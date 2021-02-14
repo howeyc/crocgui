@@ -48,6 +48,13 @@ func sendTabItem(w fyne.Window) *container.TabItem {
 	prog := widget.NewProgressBar()
 	prog.Hide()
 	topline := widget.NewLabel("Pick a file to send")
+	var currentCode string
+	copyCodeButton := widget.NewButtonWithIcon("", theme.ContentCopyIcon(), func() {
+		if currentCode != "" {
+			w.Clipboard().SetContent(currentCode)
+		}
+	})
+	copyCodeButton.Hide()
 	return container.NewTabItemWithIcon("Send", theme.MailSendIcon(),
 		container.NewVBox(
 			topline,
@@ -72,7 +79,6 @@ func sendTabItem(w fyne.Window) *container.TabItem {
 					if err != nil {
 						log.Println(err)
 					} else if f != nil {
-						status.SetText("Receive Code: " + randomName)
 						fpath := fixpath(f.URI().Path())
 
 						fi, sterr := os.Stat(fpath)
@@ -80,6 +86,9 @@ func sendTabItem(w fyne.Window) *container.TabItem {
 							status.SetText(fmt.Sprintf("Stat error: %s - %s", fpath, sterr.Error()))
 							return
 						}
+						status.SetText("Receive Code: " + randomName)
+						currentCode = randomName
+						copyCodeButton.Show()
 						filename = filepath.Base(fpath)
 						topline.SetText(fmt.Sprintf("Sending file: %s", filename))
 						totalsize := fi.Size()
@@ -111,12 +120,14 @@ func sendTabItem(w fyne.Window) *container.TabItem {
 							} else {
 								status.SetText(fmt.Sprintf("Sent file %s", filename))
 							}
+							currentCode = ""
+							copyCodeButton.Hide()
 						}()
 					}
 				}, w)
 			}),
 			prog,
-			status,
+			container.NewHBox(status, copyCodeButton),
 		))
 }
 
