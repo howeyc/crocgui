@@ -1,6 +1,9 @@
 package main
 
 import (
+	_ "embed"
+	"net/url"
+
 	"fmt"
 	"log"
 	"os"
@@ -9,13 +12,29 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
+	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
+	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 	"github.com/schollz/croc/v8/src/croc"
 	"github.com/schollz/croc/v8/src/utils"
 )
+
+func parseURL(s string) *url.URL {
+	link, _ := url.Parse(s)
+	return link
+}
+
+func aboutTabItem() *container.TabItem {
+	return container.NewTabItemWithIcon("About", theme.InfoIcon(), container.NewVBox(
+		widget.NewForm(
+			widget.NewFormItem("croc GUI", widget.NewHyperlink("v1.0.0", parseURL("https://github.com/howeyc/crocgui"))),
+			widget.NewFormItem("croc", widget.NewHyperlink("v8.6.7", parseURL("https://github.com/schollz/croc"))),
+		),
+	))
+}
 
 func sendTabItem(w fyne.Window) *container.TabItem {
 	status := widget.NewLabel("")
@@ -173,11 +192,18 @@ func recvTabItem() *container.TabItem {
 
 }
 
+//go:embed text-logo.png
+var textlogobytes []byte
+
 func main() {
 	a := app.NewWithID("com.github.howeyc.crocgui")
 	w := a.NewWindow("croc")
 
-	w.SetContent(container.NewAppTabs(sendTabItem(w), recvTabItem()))
+	textlogores := fyne.NewStaticResource("text-logo", textlogobytes)
+	textlogo := canvas.NewImageFromResource(textlogores)
+	textlogo.SetMinSize(fyne.NewSize(205, 100))
+	top := container.NewHBox(layout.NewSpacer(), textlogo, layout.NewSpacer())
+	w.SetContent(container.NewBorder(top, nil, nil, nil, container.NewAppTabs(sendTabItem(w), recvTabItem(), aboutTabItem())))
 	w.Resize(fyne.NewSize(800, 600))
 	w.ShowAndRun()
 }
