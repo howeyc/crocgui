@@ -8,4 +8,3 @@ require (
 	github.com/schollz/croc/v8 v8.6.7
 )
 
-replace github.com/fyne-io/mobile v0.1.2 => ../mobile

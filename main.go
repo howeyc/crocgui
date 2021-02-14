@@ -19,6 +19,11 @@ import (
 
 func sendTabItem(w fyne.Window) *container.TabItem {
 	status := widget.NewLabel("")
+	defer func() {
+		if r := recover(); r != nil {
+			status.SetText(fmt.Sprint(r))
+		}
+	}()
 	prog := widget.NewProgressBar()
 	prog.Hide()
 	topline := widget.NewLabel("Pick a file to send")
@@ -35,7 +40,7 @@ func sendTabItem(w fyne.Window) *container.TabItem {
 						IsSender:      true,
 						SharedSecret:  randomName,
 						Debug:         false,
-						RelayAddress:  "10.0.1.1:9009",
+						RelayAddress:  "croc.schollz.com:9009",
 						RelayPorts:    []string{"9009", "9010", "9011", "9012", "9013"},
 						RelayPassword: "pass123",
 						Stdout:        false,
@@ -47,8 +52,14 @@ func sendTabItem(w fyne.Window) *container.TabItem {
 						log.Println(err)
 					} else if f != nil {
 						status.SetText("Receive Code: " + randomName)
-						fi, _ := os.Stat(f.URI().Path())
-						filename = filepath.Base(fi.Name())
+						fpath := fixpath(f.URI().Path())
+
+						fi, sterr := os.Stat(fpath)
+						if sterr != nil {
+							status.SetText(fmt.Sprintf("Stat error: %s - %s", fpath, sterr.Error()))
+							return
+						}
+						filename = filepath.Base(fpath)
 						topline.SetText(fmt.Sprintf("Sending file: %s", filename))
 						totalsize := fi.Size()
 						prog.Max = float64(totalsize)
@@ -66,18 +77,20 @@ func sendTabItem(w fyne.Window) *container.TabItem {
 								}
 							}
 						}()
-						serr := sender.Send(croc.TransferOptions{
-							PathToFiles: []string{f.URI().Path()},
-						})
-						donechan <- true
-						prog.Hide()
-						prog.SetValue(0)
-						topline.SetText("Pick a file to send")
-						if serr != nil {
-							log.Println("Send failed:", serr)
-						} else {
-							status.SetText(fmt.Sprintf("Sent file %s", filename))
-						}
+						go func() {
+							serr := sender.Send(croc.TransferOptions{
+								PathToFiles: []string{fpath},
+							})
+							donechan <- true
+							prog.Hide()
+							prog.SetValue(0)
+							topline.SetText("Pick a file to send")
+							if serr != nil {
+								log.Println("Send failed:", serr)
+							} else {
+								status.SetText(fmt.Sprintf("Sent file %s", filename))
+							}
+						}()
 					}
 				}, w)
 			}),
@@ -88,6 +101,12 @@ func sendTabItem(w fyne.Window) *container.TabItem {
 
 func recvTabItem() *container.TabItem {
 	status := widget.NewLabel("")
+	defer func() {
+		if r := recover(); r != nil {
+			status.SetText(fmt.Sprint(r))
+		}
+	}()
+
 	prog := widget.NewProgressBar()
 	prog.Hide()
 	recvEntry := widget.NewEntry()
@@ -101,7 +120,7 @@ func recvTabItem() *container.TabItem {
 					IsSender:      false,
 					SharedSecret:  recvEntry.Text,
 					Debug:         false,
-					RelayAddress:  "10.0.1.1:9009",
+					RelayAddress:  "croc.schollz.com:9009",
 					RelayPassword: "pass123",
 					Stdout:        false,
 					NoPrompt:      true,
@@ -133,6 +152,10 @@ func recvTabItem() *container.TabItem {
 						}
 					}
 				}()
+				cderr := os.Chdir(DEFAULT_DOWNLOAD_DIR)
+				if cderr != nil {
+					log.Println("Unable to change to download dir")
+				}
 				rerr := receiver.Receive()
 				donechan <- true
 				prog.Hide()
@@ -155,5 +178,6 @@ func main() {
 	w := a.NewWindow("croc")
 
 	w.SetContent(container.NewAppTabs(sendTabItem(w), recvTabItem()))
+	w.Resize(fyne.NewSize(800, 600))
 	w.ShowAndRun()
 }
