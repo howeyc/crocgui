@@ -3,6 +3,8 @@ package main
 import (
 	_ "embed"
 	"net/url"
+	"sort"
+	"strings"
 
 	"fmt"
 	"log"
@@ -151,20 +153,21 @@ func recvTabItem() *container.TabItem {
 				prog.Show()
 				donechan := make(chan bool)
 				var filename string
+				receivednames := make(map[string]int)
 				go func() {
 					ticker := time.NewTicker(time.Millisecond * 100)
 					for {
-						gotInfo := false
 						select {
 						case <-ticker.C:
-							if !gotInfo && receiver.Step2FileInfoTransfered {
-								gotInfo = true
-								fi := receiver.FilesToTransfer[0]
+							if receiver.Step2FileInfoTransfered {
+								cnum := receiver.FilesToTransferCurrentNum
+								fi := receiver.FilesToTransfer[cnum]
 								filename = filepath.Base(fi.Name)
-								topline.SetText(fmt.Sprintf("Receiving file: %s", filename))
+								receivednames[filename] = cnum
+								topline.SetText(fmt.Sprintf("Receiving file: %s (%d/%d)", filename, cnum+1, len(receiver.FilesToTransfer)))
 								prog.Max = float64(fi.Size)
+								prog.SetValue(float64(receiver.TotalSent))
 							}
-							prog.SetValue(float64(receiver.TotalSent))
 						case <-donechan:
 							ticker.Stop()
 							return
@@ -175,6 +178,7 @@ func recvTabItem() *container.TabItem {
 				if cderr != nil {
 					log.Println("Unable to change to download dir")
 				}
+				status.SetText("")
 				rerr := receiver.Receive()
 				donechan <- true
 				prog.Hide()
@@ -183,7 +187,21 @@ func recvTabItem() *container.TabItem {
 				if rerr != nil {
 					status.Text = "Receive failed: " + rerr.Error()
 				} else {
-					status.Text = fmt.Sprintf("Received file %s", filename)
+					filesReceived := make([]string, len(receivednames))
+					var i int
+					for f := range receivednames {
+						filesReceived[i] = f
+						i++
+					}
+					sort.Slice(filesReceived, func(i, j int) bool {
+						return receivednames[filesReceived[i]] < receivednames[filesReceived[j]]
+					})
+
+					plural := ""
+					if len(filesReceived) > 1 {
+						plural = "s"
+					}
+					status.Text = fmt.Sprintf("Received file%s %s", plural, strings.Join(filesReceived, ","))
 				}
 			}),
 			prog,
