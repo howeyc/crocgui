@@ -17,5 +17,5 @@ go version
 ./golang/go/bin/go get github.com/fyne-io/mobile\@v0.1.2
 sed -i '38s/^EGLDisplay/extern EGLDisplay/' ./gopath/pkg/mod/github.com/fyne-io/mobile\@v0.1.2/app/android.go
 sed -i '39s/^EGLSurface/extern EGLSurface/' ./gopath/pkg/mod/github.com/fyne-io/mobile\@v0.1.2/app/android.go
-./gopath/bin/fyne package -os android -release -appID com.github.howeyc.crocgui -icon manifest/en-US/images/icon.png
+./gopath/bin/fyne package -os android -release -appID com.github.howeyc.crocgui -icon metadata/en-US/images/icon.png
  
