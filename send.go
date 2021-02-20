@@ -44,15 +44,18 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 					}
 					randomName := utils.GetRandomName()
 					sender, err := croc.New(croc.Options{
-						IsSender:      true,
-						SharedSecret:  randomName,
-						Debug:         false,
-						RelayAddress:  a.Preferences().String("relay-address"),
-						RelayPorts:    strings.Split(a.Preferences().String("relay-ports"), ","),
-						RelayPassword: a.Preferences().String("relay-password"),
-						Stdout:        false,
-						NoPrompt:      true,
-						DisableLocal:  true,
+						IsSender:       true,
+						SharedSecret:   randomName,
+						Debug:          false,
+						RelayAddress:   a.Preferences().String("relay-address"),
+						RelayPorts:     strings.Split(a.Preferences().String("relay-ports"), ","),
+						RelayPassword:  a.Preferences().String("relay-password"),
+						Stdout:         false,
+						NoPrompt:       true,
+						DisableLocal:   a.Preferences().Bool("disable-local"),
+						NoMultiplexing: a.Preferences().Bool("disable-multiplexing"),
+						OnlyLocal:      a.Preferences().Bool("force-local"),
+						NoCompress:     a.Preferences().Bool("disable-compression"),
 					})
 					var filename string
 					if err != nil {

@@ -34,14 +34,17 @@ func recvTabItem(a fyne.App) *container.TabItem {
 			widget.NewForm(&widget.FormItem{Text: "Receive Code", Widget: recvEntry}),
 			widget.NewButtonWithIcon("Download", theme.DownloadIcon(), func() {
 				receiver, err := croc.New(croc.Options{
-					IsSender:      false,
-					SharedSecret:  recvEntry.Text,
-					Debug:         false,
-					RelayAddress:  a.Preferences().String("relay-address"),
-					RelayPassword: a.Preferences().String("relay-password"),
-					Stdout:        false,
-					NoPrompt:      true,
-					DisableLocal:  true,
+					IsSender:       false,
+					SharedSecret:   recvEntry.Text,
+					Debug:          false,
+					RelayAddress:   a.Preferences().String("relay-address"),
+					RelayPassword:  a.Preferences().String("relay-password"),
+					Stdout:         false,
+					NoPrompt:       true,
+					DisableLocal:   a.Preferences().Bool("disable-local"),
+					NoMultiplexing: a.Preferences().Bool("disable-multiplexing"),
+					OnlyLocal:      a.Preferences().Bool("force-local"),
+					NoCompress:     a.Preferences().Bool("disable-compression"),
 				})
 				if err != nil {
 					log.Println("Receive setup error:", err)
