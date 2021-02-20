@@ -3,6 +3,7 @@ package main
 import (
 	_ "embed"
 	"net/url"
+	"strings"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
@@ -19,6 +20,8 @@ func parseURL(s string) *url.URL {
 var longdesc string
 
 func aboutTabItem() *container.TabItem {
+	longdesc = strings.ReplaceAll(longdesc, "<b>", "")
+	longdesc = strings.ReplaceAll(longdesc, "</b>", "")
 	aboutInfo := widget.NewLabel(longdesc)
 	aboutInfo.Wrapping = fyne.TextWrapWord
 	return container.NewTabItemWithIcon("About", theme.InfoIcon(), container.NewBorder(nil,

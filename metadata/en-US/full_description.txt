@@ -1,5 +1,4 @@
-croc is a tool that allows any two computers to simply and securely transfer
-files.
+croc is a tool that allows any two computers to simply and securely transfer files.
 
 <b>Features</b>
 - allows <b>any two computers</b> to transfer data (using a relay)
