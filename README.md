@@ -5,4 +5,4 @@ mobile use.
 
 Mobile Screenshot:
 
-![mobile screenshot](screenshots/mobile-receive.png)
+![mobile screenshot](metadata/en-US/images/phoneScreenshots/1.png)

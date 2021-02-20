@@ -221,7 +221,7 @@ func recvTabItem() *container.TabItem {
 
 }
 
-//go:embed text-logo.png
+//go:embed metadata/en-US/images/featureGraphic.png
 var textlogobytes []byte
 
 func main() {
