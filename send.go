@@ -11,6 +11,7 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
+	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 	"github.com/schollz/croc/v8/src/croc"
@@ -34,79 +35,114 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 		}
 	})
 	copyCodeButton.Hide()
+
+	boxholder := container.NewVBox()
+	fileentries := make(map[string]*fyne.Container)
+
+	addFileButton := widget.NewButtonWithIcon("", theme.FileIcon(), func() {
+		dialog.ShowFileOpen(func(f fyne.URIReadCloser, e error) {
+			if e != nil {
+				return
+			}
+			if f != nil {
+				fpath := fixpath(f.URI().Path())
+				_, sterr := os.Stat(fpath)
+				if sterr != nil {
+					status.SetText(fmt.Sprintf("Stat error: %s - %s", fpath, sterr.Error()))
+					return
+				}
+				labelFile := widget.NewLabel(filepath.Base(fpath))
+				newentry := container.NewHBox(labelFile, layout.NewSpacer(), widget.NewButtonWithIcon("", theme.CancelIcon(), func() {
+					if fe, ok := fileentries[fpath]; ok {
+						boxholder.Remove(fe)
+						delete(fileentries, fpath)
+					}
+				}))
+				fileentries[fpath] = newentry
+				boxholder.Add(newentry)
+			}
+		}, w)
+	})
+
 	return container.NewTabItemWithIcon("Send", theme.MailSendIcon(),
 		container.NewVBox(
-			topline,
-			widget.NewButtonWithIcon("File", theme.FileIcon(), func() {
-				dialog.ShowFileOpen(func(f fyne.URIReadCloser, e error) {
-					if e != nil {
-						return
-					}
-					randomName := utils.GetRandomName()
-					sender, err := croc.New(croc.Options{
-						IsSender:       true,
-						SharedSecret:   randomName,
-						Debug:          false,
-						RelayAddress:   a.Preferences().String("relay-address"),
-						RelayPorts:     strings.Split(a.Preferences().String("relay-ports"), ","),
-						RelayPassword:  a.Preferences().String("relay-password"),
-						Stdout:         false,
-						NoPrompt:       true,
-						DisableLocal:   a.Preferences().Bool("disable-local"),
-						NoMultiplexing: a.Preferences().Bool("disable-multiplexing"),
-						OnlyLocal:      a.Preferences().Bool("force-local"),
-						NoCompress:     a.Preferences().Bool("disable-compression"),
-					})
-					var filename string
-					if err != nil {
-						log.Println(err)
-					} else if f != nil {
-						fpath := fixpath(f.URI().Path())
-
-						fi, sterr := os.Stat(fpath)
-						if sterr != nil {
-							status.SetText(fmt.Sprintf("Stat error: %s - %s", fpath, sterr.Error()))
+			container.NewHBox(topline, layout.NewSpacer(), addFileButton),
+			boxholder,
+			widget.NewButtonWithIcon("Send", theme.MailSendIcon(), func() {
+				addFileButton.Hide()
+				randomName := utils.GetRandomName()
+				sender, err := croc.New(croc.Options{
+					IsSender:       true,
+					SharedSecret:   randomName,
+					Debug:          false,
+					RelayAddress:   a.Preferences().String("relay-address"),
+					RelayPorts:     strings.Split(a.Preferences().String("relay-ports"), ","),
+					RelayPassword:  a.Preferences().String("relay-password"),
+					Stdout:         false,
+					NoPrompt:       true,
+					DisableLocal:   a.Preferences().Bool("disable-local"),
+					NoMultiplexing: a.Preferences().Bool("disable-multiplexing"),
+					OnlyLocal:      a.Preferences().Bool("force-local"),
+					NoCompress:     a.Preferences().Bool("disable-compression"),
+				})
+				if err != nil {
+					status.SetText("croc error: " + err.Error())
+					return
+				}
+				var filename string
+				status.SetText("Receive Code: " + randomName)
+				currentCode = randomName
+				copyCodeButton.Show()
+				prog.Show()
+				donechan := make(chan bool)
+				sendnames := make(map[string]int)
+				go func() {
+					ticker := time.NewTicker(time.Millisecond * 100)
+					for {
+						select {
+						case <-ticker.C:
+							if sender.Step2FileInfoTransfered {
+								cnum := sender.FilesToTransferCurrentNum
+								fi := sender.FilesToTransfer[cnum]
+								filename = filepath.Base(fi.Name)
+								sendnames[filename] = cnum
+								topline.SetText(fmt.Sprintf("Sending file: %s (%d/%d)", filename, cnum+1, len(sender.FilesToTransfer)))
+								prog.Max = float64(fi.Size)
+								prog.SetValue(float64(sender.TotalSent))
+							}
+						case <-donechan:
+							ticker.Stop()
 							return
 						}
-						status.SetText("Receive Code: " + randomName)
-						currentCode = randomName
-						copyCodeButton.Show()
-						filename = filepath.Base(fpath)
-						topline.SetText(fmt.Sprintf("Sending file: %s", filename))
-						totalsize := fi.Size()
-						prog.Max = float64(totalsize)
-						prog.Show()
-						donechan := make(chan bool)
-						go func() {
-							ticker := time.NewTicker(time.Millisecond * 100)
-							for {
-								select {
-								case <-ticker.C:
-									prog.SetValue(float64(sender.TotalSent))
-								case <-donechan:
-									ticker.Stop()
-									return
-								}
-							}
-						}()
-						go func() {
-							serr := sender.Send(croc.TransferOptions{
-								PathToFiles: []string{fpath},
-							})
-							donechan <- true
-							prog.Hide()
-							prog.SetValue(0)
-							topline.SetText("Pick a file to send")
-							if serr != nil {
-								log.Println("Send failed:", serr)
-							} else {
-								status.SetText(fmt.Sprintf("Sent file %s", filename))
-							}
-							currentCode = ""
-							copyCodeButton.Hide()
-						}()
 					}
-				}, w)
+				}()
+				go func() {
+					var filepaths []string
+					for fpath := range fileentries {
+						filepaths = append(filepaths, fpath)
+					}
+					serr := sender.Send(croc.TransferOptions{
+						PathToFiles: filepaths,
+					})
+					donechan <- true
+					prog.Hide()
+					prog.SetValue(0)
+					for _, fpath := range filepaths {
+						if fe, ok := fileentries[fpath]; ok {
+							boxholder.Remove(fe)
+							delete(fileentries, fpath)
+						}
+					}
+					topline.SetText("Pick a file to send")
+					addFileButton.Show()
+					if serr != nil {
+						log.Println("Send failed:", serr)
+					} else {
+						status.SetText(fmt.Sprintf("Sent file %s", filename))
+					}
+					currentCode = ""
+					copyCodeButton.Hide()
+				}()
 			}),
 			prog,
 			container.NewHBox(status, copyCodeButton),
