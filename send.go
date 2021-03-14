@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"path/filepath"
@@ -36,6 +37,8 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 	})
 	copyCodeButton.Hide()
 
+	sendDir, _ := os.MkdirTemp("", "crocgui")
+
 	boxholder := container.NewVBox()
 	fileentries := make(map[string]*fyne.Container)
 
@@ -46,6 +49,15 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 			}
 			if f != nil {
 				fpath := fixpath(f.URI().Path())
+				nfile, oerr := os.Create(filepath.Join(sendDir, filepath.Base(fpath)))
+				if oerr != nil {
+					status.SetText(fmt.Sprintf("Unable to copy file, error: %s - %s", sendDir, oerr.Error()))
+					return
+				}
+				io.Copy(nfile, f)
+				nfile.Close()
+				fpath = nfile.Name()
+
 				_, sterr := os.Stat(fpath)
 				if sterr != nil {
 					status.SetText(fmt.Sprintf("Stat error: %s - %s", fpath, sterr.Error()))
@@ -55,6 +67,7 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 				newentry := container.NewHBox(labelFile, layout.NewSpacer(), widget.NewButtonWithIcon("", theme.CancelIcon(), func() {
 					if fe, ok := fileentries[fpath]; ok {
 						boxholder.Remove(fe)
+						os.Remove(fpath)
 						delete(fileentries, fpath)
 					}
 				}))
@@ -130,9 +143,11 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 					for _, fpath := range filepaths {
 						if fe, ok := fileentries[fpath]; ok {
 							boxholder.Remove(fe)
+							os.Remove(fpath)
 							delete(fileentries, fpath)
 						}
 					}
+
 					topline.SetText("Pick a file to send")
 					addFileButton.Show()
 					if serr != nil {

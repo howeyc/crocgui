@@ -1,0 +1,1 @@
+- User request of permissions no longer necessary to send files, uses android URI and temp files instead
