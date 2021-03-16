@@ -3,9 +3,11 @@
 A nice simple GUI for [croc](https://github.com/schollz/croc), designed for
 mobile use.
 
-Get it on F-Droid, just add my repo:
+Get it on F-Droid, just add my repo, scan the qrcode:
 
-![fdroid/fdroid-repo.gif](https://public.web.howey.me/fdroid/repo?fingerprint=744CA13B2FB42DB413594669F55CC2319DD70460D0244A51A314AF17FDF05C0F)
+![repo-qrcode](fdroid/fdroid-repo.gif)
+
+Or [copy this link](https://apps.howey.me/fdroid/repo?fingerprint=744CA13B2FB42DB413594669F55CC2319DD70460D0244A51A314AF17FDF05C0F)
 
 Mobile Screenshot:
 
