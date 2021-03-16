@@ -37,7 +37,7 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 	})
 	copyCodeButton.Hide()
 
-	sendDir, _ := os.MkdirTemp("", "crocgui")
+	sendDir, _ := os.MkdirTemp("", "crocgui-send")
 
 	boxholder := container.NewVBox()
 	fileentries := make(map[string]*fyne.Container)
@@ -82,6 +82,11 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 			container.NewHBox(topline, layout.NewSpacer(), addFileButton),
 			boxholder,
 			widget.NewButtonWithIcon("Send", theme.MailSendIcon(), func() {
+				// Only send if files selected
+				if len(fileentries) < 1 {
+					return
+				}
+
 				addFileButton.Hide()
 				randomName := utils.GetRandomName()
 				sender, err := croc.New(croc.Options{

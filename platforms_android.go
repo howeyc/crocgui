@@ -5,7 +5,10 @@ import (
 	"strings"
 )
 
-const DEFAULT_DOWNLOAD_DIR = "/storage/emulated/0/Download"
+func init() {
+	// TODO: android probably has a way to find this
+	DEFAULT_DOWNLOAD_DIR = "/storage/emulated/0/Download"
+}
 
 func fixpath(fpath string) string {
 	if strings.Contains(fpath, "%3A") {

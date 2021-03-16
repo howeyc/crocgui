@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"io"
+	"io/fs"
 	"log"
 	"os"
 	"path/filepath"
@@ -23,6 +25,8 @@ func recvTabItem(a fyne.App) *container.TabItem {
 			status.SetText(fmt.Sprint(r))
 		}
 	}()
+
+	recvDir, _ := os.MkdirTemp("", "crocgui-recv")
 
 	prog := widget.NewProgressBar()
 	prog.Hide()
@@ -73,9 +77,9 @@ func recvTabItem(a fyne.App) *container.TabItem {
 						}
 					}
 				}()
-				cderr := os.Chdir(DEFAULT_DOWNLOAD_DIR)
+				cderr := os.Chdir(recvDir)
 				if cderr != nil {
-					log.Println("Unable to change to download dir")
+					log.Println("Unable to change to dir:", recvDir, cderr)
 				}
 				status.SetText("")
 				rerr := receiver.Receive()
@@ -101,6 +105,29 @@ func recvTabItem(a fyne.App) *container.TabItem {
 						plural = "s"
 					}
 					status.Text = fmt.Sprintf("Received file%s %s", plural, strings.Join(filesReceived, ","))
+					filepath.Walk(recvDir, func(path string, info fs.FileInfo, err error) error {
+						if err != nil {
+							return err
+						}
+						if !info.IsDir() {
+							newpath := filepath.Join(DEFAULT_DOWNLOAD_DIR, filepath.Base(path))
+							ofile, oerr := os.Create(newpath)
+							if oerr != nil {
+								status.SetText(oerr.Error())
+								return oerr
+							}
+							ifile, ierr := os.Open(path)
+							if ierr != nil {
+								status.SetText(ierr.Error())
+								return ierr
+							}
+							io.Copy(ofile, ifile)
+							ifile.Close()
+							ofile.Close()
+							os.Remove(path)
+						}
+						return nil
+					})
 				}
 			}),
 			prog,

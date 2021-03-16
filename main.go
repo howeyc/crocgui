@@ -13,6 +13,8 @@ import (
 //go:embed metadata/en-US/images/featureGraphic.png
 var textlogobytes []byte
 
+var DEFAULT_DOWNLOAD_DIR string
+
 func main() {
 	a := app.NewWithID("com.github.howeyc.crocgui")
 	w := a.NewWindow("croc")
