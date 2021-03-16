@@ -13,9 +13,10 @@ export ANDROID_SDK_ROOT=$$SDK$$
 export ANDROID_NDK_ROOT=$$NDK$$
 export PATH=$(pwd)/go/bin:$PATH
 go version
-./golang/go/bin/go get fyne.io/fyne/v2/cmd/fyne\@v2.0.0
-./golang/go/bin/go get github.com/fyne-io/mobile\@v0.1.2
-sed -i '38s/^EGLDisplay/extern EGLDisplay/' ./gopath/pkg/mod/github.com/fyne-io/mobile\@v0.1.2/app/android.go
-sed -i '39s/^EGLSurface/extern EGLSurface/' ./gopath/pkg/mod/github.com/fyne-io/mobile\@v0.1.2/app/android.go
-./gopath/bin/fyne package -os android -release -appID com.github.howeyc.crocgui -icon metadata/en-US/images/icon.png
+curl -Lso fyne-mobile-save.zip https://github.com/howeyc/fyne/archive/mobile-save.zip
+unzip fyne-mobile-save
+pushd fyne-mobile-save
+go build fyne.io/fyne/v2/cmd/fyne
+popd
+./fyne-mobile-save/fyne package -os android -release -appID com.github.howeyc.crocgui -icon metadata/en-US/images/icon.png
  

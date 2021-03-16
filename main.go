@@ -13,8 +13,6 @@ import (
 //go:embed metadata/en-US/images/featureGraphic.png
 var textlogobytes []byte
 
-var DEFAULT_DOWNLOAD_DIR string
-
 func main() {
 	a := app.NewWithID("com.github.howeyc.crocgui")
 	w := a.NewWindow("croc")
@@ -34,7 +32,7 @@ func main() {
 	w.SetContent(container.NewBorder(top, nil, nil, nil,
 		container.NewAppTabs(
 			sendTabItem(a, w),
-			recvTabItem(a),
+			recvTabItem(a, w),
 			settingsTabItem(a),
 			aboutTabItem(),
 		)))

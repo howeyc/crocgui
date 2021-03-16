@@ -9,16 +9,18 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 	"github.com/schollz/croc/v8/src/croc"
 )
 
-func recvTabItem(a fyne.App) *container.TabItem {
+func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 	status := widget.NewLabel("")
 	defer func() {
 		if r := recover(); r != nil {
@@ -104,27 +106,37 @@ func recvTabItem(a fyne.App) *container.TabItem {
 					if len(filesReceived) > 1 {
 						plural = "s"
 					}
-					status.Text = fmt.Sprintf("Received file%s %s", plural, strings.Join(filesReceived, ","))
+					status.SetText(fmt.Sprintf("Received file%s %s", plural, strings.Join(filesReceived, ",")))
 					filepath.Walk(recvDir, func(path string, info fs.FileInfo, err error) error {
 						if err != nil {
 							return err
 						}
 						if !info.IsDir() {
-							newpath := filepath.Join(DEFAULT_DOWNLOAD_DIR, filepath.Base(path))
-							ofile, oerr := os.Create(newpath)
-							if oerr != nil {
-								status.SetText(oerr.Error())
-								return oerr
-							}
-							ifile, ierr := os.Open(path)
-							if ierr != nil {
-								status.SetText(ierr.Error())
-								return ierr
-							}
-							io.Copy(ofile, ifile)
-							ifile.Close()
-							ofile.Close()
-							os.Remove(path)
+							var diagwg sync.WaitGroup
+							diagwg.Add(1)
+							savedialog := dialog.NewFileSave(func(f fyne.URIWriteCloser, e error) {
+								var ofile io.WriteCloser
+								var oerr error
+								ofile = f
+								oerr = e
+								if oerr != nil {
+									status.SetText(oerr.Error())
+									return
+								}
+								ifile, ierr := os.Open(path)
+								if ierr != nil {
+									status.SetText(ierr.Error())
+									return
+								}
+								io.Copy(ofile, ifile)
+								ifile.Close()
+								ofile.Close()
+								os.Remove(path)
+								diagwg.Done()
+							}, w)
+							savedialog.SetFileName(filepath.Base(path))
+							savedialog.Show()
+							diagwg.Wait()
 						}
 						return nil
 					})
