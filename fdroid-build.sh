@@ -9,8 +9,6 @@ export GOPATH="$PWD/gopath"
 export GO_LANG="$PWD/golang/go/bin"
 export GO_COMPILED="$PWD/bin"
 export PATH="$GO_LANG:$GO_COMPILED:$PATH"
-export ANDROID_SDK_ROOT=$$SDK$$
-export ANDROID_NDK_ROOT=$$NDK$$
 export PATH=$(pwd)/go/bin:$PATH
 go version
 curl -Lso fyne-mobile-save.zip https://github.com/howeyc/fyne/archive/mobile-save.zip
@@ -19,4 +17,5 @@ pushd fyne-mobile-save
 go build fyne.io/fyne/v2/cmd/fyne
 popd
 ./fyne-mobile-save/fyne package -os android -release -appID com.github.howeyc.crocgui -icon metadata/en-US/images/icon.png
+zip -d crocgui.apk "META-INF/*"
  

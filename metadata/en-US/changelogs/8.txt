@@ -1,0 +1,1 @@
+- Remove apk signature for fdroid to sign it

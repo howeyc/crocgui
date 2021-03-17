@@ -26,7 +26,7 @@ func aboutTabItem() *container.TabItem {
 	aboutInfo.Wrapping = fyne.TextWrapWord
 	return container.NewTabItemWithIcon("About", theme.InfoIcon(), container.NewBorder(nil,
 		widget.NewForm(
-			widget.NewFormItem("croc GUI", widget.NewHyperlink("v1.4.0", parseURL("https://github.com/howeyc/crocgui"))),
+			widget.NewFormItem("croc GUI", widget.NewHyperlink("v1.4.1", parseURL("https://github.com/howeyc/crocgui"))),
 			widget.NewFormItem("croc", widget.NewHyperlink("v8.6.7", parseURL("https://github.com/schollz/croc"))),
 		),
 		nil,
