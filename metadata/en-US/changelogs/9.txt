@@ -1,0 +1,2 @@
+- Add license info
+- Update to show filename for content:// URI on android

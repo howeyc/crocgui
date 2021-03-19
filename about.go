@@ -19,11 +19,26 @@ func parseURL(s string) *url.URL {
 //go:embed metadata/en-US/full_description.txt
 var longdesc string
 
+//go:embed LICENSE
+var crocguiLicense string
+
+//go:embed third-party-licenses.txt
+var thirdPartyLicenses string
+
 func aboutTabItem() *container.TabItem {
 	longdesc = strings.ReplaceAll(longdesc, "<b>", "")
 	longdesc = strings.ReplaceAll(longdesc, "</b>", "")
 	aboutInfo := widget.NewLabel(longdesc)
 	aboutInfo.Wrapping = fyne.TextWrapWord
+	licenseInfo := widget.NewLabel(crocguiLicense + thirdPartyLicenses)
+	licenseInfo.Hide()
+	licenseToggle := widget.NewButton("Toggle License Info", func() {
+		if licenseInfo.Visible() {
+			licenseInfo.Hide()
+		} else {
+			licenseInfo.Show()
+		}
+	})
 	return container.NewTabItemWithIcon("About", theme.InfoIcon(), container.NewBorder(nil,
 		widget.NewForm(
 			widget.NewFormItem("croc GUI", widget.NewHyperlink("v1.4.1", parseURL("https://github.com/howeyc/crocgui"))),
@@ -31,6 +46,6 @@ func aboutTabItem() *container.TabItem {
 		),
 		nil,
 		nil,
-		aboutInfo,
+		container.NewVScroll(container.NewVBox(aboutInfo, licenseToggle, licenseInfo)),
 	))
 }

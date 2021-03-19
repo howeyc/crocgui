@@ -7,4 +7,4 @@ require (
 	github.com/schollz/croc/v8 v8.6.7
 )
 
-replace fyne.io/fyne/v2 => ./fyne-mobile-save
+replace fyne.io/fyne/v2 => ./fyne-uri-name

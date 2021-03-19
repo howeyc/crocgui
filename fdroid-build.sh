@@ -11,11 +11,11 @@ export GO_COMPILED="$PWD/bin"
 export PATH="$GO_LANG:$GO_COMPILED:$PATH"
 export PATH=$(pwd)/go/bin:$PATH
 go version
-curl -Lso fyne-mobile-save.zip https://github.com/howeyc/fyne/archive/mobile-save.zip
-unzip fyne-mobile-save
-pushd fyne-mobile-save
+curl -Lso fyne-uri-name.zip https://github.com/howeyc/fyne/archive/uri-name.zip
+unzip fyne-uri-name
+pushd fyne-uri-name
 go build fyne.io/fyne/v2/cmd/fyne
 popd
-./fyne-mobile-save/fyne package -os android -release -appID com.github.howeyc.crocgui -icon metadata/en-US/images/icon.png
+./fyne-uri-name/fyne package -os android -release -appID com.github.howeyc.crocgui -icon metadata/en-US/images/icon.png
 zip -d crocgui.apk "META-INF/*"
  

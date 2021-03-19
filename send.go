@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -49,11 +48,7 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 				return
 			}
 			if f != nil {
-				upath, _ := url.PathUnescape(f.URI().Path())
-				if colidx := strings.Index(upath, ":"); colidx != -1 {
-					upath = upath[colidx+1:]
-				}
-				nfile, oerr := os.Create(filepath.Join(sendDir, filepath.Base(upath)))
+				nfile, oerr := os.Create(filepath.Join(sendDir, f.URI().Name()))
 				if oerr != nil {
 					status.SetText(fmt.Sprintf("Unable to copy file, error: %s - %s", sendDir, oerr.Error()))
 					return
