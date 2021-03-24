@@ -1,7 +1,10 @@
 package main
 
 import (
+	"bufio"
+	"bytes"
 	_ "embed"
+	"fmt"
 	"net/url"
 	"strings"
 
@@ -30,14 +33,32 @@ func aboutTabItem() *container.TabItem {
 	longdesc = strings.ReplaceAll(longdesc, "</b>", "")
 	aboutInfo := widget.NewLabel(longdesc)
 	aboutInfo.Wrapping = fyne.TextWrapWord
-	licenseInfo := widget.NewLabel(crocguiLicense + thirdPartyLicenses)
-	licenseInfo.Hide()
-	licenseToggle := widget.NewButton("Toggle License Info", func() {
-		if licenseInfo.Visible() {
-			licenseInfo.Hide()
-		} else {
-			licenseInfo.Show()
+
+	acLicense := widget.NewAccordion()
+
+	licenseReader := bytes.NewBufferString(crocguiLicense + thirdPartyLicenses)
+	currentLicense := ""
+	currentLibrary := "croc"
+	scanner := bufio.NewScanner(licenseReader)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.HasPrefix(line, "-----") {
+			acLicense.Append(widget.NewAccordionItem(currentLibrary, widget.NewLabel(currentLicense)))
+			currentLicense = ""
+			scanner.Scan()
+			scanner.Scan()
+			currentLibrary = scanner.Text()
+			scanner.Scan()
+			continue
 		}
+		currentLicense += fmt.Sprintln(line)
+	}
+
+	licenseToggle := widget.NewButton("License Info", func() {
+		w := fyne.CurrentApp().NewWindow("licenses")
+		w.SetContent(container.NewScroll(acLicense))
+		w.Resize(fyne.NewSize(450, 800))
+		w.Show()
 	})
 	return container.NewTabItemWithIcon("About", theme.InfoIcon(), container.NewBorder(nil,
 		widget.NewForm(
@@ -46,6 +67,6 @@ func aboutTabItem() *container.TabItem {
 		),
 		nil,
 		nil,
-		container.NewVScroll(container.NewVBox(aboutInfo, licenseToggle, licenseInfo)),
+		container.NewVScroll(container.NewVBox(aboutInfo, licenseToggle)),
 	))
 }
