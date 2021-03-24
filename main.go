@@ -17,13 +17,14 @@ func main() {
 	a := app.NewWithID("com.github.howeyc.crocgui")
 	w := a.NewWindow("croc")
 
-	a.Preferences().StringWithFallback("relay-address", "croc.schollz.com:9009")
-	a.Preferences().StringWithFallback("relay-password", "pass123")
-	a.Preferences().StringWithFallback("relay-ports", "9009,9010,9011,9012,9013")
-	a.Preferences().BoolWithFallback("disable-local", true)
-	a.Preferences().BoolWithFallback("force-local", false)
-	a.Preferences().BoolWithFallback("disable-multiplexing", false)
-	a.Preferences().BoolWithFallback("disable-compression", false)
+	// Defaults
+	a.Preferences().SetString("relay-address", a.Preferences().StringWithFallback("relay-address", "croc.schollz.com:9009"))
+	a.Preferences().SetString("relay-password", a.Preferences().StringWithFallback("relay-password", "pass123"))
+	a.Preferences().SetString("relay-ports", a.Preferences().StringWithFallback("relay-ports", "9009,9010,9011,9012,9013"))
+	a.Preferences().SetBool("disable-local", a.Preferences().BoolWithFallback("disable-local", true))
+	a.Preferences().SetBool("force-local", a.Preferences().BoolWithFallback("force-local", false))
+	a.Preferences().SetBool("disable-multiplexing", a.Preferences().BoolWithFallback("disable-multiplexing", false))
+	a.Preferences().SetBool("disable-compression", a.Preferences().BoolWithFallback("disable-compression", false))
 
 	textlogores := fyne.NewStaticResource("text-logo", textlogobytes)
 	textlogo := canvas.NewImageFromResource(textlogores)
