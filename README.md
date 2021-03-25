@@ -3,7 +3,7 @@
 A nice simple GUI for [croc](https://github.com/schollz/croc), designed for
 mobile use.
 
-<img height=80 src="https://fdroid.gitlab.io/artwork/badge/get-it-on.png"> (coming soon)
+[<img height=80 src="https://fdroid.gitlab.io/artwork/badge/get-it-on.png">](https://f-droid.org/en/packages/com.github.howeyc.crocgui/)
 
 Mobile Screenshot:
 
