@@ -60,13 +60,7 @@ func aboutTabItem() *container.TabItem {
 		w.Resize(fyne.NewSize(450, 800))
 		w.Show()
 	})
-	return container.NewTabItemWithIcon("About", theme.InfoIcon(), container.NewBorder(nil,
-		widget.NewForm(
-			widget.NewFormItem("croc GUI", widget.NewHyperlink("v1.4.1", parseURL("https://github.com/howeyc/crocgui"))),
-			widget.NewFormItem("croc", widget.NewHyperlink("v8.6.7", parseURL("https://github.com/schollz/croc"))),
-		),
-		nil,
-		nil,
+	return container.NewTabItemWithIcon("About", theme.InfoIcon(),
 		container.NewVScroll(container.NewVBox(aboutInfo, licenseToggle)),
-	))
+	)
 }

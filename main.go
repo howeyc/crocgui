@@ -21,10 +21,13 @@ func main() {
 	a.Preferences().SetString("relay-address", a.Preferences().StringWithFallback("relay-address", "croc.schollz.com:9009"))
 	a.Preferences().SetString("relay-password", a.Preferences().StringWithFallback("relay-password", "pass123"))
 	a.Preferences().SetString("relay-ports", a.Preferences().StringWithFallback("relay-ports", "9009,9010,9011,9012,9013"))
-	a.Preferences().SetBool("disable-local", a.Preferences().BoolWithFallback("disable-local", true))
+	a.Preferences().SetBool("disable-local", a.Preferences().BoolWithFallback("disable-local", false))
 	a.Preferences().SetBool("force-local", a.Preferences().BoolWithFallback("force-local", false))
 	a.Preferences().SetBool("disable-multiplexing", a.Preferences().BoolWithFallback("disable-multiplexing", false))
 	a.Preferences().SetBool("disable-compression", a.Preferences().BoolWithFallback("disable-compression", false))
+	a.Preferences().SetString("theme", a.Preferences().StringWithFallback("theme", "light"))
+
+	setTheme(a.Preferences().String("theme"))
 
 	textlogores := fyne.NewStaticResource("text-logo", textlogobytes)
 	textlogo := canvas.NewImageFromResource(textlogores)
