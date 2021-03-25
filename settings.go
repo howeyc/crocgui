@@ -1,6 +1,8 @@
 package main
 
 import (
+	"crocgui/internal/croctheme"
+
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/data/binding"
@@ -15,6 +17,8 @@ func setTheme(themeName string) {
 		a.Settings().SetTheme(theme.LightTheme())
 	case "dark":
 		a.Settings().SetTheme(theme.DarkTheme())
+	case "black":
+		a.Settings().SetTheme(croctheme.BlackTheme())
 	default:
 		// TODO: get system
 		a.Settings().SetTheme(theme.LightTheme())
@@ -23,7 +27,7 @@ func setTheme(themeName string) {
 
 func settingsTabItem(a fyne.App) *container.TabItem {
 	themeBinding := binding.BindPreferenceString("theme", a.Preferences())
-	themeSelect := widget.NewSelect([]string{"light", "dark"}, func(selection string) {
+	themeSelect := widget.NewSelect([]string{"light", "dark", "black"}, func(selection string) {
 		setTheme(selection)
 		themeBinding.Set(selection)
 	})
