@@ -3,11 +3,12 @@ package main
 import (
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
+
+	log "github.com/schollz/logger"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
@@ -20,10 +21,13 @@ import (
 )
 
 func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
+	logInfo := widget.NewLabelWithData(logbinding)
+	logInfo.Wrapping = fyne.TextWrapWord
+
 	status := widget.NewLabel("")
 	defer func() {
 		if r := recover(); r != nil {
-			status.SetText(fmt.Sprint(r))
+			log.Error(fmt.Sprint(r))
 		}
 	}()
 	prog := widget.NewProgressBar()
@@ -45,21 +49,23 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 	addFileButton := widget.NewButtonWithIcon("", theme.FileIcon(), func() {
 		dialog.ShowFileOpen(func(f fyne.URIReadCloser, e error) {
 			if e != nil {
+				log.Errorf("Open dialog error: %s", e.Error())
 				return
 			}
 			if f != nil {
 				nfile, oerr := os.Create(filepath.Join(sendDir, f.URI().Name()))
 				if oerr != nil {
-					status.SetText(fmt.Sprintf("Unable to copy file, error: %s - %s", sendDir, oerr.Error()))
+					log.Errorf("Unable to copy file, error: %s - %s\n", sendDir, oerr.Error())
 					return
 				}
 				io.Copy(nfile, f)
 				nfile.Close()
 				fpath := nfile.Name()
+				log.Tracef("Android URI (%s), copied to internal cache %s", f.URI().String(), nfile.Name())
 
 				_, sterr := os.Stat(fpath)
 				if sterr != nil {
-					status.SetText(fmt.Sprintf("Stat error: %s - %s", fpath, sterr.Error()))
+					log.Errorf("Stat error: %s - %s\n", fpath, sterr.Error())
 					return
 				}
 				labelFile := widget.NewLabel(filepath.Base(fpath))
@@ -67,6 +73,7 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 					if fe, ok := fileentries[fpath]; ok {
 						boxholder.Remove(fe)
 						os.Remove(fpath)
+						log.Tracef("Removed file from internal cache: %s", fpath)
 						delete(fileentries, fpath)
 					}
 				}))
@@ -75,6 +82,18 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 			}
 		}, w)
 	})
+
+	debugBox := container.NewHBox(widget.NewLabel("Debug log:"), layout.NewSpacer(), widget.NewButton("Export full log", func() {
+		savedialog := dialog.NewFileSave(func(f fyne.URIWriteCloser, e error) {
+			if f != nil {
+				logoutput.buf.WriteTo(f)
+				f.Close()
+			}
+		}, w)
+		savedialog.SetFileName("crocdebuglog.txt")
+		savedialog.Show()
+	}))
+	debugObjects = append(debugObjects, debugBox)
 
 	return container.NewTabItemWithIcon("Send", theme.MailSendIcon(),
 		container.NewVBox(
@@ -91,7 +110,7 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 				sender, err := croc.New(croc.Options{
 					IsSender:       true,
 					SharedSecret:   randomName,
-					Debug:          false,
+					Debug:          crocDebugMode(),
 					RelayAddress:   a.Preferences().String("relay-address"),
 					RelayPorts:     strings.Split(a.Preferences().String("relay-ports"), ","),
 					RelayPassword:  a.Preferences().String("relay-password"),
@@ -103,9 +122,12 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 					NoCompress:     a.Preferences().Bool("disable-compression"),
 				})
 				if err != nil {
-					status.SetText("croc error: " + err.Error())
+					log.Errorf("croc error: %s\n", err.Error())
 					return
 				}
+				log.SetLevel(crocDebugLevel())
+				log.Trace("croc sender created")
+
 				var filename string
 				status.SetText("Receive Code: " + randomName)
 				currentCode = randomName
@@ -148,6 +170,7 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 						if fe, ok := fileentries[fpath]; ok {
 							boxholder.Remove(fe)
 							os.Remove(fpath)
+							log.Tracef("Removed file from internal cache: %s", fpath)
 							delete(fileentries, fpath)
 						}
 					}
@@ -155,7 +178,7 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 					topline.SetText("Pick a file to send")
 					addFileButton.Show()
 					if serr != nil {
-						log.Println("Send failed:", serr)
+						log.Errorf("Send failed: %s\n", serr)
 					} else {
 						status.SetText(fmt.Sprintf("Sent file %s", filename))
 					}
@@ -165,5 +188,7 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 			}),
 			prog,
 			container.NewHBox(status, copyCodeButton),
+			debugBox,
+			logInfo,
 		))
 }

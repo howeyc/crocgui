@@ -5,7 +5,6 @@ import (
 	"bytes"
 	_ "embed"
 	"fmt"
-	"net/url"
 	"strings"
 
 	"fyne.io/fyne/v2"
@@ -13,11 +12,6 @@ import (
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 )
-
-func parseURL(s string) *url.URL {
-	link, _ := url.Parse(s)
-	return link
-}
 
 //go:embed metadata/en-US/full_description.txt
 var longdesc string

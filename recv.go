@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
-	"log"
 	"os"
 	"path/filepath"
 	"sort"
@@ -12,23 +11,41 @@ import (
 	"sync"
 	"time"
 
+	log "github.com/schollz/logger"
+
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
+	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 	"github.com/schollz/croc/v8/src/croc"
 )
 
 func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
+	logInfo := widget.NewLabelWithData(logbinding)
+	logInfo.Wrapping = fyne.TextWrapWord
+
 	status := widget.NewLabel("")
 	defer func() {
 		if r := recover(); r != nil {
-			status.SetText(fmt.Sprint(r))
+			logInfo.SetText(fmt.Sprint(r))
 		}
 	}()
 
 	recvDir, _ := os.MkdirTemp("", "crocgui-recv")
+
+	debugBox := container.NewHBox(widget.NewLabel("Debug log:"), layout.NewSpacer(), widget.NewButton("Export full log", func() {
+		savedialog := dialog.NewFileSave(func(f fyne.URIWriteCloser, e error) {
+			if f != nil {
+				logoutput.buf.WriteTo(f)
+				f.Close()
+			}
+		}, w)
+		savedialog.SetFileName("crocdebuglog.txt")
+		savedialog.Show()
+	}))
+	debugObjects = append(debugObjects, debugBox)
 
 	prog := widget.NewProgressBar()
 	prog.Hide()
@@ -42,7 +59,7 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 				receiver, err := croc.New(croc.Options{
 					IsSender:       false,
 					SharedSecret:   recvEntry.Text,
-					Debug:          false,
+					Debug:          crocDebugMode(),
 					RelayAddress:   a.Preferences().String("relay-address"),
 					RelayPassword:  a.Preferences().String("relay-password"),
 					Stdout:         false,
@@ -53,8 +70,12 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 					NoCompress:     a.Preferences().Bool("disable-compression"),
 				})
 				if err != nil {
-					log.Println("Receive setup error:", err)
+					log.Error("Receive setup error:", err)
+					return
 				}
+				log.SetLevel(crocDebugLevel())
+				log.Trace("croc receiver created")
+
 				prog.Show()
 				donechan := make(chan bool)
 				var filename string
@@ -81,7 +102,7 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 				}()
 				cderr := os.Chdir(recvDir)
 				if cderr != nil {
-					log.Println("Unable to change to dir:", recvDir, cderr)
+					log.Error("Unable to change to dir:", recvDir, cderr)
 				}
 				status.SetText("")
 				rerr := receiver.Receive()
@@ -90,7 +111,7 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 				prog.SetValue(0)
 				topline.SetText("Enter code to download")
 				if rerr != nil {
-					status.Text = "Receive failed: " + rerr.Error()
+					log.Error("Receive failed: " + rerr.Error())
 				} else {
 					filesReceived := make([]string, len(receivednames))
 					var i int
@@ -120,18 +141,20 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 								ofile = f
 								oerr = e
 								if oerr != nil {
-									status.SetText(oerr.Error())
+									log.Error(oerr.Error())
 									return
 								}
 								ifile, ierr := os.Open(path)
 								if ierr != nil {
-									status.SetText(ierr.Error())
+									log.Error(ierr.Error())
 									return
 								}
 								io.Copy(ofile, ifile)
 								ifile.Close()
 								ofile.Close()
 								os.Remove(path)
+								log.Tracef("saved (%s) to user path %s", path, f.URI().String())
+								log.Tracef("remove internal cache file %s", path)
 								diagwg.Done()
 							}, w)
 							savedialog.SetFileName(filepath.Base(path))
@@ -144,6 +167,8 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 			}),
 			prog,
 			status,
+			debugBox,
+			logInfo,
 		))
 
 }
