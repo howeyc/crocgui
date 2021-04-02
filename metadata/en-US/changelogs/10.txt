@@ -1,2 +1,3 @@
 - Settings are scrollable
 - Add debug logging
+- Update croc from v8.6.7 to v8.6.12
