@@ -33,11 +33,11 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 	prog := widget.NewProgressBar()
 	prog.Hide()
 	topline := widget.NewLabel("Pick a file to send")
-	var currentCode string
+	randomCode := utils.GetRandomName()
+	sendEntry := widget.NewEntry()
+	sendEntry.SetText(randomCode)
 	copyCodeButton := widget.NewButtonWithIcon("", theme.ContentCopyIcon(), func() {
-		if currentCode != "" {
-			w.Clipboard().SetContent(currentCode)
-		}
+		w.Clipboard().SetContent(sendEntry.Text)
 	})
 	copyCodeButton.Hide()
 
@@ -70,11 +70,14 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 				}
 				labelFile := widget.NewLabel(filepath.Base(fpath))
 				newentry := container.NewHBox(labelFile, layout.NewSpacer(), widget.NewButtonWithIcon("", theme.CancelIcon(), func() {
-					if fe, ok := fileentries[fpath]; ok {
-						boxholder.Remove(fe)
-						os.Remove(fpath)
-						log.Tracef("Removed file from internal cache: %s", fpath)
-						delete(fileentries, fpath)
+					// Can only add/remove if not currently attempting a send
+					if !sendEntry.Disabled() {
+						if fe, ok := fileentries[fpath]; ok {
+							boxholder.Remove(fe)
+							os.Remove(fpath)
+							log.Tracef("Removed file from internal cache: %s", fpath)
+							delete(fileentries, fpath)
+						}
 					}
 				}))
 				fileentries[fpath] = newentry
@@ -95,97 +98,135 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 	}))
 	debugObjects = append(debugObjects, debugBox)
 
+	cancelchan := make(chan bool)
+	activeButtonHolder := container.NewVBox()
+	var cancelButton, sendButton *widget.Button
+
+	resetSender := func() {
+		prog.Hide()
+		prog.SetValue(0)
+		for _, obj := range activeButtonHolder.Objects {
+			activeButtonHolder.Remove(obj)
+		}
+		activeButtonHolder.Add(sendButton)
+
+		for fpath, fe := range fileentries {
+			boxholder.Remove(fe)
+			os.Remove(fpath)
+			log.Tracef("Removed file from internal cache: %s", fpath)
+			delete(fileentries, fpath)
+		}
+
+		topline.SetText("Pick a file to send")
+		addFileButton.Show()
+		if sendEntry.Text == randomCode {
+			randomCode = utils.GetRandomName()
+			sendEntry.SetText(randomCode)
+		}
+		copyCodeButton.Hide()
+		sendEntry.Enable()
+	}
+
+	sendButton = widget.NewButtonWithIcon("Send", theme.MailSendIcon(), func() {
+		// Only send if files selected
+		if len(fileentries) < 1 {
+			log.Error("no files selected")
+			return
+		}
+
+		addFileButton.Hide()
+		sender, err := croc.New(croc.Options{
+			IsSender:       true,
+			SharedSecret:   sendEntry.Text,
+			Debug:          crocDebugMode(),
+			RelayAddress:   a.Preferences().String("relay-address"),
+			RelayPorts:     strings.Split(a.Preferences().String("relay-ports"), ","),
+			RelayPassword:  a.Preferences().String("relay-password"),
+			Stdout:         false,
+			NoPrompt:       true,
+			DisableLocal:   a.Preferences().Bool("disable-local"),
+			NoMultiplexing: a.Preferences().Bool("disable-multiplexing"),
+			OnlyLocal:      a.Preferences().Bool("force-local"),
+			NoCompress:     a.Preferences().Bool("disable-compression"),
+		})
+		if err != nil {
+			log.Errorf("croc error: %s\n", err.Error())
+			return
+		}
+		log.SetLevel(crocDebugLevel())
+		log.Trace("croc sender created")
+
+		var filename string
+		status.SetText("Receive Code: " + sendEntry.Text)
+		copyCodeButton.Show()
+		prog.Show()
+
+		for _, obj := range activeButtonHolder.Objects {
+			activeButtonHolder.Remove(obj)
+		}
+		activeButtonHolder.Add(cancelButton)
+
+		donechan := make(chan bool)
+		sendnames := make(map[string]int)
+		go func() {
+			ticker := time.NewTicker(time.Millisecond * 100)
+			for {
+				select {
+				case <-ticker.C:
+					if sender.Step2FileInfoTransfered {
+						cnum := sender.FilesToTransferCurrentNum
+						fi := sender.FilesToTransfer[cnum]
+						filename = filepath.Base(fi.Name)
+						sendnames[filename] = cnum
+						topline.SetText(fmt.Sprintf("Sending file: %s (%d/%d)", filename, cnum+1, len(sender.FilesToTransfer)))
+						prog.Max = float64(fi.Size)
+						prog.SetValue(float64(sender.TotalSent))
+					}
+				case <-donechan:
+					ticker.Stop()
+					return
+				}
+			}
+		}()
+		go func() {
+			var filepaths []string
+			for fpath := range fileentries {
+				filepaths = append(filepaths, fpath)
+			}
+			sendEntry.Disable()
+			serr := sender.Send(croc.TransferOptions{
+				PathToFiles: filepaths,
+			})
+			donechan <- true
+			if serr != nil {
+				log.Errorf("Send failed: %s\n", serr)
+			} else {
+				status.SetText(fmt.Sprintf("Sent file %s", filename))
+			}
+			resetSender()
+		}()
+		go func() {
+			select {
+			case <-cancelchan:
+				donechan <- true
+				status.SetText("Send cancelled.")
+			}
+			resetSender()
+		}()
+	})
+
+	cancelButton = widget.NewButtonWithIcon("Cancel", theme.CancelIcon(), func() {
+		cancelchan <- true
+	})
+
+	activeButtonHolder.Add(sendButton)
+
 	return container.NewTabItemWithIcon("Send", theme.MailSendIcon(),
 		container.NewVBox(
 			container.NewHBox(topline, layout.NewSpacer(), addFileButton),
+			widget.NewForm(&widget.FormItem{Text: "Send Code", Widget: sendEntry}),
 			boxholder,
-			widget.NewButtonWithIcon("Send", theme.MailSendIcon(), func() {
-				// Only send if files selected
-				if len(fileentries) < 1 {
-					return
-				}
-
-				addFileButton.Hide()
-				randomName := utils.GetRandomName()
-				sender, err := croc.New(croc.Options{
-					IsSender:       true,
-					SharedSecret:   randomName,
-					Debug:          crocDebugMode(),
-					RelayAddress:   a.Preferences().String("relay-address"),
-					RelayPorts:     strings.Split(a.Preferences().String("relay-ports"), ","),
-					RelayPassword:  a.Preferences().String("relay-password"),
-					Stdout:         false,
-					NoPrompt:       true,
-					DisableLocal:   a.Preferences().Bool("disable-local"),
-					NoMultiplexing: a.Preferences().Bool("disable-multiplexing"),
-					OnlyLocal:      a.Preferences().Bool("force-local"),
-					NoCompress:     a.Preferences().Bool("disable-compression"),
-				})
-				if err != nil {
-					log.Errorf("croc error: %s\n", err.Error())
-					return
-				}
-				log.SetLevel(crocDebugLevel())
-				log.Trace("croc sender created")
-
-				var filename string
-				status.SetText("Receive Code: " + randomName)
-				currentCode = randomName
-				copyCodeButton.Show()
-				prog.Show()
-				donechan := make(chan bool)
-				sendnames := make(map[string]int)
-				go func() {
-					ticker := time.NewTicker(time.Millisecond * 100)
-					for {
-						select {
-						case <-ticker.C:
-							if sender.Step2FileInfoTransfered {
-								cnum := sender.FilesToTransferCurrentNum
-								fi := sender.FilesToTransfer[cnum]
-								filename = filepath.Base(fi.Name)
-								sendnames[filename] = cnum
-								topline.SetText(fmt.Sprintf("Sending file: %s (%d/%d)", filename, cnum+1, len(sender.FilesToTransfer)))
-								prog.Max = float64(fi.Size)
-								prog.SetValue(float64(sender.TotalSent))
-							}
-						case <-donechan:
-							ticker.Stop()
-							return
-						}
-					}
-				}()
-				go func() {
-					var filepaths []string
-					for fpath := range fileentries {
-						filepaths = append(filepaths, fpath)
-					}
-					serr := sender.Send(croc.TransferOptions{
-						PathToFiles: filepaths,
-					})
-					donechan <- true
-					prog.Hide()
-					prog.SetValue(0)
-					for _, fpath := range filepaths {
-						if fe, ok := fileentries[fpath]; ok {
-							boxholder.Remove(fe)
-							os.Remove(fpath)
-							log.Tracef("Removed file from internal cache: %s", fpath)
-							delete(fileentries, fpath)
-						}
-					}
-
-					topline.SetText("Pick a file to send")
-					addFileButton.Show()
-					if serr != nil {
-						log.Errorf("Send failed: %s\n", serr)
-					} else {
-						status.SetText(fmt.Sprintf("Sent file %s", filename))
-					}
-					currentCode = ""
-					copyCodeButton.Hide()
-				}()
-			}),
+			activeButtonHolder,
 			prog,
 			container.NewHBox(status, copyCodeButton),
 			debugBox,

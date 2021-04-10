@@ -1,0 +1,2 @@
+- Add cancel send button
+- User can change/set send code
