@@ -7,3 +7,5 @@ require (
 	github.com/schollz/croc/v8 v8.6.12
 	github.com/schollz/logger v1.2.0
 )
+
+replace fyne.io/fyne/v2 => ./fyne-mobile-save-filename
