@@ -19,7 +19,7 @@ import (
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
-	"github.com/schollz/croc/v8/src/croc"
+	"github.com/schollz/croc/v9/src/croc"
 )
 
 func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
