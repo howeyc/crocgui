@@ -62,6 +62,13 @@ func settingsTabItem(a fyne.App) *container.TabItem {
 	currentTheme, _ := themeBinding.Get()
 	themeSelect.SetSelected(currentTheme)
 
+	curveBinding := binding.BindPreferenceString("pake-curve", a.Preferences())
+	curveSelect := widget.NewSelect([]string{"siec", "p256", "p348", "p521"}, func(selection string) {
+		curveBinding.Set(selection)
+	})
+	currentCurve, _ := curveBinding.Get()
+	curveSelect.SetSelected(currentCurve)
+
 	debugLevelBinding := binding.BindPreferenceString("debug-level", a.Preferences())
 	debugCheck := widget.NewCheck("Enable Debug Log", func(debug bool) {
 		if debug {
@@ -96,6 +103,7 @@ func settingsTabItem(a fyne.App) *container.TabItem {
 		widget.NewSeparator(),
 		widget.NewLabelWithStyle("Transfer Options", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
 		widget.NewForm(
+			widget.NewFormItem("PAKE Curve", curveSelect),
 			widget.NewFormItem("", widget.NewCheckWithData("Disable Multiplexing", binding.BindPreferenceBool("disable-multiplexing", a.Preferences()))),
 			widget.NewFormItem("", widget.NewCheckWithData("Disable Compression", binding.BindPreferenceBool("disable-compression", a.Preferences()))),
 		),

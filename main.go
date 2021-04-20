@@ -62,6 +62,7 @@ func main() {
 	a.Preferences().SetBool("disable-compression", a.Preferences().BoolWithFallback("disable-compression", false))
 	a.Preferences().SetString("theme", a.Preferences().StringWithFallback("theme", "light"))
 	a.Preferences().SetString("debug-level", a.Preferences().StringWithFallback("debug-level", "error"))
+	a.Preferences().SetString("pake-curve", a.Preferences().StringWithFallback("pake-curve", "siec"))
 
 	setTheme(a.Preferences().String("theme"))
 	log.SetLevel(a.Preferences().String("debug-level"))

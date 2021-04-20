@@ -148,6 +148,7 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 			NoMultiplexing: a.Preferences().Bool("disable-multiplexing"),
 			OnlyLocal:      a.Preferences().Bool("force-local"),
 			NoCompress:     a.Preferences().Bool("disable-compression"),
+			Curve:          a.Preferences().String("pake-curve"),
 		})
 		if err != nil {
 			log.Errorf("croc error: %s\n", err.Error())
