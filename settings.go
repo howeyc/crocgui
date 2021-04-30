@@ -69,6 +69,13 @@ func settingsTabItem(a fyne.App) *container.TabItem {
 	currentCurve, _ := curveBinding.Get()
 	curveSelect.SetSelected(currentCurve)
 
+	hashBinding := binding.BindPreferenceString("croc-hash", a.Preferences())
+	hashSelect := widget.NewSelect([]string{"imohash", "md5", "xxhash"}, func(selection string) {
+		hashBinding.Set(selection)
+	})
+	currentHash, _ := hashBinding.Get()
+	hashSelect.SetSelected(currentHash)
+
 	debugLevelBinding := binding.BindPreferenceString("debug-level", a.Preferences())
 	debugCheck := widget.NewCheck("Enable Debug Log", func(debug bool) {
 		if debug {
@@ -104,6 +111,7 @@ func settingsTabItem(a fyne.App) *container.TabItem {
 		widget.NewLabelWithStyle("Transfer Options", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
 		widget.NewForm(
 			widget.NewFormItem("PAKE Curve", curveSelect),
+			widget.NewFormItem("Hash Algorithm", hashSelect),
 			widget.NewFormItem("", widget.NewCheckWithData("Disable Multiplexing", binding.BindPreferenceBool("disable-multiplexing", a.Preferences()))),
 			widget.NewFormItem("", widget.NewCheckWithData("Disable Compression", binding.BindPreferenceBool("disable-compression", a.Preferences()))),
 		),

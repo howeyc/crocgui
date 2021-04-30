@@ -69,6 +69,7 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 					OnlyLocal:      a.Preferences().Bool("force-local"),
 					NoCompress:     a.Preferences().Bool("disable-compression"),
 					Curve:          a.Preferences().String("pake-curve"),
+					HashAlgorithm:  a.Preferences().String("croc-hash"),
 				})
 				if err != nil {
 					log.Error("Receive setup error:", err)

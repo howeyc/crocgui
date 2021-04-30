@@ -1,0 +1,2 @@
+- new icon
+- croc hash algorithm selection

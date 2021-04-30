@@ -38,6 +38,8 @@ github.com/josephspurrier/goversioninfo v0.0.0-20200309025242-14b0ab84c6ca/go.mo
 github.com/k0kubun/go-ansi v0.0.0-20180517002512-3bf9e2903213/go.mod h1:vNUNkEQ1e29fT/6vq2aBdFsgNPmy8qMdSay1npru+Sw=
 github.com/kalafut/imohash v1.0.0 h1:LgCJ+p/BwM2HKpOxFopkeddpzVCfm15EtXMroXD1SYE=
 github.com/kalafut/imohash v1.0.0/go.mod h1:c3RHT80ZAp5C/aYgQI92ZlrOymqkZnRDprU87kg75HI=
+github.com/kalafut/imohash v1.0.2 h1:j/cUPa15YvXv7abJlM+kdJIycbBMpmO7WqhPl4YB76I=
+github.com/kalafut/imohash v1.0.2/go.mod h1:PjHBF0vpo1q7zMqiTn0qwSTQU2wDn5QIe8S8sFQuZS8=
 github.com/kr/pretty v0.1.0/go.mod h1:dAy3ld7l9f0ibDNOQOHHMYYIIbhfbHSm3C4ZsoJORNo=
 github.com/kr/pty v1.1.1/go.mod h1:pFQYn66WHrOpPYNljwOMqo10TkYh1fy3cYio2l3bCsQ=
 github.com/kr/text v0.1.0 h1:45sCR5RtlFHMR4UwH9sdQ5TC8v0qDQCHnXt+kaKSTVE=
@@ -65,6 +67,8 @@ github.com/russross/blackfriday/v2 v2.1.0/go.mod h1:+Rmxgy9KzJVeS9/2gXHxylqXiyQD
 github.com/schollz/cli/v2 v2.2.1/go.mod h1:My6bfphRLZUhZdlFUK8scAxMWHydE7k4s2ed2Dtnn+s=
 github.com/schollz/croc/v9 v9.0.0 h1:q+/+F+IJXXrGqDBIasn0sr57PCZIeuhyrB+Q1Fb0QwY=
 github.com/schollz/croc/v9 v9.0.0/go.mod h1:Vgg3AocoZzIi0hjVMOv4w7WGJWvzQXJ/j6I0L9JEGeA=
+github.com/schollz/croc/v9 v9.1.1 h1:yCZrdzdzkHHC+7kRUrqPuHu9iCDQfKOfbogIFK7gNlM=
+github.com/schollz/croc/v9 v9.1.1/go.mod h1:hP8kIHrhdvZMZ82af1F1zz2fSal82DcRtlrMFMU9zWU=
 github.com/schollz/logger v1.2.0 h1:5WXfINRs3lEUTCZ7YXhj0uN+qukjizvITLm3Ca2m0Ho=
 github.com/schollz/logger v1.2.0/go.mod h1:P6F4/dGMGcx8wh+kG1zrNEd4vnNpEBY/mwEMd/vn6AM=
 github.com/schollz/mnemonicode v1.0.1 h1:LiH5hwADZwjwnfXsaD4xgnMyTAtaKHN+e5AyjRU6WSU=
@@ -93,6 +97,8 @@ github.com/stretchr/testify v1.6.1 h1:hDPOHmpOpP40lSULcqw7IrRb/u7w6RpDC9399XyoNd
 github.com/stretchr/testify v1.6.1/go.mod h1:6Fq8oRcR53rry900zMqJjRRixrwX3KX962/h/Wwjteg=
 github.com/tscholl2/siec v0.0.0-20191122224205-8da93652b094 h1:tZWtuLE+LbUwT4OP1oWBSB9zXA8qmQ5qEm4kV9R72oo=
 github.com/tscholl2/siec v0.0.0-20191122224205-8da93652b094/go.mod h1:KL9+ubr1JZdaKjgAaHr+tCytEncXBa1pR6FjbTsOJnw=
+github.com/twmb/murmur3 v1.1.5 h1:i9OLS9fkuLzBXjt6dptlAEyk58fJsSTXbRg3SgVyqgk=
+github.com/twmb/murmur3 v1.1.5/go.mod h1:Qq/R7NUyOfr65zD+6Q5IHKsJLwP7exErjN6lyyq3OSQ=
 github.com/urfave/cli/v2 v2.3.0/go.mod h1:LJmUH05zAU44vOAcrfzZQKsZbVcdbOG8rtL3/XcUArI=
 github.com/yuin/goldmark v1.1.25/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=
 golang.org/x/crypto v0.0.0-20190308221718-c2843e01d9a2/go.mod h1:djNgcEr1/C05ACkg1iLfiJU5Ep61QUkGW8qpdssI0+w=
