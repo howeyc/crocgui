@@ -3,7 +3,7 @@
 all: crocgui.apk crocgui
 
 crocgui.apk: main.go send.go recv.go settings.go about.go AndroidManifest.xml fdroid-build.sh
-	ANDROID_HOME=~/android fyne package -os android -release -appID com.github.howeyc.crocgui -icon metadata/en-US/images/icon.png
+	ANDROID_HOME=~/android bash fdroid-build.sh test
 
 crocgui: main.go send.go recv.go settings.go about.go
 	go build

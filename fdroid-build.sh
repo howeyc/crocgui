@@ -12,7 +12,9 @@ export GO_LANG="$PWD/gobuild/golang/go/bin"
 export GO_COMPILED="$GOPATH/bin"
 export PATH="$GO_LANG:$GO_COMPILED:$PATH"
 go version
-go get fyne.io/fyne/v2/cmd/fyne\@v2.0.3-rc2
+go get fyne.io/fyne/v2/cmd/fyne\@v2.0.3
 fyne version
 fyne package -os android -release -appID com.github.howeyc.crocgui -icon metadata/en-US/images/icon.png
-zip -d crocgui.apk "META-INF/*"
+if [[ $# -eq 0 ]]; then
+	zip -d crocgui.apk "META-INF/*"
+fi
