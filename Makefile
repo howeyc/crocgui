@@ -2,8 +2,8 @@
 
 all: crocgui.apk crocgui
 
-crocgui.apk: main.go send.go recv.go settings.go about.go AndroidManifest.xml
-	ANDROID_HOME=~/android ./fyne-mobile-save-filename/fyne package -os android -appID com.github.howeyc.crocgui -icon metadata/en-US/images/icon.png
+crocgui.apk: main.go send.go recv.go settings.go about.go AndroidManifest.xml fdroid-build.sh
+	ANDROID_HOME=~/android fyne package -os android -release -appID com.github.howeyc.crocgui -icon metadata/en-US/images/icon.png
 
 crocgui: main.go send.go recv.go settings.go about.go
 	go build
