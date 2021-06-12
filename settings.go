@@ -21,9 +21,8 @@ func setTheme(themeName string) {
 		a.Settings().SetTheme(theme.DarkTheme())
 	case "black":
 		a.Settings().SetTheme(croctheme.BlackTheme())
-	default:
-		// TODO: get system
-		a.Settings().SetTheme(theme.LightTheme())
+	case "system":
+		// intentionally unset to use fyne default theme
 	}
 }
 
@@ -55,7 +54,7 @@ func setDebugObjects() {
 
 func settingsTabItem(a fyne.App) *container.TabItem {
 	themeBinding := binding.BindPreferenceString("theme", a.Preferences())
-	themeSelect := widget.NewSelect([]string{"light", "dark", "black"}, func(selection string) {
+	themeSelect := widget.NewSelect([]string{"system", "light", "dark", "black"}, func(selection string) {
 		setTheme(selection)
 		themeBinding.Set(selection)
 	})

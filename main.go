@@ -60,7 +60,7 @@ func main() {
 	a.Preferences().SetBool("force-local", a.Preferences().BoolWithFallback("force-local", false))
 	a.Preferences().SetBool("disable-multiplexing", a.Preferences().BoolWithFallback("disable-multiplexing", false))
 	a.Preferences().SetBool("disable-compression", a.Preferences().BoolWithFallback("disable-compression", false))
-	a.Preferences().SetString("theme", a.Preferences().StringWithFallback("theme", "light"))
+	a.Preferences().SetString("theme", a.Preferences().StringWithFallback("theme", "system"))
 	a.Preferences().SetString("debug-level", a.Preferences().StringWithFallback("debug-level", "error"))
 	a.Preferences().SetString("pake-curve", a.Preferences().StringWithFallback("pake-curve", "siec"))
 	a.Preferences().SetString("croc-hash", a.Preferences().StringWithFallback("croc-hash", "xxhash"))
