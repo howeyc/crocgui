@@ -1,0 +1,2 @@
+- fix backspace on android AOSP-based keyboards
+- system theme, follows dark/light of android settings

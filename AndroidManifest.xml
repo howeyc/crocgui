@@ -3,13 +3,14 @@
 	xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
 	package="com.github.howeyc.crocgui"
-	android:versionCode="16"
-	android:versionName="1.8.2">
+	android:versionCode="17"
+	android:versionName="1.8.3">
 
     <application android:label="Croc">
 	<activity android:name="org.golang.app.GoNativeActivity"
 		android:label="Croc"
-		android:configChanges="orientation|keyboardHidden">
+		android:configChanges="orientation|keyboardHidden|uiMode"
+		android:theme="@android:style/Theme">
 		<meta-data android:name="android.app.lib_name" android:value="croc" />
 		<intent-filter>
 			<action android:name="android.intent.action.MAIN" />
