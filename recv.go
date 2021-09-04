@@ -157,7 +157,6 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 								io.Copy(ofile, ifile)
 								ifile.Close()
 								ofile.Close()
-								os.Remove(path)
 								log.Tracef("saved (%s) to user path %s", path, f.URI().String())
 								log.Tracef("remove internal cache file %s", path)
 								diagwg.Done()
@@ -169,6 +168,13 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 						return nil
 					})
 				}
+				// Clear recv dir after finished
+				filepath.Walk(recvDir, func(path string, info fs.FileInfo, err error) error {
+					if !info.IsDir() {
+						os.Remove(path)
+					}
+					return nil
+				})
 			}),
 			prog,
 			status,
