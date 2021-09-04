@@ -50,11 +50,14 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 	prog := widget.NewProgressBar()
 	prog.Hide()
 	recvEntry := widget.NewEntry()
+	recvEntry.OnChanged = func(s string) {
+		recvEntry.Text = strings.ReplaceAll(s, " ", "-")
+	}
 	topline := widget.NewLabel("Enter code to download")
 	return container.NewTabItemWithIcon("Receive", theme.DownloadIcon(),
 		container.NewVBox(
 			topline,
-			widget.NewForm(&widget.FormItem{Text: "Receive Code", Widget: recvEntry}),
+			widget.NewForm(&widget.FormItem{Text: "Receive Code", Widget: recvEntry, HintText: "Spaces ( ) become dash (-)"}),
 			widget.NewButtonWithIcon("Download", theme.DownloadIcon(), func() {
 				receiver, err := croc.New(croc.Options{
 					IsSender:       false,
