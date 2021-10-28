@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
-curl -Lso go.tar.gz https://golang.org/dl/go1.17.linux-amd64.tar.gz
-echo "6bf89fc4f5ad763871cf7eac80a2d594492de7a818303283f1366a7f6a30372d go.tar.gz" | sha256sum -c -
+curl -Lso go.tar.gz https://golang.org/dl/go1.17.2.linux-amd64.tar.gz
+echo "f242a9db6a0ad1846de7b6d94d507915d14062660616a61ef7c808a76e4f1676 go.tar.gz" | sha256sum -c -
 mkdir -p gobuild/golang
 tar -C gobuild/golang -xzf go.tar.gz
 mkdir -p gobuild/gopath
@@ -12,12 +12,11 @@ export GO_LANG="$PWD/gobuild/golang/go/bin"
 export GO_COMPILED="$GOPATH/bin"
 export PATH="$GO_LANG:$GO_COMPILED:$PATH"
 go version
-curl -Lso fyne-backspace-android.zip https://github.com/howeyc/fyne/archive/backspace-android.zip
-unzip fyne-backspace-android.zip
-pushd fyne-backspace-android
-go build fyne.io/fyne/v2/cmd/fyne
-popd
-./fyne-backspace-android/fyne package -os android -release -appID com.github.howeyc.crocgui -icon metadata/en-US/images/icon.png
+go install fyne.io/fyne/v2/cmd/fyne\@v2.1.0
+fyne version
 if [[ $# -eq 0 ]]; then
+	fyne package -os android -release -appID com.github.howeyc.crocgui -icon metadata/en-US/images/icon.png
 	zip -d crocgui.apk "META-INF/*"
+else
+	fyne package -os android -appID com.github.howeyc.crocgui -icon metadata/en-US/images/icon.png
 fi
