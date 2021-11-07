@@ -3,7 +3,7 @@ module crocgui
 go 1.17
 
 require (
-	fyne.io/fyne/v2 v2.1.0
+	fyne.io/fyne/v2 v2.1.1
 	github.com/schollz/croc/v9 v9.4.2
 	github.com/schollz/logger v1.2.0
 )
