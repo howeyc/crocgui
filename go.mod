@@ -4,7 +4,7 @@ go 1.17
 
 require (
 	fyne.io/fyne/v2 v2.1.1
-	github.com/schollz/croc/v9 v9.4.2
+	github.com/schollz/croc/v9 v9.5.0
 	github.com/schollz/logger v1.2.0
 )
 
@@ -34,6 +34,7 @@ require (
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/rivo/uniseg v0.2.0 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
+	github.com/schollz/cli/v2 v2.2.1 // indirect
 	github.com/schollz/mnemonicode v1.0.1 // indirect
 	github.com/schollz/pake/v3 v3.0.2 // indirect
 	github.com/schollz/peerdiscovery v1.6.9 // indirect
@@ -52,6 +53,7 @@ require (
 	golang.org/x/sys v0.0.0-20211002104244-808efd93c36d // indirect
 	golang.org/x/term v0.0.0-20210927222741-03fcf44c2211 // indirect
 	golang.org/x/text v0.3.7 // indirect
+	golang.org/x/time v0.0.0-20211116232009-f0f3c7e86c11 // indirect
 	golang.org/x/tools v0.1.5 // indirect
 	golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1 // indirect
 	gopkg.in/yaml.v3 v3.0.0-20200313102051-9f266ea9e77c // indirect

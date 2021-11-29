@@ -113,6 +113,7 @@ func settingsTabItem(a fyne.App) *container.TabItem {
 			widget.NewFormItem("Hash Algorithm", hashSelect),
 			widget.NewFormItem("", widget.NewCheckWithData("Disable Multiplexing", binding.BindPreferenceBool("disable-multiplexing", a.Preferences()))),
 			widget.NewFormItem("", widget.NewCheckWithData("Disable Compression", binding.BindPreferenceBool("disable-compression", a.Preferences()))),
+			widget.NewFormItem("Upload Speed Throttle", widget.NewEntryWithData(binding.BindPreferenceString("upload-throttle", a.Preferences()))),
 		),
 		widget.NewSeparator(),
 		widget.NewLabelWithStyle("Debug", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),

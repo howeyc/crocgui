@@ -159,6 +159,7 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 			NoCompress:     a.Preferences().Bool("disable-compression"),
 			Curve:          a.Preferences().String("pake-curve"),
 			HashAlgorithm:  a.Preferences().String("croc-hash"),
+			ThrottleUpload: a.Preferences().String("upload-throttle"),
 		})
 		if err != nil {
 			log.Errorf("croc error: %s\n", err.Error())
@@ -184,7 +185,7 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 			for {
 				select {
 				case <-ticker.C:
-					if sender.Step2FileInfoTransfered {
+					if sender.Step2FileInfoTransferred {
 						cnum := sender.FilesToTransferCurrentNum
 						fi := sender.FilesToTransfer[cnum]
 						filename = filepath.Base(fi.Name)

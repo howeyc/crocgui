@@ -90,7 +90,7 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 					for {
 						select {
 						case <-ticker.C:
-							if receiver.Step2FileInfoTransfered {
+							if receiver.Step2FileInfoTransferred {
 								cnum := receiver.FilesToTransferCurrentNum
 								fi := receiver.FilesToTransfer[cnum]
 								filename = filepath.Base(fi.Name)
