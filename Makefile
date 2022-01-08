@@ -8,4 +8,3 @@ crocgui.apk: main.go send.go recv.go settings.go about.go AndroidManifest.xml fd
 clean:
 	go clean
 	rm crocgui.apk
-	rm go.tar.gz
