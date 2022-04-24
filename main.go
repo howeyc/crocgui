@@ -62,7 +62,7 @@ func main() {
 	a.Preferences().SetBool("disable-compression", a.Preferences().BoolWithFallback("disable-compression", false))
 	a.Preferences().SetString("theme", a.Preferences().StringWithFallback("theme", "system"))
 	a.Preferences().SetString("debug-level", a.Preferences().StringWithFallback("debug-level", "error"))
-	a.Preferences().SetString("pake-curve", a.Preferences().StringWithFallback("pake-curve", "siec"))
+	a.Preferences().SetString("pake-curve", a.Preferences().StringWithFallback("pake-curve", "p256"))
 	a.Preferences().SetString("croc-hash", a.Preferences().StringWithFallback("croc-hash", "xxhash"))
 
 	setTheme(a.Preferences().String("theme"))

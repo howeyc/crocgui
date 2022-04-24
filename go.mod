@@ -3,13 +3,12 @@ module crocgui
 go 1.17
 
 require (
-	fyne.io/fyne/v2 v2.1.3
-	github.com/schollz/croc/v9 v9.5.2
+	fyne.io/fyne/v2 v2.1.4
+	github.com/schollz/croc/v9 v9.5.3
 	github.com/schollz/logger v1.2.0
 )
 
 require (
-	github.com/BurntSushi/toml v0.4.1 // indirect
 	github.com/cespare/xxhash v1.1.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/denisbrodbeck/machineid v1.0.1 // indirect
@@ -34,12 +33,12 @@ require (
 	github.com/tscholl2/siec v0.0.0-20210707234609-9bdfc483d499 // indirect
 	github.com/twmb/murmur3 v1.1.6 // indirect
 	github.com/yuin/goldmark v1.3.8 // indirect
-	golang.org/x/crypto v0.0.0-20220214200702-86341886e292 // indirect
+	golang.org/x/crypto v0.0.0-20220321153916-2c7772ba3064 // indirect
 	golang.org/x/image v0.0.0-20200430140353-33d19683fad8 // indirect
-	golang.org/x/net v0.0.0-20220127200216-cd36cc0744dd // indirect
-	golang.org/x/sys v0.0.0-20220222200937-f2425489ef4c // indirect
+	golang.org/x/net v0.0.0-20220325170049-de3da57026de // indirect
+	golang.org/x/sys v0.0.0-20220330033206-e17cdc41300f // indirect
 	golang.org/x/term v0.0.0-20210927222741-03fcf44c2211 // indirect
 	golang.org/x/text v0.3.7 // indirect
-	golang.org/x/time v0.0.0-20220210224613-90d013bbcef8 // indirect
+	golang.org/x/time v0.0.0-20220224211638-0e9765cccd65 // indirect
 	gopkg.in/yaml.v3 v3.0.0-20200313102051-9f266ea9e77c // indirect
 )
