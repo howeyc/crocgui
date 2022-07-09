@@ -206,7 +206,7 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 				filepaths = append(filepaths, fpath)
 			}
 			sendEntry.Disable()
-			fi, emptyfolders, numFolders, ferr := croc.GetFilesInfo(filepaths)
+			fi, emptyfolders, numFolders, ferr := croc.GetFilesInfo(filepaths, false)
 			if ferr != nil {
 				log.Errorf("file info failed: %s\n", ferr)
 			}
