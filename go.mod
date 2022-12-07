@@ -3,8 +3,8 @@ module crocgui
 go 1.18
 
 require (
-	fyne.io/fyne/v2 v2.2.2
-	github.com/schollz/croc/v9 v9.6.0
+	fyne.io/fyne/v2 v2.2.4
+	github.com/schollz/croc/v9 v9.6.2
 	github.com/schollz/logger v1.2.0
 )
 
@@ -25,29 +25,29 @@ require (
 	github.com/gopherjs/gopherjs v1.17.2 // indirect
 	github.com/jsummers/gobmp v0.0.0-20151104160322-e2ba15ffa76e // indirect
 	github.com/kalafut/imohash v1.0.2 // indirect
-	github.com/mattn/go-runewidth v0.0.13 // indirect
+	github.com/mattn/go-runewidth v0.0.14 // indirect
 	github.com/mitchellh/colorstring v0.0.0-20190213212951-d06e56a500db // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
-	github.com/rivo/uniseg v0.2.0 // indirect
+	github.com/rivo/uniseg v0.4.3 // indirect
 	github.com/schollz/mnemonicode v1.0.1 // indirect
-	github.com/schollz/pake/v3 v3.0.4 // indirect
-	github.com/schollz/peerdiscovery v1.6.12 // indirect
-	github.com/schollz/progressbar/v3 v3.8.6 // indirect
+	github.com/schollz/pake/v3 v3.0.5 // indirect
+	github.com/schollz/peerdiscovery v1.6.14 // indirect
+	github.com/schollz/progressbar/v3 v3.12.2 // indirect
 	github.com/srwiley/oksvg v0.0.0-20200311192757-870daf9aa564 // indirect
 	github.com/srwiley/rasterx v0.0.0-20200120212402-85cb7272f5e9 // indirect
 	github.com/stretchr/testify v1.7.2 // indirect
 	github.com/tevino/abool v1.2.0 // indirect
 	github.com/tscholl2/siec v0.0.0-20210707234609-9bdfc483d499 // indirect
 	github.com/twmb/murmur3 v1.1.6 // indirect
-	github.com/yuin/goldmark v1.4.0 // indirect
-	golang.org/x/crypto v0.0.0-20220622213112-05595931fe9d // indirect
+	github.com/yuin/goldmark v1.4.13 // indirect
+	golang.org/x/crypto v0.3.0 // indirect
 	golang.org/x/image v0.0.0-20220601225756-64ec528b34cd // indirect
 	golang.org/x/mobile v0.0.0-20211207041440-4e6c2922fdee // indirect
-	golang.org/x/net v0.0.0-20220706163947-c90051bbdb60 // indirect
-	golang.org/x/sys v0.0.0-20220704084225-05e143d24a9e // indirect
-	golang.org/x/term v0.0.0-20220526004731-065cf7ba2467 // indirect
-	golang.org/x/text v0.3.7 // indirect
-	golang.org/x/time v0.0.0-20220609170525-579cf78fd858 // indirect
+	golang.org/x/net v0.2.0 // indirect
+	golang.org/x/sys v0.3.0 // indirect
+	golang.org/x/term v0.3.0 // indirect
+	golang.org/x/text v0.5.0 // indirect
+	golang.org/x/time v0.3.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	honnef.co/go/js/dom v0.0.0-20210725211120-f030747120f2 // indirect
 )
