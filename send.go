@@ -32,7 +32,7 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 	}()
 	prog := widget.NewProgressBar()
 	prog.Hide()
-	topline := widget.NewLabel("Pick a file to send")
+	topline := widget.NewLabel(lp("Pick a file to send"))
 	randomCode := utils.GetRandomName()
 	sendEntry := widget.NewEntry()
 	sendEntry.SetText(randomCode)
@@ -95,7 +95,7 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 		}, w)
 	})
 
-	debugBox := container.NewHBox(widget.NewLabel("Debug log:"), layout.NewSpacer(), widget.NewButton("Export full log", func() {
+	debugBox := container.NewHBox(widget.NewLabel(lp("Debug log:")), layout.NewSpacer(), widget.NewButton("Export full log", func() {
 		savedialog := dialog.NewFileSave(func(f fyne.URIWriteCloser, e error) {
 			if f != nil {
 				logoutput.buf.WriteTo(f)
@@ -126,7 +126,7 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 			delete(fileentries, fpath)
 		}
 
-		topline.SetText("Pick a file to send")
+		topline.SetText(lp("Pick a file to send"))
 		addFileButton.Show()
 		if sendEntry.Text == randomCode {
 			randomCode = utils.GetRandomName()
@@ -136,7 +136,7 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 		sendEntry.Enable()
 	}
 
-	sendButton = widget.NewButtonWithIcon("Send", theme.MailSendIcon(), func() {
+	sendButton = widget.NewButtonWithIcon(lp("Send"), theme.MailSendIcon(), func() {
 		// Only send if files selected
 		if len(fileentries) < 1 {
 			log.Error("no files selected")
@@ -169,7 +169,7 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 		log.Trace("croc sender created")
 
 		var filename string
-		status.SetText("Receive Code: " + sendEntry.Text)
+		status.SetText(fmt.Sprintf("%s: %s", lp("Receive Code"), sendEntry.Text))
 		copyCodeButton.Show()
 		prog.Show()
 
@@ -190,7 +190,7 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 						fi := sender.FilesToTransfer[cnum]
 						filename = filepath.Base(fi.Name)
 						sendnames[filename] = cnum
-						topline.SetText(fmt.Sprintf("Sending file: %s (%d/%d)", filename, cnum+1, len(sender.FilesToTransfer)))
+						topline.SetText(fmt.Sprintf("%s: (%d/%d)", lp("Sending file"), filename, cnum+1, len(sender.FilesToTransfer)))
 						prog.Max = float64(fi.Size)
 						prog.SetValue(float64(sender.TotalSent))
 					}
@@ -215,7 +215,7 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 			if serr != nil {
 				log.Errorf("Send failed: %s\n", serr)
 			} else {
-				status.SetText(fmt.Sprintf("Sent file %s", filename))
+				status.SetText(fmt.Sprintf("%s %s", lp("Sent file"), filename))
 			}
 			resetSender()
 		}()
@@ -223,22 +223,22 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 			select {
 			case <-cancelchan:
 				donechan <- true
-				status.SetText("Send cancelled.")
+				status.SetText(lp("Send cancelled."))
 			}
 			resetSender()
 		}()
 	})
 
-	cancelButton = widget.NewButtonWithIcon("Cancel", theme.CancelIcon(), func() {
+	cancelButton = widget.NewButtonWithIcon(lp("Cancel"), theme.CancelIcon(), func() {
 		cancelchan <- true
 	})
 
 	activeButtonHolder.Add(sendButton)
 
-	return container.NewTabItemWithIcon("Send", theme.MailSendIcon(),
+	return container.NewTabItemWithIcon(lp("Send"), theme.MailSendIcon(),
 		container.NewVBox(
 			container.NewHBox(topline, layout.NewSpacer(), addFileButton),
-			widget.NewForm(&widget.FormItem{Text: "Send Code", Widget: sendEntry}),
+			widget.NewForm(&widget.FormItem{Text: lp("Send Code"), Widget: sendEntry}),
 			senderScroller,
 			activeButtonHolder,
 			prog,

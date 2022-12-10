@@ -7,6 +7,8 @@ import (
 	"time"
 
 	log "github.com/schollz/logger"
+	"golang.org/x/text/language"
+	"golang.org/x/text/message"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
@@ -53,6 +55,7 @@ func main() {
 	log.SetOutput(&logoutput)
 
 	// Defaults
+	a.Preferences().SetString("lang", a.Preferences().StringWithFallback("lang", "en-US"))
 	a.Preferences().SetString("relay-address", a.Preferences().StringWithFallback("relay-address", "croc.schollz.com:9009"))
 	a.Preferences().SetString("relay-password", a.Preferences().StringWithFallback("relay-password", "pass123"))
 	a.Preferences().SetString("relay-ports", a.Preferences().StringWithFallback("relay-ports", "9009,9010,9011,9012,9013"))
@@ -64,6 +67,9 @@ func main() {
 	a.Preferences().SetString("debug-level", a.Preferences().StringWithFallback("debug-level", "error"))
 	a.Preferences().SetString("pake-curve", a.Preferences().StringWithFallback("pake-curve", "p256"))
 	a.Preferences().SetString("croc-hash", a.Preferences().StringWithFallback("croc-hash", "xxhash"))
+
+	langCode = a.Preferences().String("lang")
+	langPrinter = message.NewPrinter(language.MustParse(langCode))
 
 	setTheme(a.Preferences().String("theme"))
 	log.SetLevel(a.Preferences().String("debug-level"))

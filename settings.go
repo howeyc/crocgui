@@ -4,6 +4,8 @@ import (
 	"crocgui/internal/croctheme"
 
 	log "github.com/schollz/logger"
+	"golang.org/x/text/language"
+	"golang.org/x/text/message"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
@@ -53,6 +55,15 @@ func setDebugObjects() {
 }
 
 func settingsTabItem(a fyne.App) *container.TabItem {
+	langBinding := binding.BindPreferenceString("lang", a.Preferences())
+	langSelect := widget.NewSelect([]string{"en-US"}, func(selection string) {
+		lang := language.MustParse(selection)
+		langPrinter = message.NewPrinter(lang)
+		langBinding.Set(selection)
+	})
+	currentLang, _ := langBinding.Get()
+	langSelect.SetSelected(currentLang)
+
 	themeBinding := binding.BindPreferenceString("theme", a.Preferences())
 	themeSelect := widget.NewSelect([]string{"system", "light", "dark", "black"}, func(selection string) {
 		setTheme(selection)
@@ -76,7 +87,7 @@ func settingsTabItem(a fyne.App) *container.TabItem {
 	hashSelect.SetSelected(currentHash)
 
 	debugLevelBinding := binding.BindPreferenceString("debug-level", a.Preferences())
-	debugCheck := widget.NewCheck("Enable Debug Log", func(debug bool) {
+	debugCheck := widget.NewCheck(lp("Enable Debug Log"), func(debug bool) {
 		if debug {
 			log.SetLevel("trace")
 			debugLevelBinding.Set("trace")
@@ -88,35 +99,39 @@ func settingsTabItem(a fyne.App) *container.TabItem {
 	})
 	debugCheck.SetChecked(crocDebugMode())
 
-	return container.NewTabItemWithIcon("Settings", theme.SettingsIcon(), container.NewVScroll(container.NewVBox(
-		widget.NewLabelWithStyle("Appearance", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
+	return container.NewTabItemWithIcon(lp("Settings"), theme.SettingsIcon(), container.NewVScroll(container.NewVBox(
+		widget.NewLabelWithStyle(lp("Language"), fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
 		widget.NewForm(
-			widget.NewFormItem("Theme", themeSelect),
+			widget.NewFormItem(lp("Language"), langSelect),
+		),
+		widget.NewLabelWithStyle(lp("Appearance"), fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
+		widget.NewForm(
+			widget.NewFormItem(lp("Theme"), themeSelect),
 		),
 		widget.NewSeparator(),
-		widget.NewLabelWithStyle("Relay", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
+		widget.NewLabelWithStyle(lp("Relay"), fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
 		widget.NewForm(
-			widget.NewFormItem("Address", widget.NewEntryWithData(binding.BindPreferenceString("relay-address", a.Preferences()))),
-			widget.NewFormItem("Ports", widget.NewEntryWithData(binding.BindPreferenceString("relay-ports", a.Preferences()))),
-			widget.NewFormItem("Password", widget.NewEntryWithData(binding.BindPreferenceString("relay-password", a.Preferences()))),
+			widget.NewFormItem(lp("Address"), widget.NewEntryWithData(binding.BindPreferenceString("relay-address", a.Preferences()))),
+			widget.NewFormItem(lp("Ports"), widget.NewEntryWithData(binding.BindPreferenceString("relay-ports", a.Preferences()))),
+			widget.NewFormItem(lp("Password"), widget.NewEntryWithData(binding.BindPreferenceString("relay-password", a.Preferences()))),
 		),
 		widget.NewSeparator(),
-		widget.NewLabelWithStyle("Network Local", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
+		widget.NewLabelWithStyle(lp("Network Local"), fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
 		widget.NewForm(
-			widget.NewFormItem("", widget.NewCheckWithData("Disable Local", binding.BindPreferenceBool("disable-local", a.Preferences()))),
-			widget.NewFormItem("", widget.NewCheckWithData("Force Local Only", binding.BindPreferenceBool("force-local", a.Preferences()))),
+			widget.NewFormItem("", widget.NewCheckWithData(lp("Disable Local"), binding.BindPreferenceBool("disable-local", a.Preferences()))),
+			widget.NewFormItem("", widget.NewCheckWithData(lp("Force Local Only"), binding.BindPreferenceBool("force-local", a.Preferences()))),
 		),
 		widget.NewSeparator(),
-		widget.NewLabelWithStyle("Transfer Options", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
+		widget.NewLabelWithStyle(lp("Transfer Options"), fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
 		widget.NewForm(
-			widget.NewFormItem("PAKE Curve", curveSelect),
-			widget.NewFormItem("Hash Algorithm", hashSelect),
-			widget.NewFormItem("", widget.NewCheckWithData("Disable Multiplexing", binding.BindPreferenceBool("disable-multiplexing", a.Preferences()))),
-			widget.NewFormItem("", widget.NewCheckWithData("Disable Compression", binding.BindPreferenceBool("disable-compression", a.Preferences()))),
-			widget.NewFormItem("Upload Speed Throttle", widget.NewEntryWithData(binding.BindPreferenceString("upload-throttle", a.Preferences()))),
+			widget.NewFormItem(lp("PAKE Curve"), curveSelect),
+			widget.NewFormItem(lp("Hash Algorithm"), hashSelect),
+			widget.NewFormItem("", widget.NewCheckWithData(lp("Disable Multiplexing"), binding.BindPreferenceBool("disable-multiplexing", a.Preferences()))),
+			widget.NewFormItem("", widget.NewCheckWithData(lp("Disable Compression"), binding.BindPreferenceBool("disable-compression", a.Preferences()))),
+			widget.NewFormItem(lp("Upload Speed Throttle"), widget.NewEntryWithData(binding.BindPreferenceString("upload-throttle", a.Preferences()))),
 		),
 		widget.NewSeparator(),
-		widget.NewLabelWithStyle("Debug", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
+		widget.NewLabelWithStyle(lp("Debug"), fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
 		widget.NewForm(
 			widget.NewFormItem("", debugCheck),
 		),

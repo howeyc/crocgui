@@ -35,7 +35,7 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 
 	recvDir, _ := os.MkdirTemp("", "crocgui-recv")
 
-	debugBox := container.NewHBox(widget.NewLabel("Debug log:"), layout.NewSpacer(), widget.NewButton("Export full log", func() {
+	debugBox := container.NewHBox(widget.NewLabel(lp("Debug log:")), layout.NewSpacer(), widget.NewButton("Export full log", func() {
 		savedialog := dialog.NewFileSave(func(f fyne.URIWriteCloser, e error) {
 			if f != nil {
 				logoutput.buf.WriteTo(f)
@@ -53,12 +53,12 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 	recvEntry.OnChanged = func(s string) {
 		recvEntry.Text = strings.ReplaceAll(s, " ", "-")
 	}
-	topline := widget.NewLabel("Enter code to download")
-	return container.NewTabItemWithIcon("Receive", theme.DownloadIcon(),
+	topline := widget.NewLabel(lp("Enter code to download"))
+	return container.NewTabItemWithIcon(lp("Receive"), theme.DownloadIcon(),
 		container.NewVBox(
 			topline,
-			widget.NewForm(&widget.FormItem{Text: "Receive Code", Widget: recvEntry, HintText: "Spaces ( ) become dash (-)"}),
-			widget.NewButtonWithIcon("Download", theme.DownloadIcon(), func() {
+			widget.NewForm(&widget.FormItem{Text: lp("Receive Code"), Widget: recvEntry, HintText: "Spaces ( ) become dash (-)"}),
+			widget.NewButtonWithIcon(lp("Download"), theme.DownloadIcon(), func() {
 				receiver, err := croc.New(croc.Options{
 					IsSender:       false,
 					SharedSecret:   recvEntry.Text,
@@ -95,7 +95,7 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 								fi := receiver.FilesToTransfer[cnum]
 								filename = filepath.Base(fi.Name)
 								receivednames[filename] = cnum
-								topline.SetText(fmt.Sprintf("Receiving file: %s (%d/%d)", filename, cnum+1, len(receiver.FilesToTransfer)))
+								topline.SetText(fmt.Sprintf("%s: %s (%d/%d)", lp("Receiving file"), filename, cnum+1, len(receiver.FilesToTransfer)))
 								prog.Max = float64(fi.Size)
 								prog.SetValue(float64(receiver.TotalSent))
 							}
@@ -114,7 +114,7 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 				donechan <- true
 				prog.Hide()
 				prog.SetValue(0)
-				topline.SetText("Enter code to download")
+				topline.SetText(lp("Enter code to download"))
 				if rerr != nil {
 					log.Error("Receive failed: " + rerr.Error())
 				} else {
@@ -128,11 +128,7 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 						return receivednames[filesReceived[i]] < receivednames[filesReceived[j]]
 					})
 
-					plural := ""
-					if len(filesReceived) > 1 {
-						plural = "s"
-					}
-					status.SetText(fmt.Sprintf("Received file%s %s", plural, strings.Join(filesReceived, ",")))
+					status.SetText(fmt.Sprintf("%s: %s", lp("Received"), strings.Join(filesReceived, ",")))
 					filepath.Walk(recvDir, func(path string, info fs.FileInfo, err error) error {
 						if err != nil {
 							return err

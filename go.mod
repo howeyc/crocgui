@@ -6,6 +6,7 @@ require (
 	fyne.io/fyne/v2 v2.2.4
 	github.com/schollz/croc/v9 v9.6.2
 	github.com/schollz/logger v1.2.0
+	golang.org/x/text v0.5.0
 )
 
 require (
@@ -46,7 +47,6 @@ require (
 	golang.org/x/net v0.2.0 // indirect
 	golang.org/x/sys v0.3.0 // indirect
 	golang.org/x/term v0.3.0 // indirect
-	golang.org/x/text v0.5.0 // indirect
 	golang.org/x/time v0.3.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	honnef.co/go/js/dom v0.0.0-20210725211120-f030747120f2 // indirect

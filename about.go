@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"embed"
 	_ "embed"
 	"fmt"
 	"strings"
@@ -13,8 +14,8 @@ import (
 	"fyne.io/fyne/v2/widget"
 )
 
-//go:embed metadata/en-US/full_description.txt
-var longdesc string
+//go:embed metadata
+var metadata embed.FS
 
 //go:embed LICENSE
 var crocguiLicense string
@@ -23,6 +24,8 @@ var crocguiLicense string
 var thirdPartyLicenses string
 
 func aboutTabItem() *container.TabItem {
+	longdescbytes, _ := metadata.ReadFile(fmt.Sprintf("metadata/%s/full_description.txt"), langCode)
+	longdesc := string(longdescbytes)
 	longdesc = strings.ReplaceAll(longdesc, "<b>", "")
 	longdesc = strings.ReplaceAll(longdesc, "</b>", "")
 	aboutInfo := widget.NewLabel(longdesc)
@@ -48,13 +51,13 @@ func aboutTabItem() *container.TabItem {
 		currentLicense += fmt.Sprintln(line)
 	}
 
-	licenseToggle := widget.NewButton("License Info", func() {
-		w := fyne.CurrentApp().NewWindow("licenses")
+	licenseToggle := widget.NewButton(lp("License Info"), func() {
+		w := fyne.CurrentApp().NewWindow(lp("licenses"))
 		w.SetContent(container.NewScroll(acLicense))
 		w.Resize(fyne.NewSize(450, 800))
 		w.Show()
 	})
-	return container.NewTabItemWithIcon("About", theme.InfoIcon(),
+	return container.NewTabItemWithIcon(lp("About"), theme.InfoIcon(),
 		container.NewVScroll(container.NewVBox(aboutInfo, licenseToggle)),
 	)
 }

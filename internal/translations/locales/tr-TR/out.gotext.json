@@ -1,0 +1,170 @@
+{
+    "language": "tr-TR",
+    "messages": [
+        {
+            "id": "Debug log:",
+            "message": "Debug log:",
+            "translation": ""
+        },
+        {
+            "id": "Enter code to download",
+            "message": "Enter code to download",
+            "translation": ""
+        },
+        {
+            "id": "Receive",
+            "message": "Receive",
+            "translation": ""
+        },
+        {
+            "id": "Receive Code",
+            "message": "Receive Code",
+            "translation": ""
+        },
+        {
+            "id": "Download",
+            "message": "Download",
+            "translation": ""
+        },
+        {
+            "id": "Receiving file",
+            "message": "Receiving file",
+            "translation": ""
+        },
+        {
+            "id": "Received",
+            "message": "Received",
+            "translation": ""
+        },
+        {
+            "id": "Pick a file to send",
+            "message": "Pick a file to send",
+            "translation": ""
+        },
+        {
+            "id": "Send",
+            "message": "Send",
+            "translation": ""
+        },
+        {
+            "id": "Sending file",
+            "message": "Sending file",
+            "translation": ""
+        },
+        {
+            "id": "Sent file",
+            "message": "Sent file",
+            "translation": ""
+        },
+        {
+            "id": "Send cancelled.",
+            "message": "Send cancelled.",
+            "translation": ""
+        },
+        {
+            "id": "Cancel",
+            "message": "Cancel",
+            "translation": ""
+        },
+        {
+            "id": "Send Code",
+            "message": "Send Code",
+            "translation": ""
+        },
+        {
+            "id": "Enable Debug Log",
+            "message": "Enable Debug Log",
+            "translation": ""
+        },
+        {
+            "id": "Settings",
+            "message": "Settings",
+            "translation": ""
+        },
+        {
+            "id": "Language",
+            "message": "Language",
+            "translation": ""
+        },
+        {
+            "id": "Appearance",
+            "message": "Appearance",
+            "translation": ""
+        },
+        {
+            "id": "Theme",
+            "message": "Theme",
+            "translation": ""
+        },
+        {
+            "id": "Relay",
+            "message": "Relay",
+            "translation": ""
+        },
+        {
+            "id": "Address",
+            "message": "Address",
+            "translation": ""
+        },
+        {
+            "id": "Ports",
+            "message": "Ports",
+            "translation": ""
+        },
+        {
+            "id": "Password",
+            "message": "Password",
+            "translation": ""
+        },
+        {
+            "id": "Network Local",
+            "message": "Network Local",
+            "translation": ""
+        },
+        {
+            "id": "Disable Local",
+            "message": "Disable Local",
+            "translation": ""
+        },
+        {
+            "id": "Force Local Only",
+            "message": "Force Local Only",
+            "translation": ""
+        },
+        {
+            "id": "Transfer Options",
+            "message": "Transfer Options",
+            "translation": ""
+        },
+        {
+            "id": "PAKE Curve",
+            "message": "PAKE Curve",
+            "translation": ""
+        },
+        {
+            "id": "Hash Algorithm",
+            "message": "Hash Algorithm",
+            "translation": ""
+        },
+        {
+            "id": "Disable Multiplexing",
+            "message": "Disable Multiplexing",
+            "translation": ""
+        },
+        {
+            "id": "Disable Compression",
+            "message": "Disable Compression",
+            "translation": ""
+        },
+        {
+            "id": "Upload Speed Throttle",
+            "message": "Upload Speed Throttle",
+            "translation": ""
+        },
+        {
+            "id": "Debug",
+            "message": "Debug",
+            "translation": ""
+        }
+    ]
+}
