@@ -10,6 +10,8 @@ import (
 	"golang.org/x/text/language"
 	"golang.org/x/text/message"
 
+	_ "crocgui/internal/translations"
+
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/canvas"
@@ -47,6 +49,20 @@ func (lw *logwriter) Write(p []byte) (n int, err error) {
 var logoutput logwriter
 var logbinding binding.String
 
+func refreshWindow(a fyne.App, w fyne.Window) {
+	textlogores := fyne.NewStaticResource("text-logo", textlogobytes)
+	textlogo := canvas.NewImageFromResource(textlogores)
+	textlogo.SetMinSize(fyne.NewSize(205, 100))
+	top := container.NewHBox(layout.NewSpacer(), textlogo, layout.NewSpacer())
+	w.SetContent(container.NewBorder(top, nil, nil, nil,
+		container.NewAppTabs(
+			sendTabItem(a, w),
+			recvTabItem(a, w),
+			settingsTabItem(a, w),
+			aboutTabItem(),
+		)))
+}
+
 func main() {
 	a := app.NewWithID("com.github.howeyc.crocgui")
 	w := a.NewWindow("croc")
@@ -74,19 +90,8 @@ func main() {
 	setTheme(a.Preferences().String("theme"))
 	log.SetLevel(a.Preferences().String("debug-level"))
 
-	textlogores := fyne.NewStaticResource("text-logo", textlogobytes)
-	textlogo := canvas.NewImageFromResource(textlogores)
-	textlogo.SetMinSize(fyne.NewSize(205, 100))
-	top := container.NewHBox(layout.NewSpacer(), textlogo, layout.NewSpacer())
-	w.SetContent(container.NewBorder(top, nil, nil, nil,
-		container.NewAppTabs(
-			sendTabItem(a, w),
-			recvTabItem(a, w),
-			settingsTabItem(a),
-			aboutTabItem(),
-		)))
+	refreshWindow(a, w)
 	w.Resize(fyne.NewSize(800, 600))
-
 	setDebugObjects()
 
 	w.ShowAndRun()

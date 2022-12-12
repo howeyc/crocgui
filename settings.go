@@ -54,12 +54,16 @@ func setDebugObjects() {
 	}
 }
 
-func settingsTabItem(a fyne.App) *container.TabItem {
+func settingsTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 	langBinding := binding.BindPreferenceString("lang", a.Preferences())
 	langSelect := widget.NewSelect([]string{"en-US", "tr-TR"}, func(selection string) {
-		lang := language.MustParse(selection)
-		langPrinter = message.NewPrinter(lang)
 		langBinding.Set(selection)
+		if langCode != selection {
+			langCode = selection
+			lang := language.MustParse(selection)
+			langPrinter = message.NewPrinter(lang)
+			refreshWindow(a, w)
+		}
 	})
 	currentLang, _ := langBinding.Get()
 	langSelect.SetSelected(currentLang)
