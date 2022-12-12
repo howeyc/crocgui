@@ -56,7 +56,7 @@ func setDebugObjects() {
 
 func settingsTabItem(a fyne.App) *container.TabItem {
 	langBinding := binding.BindPreferenceString("lang", a.Preferences())
-	langSelect := widget.NewSelect([]string{"en-US"}, func(selection string) {
+	langSelect := widget.NewSelect([]string{"en-US", "tr-TR"}, func(selection string) {
 		lang := language.MustParse(selection)
 		langPrinter = message.NewPrinter(lang)
 		langBinding.Set(selection)

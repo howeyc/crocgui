@@ -39,79 +39,90 @@ func init() {
 }
 
 var messageKeyToIndex = map[string]int{
-	"Address":                20,
-	"Appearance":             17,
-	"Cancel":                 12,
-	"Debug":                  32,
-	"Debug log:":             0,
-	"Disable Compression":    30,
-	"Disable Local":          24,
-	"Disable Multiplexing":   29,
-	"Download":               4,
-	"Enable Debug Log":       14,
-	"Enter code to download": 1,
-	"Force Local Only":       25,
-	"Hash Algorithm":         28,
-	"Language":               16,
-	"Network Local":          23,
-	"PAKE Curve":             27,
-	"Password":               22,
-	"Pick a file to send":    7,
-	"Ports":                  21,
-	"Receive":                2,
-	"Receive Code":           3,
-	"Received":               6,
-	"Receiving file":         5,
-	"Relay":                  19,
-	"Send":                   8,
-	"Send Code":              13,
-	"Send cancelled.":        11,
-	"Sending file":           9,
-	"Sent file":              10,
-	"Settings":               15,
-	"Theme":                  18,
-	"Transfer Options":       26,
-	"Upload Speed Throttle":  31,
+	"About":                  1,
+	"Address":                22,
+	"Appearance":             19,
+	"Cancel":                 14,
+	"Debug":                  34,
+	"Debug log:":             2,
+	"Disable Compression":    32,
+	"Disable Local":          26,
+	"Disable Multiplexing":   31,
+	"Download":               6,
+	"Enable Debug Log":       16,
+	"Enter code to download": 3,
+	"Force Local Only":       27,
+	"Hash Algorithm":         30,
+	"Language":               18,
+	"License Info":           0,
+	"Network Local":          25,
+	"PAKE Curve":             29,
+	"Password":               24,
+	"Pick a file to send":    9,
+	"Ports":                  23,
+	"Receive":                4,
+	"Receive Code":           5,
+	"Received":               8,
+	"Receiving file":         7,
+	"Relay":                  21,
+	"Send":                   10,
+	"Send Code":              15,
+	"Send cancelled.":        13,
+	"Sending file":           11,
+	"Sent file":              12,
+	"Settings":               17,
+	"Theme":                  20,
+	"Transfer Options":       28,
+	"Upload Speed Throttle":  33,
 }
 
-var en_USIndex = []uint32{ // 34 elements
+var en_USIndex = []uint32{ // 36 elements
 	// Entry 0 - 1F
-	0x00000000, 0x0000000b, 0x00000022, 0x0000002a,
-	0x00000037, 0x00000040, 0x0000004f, 0x00000058,
-	0x0000006c, 0x00000071, 0x0000007e, 0x00000088,
-	0x00000098, 0x0000009f, 0x000000a9, 0x000000ba,
-	0x000000c3, 0x000000cc, 0x000000d7, 0x000000dd,
-	0x000000e3, 0x000000eb, 0x000000f1, 0x000000fa,
-	0x00000108, 0x00000116, 0x00000127, 0x00000138,
-	0x00000143, 0x00000152, 0x00000167, 0x0000017b,
+	0x00000000, 0x0000000d, 0x00000013, 0x0000001e,
+	0x00000035, 0x0000003d, 0x0000004a, 0x00000053,
+	0x00000062, 0x0000006b, 0x0000007f, 0x00000084,
+	0x00000091, 0x0000009b, 0x000000ab, 0x000000b2,
+	0x000000bc, 0x000000cd, 0x000000d6, 0x000000df,
+	0x000000ea, 0x000000f0, 0x000000f6, 0x000000fe,
+	0x00000104, 0x0000010d, 0x0000011b, 0x00000129,
+	0x0000013a, 0x0000014b, 0x00000156, 0x00000165,
 	// Entry 20 - 3F
-	0x00000191, 0x00000197,
-} // Size: 160 bytes
+	0x0000017a, 0x0000018e, 0x000001a4, 0x000001aa,
+} // Size: 168 bytes
 
-const en_USData string = "" + // Size: 407 bytes
-	"\x02Debug log:\x02Enter code to download\x02Receive\x02Receive Code\x02D" +
-	"ownload\x02Receiving file\x02Received\x02Pick a file to send\x02Send\x02" +
-	"Sending file\x02Sent file\x02Send cancelled.\x02Cancel\x02Send Code\x02E" +
-	"nable Debug Log\x02Settings\x02Language\x02Appearance\x02Theme\x02Relay" +
-	"\x02Address\x02Ports\x02Password\x02Network Local\x02Disable Local\x02Fo" +
-	"rce Local Only\x02Transfer Options\x02PAKE Curve\x02Hash Algorithm\x02Di" +
-	"sable Multiplexing\x02Disable Compression\x02Upload Speed Throttle\x02De" +
-	"bug"
+const en_USData string = "" + // Size: 426 bytes
+	"\x02License Info\x02About\x02Debug log:\x02Enter code to download\x02Rec" +
+	"eive\x02Receive Code\x02Download\x02Receiving file\x02Received\x02Pick a" +
+	" file to send\x02Send\x02Sending file\x02Sent file\x02Send cancelled." +
+	"\x02Cancel\x02Send Code\x02Enable Debug Log\x02Settings\x02Language\x02A" +
+	"ppearance\x02Theme\x02Relay\x02Address\x02Ports\x02Password\x02Network L" +
+	"ocal\x02Disable Local\x02Force Local Only\x02Transfer Options\x02PAKE Cu" +
+	"rve\x02Hash Algorithm\x02Disable Multiplexing\x02Disable Compression\x02" +
+	"Upload Speed Throttle\x02Debug"
 
-var tr_TRIndex = []uint32{ // 34 elements
+var tr_TRIndex = []uint32{ // 36 elements
 	// Entry 0 - 1F
-	0x00000000, 0x00000000, 0x00000000, 0x00000000,
-	0x00000000, 0x00000000, 0x00000000, 0x00000000,
-	0x00000000, 0x00000000, 0x00000000, 0x00000000,
-	0x00000000, 0x00000000, 0x00000000, 0x00000000,
-	0x00000000, 0x00000000, 0x00000000, 0x00000000,
-	0x00000000, 0x00000000, 0x00000000, 0x00000000,
-	0x00000000, 0x00000000, 0x00000000, 0x00000000,
-	0x00000000, 0x00000000, 0x00000000, 0x00000000,
+	0x00000000, 0x00000007, 0x00000011, 0x0000002c,
+	0x00000047, 0x0000004d, 0x00000054, 0x0000005b,
+	0x00000066, 0x0000006e, 0x0000008c, 0x00000094,
+	0x000000a8, 0x000000ba, 0x000000d1, 0x000000d8,
+	0x000000e4, 0x0000010f, 0x00000117, 0x0000011b,
+	0x00000127, 0x0000012c, 0x00000132, 0x00000138,
+	0x0000014c, 0x00000153, 0x0000015d, 0x00000171,
+	0x0000018e, 0x000001a4, 0x000001b1, 0x000001c1,
 	// Entry 20 - 3F
-	0x00000000, 0x00000000,
-} // Size: 160 bytes
+	0x000001e5, 0x0000020c, 0x00000227, 0x00000236,
+} // Size: 168 bytes
 
-const tr_TRData string = ""
+const tr_TRData string = "" + // Size: 566 bytes
+	"\x02Lisans\x02Hakkında\x02Hata ayıklama günlüğü\x02İndirmek için kodu gi" +
+	"rin\x02Almak\x02Kod al\x02İndir\x02Dosya alma\x02Alınan\x02Gönderilicek " +
+	"dosyayı seçin\x02Gönder\x02Dosya gönderiliyor\x02Dosya gönderildi\x02Gön" +
+	"derme iptal edildi\x02İptal\x02Kod gönder\x02Hata ayıklama günlüğünü etk" +
+	"inleştir\x02Ayarlar\x02Dil\x02Görünüş\x02Tema\x02Röle\x02Adres\x02Bağlan" +
+	"tı noktası\x02Şifre\x02Yerel ağ\x02Yerel devre dışı\x02Yalnızca yerel ol" +
+	"arak zorla\x02Transfer seçenekleri\x02PAKR eğrisi\x02Karma algoritma\x02" +
+	"Çoğullamayı devre dışı bırak\x02Sıkıştırmayı devre dışı bırak\x02Yüklem" +
+	"e hızını kısma \x02Hata ayıklama"
 
-// Total table size 727 bytes (0KiB); checksum: 2F6077C8
+	// Total table size 1328 bytes (1KiB); checksum: 89CB0FD9

@@ -2,16 +2,6 @@
     "language": "tr-TR",
     "messages": [
         {
-            "id": "License Info",
-            "message": "License Info",
-            "translation": "Lisans"
-        },
-        {
-            "id": "About",
-            "message": "About",
-            "translation": "Hakkında"
-        },
-        {
             "id": "Debug log:",
             "message": "Debug log:",
             "translation": "Hata ayıklama günlüğü"
@@ -175,6 +165,16 @@
             "id": "Debug",
             "message": "Debug",
             "translation": "Hata ayıklama"
-        }
+        },
+		{
+			"id": "About",
+			"message": "About",
+			"translation": "Hakkında"
+		},
+		{
+			"id": "License Info",
+			"message": "License Info",
+			"translation": "Lisans"
+		}
     ]
 }

@@ -24,7 +24,7 @@ var crocguiLicense string
 var thirdPartyLicenses string
 
 func aboutTabItem() *container.TabItem {
-	longdescbytes, _ := metadata.ReadFile(fmt.Sprintf("metadata/%s/full_description.txt"), langCode)
+	longdescbytes, _ := metadata.ReadFile(fmt.Sprintf("metadata/%s/full_description.txt", langCode))
 	longdesc := string(longdescbytes)
 	longdesc = strings.ReplaceAll(longdesc, "<b>", "")
 	longdesc = strings.ReplaceAll(longdesc, "</b>", "")
@@ -52,7 +52,7 @@ func aboutTabItem() *container.TabItem {
 	}
 
 	licenseToggle := widget.NewButton(lp("License Info"), func() {
-		w := fyne.CurrentApp().NewWindow(lp("licenses"))
+		w := fyne.CurrentApp().NewWindow(lp("License Info"))
 		w.SetContent(container.NewScroll(acLicense))
 		w.Resize(fyne.NewSize(450, 800))
 		w.Show()

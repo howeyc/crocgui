@@ -2,6 +2,20 @@
     "language": "en-US",
     "messages": [
         {
+            "id": "License Info",
+            "message": "License Info",
+            "translation": "License Info",
+            "translatorComment": "Copied from source.",
+            "fuzzy": true
+        },
+        {
+            "id": "About",
+            "message": "About",
+            "translation": "About",
+            "translatorComment": "Copied from source.",
+            "fuzzy": true
+        },
+        {
             "id": "Debug log:",
             "message": "Debug log:",
             "translation": "Debug log:",

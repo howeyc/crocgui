@@ -1,0 +1,14 @@
+croc, herhangi iki bilgisayarın dosyaları basit ve güvenli bir şekilde aktarmasını sağlayan bir araçtır.
+
+<b>Özellik</b>
+- izin verir <b>herhangi iki bilgisayar</b> veri aktarmak için bu (Relay kullanarak)
+- <b>uçtan uca şifreleme</b> sağlar (PAKE kullanarak)
+- kolay <b>platformlar arası</b> aktarımlara olanak tanır (Windows, Linux, Mac)
+- <b>birden çok dosya</b> aktarımına izin verir
+- yerel sunucu veya bağlantı noktası iletme <b>gerekli değil</b>
+- <b>ipv6-ilk</b> ipv4 geri dönüş ile
+
+Bu komut satırı uygulaması aşşağıdaki kaynakta bulunabilir:
+
+https://github.com/schollz/croc
+
