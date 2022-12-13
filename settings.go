@@ -104,12 +104,9 @@ func settingsTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 	debugCheck.SetChecked(crocDebugMode())
 
 	return container.NewTabItemWithIcon(lp("Settings"), theme.SettingsIcon(), container.NewVScroll(container.NewVBox(
-		widget.NewLabelWithStyle(lp("Language"), fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
-		widget.NewForm(
-			widget.NewFormItem(lp("Language"), langSelect),
-		),
 		widget.NewLabelWithStyle(lp("Appearance"), fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
 		widget.NewForm(
+			widget.NewFormItem(lp("Language"), langSelect),
 			widget.NewFormItem(lp("Theme"), themeSelect),
 		),
 		widget.NewSeparator(),
