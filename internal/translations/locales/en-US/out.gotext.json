@@ -128,16 +128,16 @@
             "fuzzy": true
         },
         {
-            "id": "Language",
-            "message": "Language",
-            "translation": "Language",
+            "id": "Appearance",
+            "message": "Appearance",
+            "translation": "Appearance",
             "translatorComment": "Copied from source.",
             "fuzzy": true
         },
         {
-            "id": "Appearance",
-            "message": "Appearance",
-            "translation": "Appearance",
+            "id": "Language",
+            "message": "Language",
+            "translation": "Language",
             "translatorComment": "Copied from source.",
             "fuzzy": true
         },

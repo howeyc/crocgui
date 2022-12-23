@@ -1,180 +1,180 @@
 {
-    "language": "tr-TR",
+    "language": "ja-JP",
     "messages": [
         {
             "id": "License Info",
             "message": "License Info",
-            "translation": "Lisans"
+            "translation": "ライセンス情報"
         },
         {
             "id": "About",
             "message": "About",
-            "translation": "Hakkında"
+            "translation": "情報"
         },
         {
             "id": "Debug log:",
             "message": "Debug log:",
-            "translation": "Hata ayıklama günlüğü"
+            "translation": "デバッグログ:"
         },
         {
             "id": "Enter code to download",
             "message": "Enter code to download",
-            "translation": "İndirmek için kodu girin"
+            "translation": "コードを入力してダウンロード"
         },
         {
             "id": "Receive",
             "message": "Receive",
-            "translation": "Almak"
+            "translation": "受信"
         },
         {
             "id": "Receive Code",
             "message": "Receive Code",
-            "translation": "Kod al"
+            "translation": "受信コード"
         },
         {
             "id": "Download",
             "message": "Download",
-            "translation": "İndir"
+            "translation": "ダウンロード"
         },
         {
             "id": "Receiving file",
             "message": "Receiving file",
-            "translation": "Dosya alma"
+            "translation": "ファイルを受信中"
         },
         {
             "id": "Received",
             "message": "Received",
-            "translation": "Alınan"
+            "translation": "受信しました"
         },
         {
             "id": "Pick a file to send",
             "message": "Pick a file to send",
-            "translation": "Gönderilicek dosyayı seçin"
+            "translation": "ファイルを選択して送信"
         },
         {
             "id": "Send",
             "message": "Send",
-            "translation": "Gönder"
+            "translation": "送信"
         },
         {
             "id": "Sending file",
             "message": "Sending file",
-            "translation": "Dosya gönderiliyor"
+            "translation": "ファイルを送信中"
         },
         {
             "id": "Sent file",
             "message": "Sent file",
-            "translation": "Dosya gönderildi"
+            "translation": "ファイルを送信しました"
         },
         {
             "id": "Send cancelled.",
             "message": "Send cancelled.",
-            "translation": "Gönderme iptal edildi"
+            "translation": "送信はキャンセルされました"
         },
         {
             "id": "Cancel",
             "message": "Cancel",
-            "translation": "İptal"
+            "translation": "キャンセル"
         },
         {
             "id": "Send Code",
             "message": "Send Code",
-            "translation": "Kod gönder"
+            "translation": "受信コード"
         },
         {
             "id": "Enable Debug Log",
             "message": "Enable Debug Log",
-            "translation": "Hata ayıklama günlüğünü etkinleştir"
+            "translation": "デバッグログを有効化"
         },
         {
             "id": "Settings",
             "message": "Settings",
-            "translation": "Ayarlar"
+            "translation": "設定"
         },
         {
             "id": "Appearance",
             "message": "Appearance",
-            "translation": "Görünüş"
+            "translation": "外観"
         },
         {
             "id": "Language",
             "message": "Language",
-            "translation": "Dil"
+            "translation": "言語"
         },
         {
             "id": "Theme",
             "message": "Theme",
-            "translation": "Tema"
+            "translation": "テーマ"
         },
         {
             "id": "Relay",
             "message": "Relay",
-            "translation": "Röle"
+            "translation": "リレー"
         },
         {
             "id": "Address",
             "message": "Address",
-            "translation": "Adres"
+            "translation": "アドレス"
         },
         {
             "id": "Ports",
             "message": "Ports",
-            "translation": "Bağlantı noktası"
+            "translation": "ポート"
         },
         {
             "id": "Password",
             "message": "Password",
-            "translation": "Şifre"
+            "translation": "パスワード"
         },
         {
             "id": "Network Local",
             "message": "Network Local",
-            "translation": "Yerel ağ"
+            "translation": "ローカルネットワーク"
         },
         {
             "id": "Disable Local",
             "message": "Disable Local",
-            "translation": "Yerel devre dışı"
+            "translation": "ローカルネットワークを無効化"
         },
         {
             "id": "Force Local Only",
             "message": "Force Local Only",
-            "translation": "Yalnızca yerel olarak zorla"
+            "translation": "ローカルネットワークのみ使用する"
         },
         {
             "id": "Transfer Options",
             "message": "Transfer Options",
-            "translation": "Transfer seçenekleri"
+            "translation": "転送オプション"
         },
         {
             "id": "PAKE Curve",
             "message": "PAKE Curve",
-            "translation": "PAKR eğrisi"
+            "translation": "PAKE Curve"
         },
         {
             "id": "Hash Algorithm",
             "message": "Hash Algorithm",
-            "translation": "Karma algoritma"
+            "translation": "ハッシュ方式"
         },
         {
             "id": "Disable Multiplexing",
             "message": "Disable Multiplexing",
-            "translation": "Çoğullamayı devre dışı bırak"
+            "translation": "多重化を無効にする"
         },
         {
             "id": "Disable Compression",
             "message": "Disable Compression",
-            "translation": "Sıkıştırmayı devre dışı bırak"
+            "translation": "圧縮を無効化"
         },
         {
             "id": "Upload Speed Throttle",
             "message": "Upload Speed Throttle",
-            "translation": "Yükleme hızını kısma "
+            "translation": "アップロード速度の制限"
         },
         {
             "id": "Debug",
             "message": "Debug",
-            "translation": "Hata ayıklama"
+            "translation": "デバッグ"
         }
     ]
 }

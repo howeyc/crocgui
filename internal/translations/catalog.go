@@ -28,6 +28,7 @@ func (d *dictionary) Lookup(key string) (data string, ok bool) {
 func init() {
 	dict := map[string]catalog.Dictionary{
 		"en_US": &dictionary{index: en_USIndex, data: en_USData},
+		"ja_JP": &dictionary{index: ja_JPIndex, data: ja_JPData},
 		"tr_TR": &dictionary{index: tr_TRIndex, data: tr_TRData},
 	}
 	fallback := language.MustParse("en-US")
@@ -41,7 +42,7 @@ func init() {
 var messageKeyToIndex = map[string]int{
 	"About":                  1,
 	"Address":                22,
-	"Appearance":             19,
+	"Appearance":             18,
 	"Cancel":                 14,
 	"Debug":                  34,
 	"Debug log:":             2,
@@ -53,7 +54,7 @@ var messageKeyToIndex = map[string]int{
 	"Enter code to download": 3,
 	"Force Local Only":       27,
 	"Hash Algorithm":         30,
-	"Language":               18,
+	"Language":               19,
 	"License Info":           0,
 	"Network Local":          25,
 	"PAKE Curve":             29,
@@ -82,7 +83,7 @@ var en_USIndex = []uint32{ // 36 elements
 	0x00000035, 0x0000003d, 0x0000004a, 0x00000053,
 	0x00000062, 0x0000006b, 0x0000007f, 0x00000084,
 	0x00000091, 0x0000009b, 0x000000ab, 0x000000b2,
-	0x000000bc, 0x000000cd, 0x000000d6, 0x000000df,
+	0x000000bc, 0x000000cd, 0x000000d6, 0x000000e1,
 	0x000000ea, 0x000000f0, 0x000000f6, 0x000000fe,
 	0x00000104, 0x0000010d, 0x0000011b, 0x00000129,
 	0x0000013a, 0x0000014b, 0x00000156, 0x00000165,
@@ -94,11 +95,33 @@ const en_USData string = "" + // Size: 426 bytes
 	"\x02License Info\x02About\x02Debug log:\x02Enter code to download\x02Rec" +
 	"eive\x02Receive Code\x02Download\x02Receiving file\x02Received\x02Pick a" +
 	" file to send\x02Send\x02Sending file\x02Sent file\x02Send cancelled." +
-	"\x02Cancel\x02Send Code\x02Enable Debug Log\x02Settings\x02Language\x02A" +
-	"ppearance\x02Theme\x02Relay\x02Address\x02Ports\x02Password\x02Network L" +
-	"ocal\x02Disable Local\x02Force Local Only\x02Transfer Options\x02PAKE Cu" +
-	"rve\x02Hash Algorithm\x02Disable Multiplexing\x02Disable Compression\x02" +
-	"Upload Speed Throttle\x02Debug"
+	"\x02Cancel\x02Send Code\x02Enable Debug Log\x02Settings\x02Appearance" +
+	"\x02Language\x02Theme\x02Relay\x02Address\x02Ports\x02Password\x02Networ" +
+	"k Local\x02Disable Local\x02Force Local Only\x02Transfer Options\x02PAKE" +
+	" Curve\x02Hash Algorithm\x02Disable Multiplexing\x02Disable Compression" +
+	"\x02Upload Speed Throttle\x02Debug"
+
+var ja_JPIndex = []uint32{ // 36 elements
+	// Entry 0 - 1F
+	0x00000000, 0x00000016, 0x0000001d, 0x00000031,
+	0x0000005c, 0x00000063, 0x00000073, 0x00000086,
+	0x0000009f, 0x000000b2, 0x000000d4, 0x000000db,
+	0x000000f4, 0x00000116, 0x0000013e, 0x0000014e,
+	0x0000015e, 0x0000017d, 0x00000184, 0x0000018b,
+	0x00000192, 0x0000019c, 0x000001a6, 0x000001b3,
+	0x000001bd, 0x000001cd, 0x000001ec, 0x00000217,
+	0x00000248, 0x0000025e, 0x00000269, 0x0000027c,
+	// Entry 20 - 3F
+	0x00000298, 0x000002ab, 0x000002cd, 0x000002da,
+} // Size: 168 bytes
+
+const ja_JPData string = "" + // Size: 730 bytes
+	"\x02ライセンス情報\x02情報\x02デバッグログ:\x02コードを入力してダウンロード\x02受信\x02受信コード\x02ダウンロード" +
+	"\x02ファイルを受信中\x02受信しました\x02ファイルを選択して送信\x02送信\x02ファイルを送信中\x02ファイルを送信しました" +
+	"\x02送信はキャンセルされました\x02キャンセル\x02受信コード\x02デバッグログを有効化\x02設定\x02外観\x02言語\x02テ" +
+	"ーマ\x02リレー\x02アドレス\x02ポート\x02パスワード\x02ローカルネットワーク\x02ローカルネットワークを無効化\x02ロ" +
+	"ーカルネットワークのみ使用する\x02転送オプション\x02PAKE Curve\x02ハッシュ方式\x02多重化を無効にする\x02圧縮を" +
+	"無効化\x02アップロード速度の制限\x02デバッグ"
 
 var tr_TRIndex = []uint32{ // 36 elements
 	// Entry 0 - 1F
@@ -106,7 +129,7 @@ var tr_TRIndex = []uint32{ // 36 elements
 	0x00000047, 0x0000004d, 0x00000054, 0x0000005b,
 	0x00000066, 0x0000006e, 0x0000008c, 0x00000094,
 	0x000000a8, 0x000000ba, 0x000000d1, 0x000000d8,
-	0x000000e4, 0x0000010f, 0x00000117, 0x0000011b,
+	0x000000e4, 0x0000010f, 0x00000117, 0x00000123,
 	0x00000127, 0x0000012c, 0x00000132, 0x00000138,
 	0x0000014c, 0x00000153, 0x0000015d, 0x00000171,
 	0x0000018e, 0x000001a4, 0x000001b1, 0x000001c1,
@@ -119,10 +142,10 @@ const tr_TRData string = "" + // Size: 566 bytes
 	"rin\x02Almak\x02Kod al\x02İndir\x02Dosya alma\x02Alınan\x02Gönderilicek " +
 	"dosyayı seçin\x02Gönder\x02Dosya gönderiliyor\x02Dosya gönderildi\x02Gön" +
 	"derme iptal edildi\x02İptal\x02Kod gönder\x02Hata ayıklama günlüğünü etk" +
-	"inleştir\x02Ayarlar\x02Dil\x02Görünüş\x02Tema\x02Röle\x02Adres\x02Bağlan" +
+	"inleştir\x02Ayarlar\x02Görünüş\x02Dil\x02Tema\x02Röle\x02Adres\x02Bağlan" +
 	"tı noktası\x02Şifre\x02Yerel ağ\x02Yerel devre dışı\x02Yalnızca yerel ol" +
 	"arak zorla\x02Transfer seçenekleri\x02PAKR eğrisi\x02Karma algoritma\x02" +
 	"Çoğullamayı devre dışı bırak\x02Sıkıştırmayı devre dışı bırak\x02Yüklem" +
 	"e hızını kısma \x02Hata ayıklama"
 
-	// Total table size 1328 bytes (1KiB); checksum: 89CB0FD9
+	// Total table size 2226 bytes (2KiB); checksum: 7FFA3102
