@@ -92,14 +92,14 @@
             "translation": "設定"
         },
         {
-            "id": "Language",
-            "message": "Language",
-            "translation": "言語"
-        },
-        {
             "id": "Appearance",
             "message": "Appearance",
             "translation": "外観"
+        },
+        {
+            "id": "Language",
+            "message": "Language",
+            "translation": "言語"
         },
         {
             "id": "Theme",
