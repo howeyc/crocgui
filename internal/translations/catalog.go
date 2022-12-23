@@ -29,6 +29,7 @@ func init() {
 	dict := map[string]catalog.Dictionary{
 		"en_US": &dictionary{index: en_USIndex, data: en_USData},
 		"tr_TR": &dictionary{index: tr_TRIndex, data: tr_TRData},
+		"ja_JP": &dictionary{index: ja_JPIndex, data: ja_JPData},
 	}
 	fallback := language.MustParse("en-US")
 	cat, err := catalog.NewFromMap(dict, catalog.Fallback(fallback))
