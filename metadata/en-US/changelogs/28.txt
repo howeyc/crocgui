@@ -1,0 +1,2 @@
+- Add Font selection
+- Refresh app view on settings change
