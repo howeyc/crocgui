@@ -41,31 +41,32 @@ func init() {
 
 var messageKeyToIndex = map[string]int{
 	"About":                  1,
-	"Address":                22,
+	"Address":                23,
 	"Appearance":             18,
 	"Cancel":                 14,
-	"Debug":                  34,
+	"Debug":                  35,
 	"Debug log:":             2,
-	"Disable Compression":    32,
-	"Disable Local":          26,
-	"Disable Multiplexing":   31,
+	"Disable Compression":    33,
+	"Disable Local":          27,
+	"Disable Multiplexing":   32,
 	"Download":               6,
 	"Enable Debug Log":       16,
 	"Enter code to download": 3,
-	"Force Local Only":       27,
-	"Hash Algorithm":         30,
+	"Font":                   21,
+	"Force Local Only":       28,
+	"Hash Algorithm":         31,
 	"Language":               19,
 	"License Info":           0,
-	"Network Local":          25,
-	"PAKE Curve":             29,
-	"Password":               24,
+	"Network Local":          26,
+	"PAKE Curve":             30,
+	"Password":               25,
 	"Pick a file to send":    9,
-	"Ports":                  23,
+	"Ports":                  24,
 	"Receive":                4,
 	"Receive Code":           5,
 	"Received":               8,
 	"Receiving file":         7,
-	"Relay":                  21,
+	"Relay":                  22,
 	"Send":                   10,
 	"Send Code":              15,
 	"Send cancelled.":        13,
@@ -73,47 +74,49 @@ var messageKeyToIndex = map[string]int{
 	"Sent file":              12,
 	"Settings":               17,
 	"Theme":                  20,
-	"Transfer Options":       28,
-	"Upload Speed Throttle":  33,
+	"Transfer Options":       29,
+	"Upload Speed Throttle":  34,
 }
 
-var en_USIndex = []uint32{ // 36 elements
+var en_USIndex = []uint32{ // 37 elements
 	// Entry 0 - 1F
 	0x00000000, 0x0000000d, 0x00000013, 0x0000001e,
 	0x00000035, 0x0000003d, 0x0000004a, 0x00000053,
 	0x00000062, 0x0000006b, 0x0000007f, 0x00000084,
 	0x00000091, 0x0000009b, 0x000000ab, 0x000000b2,
 	0x000000bc, 0x000000cd, 0x000000d6, 0x000000e1,
-	0x000000ea, 0x000000f0, 0x000000f6, 0x000000fe,
-	0x00000104, 0x0000010d, 0x0000011b, 0x00000129,
-	0x0000013a, 0x0000014b, 0x00000156, 0x00000165,
+	0x000000ea, 0x000000f0, 0x000000f5, 0x000000fb,
+	0x00000103, 0x00000109, 0x00000112, 0x00000120,
+	0x0000012e, 0x0000013f, 0x00000150, 0x0000015b,
 	// Entry 20 - 3F
-	0x0000017a, 0x0000018e, 0x000001a4, 0x000001aa,
-} // Size: 168 bytes
+	0x0000016a, 0x0000017f, 0x00000193, 0x000001a9,
+	0x000001af,
+} // Size: 172 bytes
 
-const en_USData string = "" + // Size: 426 bytes
+const en_USData string = "" + // Size: 431 bytes
 	"\x02License Info\x02About\x02Debug log:\x02Enter code to download\x02Rec" +
 	"eive\x02Receive Code\x02Download\x02Receiving file\x02Received\x02Pick a" +
 	" file to send\x02Send\x02Sending file\x02Sent file\x02Send cancelled." +
 	"\x02Cancel\x02Send Code\x02Enable Debug Log\x02Settings\x02Appearance" +
-	"\x02Language\x02Theme\x02Relay\x02Address\x02Ports\x02Password\x02Networ" +
-	"k Local\x02Disable Local\x02Force Local Only\x02Transfer Options\x02PAKE" +
-	" Curve\x02Hash Algorithm\x02Disable Multiplexing\x02Disable Compression" +
-	"\x02Upload Speed Throttle\x02Debug"
+	"\x02Language\x02Theme\x02Font\x02Relay\x02Address\x02Ports\x02Password" +
+	"\x02Network Local\x02Disable Local\x02Force Local Only\x02Transfer Optio" +
+	"ns\x02PAKE Curve\x02Hash Algorithm\x02Disable Multiplexing\x02Disable Co" +
+	"mpression\x02Upload Speed Throttle\x02Debug"
 
-var ja_JPIndex = []uint32{ // 36 elements
+var ja_JPIndex = []uint32{ // 37 elements
 	// Entry 0 - 1F
 	0x00000000, 0x00000016, 0x0000001d, 0x00000031,
 	0x0000005c, 0x00000063, 0x00000073, 0x00000086,
 	0x0000009f, 0x000000b2, 0x000000d4, 0x000000db,
 	0x000000f4, 0x00000116, 0x0000013e, 0x0000014e,
 	0x0000015e, 0x0000017d, 0x00000184, 0x0000018b,
-	0x00000192, 0x0000019c, 0x000001a6, 0x000001b3,
-	0x000001bd, 0x000001cd, 0x000001ec, 0x00000217,
-	0x00000248, 0x0000025e, 0x00000269, 0x0000027c,
+	0x00000192, 0x0000019c, 0x0000019c, 0x000001a6,
+	0x000001b3, 0x000001bd, 0x000001cd, 0x000001ec,
+	0x00000217, 0x00000248, 0x0000025e, 0x00000269,
 	// Entry 20 - 3F
-	0x00000298, 0x000002ab, 0x000002cd, 0x000002da,
-} // Size: 168 bytes
+	0x0000027c, 0x00000298, 0x000002ab, 0x000002cd,
+	0x000002da,
+} // Size: 172 bytes
 
 const ja_JPData string = "" + // Size: 730 bytes
 	"\x02ライセンス情報\x02情報\x02デバッグログ:\x02コードを入力してダウンロード\x02受信\x02受信コード\x02ダウンロード" +
@@ -123,19 +126,20 @@ const ja_JPData string = "" + // Size: 730 bytes
 	"ーカルネットワークのみ使用する\x02転送オプション\x02PAKE Curve\x02ハッシュ方式\x02多重化を無効にする\x02圧縮を" +
 	"無効化\x02アップロード速度の制限\x02デバッグ"
 
-var tr_TRIndex = []uint32{ // 36 elements
+var tr_TRIndex = []uint32{ // 37 elements
 	// Entry 0 - 1F
 	0x00000000, 0x00000007, 0x00000011, 0x0000002c,
 	0x00000047, 0x0000004d, 0x00000054, 0x0000005b,
 	0x00000066, 0x0000006e, 0x0000008c, 0x00000094,
 	0x000000a8, 0x000000ba, 0x000000d1, 0x000000d8,
 	0x000000e4, 0x0000010f, 0x00000117, 0x00000123,
-	0x00000127, 0x0000012c, 0x00000132, 0x00000138,
-	0x0000014c, 0x00000153, 0x0000015d, 0x00000171,
-	0x0000018e, 0x000001a4, 0x000001b1, 0x000001c1,
+	0x00000127, 0x0000012c, 0x0000012c, 0x00000132,
+	0x00000138, 0x0000014c, 0x00000153, 0x0000015d,
+	0x00000171, 0x0000018e, 0x000001a4, 0x000001b1,
 	// Entry 20 - 3F
-	0x000001e5, 0x0000020c, 0x00000227, 0x00000236,
-} // Size: 168 bytes
+	0x000001c1, 0x000001e5, 0x0000020c, 0x00000227,
+	0x00000236,
+} // Size: 172 bytes
 
 const tr_TRData string = "" + // Size: 566 bytes
 	"\x02Lisans\x02Hakkında\x02Hata ayıklama günlüğü\x02İndirmek için kodu gi" +
@@ -148,4 +152,4 @@ const tr_TRData string = "" + // Size: 566 bytes
 	"Çoğullamayı devre dışı bırak\x02Sıkıştırmayı devre dışı bırak\x02Yüklem" +
 	"e hızını kısma \x02Hata ayıklama"
 
-	// Total table size 2226 bytes (2KiB); checksum: 7FFA3102
+	// Total table size 2243 bytes (2KiB); checksum: D9C9EDD0

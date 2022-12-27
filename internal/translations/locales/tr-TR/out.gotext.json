@@ -107,6 +107,11 @@
             "translation": "Tema"
         },
         {
+            "id": "Font",
+            "message": "Font",
+            "translation": ""
+        },
+        {
             "id": "Relay",
             "message": "Relay",
             "translation": "Röle"

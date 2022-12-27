@@ -149,6 +149,13 @@
             "fuzzy": true
         },
         {
+            "id": "Font",
+            "message": "Font",
+            "translation": "Font",
+            "translatorComment": "Copied from source.",
+            "fuzzy": true
+        },
+        {
             "id": "Relay",
             "message": "Relay",
             "translation": "Relay",

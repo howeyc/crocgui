@@ -107,6 +107,11 @@
             "translation": "テーマ"
         },
         {
+            "id": "Font",
+            "message": "Font",
+            "translation": ""
+        },
+        {
             "id": "Relay",
             "message": "Relay",
             "translation": "リレー"
