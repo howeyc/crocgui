@@ -1,7 +1,8 @@
 package main
 
 import (
-	"crocgui/internal/croctheme"
+	"embed"
+	"strings"
 
 	log "github.com/schollz/logger"
 	"golang.org/x/text/language"
@@ -14,19 +15,8 @@ import (
 	"fyne.io/fyne/v2/widget"
 )
 
-func setTheme(themeName string) {
-	a := fyne.CurrentApp()
-	switch themeName {
-	case "light":
-		a.Settings().SetTheme(theme.LightTheme())
-	case "dark":
-		a.Settings().SetTheme(theme.DarkTheme())
-	case "black":
-		a.Settings().SetTheme(croctheme.BlackTheme())
-	case "system":
-		// intentionally unset to use fyne default theme
-	}
-}
+//go:embed internal/fonts
+var fsFonts embed.FS
 
 func crocDebugMode() bool {
 	switch fyne.CurrentApp().Preferences().String("debug-level") {
@@ -70,11 +60,38 @@ func settingsTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 
 	themeBinding := binding.BindPreferenceString("theme", a.Preferences())
 	themeSelect := widget.NewSelect([]string{"system", "light", "dark", "black"}, func(selection string) {
-		setTheme(selection)
+		setThemeColor(selection)
 		themeBinding.Set(selection)
 	})
 	currentTheme, _ := themeBinding.Get()
 	themeSelect.SetSelected(currentTheme)
+
+	// Get list of embedded fonts
+	fontSelections := []string{"default"}
+	fontEntries, _ := fsFonts.ReadDir("internal/fonts")
+	for _, fe := range fontEntries {
+		// FiraCode-Regular.ttf -> FiraCode
+		if fbase, _, split := strings.Cut(fe.Name(), "-"); split {
+			found := false
+			for _, fs := range fontSelections {
+				if fs == fbase {
+					found = true
+					break
+				}
+			}
+			if !found {
+				fontSelections = append(fontSelections, fbase)
+			}
+		}
+	}
+
+	fontBinding := binding.BindPreferenceString("font", a.Preferences())
+	fontSelect := widget.NewSelect(fontSelections, func(selection string) {
+		appTheme.fontName = selection
+		fontBinding.Set(selection)
+	})
+	currentFont, _ := fontBinding.Get()
+	fontSelect.SetSelected(currentFont)
 
 	curveBinding := binding.BindPreferenceString("pake-curve", a.Preferences())
 	curveSelect := widget.NewSelect([]string{"siec", "p256", "p348", "p521"}, func(selection string) {
@@ -108,6 +125,7 @@ func settingsTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 		widget.NewForm(
 			widget.NewFormItem(lp("Language"), langSelect),
 			widget.NewFormItem(lp("Theme"), themeSelect),
+			widget.NewFormItem(lp("Font"), fontSelect),
 		),
 		widget.NewSeparator(),
 		widget.NewLabelWithStyle(lp("Relay"), fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),

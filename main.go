@@ -18,6 +18,7 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/data/binding"
 	"fyne.io/fyne/v2/layout"
+	"fyne.io/fyne/v2/theme"
 )
 
 //go:embed metadata/en-US/images/featureGraphic.png
@@ -80,15 +81,25 @@ func main() {
 	a.Preferences().SetBool("disable-multiplexing", a.Preferences().BoolWithFallback("disable-multiplexing", false))
 	a.Preferences().SetBool("disable-compression", a.Preferences().BoolWithFallback("disable-compression", false))
 	a.Preferences().SetString("theme", a.Preferences().StringWithFallback("theme", "system"))
+	a.Preferences().SetString("font", a.Preferences().StringWithFallback("font", "default"))
 	a.Preferences().SetString("debug-level", a.Preferences().StringWithFallback("debug-level", "error"))
 	a.Preferences().SetString("pake-curve", a.Preferences().StringWithFallback("pake-curve", "p256"))
 	a.Preferences().SetString("croc-hash", a.Preferences().StringWithFallback("croc-hash", "xxhash"))
 
+	appTheme.color = theme.DefaultTheme()
+	appTheme.size = theme.DefaultTheme()
+	appTheme.fontName = "default"
+	appTheme.icon = theme.DefaultTheme()
+
 	langCode = a.Preferences().String("lang")
 	langPrinter = message.NewPrinter(language.MustParse(langCode))
 
-	setTheme(a.Preferences().String("theme"))
+	setThemeColor(a.Preferences().String("theme"))
 	log.SetLevel(a.Preferences().String("debug-level"))
+
+	appTheme.fontName = a.Preferences().String("font")
+
+	a.Settings().SetTheme(appTheme)
 
 	refreshWindow(a, w)
 	w.Resize(fyne.NewSize(800, 600))

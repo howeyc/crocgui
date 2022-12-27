@@ -51,6 +51,18 @@ func aboutTabItem() *container.TabItem {
 		currentLicense += fmt.Sprintln(line)
 	}
 
+	// Add font licenses
+	fontEntries, _ := fsFonts.ReadDir("internal/fonts")
+	for _, fe := range fontEntries {
+		if fbase, remain, split := strings.Cut(fe.Name(), "-"); split && remain == "OFL.txt" {
+			bfontLicense, rerr := fsFonts.ReadFile(fmt.Sprintf("internal/fonts/%s", fe.Name()))
+			if rerr == nil {
+				strLicense := string(bfontLicense)
+				acLicense.Append(widget.NewAccordionItem(fmt.Sprintf("Font: %s", fbase), widget.NewLabel(strLicense)))
+			}
+		}
+	}
+
 	licenseToggle := widget.NewButton(lp("License Info"), func() {
 		w := fyne.CurrentApp().NewWindow(lp("License Info"))
 		w.SetContent(container.NewScroll(acLicense))
