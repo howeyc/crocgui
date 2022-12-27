@@ -52,7 +52,7 @@ func settingsTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 			langCode = selection
 			lang := language.MustParse(selection)
 			langPrinter = message.NewPrinter(lang)
-			refreshWindow(a, w)
+			refreshWindow(a, w, 2)
 		}
 	})
 	currentLang, _ := langBinding.Get()
@@ -61,7 +61,11 @@ func settingsTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 	themeBinding := binding.BindPreferenceString("theme", a.Preferences())
 	themeSelect := widget.NewSelect([]string{"system", "light", "dark", "black"}, func(selection string) {
 		setThemeColor(selection)
-		themeBinding.Set(selection)
+		if currentTheme, _ := themeBinding.Get(); currentTheme != selection {
+			themeBinding.Set(selection)
+			a.Settings().SetTheme(appTheme)
+			refreshWindow(a, w, 2)
+		}
 	})
 	currentTheme, _ := themeBinding.Get()
 	themeSelect.SetSelected(currentTheme)
@@ -88,7 +92,11 @@ func settingsTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 	fontBinding := binding.BindPreferenceString("font", a.Preferences())
 	fontSelect := widget.NewSelect(fontSelections, func(selection string) {
 		appTheme.fontName = selection
-		fontBinding.Set(selection)
+		if currentFont, _ := fontBinding.Get(); currentFont != selection {
+			fontBinding.Set(selection)
+			a.Settings().SetTheme(appTheme)
+			refreshWindow(a, w, 2)
+		}
 	})
 	currentFont, _ := fontBinding.Get()
 	fontSelect.SetSelected(currentFont)

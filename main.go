@@ -50,18 +50,20 @@ func (lw *logwriter) Write(p []byte) (n int, err error) {
 var logoutput logwriter
 var logbinding binding.String
 
-func refreshWindow(a fyne.App, w fyne.Window) {
+func refreshWindow(a fyne.App, w fyne.Window, index int) {
 	textlogores := fyne.NewStaticResource("text-logo", textlogobytes)
 	textlogo := canvas.NewImageFromResource(textlogores)
 	textlogo.SetMinSize(fyne.NewSize(205, 100))
 	top := container.NewHBox(layout.NewSpacer(), textlogo, layout.NewSpacer())
-	w.SetContent(container.NewBorder(top, nil, nil, nil,
-		container.NewAppTabs(
-			sendTabItem(a, w),
-			recvTabItem(a, w),
-			settingsTabItem(a, w),
-			aboutTabItem(),
-		)))
+
+	at := container.NewAppTabs(
+		sendTabItem(a, w),
+		recvTabItem(a, w),
+		settingsTabItem(a, w),
+		aboutTabItem(),
+	)
+	at.SelectIndex(index)
+	w.SetContent(container.NewBorder(top, nil, nil, nil, at))
 }
 
 func main() {
@@ -101,7 +103,7 @@ func main() {
 
 	a.Settings().SetTheme(appTheme)
 
-	refreshWindow(a, w)
+	refreshWindow(a, w, 0)
 	w.Resize(fyne.NewSize(800, 600))
 	setDebugObjects()
 
