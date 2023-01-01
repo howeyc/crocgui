@@ -59,7 +59,7 @@ func settingsTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 	langSelect.SetSelected(currentLang)
 
 	themeBinding := binding.BindPreferenceString("theme", a.Preferences())
-	themeSelect := widget.NewSelect([]string{"system", "light", "dark", "black"}, func(selection string) {
+	themeSelect := widget.NewSelect([]string{"system", "light", "grey", "dark", "black"}, func(selection string) {
 		setThemeColor(selection)
 		if currentTheme, _ := themeBinding.Get(); currentTheme != selection {
 			themeBinding.Set(selection)

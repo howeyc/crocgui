@@ -15,7 +15,7 @@ type blackTheme struct{}
 
 var _ fyne.Theme = (*blackTheme)(nil)
 
-func (b blackTheme) Color(name fyne.ThemeColorName, variant fyne.ThemeVariant) color.Color {
+func (b *blackTheme) Color(name fyne.ThemeColorName, variant fyne.ThemeVariant) color.Color {
 	if name == theme.ColorNameBackground {
 		return color.Black
 	}
@@ -26,14 +26,14 @@ func (b blackTheme) Color(name fyne.ThemeColorName, variant fyne.ThemeVariant) c
 	return theme.DarkTheme().Color(name, theme.VariantDark)
 }
 
-func (b blackTheme) Icon(name fyne.ThemeIconName) fyne.Resource {
+func (b *blackTheme) Icon(name fyne.ThemeIconName) fyne.Resource {
 	return theme.DarkTheme().Icon(name)
 }
 
-func (b blackTheme) Font(style fyne.TextStyle) fyne.Resource {
+func (b *blackTheme) Font(style fyne.TextStyle) fyne.Resource {
 	return theme.DarkTheme().Font(style)
 }
 
-func (bm blackTheme) Size(name fyne.ThemeSizeName) float32 {
+func (b *blackTheme) Size(name fyne.ThemeSizeName) float32 {
 	return theme.DarkTheme().Size(name)
 }

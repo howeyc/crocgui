@@ -51,6 +51,8 @@ func setThemeColor(themeName string) {
 	switch themeName {
 	case "light":
 		appTheme.color = theme.LightTheme()
+	case "grey":
+		appTheme.color = croctheme.GreyTheme()
 	case "dark":
 		appTheme.color = theme.DarkTheme()
 	case "black":
