@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
-curl -Lso go.tar.gz https://go.dev/dl/go1.20.linux-amd64.tar.gz
-echo "17700b6e5108e2a2c3b1a43cd865d3f9c66b7f1c5f0cec26d3672cc131cc0994 go.tar.gz" | sha256sum -c -
+curl -Lso go.tar.gz https://go.dev/dl/go1.20.1.linux-amd64.tar.gz
+echo "000a5b1fca4f75895f78befeb2eecf10bfff3c428597f3f1e69133b63b911b02 go.tar.gz" | sha256sum -c -
 mkdir -p gobuild/go{lang,path,cache}
 tar -C gobuild/golang -xzf go.tar.gz
 rm go.tar.gz
