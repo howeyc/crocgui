@@ -5,252 +5,252 @@
             "id": "License Info",
             "message": "License Info",
             "translation": "License Info",
-            "translatorComment": "Copied from source.",
+            "translatorComment": "從原代碼複製。",
             "fuzzy": true
         },
         {
             "id": "About",
             "message": "About",
             "translation": "About",
-            "translatorComment": "Copied from source.",
+            "translatorComment": "從原代碼複製。",
             "fuzzy": true
         },
         {
             "id": "Debug log:",
             "message": "Debug log:",
             "translation": "Debug log:",
-            "translatorComment": "Copied from source.",
+            "translatorComment": "從原代碼複製。",
             "fuzzy": true
         },
         {
             "id": "Enter code to download",
             "message": "Enter code to download",
             "translation": "Enter code to download",
-            "translatorComment": "Copied from source.",
+            "translatorComment": "從原代碼複製。",
             "fuzzy": true
         },
         {
             "id": "Receive",
             "message": "Receive",
             "translation": "Receive",
-            "translatorComment": "Copied from source.",
+            "translatorComment": "從原代碼複製。",
             "fuzzy": true
         },
         {
             "id": "Receive Code",
             "message": "Receive Code",
             "translation": "Receive Code",
-            "translatorComment": "Copied from source.",
+            "translatorComment": "從原代碼複製。",
             "fuzzy": true
         },
         {
             "id": "Download",
             "message": "Download",
             "translation": "Download",
-            "translatorComment": "Copied from source.",
+            "translatorComment": "從原代碼複製。",
             "fuzzy": true
         },
         {
             "id": "Receiving file",
             "message": "Receiving file",
             "translation": "Receiving file",
-            "translatorComment": "Copied from source.",
+            "translatorComment": "從原代碼複製。",
             "fuzzy": true
         },
         {
             "id": "Received",
             "message": "Received",
             "translation": "Received",
-            "translatorComment": "Copied from source.",
+            "translatorComment": "從原代碼複製。",
             "fuzzy": true
         },
         {
             "id": "Pick a file to send",
             "message": "Pick a file to send",
             "translation": "Pick a file to send",
-            "translatorComment": "Copied from source.",
+            "translatorComment": "從原代碼複製。",
             "fuzzy": true
         },
         {
             "id": "Send",
             "message": "Send",
             "translation": "Send",
-            "translatorComment": "Copied from source.",
+            "translatorComment": "從原代碼複製。",
             "fuzzy": true
         },
         {
             "id": "Sending file",
             "message": "Sending file",
             "translation": "Sending file",
-            "translatorComment": "Copied from source.",
+            "translatorComment": "從原代碼複製。",
             "fuzzy": true
         },
         {
             "id": "Sent file",
             "message": "Sent file",
             "translation": "Sent file",
-            "translatorComment": "Copied from source.",
+            "translatorComment": "從原代碼複製。",
             "fuzzy": true
         },
         {
             "id": "Send cancelled.",
             "message": "Send cancelled.",
             "translation": "Send cancelled.",
-            "translatorComment": "Copied from source.",
+            "translatorComment": "從原代碼複製。",
             "fuzzy": true
         },
         {
             "id": "Cancel",
             "message": "Cancel",
             "translation": "Cancel",
-            "translatorComment": "Copied from source.",
+            "translatorComment": "從原代碼複製。",
             "fuzzy": true
         },
         {
             "id": "Send Code",
             "message": "Send Code",
             "translation": "Send Code",
-            "translatorComment": "Copied from source.",
+            "translatorComment": "從原代碼複製。",
             "fuzzy": true
         },
         {
             "id": "Enable Debug Log",
             "message": "Enable Debug Log",
             "translation": "Enable Debug Log",
-            "translatorComment": "Copied from source.",
+            "translatorComment": "從原代碼複製。",
             "fuzzy": true
         },
         {
             "id": "Settings",
             "message": "Settings",
             "translation": "Settings",
-            "translatorComment": "Copied from source.",
+            "translatorComment": "從原代碼複製。",
             "fuzzy": true
         },
         {
             "id": "Appearance",
             "message": "Appearance",
             "translation": "Appearance",
-            "translatorComment": "Copied from source.",
+            "translatorComment": "從原代碼複製。",
             "fuzzy": true
         },
         {
             "id": "Language",
             "message": "Language",
             "translation": "Language",
-            "translatorComment": "Copied from source.",
+            "translatorComment": "從原代碼複製。",
             "fuzzy": true
         },
         {
             "id": "Theme",
             "message": "Theme",
             "translation": "Theme",
-            "translatorComment": "Copied from source.",
+            "translatorComment": "從原代碼複製。",
             "fuzzy": true
         },
         {
             "id": "Font",
             "message": "Font",
             "translation": "Font",
-            "translatorComment": "Copied from source.",
+            "translatorComment": "從原代碼複製。",
             "fuzzy": true
         },
         {
             "id": "Relay",
             "message": "Relay",
             "translation": "Relay",
-            "translatorComment": "Copied from source.",
+            "translatorComment": "從原代碼複製。",
             "fuzzy": true
         },
         {
             "id": "Address",
             "message": "Address",
             "translation": "Address",
-            "translatorComment": "Copied from source.",
+            "translatorComment": "從原代碼複製。",
             "fuzzy": true
         },
         {
             "id": "Ports",
             "message": "Ports",
             "translation": "Ports",
-            "translatorComment": "Copied from source.",
+            "translatorComment": "從原代碼複製。",
             "fuzzy": true
         },
         {
             "id": "Password",
             "message": "Password",
             "translation": "Password",
-            "translatorComment": "Copied from source.",
+            "translatorComment": "從原代碼複製。",
             "fuzzy": true
         },
         {
             "id": "Network Local",
             "message": "Network Local",
             "translation": "Network Local",
-            "translatorComment": "Copied from source.",
+            "translatorComment": "從原代碼複製。",
             "fuzzy": true
         },
         {
             "id": "Disable Local",
             "message": "Disable Local",
             "translation": "Disable Local",
-            "translatorComment": "Copied from source.",
+            "translatorComment": "從原代碼複製。",
             "fuzzy": true
         },
         {
             "id": "Force Local Only",
             "message": "Force Local Only",
             "translation": "Force Local Only",
-            "translatorComment": "Copied from source.",
+            "translatorComment": "從原代碼複製。",
             "fuzzy": true
         },
         {
             "id": "Transfer Options",
             "message": "Transfer Options",
             "translation": "Transfer Options",
-            "translatorComment": "Copied from source.",
+            "translatorComment": "從原代碼複製。",
             "fuzzy": true
         },
         {
             "id": "PAKE Curve",
             "message": "PAKE Curve",
             "translation": "PAKE Curve",
-            "translatorComment": "Copied from source.",
+            "translatorComment": "從原代碼複製。",
             "fuzzy": true
         },
         {
             "id": "Hash Algorithm",
             "message": "Hash Algorithm",
             "translation": "Hash Algorithm",
-            "translatorComment": "Copied from source.",
+            "translatorComment": "從原代碼複製。",
             "fuzzy": true
         },
         {
             "id": "Disable Multiplexing",
             "message": "Disable Multiplexing",
             "translation": "Disable Multiplexing",
-            "translatorComment": "Copied from source.",
+            "translatorComment": "從原代碼複製。",
             "fuzzy": true
         },
         {
             "id": "Disable Compression",
             "message": "Disable Compression",
             "translation": "Disable Compression",
-            "translatorComment": "Copied from source.",
+            "translatorComment": "從原代碼複製。",
             "fuzzy": true
         },
         {
             "id": "Upload Speed Throttle",
             "message": "Upload Speed Throttle",
             "translation": "Upload Speed Throttle",
-            "translatorComment": "Copied from source.",
+            "translatorComment": "從原代碼複製。",
             "fuzzy": true
         },
         {
             "id": "Debug",
             "message": "Debug",
             "translation": "Debug",
-            "translatorComment": "Copied from source.",
+            "translatorComment": "從原代碼複製。",
             "fuzzy": true
         }
     ]
