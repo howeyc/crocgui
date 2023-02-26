@@ -1,5 +1,5 @@
 {
-    "language": "zh-TW",
+    "language": "zh-CN",
     "messages": [
         {
             "id": "Debug log:",
@@ -95,6 +95,11 @@
             "id": "Theme",
             "message": "Theme",
             "translation": "主题"
+        },
+        {
+            "id": "Font",
+            "message": "Font",
+            "translation": "字体"
         },
         {
             "id": "Relay",

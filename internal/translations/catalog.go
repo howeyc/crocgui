@@ -30,6 +30,8 @@ func init() {
 		"en_US": &dictionary{index: en_USIndex, data: en_USData},
 		"ja_JP": &dictionary{index: ja_JPIndex, data: ja_JPData},
 		"tr_TR": &dictionary{index: tr_TRIndex, data: tr_TRData},
+		"zh_CN": &dictionary{index: zh_CNIndex, data: zh_CNData},
+		"zh_TW": &dictionary{index: zh_TWIndex, data: zh_TWData},
 	}
 	fallback := language.MustParse("en-US")
 	cat, err := catalog.NewFromMap(dict, catalog.Fallback(fallback))
@@ -152,4 +154,46 @@ const tr_TRData string = "" + // Size: 566 bytes
 	"Çoğullamayı devre dışı bırak\x02Sıkıştırmayı devre dışı bırak\x02Yüklem" +
 	"e hızını kısma \x02Hata ayıklama"
 
-	// Total table size 2243 bytes (2KiB); checksum: D9C9EDD0
+var zh_CNIndex = []uint32{ // 37 elements
+	// Entry 0 - 1F
+	0x00000000, 0x00000010, 0x00000017, 0x00000025,
+	0x00000038, 0x0000003f, 0x00000049, 0x00000050,
+	0x0000005d, 0x00000067, 0x00000080, 0x00000087,
+	0x00000097, 0x000000a7, 0x000000ba, 0x000000c1,
+	0x000000ce, 0x000000e1, 0x000000e8, 0x000000ef,
+	0x000000f6, 0x000000fd, 0x00000104, 0x0000010b,
+	0x00000112, 0x00000119, 0x00000120, 0x0000012d,
+	0x0000013a, 0x0000014d, 0x0000015a, 0x00000166,
+	// Entry 20 - 3F
+	0x00000173, 0x00000183, 0x00000190, 0x000001a3,
+	0x000001aa,
+} // Size: 172 bytes
+
+const zh_CNData string = "" + // Size: 426 bytes
+	"\x02许可证信息\x02关于\x02除错记录:\x02输入代码下载\x02接收\x02接收码\x02下载\x02接收档案\x02已接收\x02" +
+	"选择要发送的档案\x02发送\x02发送档案中\x02已发送档案\x02发送已取消。\x02取消\x02发送代码\x02启用除错记录\x02" +
+	"设定\x02外观\x02语言\x02主题\x02字体\x02中继\x02地址\x02端口\x02密码\x02本地网络\x02停用本地\x02" +
+	"强制仅限本地\x02传输选项\x02PAKE 曲线\x02哈希算法\x02停用多重化\x02停用压缩\x02上传速度调节\x02除错"
+
+var zh_TWIndex = []uint32{ // 37 elements
+	// Entry 0 - 1F
+	0x00000000, 0x00000010, 0x00000017, 0x00000025,
+	0x00000038, 0x0000003f, 0x00000049, 0x00000050,
+	0x0000005d, 0x00000067, 0x00000080, 0x00000087,
+	0x00000097, 0x000000a7, 0x000000ba, 0x000000c1,
+	0x000000ce, 0x000000e1, 0x000000e8, 0x000000ef,
+	0x000000f6, 0x000000fd, 0x00000104, 0x0000010b,
+	0x00000112, 0x0000011c, 0x00000123, 0x00000130,
+	0x0000013d, 0x00000150, 0x0000015d, 0x00000169,
+	// Entry 20 - 3F
+	0x00000179, 0x00000189, 0x00000196, 0x000001a9,
+	0x000001b0,
+} // Size: 172 bytes
+
+const zh_TWData string = "" + // Size: 432 bytes
+	"\x02許可證資訊\x02關於\x02除錯記錄:\x02輸入代碼下載\x02接收\x02接收碼\x02下載\x02接收檔案\x02已接收\x02" +
+	"選擇要發送的檔案\x02發送\x02發送檔案中\x02已發送檔案\x02發送已取消。\x02取消\x02發送代碼\x02啟用除錯記錄\x02" +
+	"設定\x02外觀\x02語言\x02主題\x02字體\x02中繼\x02地址\x02連接埠\x02密碼\x02本地網路\x02停用本地" +
+	"\x02強制僅限本地\x02傳輸選項\x02PAKE 曲線\x02哈希演算法\x02停用多重化\x02停用壓縮\x02上傳速度調節\x02除錯"
+
+	// Total table size 3445 bytes (3KiB); checksum: 61A9924D

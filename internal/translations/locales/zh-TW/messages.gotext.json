@@ -97,6 +97,11 @@
             "translation": "主題"
         },
         {
+            "id": "Font",
+            "message": "Font",
+            "translation": "字體"
+        },
+        {
             "id": "Relay",
             "message": "Relay",
             "translation": "中繼"
