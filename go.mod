@@ -6,7 +6,7 @@ require (
 	fyne.io/fyne/v2 v2.3.1
 	github.com/schollz/croc/v9 v9.6.2
 	github.com/schollz/logger v1.2.0
-	golang.org/x/text v0.5.0
+	golang.org/x/text v0.7.0
 )
 
 require (
