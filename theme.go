@@ -4,9 +4,11 @@ import (
 	"crocgui/internal/croctheme"
 	"fmt"
 	"image/color"
+	"io"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/theme"
+	"github.com/ulikunitz/xz"
 )
 
 type crocTheme struct {
@@ -31,13 +33,15 @@ func (c crocTheme) Icon(name fyne.ThemeIconName) fyne.Resource {
 }
 
 func (c crocTheme) Font(style fyne.TextStyle) fyne.Resource {
+	ftype := "Regular"
 	if style.Bold {
-		if ttf, lerr := fsFonts.ReadFile(fmt.Sprintf("internal/fonts/%s-Bold.ttf", c.fontName)); lerr == nil {
-			return fyne.NewStaticResource(fmt.Sprintf("%s-Bold.ttf", c.fontName), ttf)
-		}
+		ftype = "Bold"
 	}
-	if ttf, lerr := fsFonts.ReadFile(fmt.Sprintf("internal/fonts/%s-Regular.ttf", c.fontName)); lerr == nil {
-		return fyne.NewStaticResource(fmt.Sprintf("%s-Regular.ttf", c.fontName), ttf)
+
+	if ttfxz, lerr := fsFonts.Open(fmt.Sprintf("internal/fonts/%s-%s.ttf.xz", c.fontName, ftype)); lerr == nil {
+		xr, _ := xz.NewReader(ttfxz)
+		ttf, _ := io.ReadAll(xr)
+		return fyne.NewStaticResource(fmt.Sprintf("%s-%s.ttf", c.fontName, ftype), ttf)
 	}
 
 	return theme.DefaultTheme().Font(style)
