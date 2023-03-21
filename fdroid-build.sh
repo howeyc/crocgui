@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
-curl -Lso go.tar.gz https://go.dev/dl/go1.20.1.linux-amd64.tar.gz
-echo "000a5b1fca4f75895f78befeb2eecf10bfff3c428597f3f1e69133b63b911b02 go.tar.gz" | sha256sum -c -
+curl -Lso go.tar.gz https://go.dev/dl/go1.20.2.linux-amd64.tar.gz
+echo "4eaea32f59cde4dc635fbc42161031d13e1c780b87097f4b4234cfce671f1768 go.tar.gz" | sha256sum -c -
 mkdir -p gobuild/go{lang,path,cache}
 tar -C gobuild/golang -xzf go.tar.gz
 rm go.tar.gz
@@ -11,7 +11,7 @@ export GO_LANG="$PWD/gobuild/golang/go/bin"
 export GO_COMPILED="$GOPATH/bin"
 export PATH="$GO_LANG:$GO_COMPILED:$PATH"
 go version
-go install fyne.io/fyne/v2/cmd/fyne\@v2.3.0
+go install fyne.io/fyne/v2/cmd/fyne\@v2.3.2
 fyne version
 if [[ $# -eq 0 ]]; then
 	fyne package -os android -release -appID com.github.howeyc.crocgui -icon metadata/en-US/images/icon.png
