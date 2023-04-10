@@ -1,0 +1,185 @@
+{
+    "language": "zh-HK",
+    "messages": [
+        {
+            "id": "License Info",
+            "message": "License Info",
+            "translation": "許可證資訊"
+        },
+        {
+            "id": "About",
+            "message": "About",
+            "translation": "關於"
+        },
+        {
+            "id": "Debug log:",
+            "message": "Debug log:",
+            "translation": "除錯記錄:"
+        },
+        {
+            "id": "Enter code to download",
+            "message": "Enter code to download",
+            "translation": "輸入編碼以下載"
+        },
+        {
+            "id": "Receive",
+            "message": "Receive",
+            "translation": "接收"
+        },
+        {
+            "id": "Receive Code",
+            "message": "Receive Code",
+            "translation": "接收碼"
+        },
+        {
+            "id": "Download",
+            "message": "Download",
+            "translation": "下載"
+        },
+        {
+            "id": "Receiving file",
+            "message": "Receiving file",
+            "translation": "接收文件"
+        },
+        {
+            "id": "Received",
+            "message": "Received",
+            "translation": "已接收"
+        },
+        {
+            "id": "Pick a file to send",
+            "message": "Pick a file to send",
+            "translation": "選擇要發送的文件"
+        },
+        {
+            "id": "Send",
+            "message": "Send",
+            "translation": "發送"
+        },
+        {
+            "id": "Sending file",
+            "message": "Sending file",
+            "translation": "發送文件中"
+        },
+        {
+            "id": "Sent file",
+            "message": "Sent file",
+            "translation": "已發送文件"
+        },
+        {
+            "id": "Send cancelled.",
+            "message": "Send cancelled.",
+            "translation": "發送已取消。"
+        },
+        {
+            "id": "Cancel",
+            "message": "Cancel",
+            "translation": "取消"
+        },
+        {
+            "id": "Send Code",
+            "message": "Send Code",
+            "translation": "發送代碼"
+        },
+        {
+            "id": "Enable Debug Log",
+            "message": "Enable Debug Log",
+            "translation": "啟用除錯記錄"
+        },
+        {
+            "id": "Settings",
+            "message": "Settings",
+            "translation": "設定"
+        },
+        {
+            "id": "Appearance",
+            "message": "Appearance",
+            "translation": "外觀"
+        },
+        {
+            "id": "Language",
+            "message": "Language",
+            "translation": "語言"
+        },
+        {
+            "id": "Theme",
+            "message": "Theme",
+            "translation": "主題"
+        },
+        {
+            "id": "Font",
+            "message": "Font",
+            "translation": "字體"
+        },
+        {
+            "id": "Relay",
+            "message": "Relay",
+            "translation": "中繼"
+        },
+        {
+            "id": "Address",
+            "message": "Address",
+            "translation": "地址"
+        },
+        {
+            "id": "Ports",
+            "message": "Ports",
+            "translation": "端口"
+        },
+        {
+            "id": "Password",
+            "message": "Password",
+            "translation": "密碼"
+        },
+        {
+            "id": "Network Local",
+            "message": "Network Local",
+            "translation": "本地網絡"
+        },
+        {
+            "id": "Disable Local",
+            "message": "Disable Local",
+            "translation": "停用本地"
+        },
+        {
+            "id": "Force Local Only",
+            "message": "Force Local Only",
+            "translation": "強制只限本地"
+        },
+        {
+            "id": "Transfer Options",
+            "message": "Transfer Options",
+            "translation": "傳輸選擇"
+        },
+        {
+            "id": "PAKE Curve",
+            "message": "PAKE Curve",
+            "translation": "PAKE 曲線"
+        },
+        {
+            "id": "Hash Algorithm",
+            "message": "Hash Algorithm",
+            "translation": "哈希演算法"
+        },
+        {
+            "id": "Disable Multiplexing",
+            "message": "Disable Multiplexing",
+            "translation": "停用多重化"
+        },
+        {
+            "id": "Disable Compression",
+            "message": "Disable Compression",
+            "translation": "停用壓縮"
+        },
+        {
+            "id": "Upload Speed Throttle",
+            "message": "Upload Speed Throttle",
+            "translation": "上載速度節流"
+        },
+        {
+            "id": "Debug",
+            "message": "Debug",
+            "translation": "除錯"
+        }
+    ]
+}
