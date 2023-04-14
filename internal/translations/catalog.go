@@ -31,6 +31,7 @@ func init() {
 		"ja_JP": &dictionary{index: ja_JPIndex, data: ja_JPData},
 		"tr_TR": &dictionary{index: tr_TRIndex, data: tr_TRData},
 		"zh_CN": &dictionary{index: zh_CNIndex, data: zh_CNData},
+		"zh_HK": &dictionary{index: zh_HKIndex, data: zh_HKData},
 		"zh_TW": &dictionary{index: zh_TWIndex, data: zh_TWData},
 	}
 	fallback := language.MustParse("en-US")
@@ -175,6 +176,27 @@ const zh_CNData string = "" + // Size: 426 bytes
 	"设定\x02外观\x02语言\x02主题\x02字体\x02中继\x02地址\x02端口\x02密码\x02本地网络\x02停用本地\x02" +
 	"强制仅限本地\x02传输选项\x02PAKE 曲线\x02哈希算法\x02停用多重化\x02停用压缩\x02上传速度调节\x02除错"
 
+var zh_HKIndex = []uint32{ // 37 elements
+	// Entry 0 - 1F
+	0x00000000, 0x00000010, 0x00000017, 0x00000025,
+	0x0000003b, 0x00000042, 0x0000004c, 0x00000053,
+	0x00000060, 0x0000006a, 0x00000083, 0x0000008a,
+	0x0000009a, 0x000000aa, 0x000000bd, 0x000000c4,
+	0x000000d1, 0x000000e4, 0x000000eb, 0x000000f2,
+	0x000000f9, 0x00000100, 0x00000107, 0x0000010e,
+	0x00000115, 0x0000011c, 0x00000123, 0x00000130,
+	0x0000013d, 0x00000150, 0x0000015d, 0x00000169,
+	// Entry 20 - 3F
+	0x00000179, 0x00000189, 0x00000196, 0x000001a9,
+	0x000001b0,
+} // Size: 172 bytes
+
+const zh_HKData string = "" + // Size: 432 bytes
+	"\x02許可證資訊\x02關於\x02除錯記錄:\x02輸入編碼以下載\x02接收\x02接收碼\x02下載\x02接收文件\x02已接收" +
+	"\x02選擇要發送的文件\x02發送\x02發送文件中\x02已發送文件\x02發送已取消。\x02取消\x02發送代碼\x02啟用除錯記錄" +
+	"\x02設定\x02外觀\x02語言\x02主題\x02字體\x02中繼\x02地址\x02端口\x02密碼\x02本地網絡\x02停用本地" +
+	"\x02強制只限本地\x02傳輸選擇\x02PAKE 曲線\x02哈希演算法\x02停用多重化\x02停用壓縮\x02上載速度節流\x02除錯"
+
 var zh_TWIndex = []uint32{ // 37 elements
 	// Entry 0 - 1F
 	0x00000000, 0x00000010, 0x00000017, 0x00000025,
@@ -196,4 +218,4 @@ const zh_TWData string = "" + // Size: 432 bytes
 	"設定\x02外觀\x02語言\x02主題\x02字體\x02中繼\x02地址\x02連接埠\x02密碼\x02本地網路\x02停用本地" +
 	"\x02強制僅限本地\x02傳輸選項\x02PAKE 曲線\x02哈希演算法\x02停用多重化\x02停用壓縮\x02上傳速度調節\x02除錯"
 
-	// Total table size 3445 bytes (3KiB); checksum: 61A9924D
+	// Total table size 4049 bytes (3KiB); checksum: 912A54B3
