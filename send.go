@@ -160,6 +160,8 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 			Curve:          a.Preferences().String("pake-curve"),
 			HashAlgorithm:  a.Preferences().String("croc-hash"),
 			ThrottleUpload: a.Preferences().String("upload-throttle"),
+			ZipFolder:      false,
+			GitIgnore:      false,
 		})
 		if err != nil {
 			log.Errorf("croc error: %s\n", err.Error())
@@ -206,7 +208,7 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 				filepaths = append(filepaths, fpath)
 			}
 			sendEntry.Disable()
-			fi, emptyfolders, numFolders, ferr := croc.GetFilesInfo(filepaths, false)
+			fi, emptyfolders, numFolders, ferr := croc.GetFilesInfo(filepaths, false, false)
 			if ferr != nil {
 				log.Errorf("file info failed: %s\n", ferr)
 			}

@@ -3,8 +3,8 @@
 	xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
 	package="com.github.howeyc.crocgui"
-	android:versionCode="32"
-	android:versionName="1.10.12">
+	android:versionCode="33"
+	android:versionName="1.10.13">
 
     <application android:label="Croc">
 	<activity android:name="org.golang.app.GoNativeActivity"
