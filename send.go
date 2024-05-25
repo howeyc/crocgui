@@ -16,8 +16,8 @@ import (
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
-	"github.com/schollz/croc/v9/src/croc"
-	"github.com/schollz/croc/v9/src/utils"
+	"github.com/schollz/croc/v10/src/croc"
+	"github.com/schollz/croc/v10/src/utils"
 )
 
 func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
