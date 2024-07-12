@@ -109,7 +109,7 @@ func settingsTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 	curveSelect.SetSelected(currentCurve)
 
 	hashBinding := binding.BindPreferenceString("croc-hash", a.Preferences())
-	hashSelect := widget.NewSelect([]string{"imohash", "md5", "xxhash"}, func(selection string) {
+	hashSelect := widget.NewSelect([]string{"imohash", "md5", "xxhash", "highway"}, func(selection string) {
 		hashBinding.Set(selection)
 	})
 	currentHash, _ := hashBinding.Get()

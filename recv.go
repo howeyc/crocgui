@@ -150,11 +150,13 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 									log.Error(ierr.Error())
 									return
 								}
-								io.Copy(ofile, ifile)
+								nw, ew := io.Copy(ofile, ifile)
+								if ew != nil {
+									log.Errorf("%s: write failure from %s to %s, wrote %d bytes", ew.Error(), path, f.URI().String(), nw)
+								}
 								ifile.Close()
 								ofile.Close()
 								log.Tracef("saved (%s) to user path %s", path, f.URI().String())
-								log.Tracef("remove internal cache file %s", path)
 								diagwg.Done()
 							}, w)
 							savedialog.SetFileName(filepath.Base(path))
@@ -168,6 +170,7 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 				filepath.Walk(recvDir, func(path string, info fs.FileInfo, err error) error {
 					if !info.IsDir() {
 						os.Remove(path)
+						log.Tracef("remove internal cache file %s", path)
 					}
 					return nil
 				})
