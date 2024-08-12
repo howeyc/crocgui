@@ -23,13 +23,10 @@ import (
 )
 
 func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
-	logInfo := widget.NewLabelWithData(logbinding)
-	logInfo.Wrapping = fyne.TextWrapWord
-
 	status := widget.NewLabel("")
 	defer func() {
 		if r := recover(); r != nil {
-			logInfo.SetText(fmt.Sprint(r))
+			log.Error(fmt.Sprint(r))
 		}
 	}()
 
@@ -178,7 +175,6 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 			prog,
 			status,
 			debugBox,
-			logInfo,
 		))
 
 }

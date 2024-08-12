@@ -21,9 +21,6 @@ import (
 )
 
 func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
-	logInfo := widget.NewLabelWithData(logbinding)
-	logInfo.Wrapping = fyne.TextWrapWord
-
 	status := widget.NewLabel("")
 	defer func() {
 		if r := recover(); r != nil {
@@ -246,6 +243,5 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 			prog,
 			container.NewHBox(status, copyCodeButton),
 			debugBox,
-			logInfo,
 		))
 }
