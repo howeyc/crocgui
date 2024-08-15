@@ -44,12 +44,6 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 	senderScroller := container.NewVScroll(boxholder)
 	fileentries := make(map[string]*fyne.Container)
 
-	sendentryChanged := func() {
-		if entrylen := len(fileentries); entrylen < 6 {
-			senderScroller.SetMinSize(fyne.NewSize(100, 42*float32(entrylen)))
-		}
-	}
-
 	addFileButton := widget.NewButtonWithIcon("", theme.FileIcon(), func() {
 		dialog.ShowFileOpen(func(f fyne.URIReadCloser, e error) {
 			if e != nil {
@@ -81,13 +75,11 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 							os.Remove(fpath)
 							log.Tracef("Removed file from internal cache: %s", fpath)
 							delete(fileentries, fpath)
-							sendentryChanged()
 						}
 					}
 				}))
 				fileentries[fpath] = newentry
 				boxholder.Add(newentry)
-				sendentryChanged()
 			}
 		}, w)
 	})
@@ -234,14 +226,17 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 
 	activeButtonHolder.Add(sendButton)
 
+	sendTop := container.NewVBox(
+		container.NewHBox(topline, layout.NewSpacer(), addFileButton),
+		widget.NewForm(&widget.FormItem{Text: lp("Send Code"), Widget: sendEntry}),
+	)
+	sendBot := container.NewVBox(
+		activeButtonHolder,
+		prog,
+		container.NewHBox(status, copyCodeButton),
+		debugBox,
+	)
+
 	return container.NewTabItemWithIcon(lp("Send"), theme.MailSendIcon(),
-		container.NewVBox(
-			container.NewHBox(topline, layout.NewSpacer(), addFileButton),
-			widget.NewForm(&widget.FormItem{Text: lp("Send Code"), Widget: sendEntry}),
-			senderScroller,
-			activeButtonHolder,
-			prog,
-			container.NewHBox(status, copyCodeButton),
-			debugBox,
-		))
+		container.NewBorder(sendTop, sendBot, nil, nil, senderScroller))
 }

@@ -63,7 +63,13 @@ func refreshWindow(a fyne.App, w fyne.Window, index int) {
 		aboutTabItem(),
 	)
 	at.SelectIndex(index)
-	w.SetContent(container.NewBorder(top, nil, nil, nil, at))
+
+	if a.Preferences().Bool("hide-logo") {
+		w.SetContent(at)
+	} else {
+		w.SetContent(container.NewBorder(top, nil, nil, nil, at))
+	}
+	setDebugObjects()
 }
 
 func main() {
@@ -87,6 +93,7 @@ func main() {
 	a.Preferences().SetString("debug-level", a.Preferences().StringWithFallback("debug-level", "error"))
 	a.Preferences().SetString("pake-curve", a.Preferences().StringWithFallback("pake-curve", "p256"))
 	a.Preferences().SetString("croc-hash", a.Preferences().StringWithFallback("croc-hash", "xxhash"))
+	a.Preferences().SetBool("hide-logo", a.Preferences().BoolWithFallback("hide-logo", false))
 
 	appTheme.color = theme.DefaultTheme()
 	appTheme.size = theme.DefaultTheme()
@@ -105,7 +112,6 @@ func main() {
 
 	refreshWindow(a, w, 0)
 	w.Resize(fyne.NewSize(800, 600))
-	setDebugObjects()
 
 	w.ShowAndRun()
 }

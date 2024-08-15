@@ -128,12 +128,20 @@ func settingsTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 	})
 	debugCheck.SetChecked(crocDebugMode())
 
+	hideLogoBinding := binding.BindPreferenceBool("hide-logo", a.Preferences())
+	toggleLogo := widget.NewButton(lp("Show / Hide"), func() {
+		hideLogo, _ := hideLogoBinding.Get()
+		hideLogoBinding.Set(!hideLogo)
+		refreshWindow(a, w, 2)
+	})
+
 	return container.NewTabItemWithIcon(lp("Settings"), theme.SettingsIcon(), container.NewVScroll(container.NewVBox(
 		widget.NewLabelWithStyle(lp("Appearance"), fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
 		widget.NewForm(
 			widget.NewFormItem(lp("Language"), langSelect),
 			widget.NewFormItem(lp("Theme"), themeSelect),
 			widget.NewFormItem(lp("Font"), fontSelect),
+			widget.NewFormItem(lp("Logo"), toggleLogo),
 		),
 		widget.NewSeparator(),
 		widget.NewLabelWithStyle(lp("Relay"), fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
