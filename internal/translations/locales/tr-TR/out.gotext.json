@@ -87,6 +87,11 @@
             "translation": "Hata ayıklama günlüğünü etkinleştir"
         },
         {
+            "id": "Show / Hide",
+            "message": "Show / Hide",
+            "translation": ""
+        },
+        {
             "id": "Settings",
             "message": "Settings",
             "translation": "Ayarlar"
@@ -109,6 +114,11 @@
         {
             "id": "Font",
             "message": "Font",
+            "translation": ""
+        },
+        {
+            "id": "Logo",
+            "message": "Logo",
             "translation": ""
         },
         {
@@ -145,6 +155,11 @@
             "id": "Force Local Only",
             "message": "Force Local Only",
             "translation": "Yalnızca yerel olarak zorla"
+        },
+        {
+            "id": "Multicast Address",
+            "message": "Multicast Address",
+            "translation": ""
         },
         {
             "id": "Transfer Options",

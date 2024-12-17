@@ -87,6 +87,11 @@
             "translation": "启用除错记录"
         },
         {
+            "id": "Show / Hide",
+            "message": "Show / Hide",
+            "translation": ""
+        },
+        {
             "id": "Settings",
             "message": "Settings",
             "translation": "设定"
@@ -110,6 +115,11 @@
             "id": "Font",
             "message": "Font",
             "translation": "字体"
+        },
+        {
+            "id": "Logo",
+            "message": "Logo",
+            "translation": ""
         },
         {
             "id": "Relay",
@@ -145,6 +155,11 @@
             "id": "Force Local Only",
             "message": "Force Local Only",
             "translation": "强制仅限本地"
+        },
+        {
+            "id": "Multicast Address",
+            "message": "Multicast Address",
+            "translation": ""
         },
         {
             "id": "Transfer Options",

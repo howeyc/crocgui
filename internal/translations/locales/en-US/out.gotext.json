@@ -121,6 +121,13 @@
             "fuzzy": true
         },
         {
+            "id": "Show / Hide",
+            "message": "Show / Hide",
+            "translation": "Show / Hide",
+            "translatorComment": "Copied from source.",
+            "fuzzy": true
+        },
+        {
             "id": "Settings",
             "message": "Settings",
             "translation": "Settings",
@@ -152,6 +159,13 @@
             "id": "Font",
             "message": "Font",
             "translation": "Font",
+            "translatorComment": "Copied from source.",
+            "fuzzy": true
+        },
+        {
+            "id": "Logo",
+            "message": "Logo",
+            "translation": "Logo",
             "translatorComment": "Copied from source.",
             "fuzzy": true
         },
@@ -201,6 +215,13 @@
             "id": "Force Local Only",
             "message": "Force Local Only",
             "translation": "Force Local Only",
+            "translatorComment": "Copied from source.",
+            "fuzzy": true
+        },
+        {
+            "id": "Multicast Address",
+            "message": "Multicast Address",
+            "translation": "Multicast Address",
             "translatorComment": "Copied from source.",
             "fuzzy": true
         },
