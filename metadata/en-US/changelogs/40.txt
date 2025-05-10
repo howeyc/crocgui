@@ -1,0 +1,1 @@
+update to fyne 2.6.1

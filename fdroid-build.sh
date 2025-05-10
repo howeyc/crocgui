@@ -11,7 +11,7 @@ export GO_LANG="$PWD/gobuild/golang/go/bin"
 export GO_COMPILED="$GOPATH/bin"
 export PATH="$GO_LANG:$GO_COMPILED:$PATH"
 go version
-go install fyne.io/fyne/v2/cmd/fyne\@v2.5.5
+go install fyne.io/fyne/v2/cmd/fyne\@v2.6.1
 fyne version
 if [[ $# -eq 0 ]]; then
 	fyne package -os android -release -appID com.github.howeyc.crocgui -icon metadata/en-US/images/icon.png
