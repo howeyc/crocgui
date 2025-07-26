@@ -54,21 +54,44 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 	fileentries := make(map[string]*fyne.Container)
 
 	if android {
-		// setupIntentHandler()
 		go func() {
 			for {
 				select {
 				case <-done:
 					return
+				case text := <-textFromIntent:
+					if text == "" {
+						log.Errorf(`Received text: ""`)
+						continue
+					}
+					log.Tracef(`Received text: "%s"`, text)
+					source, err := os.CreateTemp("", "text*")
+					if err != nil {
+						log.Errorf("%s", err)
+						continue
+					}
+					src := source.Name()
+					_, err = source.WriteString(text)
+					if err != nil {
+						source.Close()
+						os.Remove(src)
+						log.Errorf("%s", err)
+						continue
+					}
+					source.Close()
+					if err := addPath(src, sendDir, fileentries, boxholder, sendEntry); err != nil {
+						log.Errorf("%s\n", err)
+					}
+					os.Remove(src)
 				case uriString := <-uriFromIntent:
 					if uriString == "" {
-						log.Errorf("Received:")
+						log.Errorf(`Received uri: ""`)
 						continue
 					}
 					if _, err := url.Parse(uriString); err == nil {
-						log.Tracef("Received URI: %s", uriString)
+						log.Tracef(`Received URI: "%s"`, uriString)
 					} else {
-						log.Errorf("Received: %s", uriString)
+						log.Errorf(`Received URI: "%s" error: %s`, uriString, err)
 						continue
 					}
 					fyneURI, err := storage.ParseURI(uriString)
@@ -94,6 +117,17 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 						log.Tracef("URI (%s) can't read", uriString)
 						continue
 					}
+					src, err := url.PathUnescape(fyneURI.Path())
+					if err != nil {
+						log.Tracef("Decode URI (%s): %v", fyneURI.Path(), err)
+						continue
+					}
+					dst := filepath.Join(sendDir, filepath.Base(src))
+					if _, has := fileentries[dst]; has {
+						log.Tracef("exists %s", src)
+						continue
+					}
+
 					source, err := storage.Reader(fyneURI)
 					if err != nil {
 						log.Errorf("%s", err.Error())
@@ -423,7 +457,7 @@ func restart(a fyne.App) {
 	if !mobile {
 		exec.Command(os.Args[0]).Start()
 	}
-	quit(a)
+	a.Quit()
 }
 
 type clientShadow struct {
@@ -536,27 +570,27 @@ func copyFromURC(source fyne.URIReadCloser, sendDir string,
 	return nil
 }
 
-func addEntry(fpath string,
+func addEntry(dst string,
 	fileentries map[string]*fyne.Container,
 	boxholder *fyne.Container,
 	sendEntry *widget.Entry) {
-	labelFile := widget.NewLabel(filepath.Base(fpath))
+	labelFile := widget.NewLabel(filepath.Base(dst))
 	newentry := container.NewHBox(
 		labelFile,
 		layout.NewSpacer(),
 		widget.NewButtonWithIcon("", theme.CancelIcon(), func() {
 			if !sendEntry.Disabled() {
-				if fe, ok := fileentries[fpath]; ok {
+				if fe, ok := fileentries[dst]; ok {
 					boxholder.Remove(fe)
-					os.Remove(fpath)
-					log.Tracef("Removed file from internal cache: %s\n", fpath)
-					delete(fileentries, fpath)
+					os.Remove(dst)
+					log.Tracef("Removed file from internal cache: %s\n", dst)
+					delete(fileentries, dst)
 				}
 			}
 		}),
 	)
 
-	fileentries[fpath] = newentry
+	fileentries[dst] = newentry
 	boxholder.Add(newentry)
 }
 func clear(path string) {

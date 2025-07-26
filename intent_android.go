@@ -8,6 +8,7 @@ package main
 #include <string.h>
 
 extern void receiveURIFromIntent(char* uri);
+extern void receiveTextFromIntent(char* text);
 
 static void processIntent(JNIEnv* env, jobject activity) {
     jclass activity_class = (*env)->GetObjectClass(env, activity);
@@ -17,8 +18,44 @@ static void processIntent(JNIEnv* env, jobject activity) {
     if (intent == NULL) return;
 
     jclass intent_class = (*env)->GetObjectClass(env, intent);
-
     if (intent_class == NULL) return;
+
+    //ACTION_SEND text/plain
+    jmethodID getAction = (*env)->GetMethodID(env, intent_class, "getAction", "()Ljava/lang/String;");
+    jstring action = (*env)->CallObjectMethod(env, intent, getAction);
+
+    const char *actionStr = (*env)->GetStringUTFChars(env, action, NULL);
+    int isSend = strcmp(actionStr, "android.intent.action.SEND") == 0;
+    (*env)->ReleaseStringUTFChars(env, action, actionStr);
+    (*env)->DeleteLocalRef(env, action);
+
+    if (isSend) {
+        jmethodID getType = (*env)->GetMethodID(env, intent_class, "getType", "()Ljava/lang/String;");
+        jstring type = (*env)->CallObjectMethod(env, intent, getType);
+
+        if (type != NULL) {
+            const char *typeStr = (*env)->GetStringUTFChars(env, type, NULL);
+            int isTextPlain = strcmp(typeStr, "text/plain") == 0;
+            (*env)->ReleaseStringUTFChars(env, type, typeStr);
+            (*env)->DeleteLocalRef(env, type);
+
+            if (isTextPlain) {
+                jmethodID getStringExtra = (*env)->GetMethodID(env, intent_class,
+                    "getStringExtra", "(Ljava/lang/String;)Ljava/lang/String;");
+                jstring extraKey = (*env)->NewStringUTF(env, "android.intent.extra.TEXT");
+                jstring text = (*env)->CallObjectMethod(env, intent, getStringExtra, extraKey);
+                (*env)->DeleteLocalRef(env, extraKey);
+
+                if (text != NULL) {
+                    const char *textStr = (*env)->GetStringUTFChars(env, text, NULL);
+                    receiveTextFromIntent(strdup(textStr));
+                    (*env)->ReleaseStringUTFChars(env, text, textStr);
+                    (*env)->DeleteLocalRef(env, text);
+                    return;
+                }
+            }
+        }
+    }
 
     // Handle ACTION_VIEW (single URI)
     jmethodID get_data = (*env)->GetMethodID(env, intent_class, "getData", "()Landroid/net/Uri;");
@@ -90,8 +127,18 @@ import (
 
 //export receiveURIFromIntent
 func receiveURIFromIntent(uri *C.char) {
-	uriFromIntent <- C.GoString(uri)
-	C.free(unsafe.Pointer(uri))
+	if uri != nil {
+		uriFromIntent <- C.GoString(uri)
+		C.free(unsafe.Pointer(uri))
+	}
+}
+
+//export receiveTextFromIntent
+func receiveTextFromIntent(text *C.char) {
+	if text != nil {
+		textFromIntent <- C.GoString(text)
+		C.free(unsafe.Pointer(text))
+	}
 }
 
 func setupIntentHandler() {

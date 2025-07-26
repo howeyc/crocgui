@@ -2,8 +2,8 @@
   Icon = "Icon.png"
   Name = "crocgui"
   ID = "com.github.howeyc.crocgui"
-  Version = "1.11.8"
-  Build = 25
+  Version = "1.11.9"
+  Build = 8
 
 [LinuxAndBSD]
   GenericName = "GUI for croc"
