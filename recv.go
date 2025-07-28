@@ -120,6 +120,7 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 				return
 			}
 			if uri == nil {
+				log.Error("User canceled folder selection")
 				return
 			}
 
@@ -130,32 +131,22 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 
 			go func() {
 				for src, fe := range fileentries {
-					dst := filepath.Join(lastSaveDir, filepath.Base(src))
-					var err error
-					if android {
-						u := storage.NewFileURI(dst)
-						if can, _ := storage.CanWrite(u); can {
-							if w, errW := storage.Writer(u); err == nil {
-								err = copyToUWC(w, src)
-								if err == nil {
-									log.Tracef("File %s copied to URI (%s)", src, u.String())
-								}
-							} else {
-								err = errW
-							}
-						} else {
-							err = fmt.Errorf("not can write to URI (%s)", u.String())
-						}
-					} else {
-						err = copyFile(src, dst)
-						if err == nil {
-							log.Tracef("File %s saved to %s", filepath.Base(src), dst)
-						}
+					filename := filepath.Base(src)
+					dstURI, _ := storage.Child(uri, filename)
+
+					w, err := storage.Writer(dstURI)
+					if err != nil {
+						log.Errorf("Error creating writer for %s: %v", filename, err)
+						continue
 					}
 
-					if err != nil {
-						log.Errorf("Error saving file %s: %v", filepath.Base(src), err)
+					if err := copyToUWC(w, src); err != nil {
+						log.Errorf("Error saving %s: %v", filename, err)
+						fyne.Do(func() {
+							topline.SetText(fmt.Sprintf("Error saving %s: %v", filename, err))
+						})
 					} else {
+						log.Tracef("File %s saved to %s", filename, dstURI.String())
 						deleteFile(src, fe)
 					}
 
@@ -335,9 +326,9 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 	saveAllButton := widget.NewButtonWithIcon(lp("Save All"), theme.FolderOpenIcon(), func() {
 		saveAllFiles()
 	})
-	// if mobile {
-	// 	saveAllButton.Hide()
-	// }
+	if android {
+		saveAllButton.Hide()
+	}
 
 	receiveTop := container.NewVBox(
 		container.NewHBox(topline, layout.NewSpacer(), copyCodeButton),
@@ -376,22 +367,19 @@ func copyFile(src, dst string) error {
 
 func copyToUWC(destination fyne.URIWriteCloser, src string) error {
 	if destination == nil {
-		return fmt.Errorf("User cancel dialog")
+		return fmt.Errorf("destination is nil (dialog closed)")
 	}
 	defer destination.Close()
-	dst := destination.URI().String()
-
 	source, err := os.Open(src)
 	if err != nil {
-		fmt.Errorf("Unable to open file %s error: %s", dst, err.Error())
+		return fmt.Errorf("failed to open source file: %v", err)
 	}
 	defer source.Close()
 
-	_, err = io.Copy(destination, source)
-	if err != nil {
-		return fmt.Errorf("File %s copied to URI (%s) error: %s", src, dst, err.Error())
+	if _, err = io.Copy(destination, source); err != nil {
+		return fmt.Errorf("failed to copy file: %v", err)
 	}
-	log.Tracef("File %s copied to URI (%s)", src, dst)
+
 	return nil
 }
 
