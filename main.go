@@ -32,8 +32,6 @@ var textlogobytes []byte
 var (
 	mobile         bool
 	android        bool
-	sendDir        string
-	recvDir        string
 	done           = make(chan bool)
 	uriFromIntent  = make(chan string, 100)
 	textFromIntent = make(chan string, 100)
@@ -95,8 +93,6 @@ func main() {
 	w := a.NewWindow("croc")
 
 	w.SetCloseIntercept(func() {
-		clear(sendDir)
-		clear(recvDir)
 		close(done)
 		w.Close()
 	})

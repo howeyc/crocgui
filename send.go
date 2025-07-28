@@ -47,11 +47,109 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 		a.Clipboard().SetContent(sendEntry.Text)
 	})
 
-	sendDir, _ = os.MkdirTemp("", "crocgui-send")
+	// sendDir, _ = os.MkdirTemp("", "crocgui-send")
+	sendDir := filepath.Join(os.TempDir(), "crocgui-send")
 
 	boxholder := container.NewVBox()
 	senderScroller := container.NewVScroll(boxholder)
 	fileentries := make(map[string]*fyne.Container)
+
+	deleteFile := func(fpath string, fe *fyne.Container) {
+		boxholder.Remove(fe)
+		os.Remove(fpath)
+		log.Tracef("Removed file from internal cache: %s", fpath)
+		delete(fileentries, fpath)
+	}
+
+	addEntry := func(dst string) {
+		labelFile := widget.NewLabel(filepath.Base(dst))
+		newentry := container.NewHBox(
+			labelFile,
+			layout.NewSpacer(),
+			widget.NewButtonWithIcon("", theme.CancelIcon(), func() {
+				if !sendEntry.Disabled() {
+					if fe, ok := fileentries[dst]; ok {
+						deleteFile(dst, fe)
+						// boxholder.Remove(fe)
+						// os.Remove(dst)
+						// log.Tracef("Removed file from internal cache: %s\n", dst)
+						// delete(fileentries, dst)
+					} else {
+						os.Remove(dst)
+					}
+				}
+			}),
+		)
+
+		fileentries[dst] = newentry
+		boxholder.Add(newentry)
+	}
+
+	addPath := func(src string) error {
+		dst := filepath.Join(sendDir, filepath.Base(src))
+
+		fi, err := os.Stat(src)
+		if err != nil {
+			return fmt.Errorf("URI (%s) %s", src, err.Error())
+		} else if fi.IsDir() {
+			log.Tracef("URI (%s), is dir\n", src)
+			return nil
+		}
+
+		fi, err = os.Stat(dst)
+		if err == nil {
+			log.Tracef("URI (%s), already in internal cache %s\n", src, dst)
+			return nil
+		}
+
+		if err := CopyFile(src, dst); err != nil {
+			return fmt.Errorf("Unable to copy file, error: %s - %s\n", sendDir, err.Error())
+		}
+		log.Tracef("URI (%s), copied to internal cache %s\n", src, dst)
+
+		if _, sterr := os.Stat(dst); sterr != nil {
+			return fmt.Errorf("Stat error: %s - %s\n", dst, sterr.Error())
+		}
+		addEntry(dst)
+		return nil
+	}
+
+	copyFromURC := func(source fyne.URIReadCloser) error {
+		if source == nil {
+			return fmt.Errorf("User cancel dialog")
+		}
+		defer source.Close()
+		fyneURI := source.URI()
+		src := fyneURI.String()
+		name := fyneURI.Name()
+		log.Tracef("name %s", name)
+		name = uriBase(fyneURI)
+		log.Tracef("name %s", name)
+
+		dst := filepath.Join(sendDir, name)
+		destination, err := os.Create(dst)
+		if err != nil {
+			return fmt.Errorf("Unable to create file %s error: %s", dst, err.Error())
+		}
+		defer destination.Close()
+
+		io.Copy(destination, source)
+
+		log.Tracef("URI (%s), copied to internal cache %s", src, dst)
+
+		if _, sterr := os.Stat(dst); sterr != nil {
+			return fmt.Errorf("Stat file %s error: %s", dst, sterr.Error())
+		}
+		addEntry(dst)
+		return nil
+	}
+
+	os.MkdirAll(sendDir, 0o700)
+	for _, name := range ls(sendDir) {
+		if name != "" {
+			addEntry(filepath.Join(sendDir, name))
+		}
+	}
 
 	if android {
 		go func() {
@@ -65,7 +163,7 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 						continue
 					}
 					log.Tracef(`Received text: "%s"`, text)
-					source, err := os.CreateTemp("", "text*")
+					source, err := os.CreateTemp(sendDir, "text*")
 					if err != nil {
 						log.Errorf("%s", err)
 						continue
@@ -79,10 +177,8 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 						continue
 					}
 					source.Close()
-					if err := addPath(src, sendDir, fileentries, boxholder, sendEntry); err != nil {
-						log.Errorf("%s\n", err)
-					}
-					os.Remove(src)
+					addEntry(src)
+					SelectIndex(w, 0)
 				case uriString := <-uriFromIntent:
 					if uriString == "" {
 						log.Errorf(`Received uri: ""`)
@@ -117,14 +213,13 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 						log.Tracef("URI (%s) can't read", uriString)
 						continue
 					}
-					src, err := url.PathUnescape(fyneURI.Path())
-					if err != nil {
-						log.Tracef("Decode URI (%s): %v", fyneURI.Path(), err)
-						continue
-					}
-					dst := filepath.Join(sendDir, filepath.Base(src))
+					name := fyneURI.Name()
+					log.Tracef("name %s", name)
+					name = uriBase(fyneURI)
+					log.Tracef("name %s", name)
+					dst := filepath.Join(sendDir, name)
 					if _, has := fileentries[dst]; has {
-						log.Tracef("exists %s", src)
+						log.Tracef("exists %s", dst)
 						continue
 					}
 
@@ -133,16 +228,18 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 						log.Errorf("%s", err.Error())
 						continue
 					}
-					if err := copyFromURC(source, sendDir, fileentries, boxholder, sendEntry); err != nil {
+					if err := copyFromURC(source); err != nil {
 						log.Errorf("%s\n", err)
+						continue
 					}
+					SelectIndex(w, 0)
 				}
 			}
 		}()
 	} else {
 		if len(os.Args) > 0 {
 			for _, src := range os.Args[1:] {
-				if err := addPath(src, sendDir, fileentries, boxholder, sendEntry); err != nil {
+				if err := addPath(src); err != nil {
 					log.Errorf(err.Error())
 				}
 			}
@@ -153,7 +250,7 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 				return
 			}
 			for _, uri := range uris {
-				if err := addPath(uri.Path(), sendDir, fileentries, boxholder, sendEntry); err != nil {
+				if err := addPath(uri.Path()); err != nil {
 					log.Errorf(err.Error())
 				}
 			}
@@ -167,7 +264,7 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 				log.Errorf("Open dialog error: %s", e)
 				return
 			}
-			if err := copyFromURC(source, sendDir, fileentries, boxholder, sendEntry); err != nil {
+			if err := copyFromURC(source); err != nil {
 				log.Errorf("%s\n", err)
 			}
 		}, w)
@@ -337,7 +434,6 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 			case <-cancelchan:
 				log.Warnf("Send cancelled. %s: %v\n", sendDir, ls(sendDir))
 				Stop(sender)
-				clear(sendDir)
 				fyne.Do(func() {
 					restart(a)
 				})
@@ -417,38 +513,6 @@ func SelectIndex(window fyne.Window, index int) {
 		tabs.SelectIndex(index)
 		tabs.Refresh()
 	}
-}
-
-func addPath(src, sendDir string,
-	fileentries map[string]*fyne.Container,
-	boxholder *fyne.Container,
-	sendEntry *widget.Entry) error {
-	dst := filepath.Join(sendDir, filepath.Base(src))
-
-	fi, err := os.Stat(src)
-	if err != nil {
-		return fmt.Errorf("URI (%s) %s", src, err.Error())
-	} else if fi.IsDir() {
-		log.Tracef("URI (%s), is dir\n", src)
-		return nil
-	}
-
-	fi, err = os.Stat(dst)
-	if err == nil {
-		log.Tracef("URI (%s), already in internal cache %s\n", src, dst)
-		return nil
-	}
-
-	if err := CopyFile(src, dst); err != nil {
-		return fmt.Errorf("Unable to copy file, error: %s - %s\n", sendDir, err.Error())
-	}
-	log.Tracef("URI (%s), copied to internal cache %s\n", src, dst)
-
-	if _, sterr := os.Stat(dst); sterr != nil {
-		return fmt.Errorf("Stat error: %s - %s\n", dst, sterr.Error())
-	}
-	addEntry(dst, fileentries, boxholder, sendEntry)
-	return nil
 }
 
 // For mobile Quit.
@@ -535,68 +599,5 @@ func Stop(client interface{}) {
 		}
 	} else {
 		log.Errorf("Stop: %v\n", err)
-	}
-}
-
-func copyFromURC(source fyne.URIReadCloser, sendDir string,
-	fileentries map[string]*fyne.Container,
-	boxholder *fyne.Container,
-	sendEntry *widget.Entry) error {
-	if source == nil {
-		return fmt.Errorf("User cancel dialog")
-	}
-	defer source.Close()
-	// src := source.URI().String()
-	src, err := url.PathUnescape(source.URI().Path())
-	if err != nil {
-		return fmt.Errorf("Decode URI (%s): %v", source.URI().Path(), err)
-	}
-
-	dst := filepath.Join(sendDir, filepath.Base(src))
-	destination, err := os.Create(dst)
-	if err != nil {
-		return fmt.Errorf("Unable to create file %s error: %s", dst, err.Error())
-	}
-	defer destination.Close()
-
-	io.Copy(destination, source)
-
-	log.Tracef("URI (%s), copied to internal cache %s", src, dst)
-
-	if _, sterr := os.Stat(dst); sterr != nil {
-		return fmt.Errorf("Stat file %s error: %s", dst, sterr.Error())
-	}
-	addEntry(dst, fileentries, boxholder, sendEntry)
-	return nil
-}
-
-func addEntry(dst string,
-	fileentries map[string]*fyne.Container,
-	boxholder *fyne.Container,
-	sendEntry *widget.Entry) {
-	labelFile := widget.NewLabel(filepath.Base(dst))
-	newentry := container.NewHBox(
-		labelFile,
-		layout.NewSpacer(),
-		widget.NewButtonWithIcon("", theme.CancelIcon(), func() {
-			if !sendEntry.Disabled() {
-				if fe, ok := fileentries[dst]; ok {
-					boxholder.Remove(fe)
-					os.Remove(dst)
-					log.Tracef("Removed file from internal cache: %s\n", dst)
-					delete(fileentries, dst)
-				}
-			}
-		}),
-	)
-
-	fileentries[dst] = newentry
-	boxholder.Add(newentry)
-}
-func clear(path string) {
-	lsPath := ls(path)
-	log.Warnf("%s: %v\n", path, lsPath)
-	if len(lsPath) > 0 {
-		log.Tracef("Clear %s %v\n", path, os.RemoveAll(path))
 	}
 }

@@ -12,6 +12,7 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/layout"
+	"fyne.io/fyne/v2/storage"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 	"github.com/schollz/croc/v10/src/croc"
@@ -34,11 +35,66 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 		recvEntry.SetText(a.Clipboard().Content())
 	})
 
-	recvDir, _ = os.MkdirTemp("", "crocgui-recv")
+	// recvDir, _ := os.MkdirTemp("", "crocgui-recv")
+	recvDir := filepath.Join(os.TempDir(), "crocgui-recv")
 
 	boxholder := container.NewVBox()
 	receiverScroller := container.NewVScroll(boxholder)
 	fileentries := make(map[string]*fyne.Container)
+
+	deleteFile := func(fpath string, fe *fyne.Container) {
+		boxholder.Remove(fe)
+		os.Remove(fpath)
+		log.Tracef("Removed received file: %s", fpath)
+		delete(fileentries, fpath)
+	}
+
+	ShowFileLocation := func(src string, parent fyne.Window) {
+		savedialog := dialog.NewFileSave(func(destination fyne.URIWriteCloser, e error) {
+			if err := copyToUWC(destination, src); err != nil {
+				log.Error("%s\n", err)
+			} else {
+				if _, ok := fileentries[src]; ok {
+					deleteFile(src, fileentries[src])
+				} else {
+					os.Remove(src)
+				}
+			}
+		}, parent)
+		savedialog.SetFileName(filepath.Base(src))
+		savedialog.Resize(parent.Canvas().Size())
+		savedialog.Show()
+	}
+
+	addEntry := func(fpath string) {
+		labelFile := widget.NewLabel(filepath.Base(fpath))
+
+		openButton := widget.NewButtonWithIcon("", theme.DocumentSaveIcon(), func() {
+			ShowFileLocation(fpath, w)
+		})
+
+		deleteButton := widget.NewButtonWithIcon("", theme.CancelIcon(), func() {
+			if fe, ok := fileentries[fpath]; ok {
+				deleteFile(fpath, fe)
+			}
+		})
+
+		newentry := container.NewHBox(
+			labelFile,
+			layout.NewSpacer(),
+			openButton,
+			deleteButton,
+		)
+		fileentries[fpath] = newentry
+		boxholder.Add(newentry)
+	}
+
+	os.MkdirAll(recvDir, 0o700)
+	for _, name := range ls(recvDir) {
+		if name != "" {
+			addEntry(filepath.Join(recvDir, name))
+		}
+	}
 
 	var lastSaveDir string
 
@@ -48,10 +104,7 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 
 	deleteAllFiles := func() {
 		for fpath, fe := range fileentries {
-			boxholder.Remove(fe)
-			os.Remove(fpath)
-			log.Tracef("Removed received file: %s", fpath)
-			delete(fileentries, fpath)
+			deleteFile(fpath, fe)
 		}
 	}
 
@@ -76,12 +129,34 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 			prog.SetValue(0)
 
 			go func() {
-				for src := range fileentries {
-					dest := filepath.Join(lastSaveDir, filepath.Base(src))
-					err := copyFile(src, dest)
+				for src, fe := range fileentries {
+					dst := filepath.Join(lastSaveDir, filepath.Base(src))
+					var err error
+					if android {
+						u := storage.NewFileURI(dst)
+						if can, _ := storage.CanWrite(u); can {
+							if w, errW := storage.Writer(u); err == nil {
+								err = copyToUWC(w, src)
+								if err == nil {
+									log.Tracef("File %s copied to URI (%s)", src, u.String())
+								}
+							} else {
+								err = errW
+							}
+						} else {
+							err = fmt.Errorf("not can write to URI (%s)", u.String())
+						}
+					} else {
+						err = copyFile(src, dst)
+						if err == nil {
+							log.Tracef("File %s saved to %s", filepath.Base(src), dst)
+						}
+					}
+
 					if err != nil {
 						log.Errorf("Error saving file %s: %v", filepath.Base(src), err)
-						continue
+					} else {
+						deleteFile(src, fe)
 					}
 
 					fyne.Do(func() {
@@ -90,7 +165,9 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 				}
 				fyne.Do(func() {
 					prog.Hide()
-					topline.SetText(fmt.Sprintf("%s: %s", lp("Saved all files to"), lastSaveDir))
+					if len(fileentries) == 0 {
+						topline.SetText(fmt.Sprintf("%s: %s", lp("Saved all files to"), lastSaveDir))
+					}
 				})
 			}()
 		}, w)
@@ -118,13 +195,13 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 			return
 		}
 		if len(fileentries) > 0 {
-			log.Error("save received files")
-			dialog.ShowInformation(
-				lp("Download"),
-				lp("Save All"),
-				w,
-			)
-			return
+			dialog.ShowConfirm(lp("Delete All"), lp("Are you sure you want to delete all received files?"), func(b bool) {
+				if b {
+					deleteAllFiles()
+				} else {
+					return
+				}
+			}, w)
 		}
 
 		receiver, err := croc.New(croc.Options{
@@ -221,29 +298,7 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 
 					for _, fi := range receiver.FilesToTransfer {
 						fpath := filepath.Join(recvDir, filepath.Base(fi.Name))
-						labelFile := widget.NewLabel(filepath.Base(fpath))
-
-						openButton := widget.NewButtonWithIcon("", theme.DocumentSaveIcon(), func() {
-							ShowFileLocation(fpath, w)
-						})
-
-						deleteButton := widget.NewButtonWithIcon("", theme.CancelIcon(), func() {
-							if fe, ok := fileentries[fpath]; ok {
-								boxholder.Remove(fe)
-								os.Remove(fpath)
-								log.Tracef("Removed received file: %s", fpath)
-								delete(fileentries, fpath)
-							}
-						})
-
-						newentry := container.NewHBox(
-							labelFile,
-							layout.NewSpacer(),
-							openButton,
-							deleteButton,
-						)
-						fileentries[fpath] = newentry
-						boxholder.Add(newentry)
+						addEntry(fpath)
 					}
 				})
 			}
@@ -257,7 +312,6 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 			case <-cancelchan:
 				log.Warnf("Receive cancelled. %s: %v\n", recvDir, ls(recvDir))
 				Stop(receiver)
-				clear(recvDir)
 
 				fyne.Do(func() {
 					resetReceiver()
@@ -275,19 +329,15 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 	activeButtonHolder.Add(receiveButton)
 
 	deleteAllButton := widget.NewButtonWithIcon(lp("Delete All"), theme.DeleteIcon(), func() {
-		dialog.ShowConfirm(lp("Delete All"), lp("Are you sure you want to delete all received files?"), func(b bool) {
-			if b {
-				deleteAllFiles()
-			}
-		}, w)
+		deleteAllFiles()
 	})
 
 	saveAllButton := widget.NewButtonWithIcon(lp("Save All"), theme.FolderOpenIcon(), func() {
 		saveAllFiles()
 	})
-	if mobile {
-		saveAllButton.Hide()
-	}
+	// if mobile {
+	// 	saveAllButton.Hide()
+	// }
 
 	receiveTop := container.NewVBox(
 		container.NewHBox(topline, layout.NewSpacer(), copyCodeButton),
@@ -345,21 +395,10 @@ func copyToUWC(destination fyne.URIWriteCloser, src string) error {
 	return nil
 }
 
-func ShowFileLocation(src string, parent fyne.Window) {
-	savedialog := dialog.NewFileSave(func(destination fyne.URIWriteCloser, e error) {
-		if err := copyToUWC(destination, src); err != nil {
-			log.Error("%s\n", err)
-		}
-	}, parent)
-	savedialog.SetFileName(filepath.Base(src))
-	savedialog.Resize(parent.Canvas().Size())
-	savedialog.Show()
-}
-
 // Big File Dialog
 func ShowFolderOpen(callback func(fyne.ListableURI, error), parent fyne.Window) {
 	if mobile {
-		dialog.NewFolderOpen(callback, parent)
+		dialog.ShowFolderOpen(callback, parent)
 		return
 	}
 	fd := dialog.NewFolderOpen(callback, parent)

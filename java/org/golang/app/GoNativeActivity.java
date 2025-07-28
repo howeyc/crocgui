@@ -9,16 +9,16 @@ public class GoNativeActivity extends org.golang.app.GoNativeActivityBase {
         System.loadLibrary("croc");
     }
 
-    @Override
-    protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        handleIntent(getIntent());
-    }
+    // @Override
+    // protected void onCreate(Bundle savedInstanceState) {
+    //     super.onCreate(savedInstanceState);
+    //     handleIntent(getIntent());
+    // }
 
     @Override
     protected void onNewIntent(Intent intent) {
-        handleIntent(Intent);
         super.onNewIntent(intent);
+        handleIntent(Intent);
     }
 
     private void handleIntent(Intent intent) {
