@@ -29,20 +29,20 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 	prog.Hide()
 
 	topline := widget.NewLabel("")
-	recvEntry := widget.NewEntry()
-	recvEntry.SetPlaceHolder(lp("Enter code to download"))
-	copyCodeButton := widget.NewButtonWithIcon("", theme.ContentCopyIcon(), func() {
-		recvEntry.SetText(a.Clipboard().Content())
+	entry := widget.NewEntry()
+	entry.SetPlaceHolder(lp("Enter code to download"))
+	pasteCodeButton := widget.NewButtonWithIcon("", theme.ContentCopyIcon(), func() {
+		entry.SetText(a.Clipboard().Content())
 	})
 
 	// recvDir, _ := os.MkdirTemp("", "crocgui-recv")
 	recvDir := filepath.Join(os.TempDir(), "crocgui-recv")
 
 	boxholder := container.NewVBox()
-	receiverScroller := container.NewVScroll(boxholder)
+	scroller := container.NewVScroll(boxholder)
 	fileentries := make(map[string]*fyne.Container)
 
-	deleteFile := func(fpath string, fe *fyne.Container) {
+	removeEntry := func(fpath string, fe *fyne.Container) {
 		boxholder.Remove(fe)
 		os.Remove(fpath)
 		log.Tracef("Removed received file: %s", fpath)
@@ -55,7 +55,7 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 				log.Error("%s\n", err)
 			} else {
 				if _, ok := fileentries[src]; ok {
-					deleteFile(src, fileentries[src])
+					removeEntry(src, fileentries[src])
 				} else {
 					os.Remove(src)
 				}
@@ -75,7 +75,7 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 
 		deleteButton := widget.NewButtonWithIcon("", theme.CancelIcon(), func() {
 			if fe, ok := fileentries[fpath]; ok {
-				deleteFile(fpath, fe)
+				removeEntry(fpath, fe)
 			}
 		})
 
@@ -99,12 +99,11 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 	var lastSaveDir string
 
 	cancelchan := make(chan bool)
-	activeButtonHolder := container.NewVBox()
-	var cancelButton, receiveButton *widget.Button
+	var cancelButton, mainButton *widget.Button
 
-	deleteAllFiles := func() {
+	removeEntrys := func() {
 		for fpath, fe := range fileentries {
-			deleteFile(fpath, fe)
+			removeEntry(fpath, fe)
 		}
 	}
 
@@ -125,9 +124,6 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 			}
 
 			lastSaveDir = uri.Path()
-			prog.Show()
-			prog.Max = float64(len(fileentries))
-			prog.SetValue(0)
 
 			go func() {
 				for src, fe := range fileentries {
@@ -147,15 +143,11 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 						})
 					} else {
 						log.Tracef("File %s saved to %s", filename, dstURI.String())
-						deleteFile(src, fe)
+						removeEntry(src, fe)
 					}
 
-					fyne.Do(func() {
-						prog.SetValue(prog.Value + 1)
-					})
 				}
 				fyne.Do(func() {
-					prog.Hide()
 					if len(fileentries) == 0 {
 						topline.SetText(fmt.Sprintf("%s: %s", lp("Saved all files to"), lastSaveDir))
 					}
@@ -164,19 +156,17 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 		}, w)
 	}
 
-	resetReceiver := func() {
+	reset := func() {
+		mainButton.Enable()
 		prog.Hide()
 		prog.SetValue(0)
-		for _, obj := range activeButtonHolder.Objects {
-			activeButtonHolder.Remove(obj)
-		}
-		activeButtonHolder.Add(receiveButton)
+		cancelButton.Hide()
 
-		recvEntry.Enable()
+		entry.Enable()
 	}
 
-	receiveButton = widget.NewButtonWithIcon(lp("Download"), theme.DownloadIcon(), func() {
-		if len(recvEntry.Text) < 6 {
+	mainButton = widget.NewButtonWithIcon(lp("Download"), theme.DownloadIcon(), func() {
+		if len(entry.Text) < 6 {
 			log.Error("no receive code entered")
 			dialog.ShowInformation(
 				lp("Download"),
@@ -188,16 +178,15 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 		if len(fileentries) > 0 {
 			dialog.ShowConfirm(lp("Delete All"), lp("Are you sure you want to delete all received files?"), func(b bool) {
 				if b {
-					deleteAllFiles()
-				} else {
-					return
+					removeEntrys()
 				}
 			}, w)
+			return
 		}
 
 		receiver, err := croc.New(croc.Options{
 			IsSender:         false,
-			SharedSecret:     recvEntry.Text,
+			SharedSecret:     entry.Text,
 			Debug:            crocDebugMode(),
 			RelayAddress:     a.Preferences().String("relay-address"),
 			RelayPassword:    a.Preferences().String("relay-password"),
@@ -225,12 +214,9 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 		log.Trace("cd", recvDir)
 
 		var filename string
+		mainButton.Disable()
 		prog.Show()
-
-		for _, obj := range activeButtonHolder.Objects {
-			activeButtonHolder.Remove(obj)
-		}
-		activeButtonHolder.Add(cancelButton)
+		cancelButton.Show()
 
 		donechan := make(chan bool)
 		go func() {
@@ -265,7 +251,7 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 		}()
 
 		go func() {
-			fyne.Do(recvEntry.Disable)
+			fyne.Do(entry.Disable)
 			var rerr error
 			if EMULATE == 0 {
 				rerr = receiver.Receive()
@@ -293,7 +279,7 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 					}
 				})
 			}
-			fyne.Do(resetReceiver)
+			fyne.Do(reset)
 		}()
 
 		go func() {
@@ -305,7 +291,7 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 				Stop(receiver)
 
 				fyne.Do(func() {
-					resetReceiver()
+					reset()
 				})
 			}
 		}()
@@ -316,11 +302,10 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 	cancelButton = widget.NewButtonWithIcon(lp("Cancel"), theme.CancelIcon(), func() {
 		cancelchan <- true
 	})
-
-	activeButtonHolder.Add(receiveButton)
+	cancelButton.Hide()
 
 	deleteAllButton := widget.NewButtonWithIcon(lp("Delete All"), theme.DeleteIcon(), func() {
-		deleteAllFiles()
+		removeEntrys()
 	})
 
 	saveAllButton := widget.NewButtonWithIcon(lp("Save All"), theme.FolderOpenIcon(), func() {
@@ -331,21 +316,20 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 	}
 
 	receiveTop := container.NewVBox(
-		container.NewHBox(topline, layout.NewSpacer(), copyCodeButton),
-		widget.NewForm(&widget.FormItem{Text: lp("Receive Code"), Widget: recvEntry}),
-	)
-	receiveBot := container.NewVBox(
-		activeButtonHolder,
-		prog,
+		container.NewHBox(topline, layout.NewSpacer(), pasteCodeButton),
+		widget.NewForm(&widget.FormItem{Text: lp("Receive Code"), Widget: entry}),
 		container.NewHBox(
 			layout.NewSpacer(),
 			saveAllButton,
 			deleteAllButton,
 		),
+		mainButton,
+		prog,
+		cancelButton,
 	)
 
 	return container.NewTabItemWithIcon(lp("Receive"), theme.DownloadIcon(),
-		container.NewBorder(receiveTop, receiveBot, nil, nil, receiverScroller))
+		container.NewBorder(receiveTop, nil, nil, nil, scroller))
 }
 
 func copyFile(src, dst string) error {

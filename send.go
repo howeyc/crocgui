@@ -41,20 +41,20 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 	prog.Hide()
 	topline := widget.NewLabel(lp("Pick a file to send"))
 	randomCode := utils.GetRandomName()
-	sendEntry := widget.NewEntry()
-	sendEntry.SetText(randomCode)
+	entry := widget.NewEntry()
+	entry.SetText(randomCode)
 	copyCodeButton := widget.NewButtonWithIcon("", theme.ContentCopyIcon(), func() {
-		a.Clipboard().SetContent(sendEntry.Text)
+		a.Clipboard().SetContent(entry.Text)
 	})
 
 	// sendDir, _ = os.MkdirTemp("", "crocgui-send")
 	sendDir := filepath.Join(os.TempDir(), "crocgui-send")
 
 	boxholder := container.NewVBox()
-	senderScroller := container.NewVScroll(boxholder)
+	scroller := container.NewVScroll(boxholder)
 	fileentries := make(map[string]*fyne.Container)
 
-	deleteFile := func(fpath string, fe *fyne.Container) {
+	removeEntry := func(fpath string, fe *fyne.Container) {
 		boxholder.Remove(fe)
 		os.Remove(fpath)
 		log.Tracef("Removed file from internal cache: %s", fpath)
@@ -67,13 +67,9 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 			labelFile,
 			layout.NewSpacer(),
 			widget.NewButtonWithIcon("", theme.CancelIcon(), func() {
-				if !sendEntry.Disabled() {
+				if !entry.Disabled() {
 					if fe, ok := fileentries[dst]; ok {
-						deleteFile(dst, fe)
-						// boxholder.Remove(fe)
-						// os.Remove(dst)
-						// log.Tracef("Removed file from internal cache: %s\n", dst)
-						// delete(fileentries, dst)
+						removeEntry(dst, fe)
 					} else {
 						os.Remove(dst)
 					}
@@ -271,34 +267,36 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 	})
 
 	cancelchan := make(chan bool)
-	activeButtonHolder := container.NewVBox()
-	var cancelButton, sendButton *widget.Button
+	var cancelButton, mainButton *widget.Button
 
-	resetSender := func() {
-		prog.Hide()
-		prog.SetValue(0)
-		for _, obj := range activeButtonHolder.Objects {
-			activeButtonHolder.Remove(obj)
-		}
-		activeButtonHolder.Add(sendButton)
-
+	removeEntrys := func() {
 		for fpath, fe := range fileentries {
-			boxholder.Remove(fe)
-			os.Remove(fpath)
-			log.Tracef("Removed file from internal cache: %s\n", fpath)
-			delete(fileentries, fpath)
+			removeEntry(fpath, fe)
 		}
-
-		addFileButton.Enable()
-		if sendEntry.Text == randomCode {
-			randomCode = utils.GetRandomName()
-			sendEntry.SetText(randomCode)
-		}
-		sendEntry.Enable()
 	}
 
-	sendButton = widget.NewButtonWithIcon(lp("Send"), theme.MailSendIcon(), func() {
-		if len(sendEntry.Text) < 6 {
+	deleteAllButton := widget.NewButtonWithIcon(lp("Delete All"), theme.DeleteIcon(), func() {
+		removeEntrys()
+	})
+
+	reset := func() {
+		mainButton.Enable()
+		prog.Hide()
+		prog.SetValue(0)
+		cancelButton.Hide()
+
+		removeEntrys()
+
+		addFileButton.Enable()
+		if entry.Text == randomCode {
+			randomCode = utils.GetRandomName()
+			entry.SetText(randomCode)
+		}
+		entry.Enable()
+	}
+
+	mainButton = widget.NewButtonWithIcon(lp("Send"), theme.MailSendIcon(), func() {
+		if len(entry.Text) < 6 {
 			log.Error("no receive code entered\n")
 			dialog.ShowInformation(
 				lp("Send"),
@@ -323,7 +321,7 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 		addFileButton.Disable()
 		sender, err := croc.New(croc.Options{
 			IsSender:         true,
-			SharedSecret:     sendEntry.Text,
+			SharedSecret:     entry.Text,
 			Debug:            crocDebugMode(),
 			RelayAddress:     a.Preferences().String("relay-address"),
 			RelayPorts:       strings.Split(a.Preferences().String("relay-ports"), ","),
@@ -350,12 +348,9 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 		log.Trace("croc sender created\n")
 
 		var filename string
+		mainButton.Disable()
 		prog.Show()
-
-		for _, obj := range activeButtonHolder.Objects {
-			activeButtonHolder.Remove(obj)
-		}
-		activeButtonHolder.Add(cancelButton)
+		cancelButton.Show()
 
 		donechan := make(chan bool)
 		sendnames := make(map[string]int)
@@ -395,7 +390,7 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 			for fpath := range fileentries {
 				filepaths = append(filepaths, fpath)
 			}
-			fyne.Do(sendEntry.Disable)
+			fyne.Do(entry.Disable)
 			fi, emptyfolders, numFolders, ferr := croc.GetFilesInfo(filepaths, false, false, []string{})
 			if ferr != nil {
 				log.Errorf("file info failed: %s\n", ferr)
@@ -418,7 +413,7 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 				} else {
 					topline.SetText(fmt.Sprintf("%s: %s", lp("Sent file"), filename))
 				}
-				resetSender()
+				reset()
 			})
 		}()
 		go func() {
@@ -441,28 +436,29 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 		}()
 		// +12 go routines
 		log.Warnf("NumGoroutine %d\n", runtime.NumGoroutine())
-		a.Clipboard().SetContent(sendEntry.Text)
+		a.Clipboard().SetContent(entry.Text)
 	})
 
 	cancelButton = widget.NewButtonWithIcon(lp("Cancel"), theme.CancelIcon(), func() {
 		cancelchan <- true
 	})
-
-	activeButtonHolder.Add(sendButton)
+	cancelButton.Hide()
 
 	sendTop := container.NewVBox(
-		container.NewHBox(topline, layout.NewSpacer(), addFileButton, copyCodeButton),
-		widget.NewForm(&widget.FormItem{Text: lp("Send Code"), Widget: sendEntry}),
-	)
-	sendBot := container.NewVBox(
-		activeButtonHolder,
+		container.NewHBox(topline, layout.NewSpacer(), addFileButton),
+		widget.NewForm(&widget.FormItem{Text: lp("Send Code"), Widget: entry}),
+		container.NewHBox(
+			copyCodeButton,
+			layout.NewSpacer(),
+			deleteAllButton,
+		),
+		mainButton,
 		prog,
-		// container.NewHBox(status, copyCodeButton),
-		// debugBox,
+		cancelButton,
 	)
 
 	return container.NewTabItemWithIcon(lp("Send"), theme.MailSendIcon(),
-		container.NewBorder(sendTop, sendBot, nil, nil, senderScroller))
+		container.NewBorder(sendTop, nil, nil, nil, scroller))
 }
 
 // Big File Dialog
