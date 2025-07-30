@@ -21,19 +21,22 @@ arm64: main.go send.go recv.go settings.go theme.go about.go AndroidManifest.xml
 amd64: main.go send.go recv.go settings.go theme.go about.go AndroidManifest.xml
 	fyne package -os android/amd64 --release
 
-linux: main.go send.go recv.go settings.go theme.go about.go AndroidManifest.xml
+linux: main.go send.go recv.go settings.go theme.go about.go
 	fyne package -os linux --release
 
-windows: main.go send.go recv.go settings.go theme.go about.go AndroidManifest.xml
+windows: main.go send.go recv.go settings.go theme.go about.go
 	#sudo apt-get install gcc-mingw-w64-x86-64
 	CC=x86_64-w64-mingw32-gcc fyne package -os windows --release -tags=opengl
 
-windowsc: main.go send.go recv.go settings.go theme.go about.go AndroidManifest.xml
+windowsc: main.go send.go recv.go settings.go theme.go about.go
 	GOOS=windows GOARCH=amd64 CGO_ENABLED=1 CC=x86_64-w64-mingw32-gcc GOFLAGS=-ldflags=-s go build -tags=opengl
 
-darwin: main.go send.go recv.go settings.go theme.go about.go AndroidManifest.xml
+darwin: main.go send.go recv.go settings.go theme.go about.go
 	fyne package -os darwin --release
 	cp -r crocgui.app /Applications/
+	cp crocgui.app/Contents/Info.plist darm/crocgui.app/Contents/
+	cp crocgui.app/Contents/Resources/* darm/crocgui.app/Contents/Resources/
+	mkdir -p darm/crocgui.app/Contents/MacOS
 
 ios: main.go send.go recv.go settings.go theme.go about.go AndroidManifest.xml
 	fyne package -os ios --release
@@ -43,10 +46,10 @@ install:
 
 darm: 
 	#brew install glfw
-	GOFLAGS=-ldflags=-s CGO_ENABLED=1 GOOS=darwin GOARCH=arm64 go build -o crocgui-darm .
-	#cp crocgui-darm /Applications/crocgui.app/Contents/MacOS/crocgui
+	GOFLAGS=-ldflags=-s CGO_ENABLED=1 GOOS=darwin GOARCH=arm64 go build -o darm/crocgui.app/Contents/MacOS/crocgui .
+	#cp -r darm/crocgui.app /Applications/
 
 damd: 
 	#brew install glfw
-	GOFLAGS=-ldflags=-s CGO_ENABLED=1 GOOS=darwin GOARCH=amd64 go build -o crocgui-damd .
-	#cp crocgui-damd /Applications/crocgui.app/Contents/MacOS/crocgui
+	GOFLAGS=-ldflags=-s CGO_ENABLED=1 GOOS=darwin GOARCH=amd64 go build -o crocgui.app/Contents/MacOS/crocgui .
+	#cp -r crocgui.app /Applications/
