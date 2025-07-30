@@ -6,10 +6,12 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sync"
 	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/data/binding"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/storage"
@@ -27,15 +29,81 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 	}()
 	prog := widget.NewProgressBar()
 	prog.Hide()
-
 	topline := widget.NewLabel("")
 	entry := widget.NewEntry()
+
+	if secret := os.Getenv("CROC_SECRET"); secret != "" {
+		entry.SetText(secret)
+	}
 	entry.SetPlaceHolder(lp("Enter code to download"))
 	pasteCodeButton := widget.NewButtonWithIcon("", theme.ContentCopyIcon(), func() {
 		entry.SetText(a.Clipboard().Content())
 	})
 
-	// recvDir, _ := os.MkdirTemp("", "crocgui-recv")
+	totpCheck := widget.NewCheckWithData("", binding.BindPreferenceBool("totp-recv", a.Preferences()))
+	totpLabel := widget.NewLabel("TOTP")
+	var totpChan chan struct{}
+
+	totpStop := func() {
+		if totpChan != nil {
+			close(totpChan)
+			totpChan = nil
+		}
+	}
+	totpProg := widget.NewProgressBar()
+	totpProg.Hide()
+
+	var updateMutex sync.Mutex
+	update := func() {
+		updateMutex.Lock()
+		defer updateMutex.Unlock()
+
+		if !totpCheck.Checked {
+			return
+		}
+
+		totpLabel.SetText(totp(entry.Text))
+		now := time.Now()
+		remaining := 30 - now.Second()%30
+		totpProg.SetValue(float64(remaining) / 30)
+	}
+
+	totpCheck.OnChanged = func(b bool) {
+		totpStop()
+		if b {
+			totpProg.Show()
+			update()
+
+			totpChan = make(chan struct{})
+			go func() {
+				ticker := time.NewTicker(time.Second)
+				defer ticker.Stop()
+				for {
+					select {
+					case <-ticker.C:
+						fyne.Do(func() {
+							update()
+						})
+					case <-totpChan:
+						return
+					}
+				}
+			}()
+		} else {
+			totpLabel.SetText("TOTP")
+			totpProg.Hide()
+		}
+		a.Preferences().SetBool("totp-recv", b)
+	}
+	if totpCheck.Checked {
+		totpCheck.OnChanged(true)
+	}
+
+	entry.OnChanged = func(secret string) {
+		os.Setenv("CROC_SECRET", secret)
+		update()
+	}
+
 	recvDir := filepath.Join(os.TempDir(), "crocgui-recv")
 
 	boxholder := container.NewVBox()
@@ -66,16 +134,16 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 		savedialog.Show()
 	}
 
-	addEntry := func(fpath string) {
-		labelFile := widget.NewLabel(filepath.Base(fpath))
+	addEntry := func(dst string) {
+		labelFile := widget.NewLabel(filepath.Base(dst))
 
 		openButton := widget.NewButtonWithIcon("", theme.DocumentSaveIcon(), func() {
-			ShowFileLocation(fpath, w)
+			ShowFileLocation(dst, w)
 		})
 
 		deleteButton := widget.NewButtonWithIcon("", theme.CancelIcon(), func() {
-			if fe, ok := fileentries[fpath]; ok {
-				removeEntry(fpath, fe)
+			if fe, ok := fileentries[dst]; ok {
+				removeEntry(dst, fe)
 			}
 		})
 
@@ -85,7 +153,8 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 			openButton,
 			deleteButton,
 		)
-		fileentries[fpath] = newentry
+
+		fileentries[dst] = newentry
 		boxholder.Add(newentry)
 	}
 
@@ -162,12 +231,21 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 		prog.SetValue(0)
 		cancelButton.Hide()
 
+		totpCheck.Enable()
+		if totpCheck.Checked {
+			totpProg.Show()
+		}
+
 		entry.Enable()
 	}
 
 	mainButton = widget.NewButtonWithIcon(lp("Download"), theme.DownloadIcon(), func() {
-		if len(entry.Text) < 6 {
-			log.Error("no receive code entered")
+		ok := len(entry.Text) > 5
+		if totpCheck.Checked {
+			ok = len(entry.Text) > 0
+		}
+		if !ok {
+			log.Error("no receive code entered\n")
 			dialog.ShowInformation(
 				lp("Download"),
 				lp("Enter code to download"),
@@ -184,9 +262,17 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 			return
 		}
 
+		totpCheck.Disable()
+		secret := entry.Text
+		if totpCheck.Checked {
+			secret = totp(entry.Text)
+			totpLabel.SetText(secret)
+			totpProg.Hide()
+		}
+
 		receiver, err := croc.New(croc.Options{
 			IsSender:         false,
-			SharedSecret:     entry.Text,
+			SharedSecret:     secret,
 			Debug:            crocDebugMode(),
 			RelayAddress:     a.Preferences().String("relay-address"),
 			RelayPassword:    a.Preferences().String("relay-password"),
@@ -202,11 +288,12 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 			MulticastAddress: a.Preferences().String("multicast-address"),
 		})
 		if err != nil {
-			log.Errorf("Receive setup error: %s\n", err.Error())
+			log.Errorf("croc setup error: %s\n", err.Error())
 			return
 		}
 		log.SetLevel(crocDebugLevel())
 		log.Trace("croc receiver created")
+
 		cderr := os.Chdir(recvDir)
 		if cderr != nil {
 			log.Error("Unable to change to dir:", recvDir, cderr)
@@ -305,7 +392,11 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 	cancelButton.Hide()
 
 	deleteAllButton := widget.NewButtonWithIcon(lp("Delete All"), theme.DeleteIcon(), func() {
-		removeEntrys()
+		if len(fileentries) > 0 {
+			removeEntrys()
+		} else {
+			entry.SetText("")
+		}
 	})
 
 	saveAllButton := widget.NewButtonWithIcon(lp("Save All"), theme.FolderOpenIcon(), func() {
@@ -315,10 +406,13 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 		saveAllButton.Hide()
 	}
 
-	receiveTop := container.NewVBox(
+	top := container.NewVBox(
 		container.NewHBox(topline, layout.NewSpacer(), pasteCodeButton),
 		widget.NewForm(&widget.FormItem{Text: lp("Receive Code"), Widget: entry}),
 		container.NewHBox(
+			totpLabel,
+			totpCheck,
+			totpProg,
 			layout.NewSpacer(),
 			saveAllButton,
 			deleteAllButton,
@@ -329,24 +423,7 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 	)
 
 	return container.NewTabItemWithIcon(lp("Receive"), theme.DownloadIcon(),
-		container.NewBorder(receiveTop, nil, nil, nil, scroller))
-}
-
-func copyFile(src, dst string) error {
-	source, err := os.Open(src)
-	if err != nil {
-		return err
-	}
-	defer source.Close()
-
-	destination, err := os.Create(dst)
-	if err != nil {
-		return err
-	}
-	defer destination.Close()
-
-	_, err = io.Copy(destination, source)
-	return err
+		container.NewBorder(top, nil, nil, nil, scroller))
 }
 
 func copyToUWC(destination fyne.URIWriteCloser, src string) error {

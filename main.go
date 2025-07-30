@@ -131,6 +131,9 @@ func main() {
 	a.Preferences().SetBool("hide-logo", a.Preferences().BoolWithFallback("hide-logo", false))
 	a.Preferences().SetString("multicast-address", a.Preferences().StringWithFallback("multicast-address", "239.255.255.250"))
 
+	a.Preferences().SetBool("totp-send", a.Preferences().BoolWithFallback("totp-send", false))
+	a.Preferences().SetBool("totp-recv", a.Preferences().BoolWithFallback("totp-recv", false))
+
 	appTheme.color = theme.DefaultTheme()
 	appTheme.size = theme.DefaultTheme()
 	appTheme.fontName = "default"

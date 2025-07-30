@@ -1,9 +1,12 @@
 package main
 
 import (
+	"crypto/hmac"
+	"crypto/sha1"
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/url"
 	"os"
 	"os/exec"
@@ -19,6 +22,7 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/data/binding"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/storage"
@@ -40,14 +44,87 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 	prog := widget.NewProgressBar()
 	prog.Hide()
 	topline := widget.NewLabel(lp("Pick a file to send"))
-	randomCode := utils.GetRandomName()
 	entry := widget.NewEntry()
+	randomCode := utils.GetRandomName()
+
+	if secret := os.Getenv("CROC_SECRET"); secret != "" {
+		randomCode = secret
+	}
+
 	entry.SetText(randomCode)
+	randomCodeButton := widget.NewButtonWithIcon("", theme.ViewRefreshIcon(), func() {
+		randomCode = utils.GetRandomName()
+		entry.SetText(randomCode)
+	})
+
 	copyCodeButton := widget.NewButtonWithIcon("", theme.ContentCopyIcon(), func() {
 		a.Clipboard().SetContent(entry.Text)
 	})
 
-	// sendDir, _ = os.MkdirTemp("", "crocgui-send")
+	totpCheck := widget.NewCheckWithData("", binding.BindPreferenceBool("totp-send", a.Preferences()))
+	totpLabel := widget.NewLabel("TOTP")
+	var totpChan chan struct{}
+
+	totpStop := func() {
+		if totpChan != nil {
+			close(totpChan)
+			totpChan = nil
+		}
+	}
+	totpProg := widget.NewProgressBar()
+	totpProg.Hide()
+
+	var updateMutex sync.Mutex
+	update := func() {
+		updateMutex.Lock()
+		defer updateMutex.Unlock()
+
+		if !totpCheck.Checked {
+			return
+		}
+
+		totpLabel.SetText(totp(entry.Text))
+		now := time.Now()
+		remaining := 30 - now.Second()%30
+		totpProg.SetValue(float64(remaining) / 30)
+	}
+
+	totpCheck.OnChanged = func(b bool) {
+		totpStop()
+		if b {
+			totpProg.Show()
+			update()
+
+			totpChan = make(chan struct{})
+			go func() {
+				ticker := time.NewTicker(time.Second)
+				defer ticker.Stop()
+				for {
+					select {
+					case <-ticker.C:
+						fyne.Do(func() {
+							update()
+						})
+					case <-totpChan:
+						return
+					}
+				}
+			}()
+		} else {
+			totpLabel.SetText("TOTP")
+			totpProg.Hide()
+		}
+		a.Preferences().SetBool("totp-send", b)
+	}
+	if totpCheck.Checked {
+		totpCheck.OnChanged(true)
+	}
+
+	entry.OnChanged = func(secret string) {
+		os.Setenv("CROC_SECRET", secret)
+		update()
+	}
+
 	sendDir := filepath.Join(os.TempDir(), "crocgui-send")
 
 	boxholder := container.NewVBox()
@@ -63,18 +140,20 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 
 	addEntry := func(dst string) {
 		labelFile := widget.NewLabel(filepath.Base(dst))
+		deleteButton := widget.NewButtonWithIcon("", theme.CancelIcon(), func() {
+			if !entry.Disabled() {
+				if fe, ok := fileentries[dst]; ok {
+					removeEntry(dst, fe)
+				} else {
+					os.Remove(dst)
+				}
+			}
+		})
+
 		newentry := container.NewHBox(
 			labelFile,
 			layout.NewSpacer(),
-			widget.NewButtonWithIcon("", theme.CancelIcon(), func() {
-				if !entry.Disabled() {
-					if fe, ok := fileentries[dst]; ok {
-						removeEntry(dst, fe)
-					} else {
-						os.Remove(dst)
-					}
-				}
-			}),
+			deleteButton,
 		)
 
 		fileentries[dst] = newentry
@@ -276,7 +355,11 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 	}
 
 	deleteAllButton := widget.NewButtonWithIcon(lp("Delete All"), theme.DeleteIcon(), func() {
-		removeEntrys()
+		if len(fileentries) > 0 {
+			removeEntrys()
+		} else {
+			entry.SetText("")
+		}
 	})
 
 	reset := func() {
@@ -284,19 +367,26 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 		prog.Hide()
 		prog.SetValue(0)
 		cancelButton.Hide()
-
 		removeEntrys()
-
 		addFileButton.Enable()
-		if entry.Text == randomCode {
+
+		totpCheck.Enable()
+		if totpCheck.Checked {
+			totpProg.Show()
+		} else if entry.Text == randomCode {
 			randomCode = utils.GetRandomName()
 			entry.SetText(randomCode)
 		}
+
 		entry.Enable()
 	}
 
 	mainButton = widget.NewButtonWithIcon(lp("Send"), theme.MailSendIcon(), func() {
-		if len(entry.Text) < 6 {
+		ok := len(entry.Text) > 5
+		if totpCheck.Checked {
+			ok = len(entry.Text) > 0
+		}
+		if !ok {
 			log.Error("no receive code entered\n")
 			dialog.ShowInformation(
 				lp("Send"),
@@ -317,11 +407,17 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 			return
 		}
 
-		// addFileButton.Hide()
 		addFileButton.Disable()
+		totpCheck.Disable()
+		secret := entry.Text
+		if totpCheck.Checked {
+			secret = totp(entry.Text)
+			totpLabel.SetText(secret)
+			totpProg.Hide()
+		}
 		sender, err := croc.New(croc.Options{
 			IsSender:         true,
-			SharedSecret:     entry.Text,
+			SharedSecret:     secret,
 			Debug:            crocDebugMode(),
 			RelayAddress:     a.Preferences().String("relay-address"),
 			RelayPorts:       strings.Split(a.Preferences().String("relay-ports"), ","),
@@ -444,11 +540,14 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 	})
 	cancelButton.Hide()
 
-	sendTop := container.NewVBox(
-		container.NewHBox(topline, layout.NewSpacer(), addFileButton),
+	top := container.NewVBox(
+		container.NewHBox(topline, layout.NewSpacer(), addFileButton, randomCodeButton),
 		widget.NewForm(&widget.FormItem{Text: lp("Send Code"), Widget: entry}),
 		container.NewHBox(
 			copyCodeButton,
+			totpLabel,
+			totpCheck,
+			totpProg,
 			layout.NewSpacer(),
 			deleteAllButton,
 		),
@@ -458,7 +557,7 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 	)
 
 	return container.NewTabItemWithIcon(lp("Send"), theme.MailSendIcon(),
-		container.NewBorder(sendTop, nil, nil, nil, scroller))
+		container.NewBorder(top, nil, nil, nil, scroller))
 }
 
 // Big File Dialog
@@ -515,7 +614,9 @@ func SelectIndex(window fyne.Window, index int) {
 // For desktop Restart.
 func restart(a fyne.App) {
 	if !mobile {
-		exec.Command(os.Args[0]).Start()
+		cmd := exec.Command(os.Args[0])
+		cmd.Env = os.Environ()
+		cmd.Start()
 	}
 	a.Quit()
 }
@@ -596,4 +697,25 @@ func Stop(client interface{}) {
 	} else {
 		log.Errorf("Stop: %v\n", err)
 	}
+}
+
+func totp(secret string) string {
+	key := []byte(secret)
+	epoch := time.Now().Unix() / 30
+	message := make([]byte, 8)
+	for i := 0; i < 8; i++ {
+		message[7-i] = byte(epoch >> (8 * i))
+	}
+
+	hash := hmac.New(sha1.New, key)
+	hash.Write(message)
+	hmacHash := hash.Sum(nil)
+	offset := int(hmacHash[len(hmacHash)-1] & 0xf)
+	code := int32(hmacHash[offset]&0x7f)<<24 |
+		int32(hmacHash[offset+1]&0xff)<<16 |
+		int32(hmacHash[offset+2]&0xff)<<8 |
+		int32(hmacHash[offset+3]&0xff)
+
+	otp := code % int32(math.Pow10(6))
+	return fmt.Sprintf("%06d", otp)
 }
