@@ -80,6 +80,8 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 				defer ticker.Stop()
 				for {
 					select {
+					case <-done:
+						return
 					case <-ticker.C:
 						fyne.Do(func() {
 							update()
@@ -129,7 +131,7 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 			if fe, ok := fileentries[src]; ok {
 				copyToUWCProgress(destination, src, fe, func(err error) {
 					if err != nil {
-						log.Error("%s\n", err)
+						log.Errorf("%s\n", err)
 					} else {
 						removeEntry(src, fe)
 					}
@@ -322,6 +324,9 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 			old := 0
 			for {
 				select {
+				case <-done:
+					close(donechan)
+					return
 				case <-ticker.C:
 					if receiver == nil {
 						return
@@ -381,6 +386,8 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 
 		go func() {
 			select {
+			case <-done:
+				return
 			case <-donechan:
 				return
 			case <-cancelchan:
@@ -436,24 +443,6 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 		container.NewBorder(top, nil, nil, nil, scroller))
 }
 
-// func copyToUWC(destination fyne.URIWriteCloser, src string) error {
-// 	if destination == nil {
-// 		return fmt.Errorf("destination is nil (dialog closed)")
-// 	}
-// 	defer destination.Close()
-// 	source, err := os.Open(src)
-// 	if err != nil {
-// 		return fmt.Errorf("failed to open source file: %v", err)
-// 	}
-// 	defer source.Close()
-
-// 	if _, err = io.Copy(destination, source); err != nil {
-// 		return fmt.Errorf("failed to copy file: %v", err)
-// 	}
-
-// 	return nil
-// }
-
 func copyToUWCProgress(destination fyne.URIWriteCloser, src string, c *fyne.Container, cb func(err error)) {
 	if destination == nil {
 		cb(fmt.Errorf("destination is nil (dialog closed)"))
@@ -475,35 +464,37 @@ func copyToUWCProgress(destination fyne.URIWriteCloser, src string, c *fyne.Cont
 		return
 	}
 
-	db := c.Objects[0].(*widget.Button)
-	db.Disable()
+	pw, restore := NewProgressWriter(destination, fi.Size(), c)
+	// db := c.Objects[0].(*widget.Button)
+	// db.Disable()
 
-	pb := c.Objects[1].(*widget.ProgressBar)
-	pb.SetValue(0)
-	pb.Show()
+	// pb := c.Objects[1].(*widget.ProgressBar)
+	// pb.SetValue(0)
+	// pb.Show()
 
-	sb := c.Objects[2].(*widget.Button)
-	sb.Hide()
+	// sb := c.Objects[2].(*widget.Button)
+	// sb.Hide()
 
-	pw := &ProgressWriter{
-		Writer: destination,
-		Total:  fi.Size(),
-		OnProgress: func(progress float64) {
-			fyne.Do(func() {
-				pb.SetValue(progress)
-			})
-		},
-	}
+	// pw := &ProgressWriter{
+	// 	Writer: destination,
+	// 	Total:  fi.Size(),
+	// 	OnProgress: func(progress float64) {
+	// 		fyne.Do(func() {
+	// 			pb.SetValue(progress)
+	// 		})
+	// 	},
+	// }
 
 	go func() {
 		_, err := io.Copy(pw, source)
 		source.Close()
 		destination.Close()
-		fyne.Do(func() {
-			pb.Hide()
-			db.Enable()
-			sb.Show()
-		})
+		// fyne.Do(func() {
+		// 	pb.Hide()
+		// 	db.Enable()
+		// 	sb.Show()
+		// })
+		restore()
 		cb(err)
 	}()
 }

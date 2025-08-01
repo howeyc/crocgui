@@ -5,6 +5,7 @@ package main
 import (
 	"bytes"
 	_ "embed"
+	"errors"
 	"io"
 	"os"
 	"runtime"
@@ -30,11 +31,12 @@ import (
 var textlogobytes []byte
 
 var (
-	mobile         bool
-	android        bool
-	done           = make(chan bool)
-	uriFromIntent  = make(chan string, 100)
-	textFromIntent = make(chan string, 100)
+	mobile                 bool
+	android                bool
+	done                   = make(chan struct{})
+	ErrApplicationShutdown = errors.New("application shutdown")
+	uriFromIntent          = make(chan string, 100)
+	textFromIntent         = make(chan string, 100)
 
 	logoutput  logwriter
 	logbinding binding.String

@@ -2,9 +2,10 @@ package main
 
 import (
 	"crypto/hmac"
-	"crypto/sha1"
+	"crypto/sha256"
 	"errors"
 	"fmt"
+	"hash/crc32"
 	"io"
 	"math"
 	"net/url"
@@ -101,6 +102,8 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 				defer ticker.Stop()
 				for {
 					select {
+					case <-done:
+						return
 					case <-ticker.C:
 						fyne.Do(func() {
 							update()
@@ -210,36 +213,6 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 		return nil
 	}
 
-	// copyFromURC := func(source fyne.URIReadCloser) error {
-	// 	if source == nil {
-	// 		return fmt.Errorf("User cancel dialog")
-	// 	}
-	// 	defer source.Close()
-	// 	fyneURI := source.URI()
-	// 	src := fyneURI.String()
-	// 	name := fyneURI.Name()
-	// 	log.Tracef("name %s", name)
-	// 	name = uriBase(fyneURI)
-	// 	log.Tracef("name %s", name)
-
-	// 	dst := filepath.Join(sendDir, name)
-	// 	destination, err := os.Create(dst)
-	// 	if err != nil {
-	// 		return fmt.Errorf("Unable to create file %s error: %s", dst, err.Error())
-	// 	}
-	// 	defer destination.Close()
-
-	// 	io.Copy(destination, source)
-
-	// 	log.Tracef("URI (%s), copied to internal cache %s", src, dst)
-
-	// 	if _, sterr := os.Stat(dst); sterr != nil {
-	// 		return fmt.Errorf("Stat file %s error: %s", dst, sterr.Error())
-	// 	}
-	// 	addEntry(dst)
-	// 	return nil
-	// }
-
 	copyFromURCProgress := func(source fyne.URIReadCloser, c *fyne.Container, cb func(err error)) {
 		if source == nil {
 			cb(fmt.Errorf("User cancel dialog"))
@@ -259,31 +232,13 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 			return
 		}
 
-		db := c.Objects[0].(*widget.Button)
-		db.Disable()
-
-		pb := c.Objects[1].(*widget.ProgressBar)
-		pb.SetValue(0)
-		pb.Show()
-
-		pw := &ProgressWriter{
-			Writer: destination,
-			Total:  100 * 1024 * 1024,
-			OnProgress: func(progress float64) {
-				fyne.Do(func() {
-					pb.SetValue(progress)
-				})
-			},
-		}
+		pw, restore := NewProgressWriter(destination, 1<<30, c)
 
 		go func() {
 			_, err := io.Copy(pw, source)
 			source.Close()
 			destination.Close()
-			fyne.Do(func() {
-				pb.Hide()
-				db.Enable()
-			})
+			restore()
 			cb(err)
 		}()
 	}
@@ -311,22 +266,28 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 						continue
 					}
 					log.Tracef(`Received text: "%s"`, text)
-					source, err := os.CreateTemp(sendDir, "text*")
-					if err != nil {
-						log.Errorf("%s", err)
+					src := filepath.Join(sendDir, "text"+hashToFilename(text))
+					if fe := addEntry(src); fe == nil {
 						continue
 					}
-					src := source.Name()
+
+					source, err := os.Create(src)
+					if err != nil {
+						log.Errorf("Failed to create file: %s", err)
+						continue
+					}
+
 					_, err = source.WriteString(text)
 					if err != nil {
 						source.Close()
 						os.Remove(src)
-						log.Errorf("%s", err)
+						log.Errorf("Failed to write file: %s", err)
 						continue
 					}
+
 					source.Close()
-					addEntry(src)
 					SelectIndex(w, 0)
+
 				case uriString := <-uriFromIntent:
 					if uriString == "" {
 						log.Errorf(`Received uri: ""`)
@@ -586,6 +547,9 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 			old := 0
 			for {
 				select {
+				case <-done:
+					close(donechan)
+					return
 				case <-ticker.C:
 					if sender == nil {
 						return
@@ -644,6 +608,8 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 		}()
 		go func() {
 			select {
+			case <-done:
+				return
 			case <-donechan:
 				if !mobile {
 					log.Tracef("A restart is better than leaving 12 goroutines leaking\n")
@@ -837,7 +803,7 @@ func totp(secret string) string {
 		message[7-i] = byte(epoch >> (8 * i))
 	}
 
-	hash := hmac.New(sha1.New, key)
+	hash := hmac.New(sha256.New, key)
 	hash.Write(message)
 	hmacHash := hash.Sum(nil)
 	offset := int(hmacHash[len(hmacHash)-1] & 0xf)
@@ -846,30 +812,92 @@ func totp(secret string) string {
 		int32(hmacHash[offset+2]&0xff)<<8 |
 		int32(hmacHash[offset+3]&0xff)
 
-	otp := code % int32(math.Pow10(8))
-	return fmt.Sprintf("%08d", otp)
+	otp := code % int32(math.Pow10(6))
+	return fmt.Sprintf("%06d", otp)
 }
 
 type ProgressWriter struct {
-	Writer     io.Writer
-	Total      int64
-	Written    int64
-	OnProgress func(float64)
+	Writer       io.Writer
+	Total        int64
+	Written      int64
+	OnProgress   func(float64)
+	lastCall     time.Time
+	lastProgress float64
+	cancel       <-chan struct{}
+	mu           sync.Mutex
 }
 
-func (pw *ProgressWriter) Write(p []byte) (int, error) {
-	n, err := pw.Writer.Write(p)
-	if err == nil {
-		pw.Written += int64(n)
-		if pw.OnProgress != nil && pw.Total > 0 {
-			if pw.Written > pw.Total {
-				pw.Total += int64(n) + 1
-			}
-			progress := float64(pw.Written) / float64(pw.Total)
-			pw.OnProgress(progress)
+var ErrWriteCanceled = errors.New("write canceled")
+
+func (pw *ProgressWriter) Write(p []byte) (n int, err error) {
+	const minInterval = 200 * time.Millisecond
+	select {
+	case <-pw.cancel:
+		return 0, ErrWriteCanceled
+	case <-done:
+		return 0, ErrApplicationShutdown
+	default:
+	}
+
+	pw.mu.Lock()
+	defer pw.mu.Unlock()
+	n, err = pw.Writer.Write(p)
+
+	if err != nil || pw.OnProgress == nil || pw.Total <= 0 {
+		return
+	}
+	pw.Written += int64(n)
+	progress := float64(pw.Written) / float64(pw.Total)
+	if pw.lastProgress < progress {
+		if progress > 1.0 {
+			progress = 1.0
+		}
+		pw.lastProgress = progress
+	} else {
+		return
+	}
+
+	now := time.Now()
+	if now.Sub(pw.lastCall) >= minInterval {
+		pw.OnProgress(progress)
+		pw.lastCall = now
+	}
+	return
+}
+
+func NewProgressWriter(destination io.Writer, total int64, c *fyne.Container) (pw *ProgressWriter, restore func()) {
+	db := c.Objects[0].(*widget.Button)
+	pb := c.Objects[1].(*widget.ProgressBar)
+	oldOnTapped := db.OnTapped
+
+	cancelChan := make(chan struct{})
+
+	pw = &ProgressWriter{
+		Writer: destination,
+		Total:  total,
+		cancel: cancelChan,
+		OnProgress: func(p float64) {
+			fyne.Do(func() { pb.SetValue(p) })
+		},
+	}
+
+	db.OnTapped = func() {
+		select {
+		case <-cancelChan:
+		default:
+			close(cancelChan)
 		}
 	}
-	return n, err
+
+	pb.SetValue(0)
+	pb.Show()
+
+	restore = func() {
+		db.OnTapped = oldOnTapped
+		fyne.Do(pb.Hide)
+	}
+
+	return pw, restore
 }
 
 func CopyFileProgress(src, dst string, c *fyne.Container, cb func(err error)) {
@@ -893,31 +921,18 @@ func CopyFileProgress(src, dst string, c *fyne.Container, cb func(err error)) {
 		return
 	}
 
-	db := c.Objects[0].(*widget.Button)
-	db.Disable()
-
-	pb := c.Objects[1].(*widget.ProgressBar)
-	pb.SetValue(0)
-	pb.Show()
-
-	pw := &ProgressWriter{
-		Writer: destination,
-		Total:  fi.Size(),
-		OnProgress: func(progress float64) {
-			fyne.Do(func() {
-				pb.SetValue(progress)
-			})
-		},
-	}
+	pw, restore := NewProgressWriter(destination, fi.Size(), c)
 
 	go func() {
 		_, err := io.Copy(pw, source)
 		source.Close()
 		destination.Close()
-		fyne.Do(func() {
-			pb.Hide()
-			db.Enable()
-		})
+		restore()
 		cb(err)
 	}()
+}
+
+func hashToFilename(data string) string {
+	hash := crc32.ChecksumIEEE([]byte(data))
+	return fmt.Sprintf("%x", hash)
 }
