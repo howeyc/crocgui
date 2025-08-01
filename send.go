@@ -47,7 +47,7 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 	entry := widget.NewEntry()
 	randomCode := utils.GetRandomName()
 
-	if secret := os.Getenv("CROC_SECRET"); secret != "" {
+	if secret := os.Getenv(CROC_SECRET); secret != "" {
 		randomCode = secret
 	}
 
@@ -62,7 +62,7 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 	})
 
 	totpCheck := widget.NewCheckWithData("", binding.BindPreferenceBool("totp-send", a.Preferences()))
-	totpLabel := widget.NewLabel("TOTP")
+	totpLabel := widget.NewLabel(TOTP)
 	var totpChan chan struct{}
 
 	totpStop := func() {
@@ -111,7 +111,7 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 				}
 			}()
 		} else {
-			totpLabel.SetText("TOTP")
+			totpLabel.SetText(TOTP)
 			totpProg.Hide()
 		}
 		a.Preferences().SetBool("totp-send", b)
@@ -121,7 +121,7 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 	}
 
 	entry.OnChanged = func(secret string) {
-		os.Setenv("CROC_SECRET", secret)
+		os.Setenv(CROC_SECRET, secret)
 		update()
 	}
 
@@ -138,10 +138,17 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 		delete(fileentries, fpath)
 	}
 
-	addEntry := func(dst string) {
+	// nil if exists
+	addEntry := func(dst string) (newentry *fyne.Container) {
+		if _, has := fileentries[dst]; has {
+			log.Tracef("exists %s", dst)
+			return nil
+		}
 		labelFile := widget.NewLabel(filepath.Base(dst))
 		deleteButton := widget.NewButtonWithIcon("", theme.CancelIcon(), func() {
-			if !entry.Disabled() {
+			if entry.Disabled() {
+				log.Trace("Sending")
+			} else {
 				if fe, ok := fileentries[dst]; ok {
 					removeEntry(dst, fe)
 				} else {
@@ -149,21 +156,29 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 				}
 			}
 		})
+		progFile := widget.NewProgressBar()
+		progFile.Hide()
 
-		newentry := container.NewHBox(
-			labelFile,
-			layout.NewSpacer(),
+		newentry = container.NewHBox(
 			deleteButton,
+			progFile,
+			labelFile,
 		)
 
 		fileentries[dst] = newentry
 		boxholder.Add(newentry)
+		return
 	}
 
 	addPath := func(src string) error {
 		dst := filepath.Join(sendDir, filepath.Base(src))
+		fe := addEntry(dst)
+		if fe == nil {
+			return nil
+		}
 
 		fi, err := os.Stat(src)
+		size := fi.Size()
 		if err != nil {
 			return fmt.Errorf("URI (%s) %s", src, err.Error())
 		} else if fi.IsDir() {
@@ -172,51 +187,105 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 		}
 
 		fi, err = os.Stat(dst)
-		if err == nil {
+		if err == nil && fi.Size() == size {
 			log.Tracef("URI (%s), already in internal cache %s\n", src, dst)
+			addEntry(dst)
 			return nil
 		}
 
-		if err := CopyFile(src, dst); err != nil {
-			return fmt.Errorf("Unable to copy file, error: %s - %s\n", sendDir, err.Error())
-		}
-		log.Tracef("URI (%s), copied to internal cache %s\n", src, dst)
+		CopyFileProgress(src, dst, fe, func(err error) {
+			// onComplete
+			if err != nil {
+				log.Errorf("Unable to copy file, error: %s - %s\n", sendDir, err.Error())
+				removeEntry(dst, fe)
+				return
+			}
+			log.Tracef("URI (%s), copied to internal cache %s\n", src, dst)
 
-		if _, sterr := os.Stat(dst); sterr != nil {
-			return fmt.Errorf("Stat error: %s - %s\n", dst, sterr.Error())
-		}
-		addEntry(dst)
+			if _, sterr := os.Stat(dst); sterr != nil {
+				log.Errorf("Stat error: %s - %s\n", dst, sterr.Error())
+				removeEntry(dst, fe)
+			}
+		})
 		return nil
 	}
 
-	copyFromURC := func(source fyne.URIReadCloser) error {
+	// copyFromURC := func(source fyne.URIReadCloser) error {
+	// 	if source == nil {
+	// 		return fmt.Errorf("User cancel dialog")
+	// 	}
+	// 	defer source.Close()
+	// 	fyneURI := source.URI()
+	// 	src := fyneURI.String()
+	// 	name := fyneURI.Name()
+	// 	log.Tracef("name %s", name)
+	// 	name = uriBase(fyneURI)
+	// 	log.Tracef("name %s", name)
+
+	// 	dst := filepath.Join(sendDir, name)
+	// 	destination, err := os.Create(dst)
+	// 	if err != nil {
+	// 		return fmt.Errorf("Unable to create file %s error: %s", dst, err.Error())
+	// 	}
+	// 	defer destination.Close()
+
+	// 	io.Copy(destination, source)
+
+	// 	log.Tracef("URI (%s), copied to internal cache %s", src, dst)
+
+	// 	if _, sterr := os.Stat(dst); sterr != nil {
+	// 		return fmt.Errorf("Stat file %s error: %s", dst, sterr.Error())
+	// 	}
+	// 	addEntry(dst)
+	// 	return nil
+	// }
+
+	copyFromURCProgress := func(source fyne.URIReadCloser, c *fyne.Container, cb func(err error)) {
 		if source == nil {
-			return fmt.Errorf("User cancel dialog")
+			cb(fmt.Errorf("User cancel dialog"))
+			return
 		}
-		defer source.Close()
-		fyneURI := source.URI()
-		src := fyneURI.String()
-		name := fyneURI.Name()
+		u := source.URI()
+		name := u.Name()
 		log.Tracef("name %s", name)
-		name = uriBase(fyneURI)
+		name = uriBase(u)
 		log.Tracef("name %s", name)
 
 		dst := filepath.Join(sendDir, name)
 		destination, err := os.Create(dst)
 		if err != nil {
-			return fmt.Errorf("Unable to create file %s error: %s", dst, err.Error())
+			source.Close()
+			cb(fmt.Errorf("Unable to create file %s error: %s", dst, err.Error()))
+			return
 		}
-		defer destination.Close()
 
-		io.Copy(destination, source)
+		db := c.Objects[0].(*widget.Button)
+		db.Disable()
 
-		log.Tracef("URI (%s), copied to internal cache %s", src, dst)
+		pb := c.Objects[1].(*widget.ProgressBar)
+		pb.SetValue(0)
+		pb.Show()
 
-		if _, sterr := os.Stat(dst); sterr != nil {
-			return fmt.Errorf("Stat file %s error: %s", dst, sterr.Error())
+		pw := &ProgressWriter{
+			Writer: destination,
+			Total:  100 * 1024 * 1024,
+			OnProgress: func(progress float64) {
+				fyne.Do(func() {
+					pb.SetValue(progress)
+				})
+			},
 		}
-		addEntry(dst)
-		return nil
+
+		go func() {
+			_, err := io.Copy(pw, source)
+			source.Close()
+			destination.Close()
+			fyne.Do(func() {
+				pb.Hide()
+				db.Enable()
+			})
+			cb(err)
+		}()
 	}
 
 	os.MkdirAll(sendDir, 0o700)
@@ -235,6 +304,10 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 				case text := <-textFromIntent:
 					if text == "" {
 						log.Errorf(`Received text: ""`)
+						continue
+					}
+					if entry.Disabled() {
+						log.Trace("Sending")
 						continue
 					}
 					log.Tracef(`Received text: "%s"`, text)
@@ -259,18 +332,22 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 						log.Errorf(`Received uri: ""`)
 						continue
 					}
+					if entry.Disabled() {
+						log.Trace("Sending")
+						continue
+					}
 					if _, err := url.Parse(uriString); err == nil {
 						log.Tracef(`Received URI: "%s"`, uriString)
 					} else {
 						log.Errorf(`Received URI: "%s" error: %s`, uriString, err)
 						continue
 					}
-					fyneURI, err := storage.ParseURI(uriString)
+					u, err := storage.ParseURI(uriString)
 					if err != nil {
 						log.Errorf("%s", err.Error())
 						continue
 					}
-					listable, err := storage.CanList(fyneURI)
+					listable, err := storage.CanList(u)
 					if err != nil {
 						log.Errorf("%s", err.Error())
 						continue
@@ -279,7 +356,7 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 						log.Tracef("URI (%s) is dir", uriString)
 						continue
 					}
-					can, err := storage.CanRead(fyneURI)
+					can, err := storage.CanRead(u)
 					if err != nil {
 						log.Errorf("%s", err.Error())
 						continue
@@ -288,26 +365,38 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 						log.Tracef("URI (%s) can't read", uriString)
 						continue
 					}
-					name := fyneURI.Name()
+					name := u.Name()
 					log.Tracef("name %s", name)
-					name = uriBase(fyneURI)
+					name = uriBase(u)
 					log.Tracef("name %s", name)
 					dst := filepath.Join(sendDir, name)
-					if _, has := fileentries[dst]; has {
-						log.Tracef("exists %s", dst)
+					fe := addEntry(dst)
+					if fe == nil {
 						continue
 					}
 
-					source, err := storage.Reader(fyneURI)
+					source, err := storage.Reader(u)
 					if err != nil {
 						log.Errorf("%s", err.Error())
 						continue
 					}
-					if err := copyFromURC(source); err != nil {
-						log.Errorf("%s\n", err)
-						continue
-					}
 					SelectIndex(w, 0)
+
+					src := u.String()
+					copyFromURCProgress(source, fe, func(err error) {
+						// onComplete
+						if err != nil {
+							log.Errorf("URI (%s), copied to internal cache %s error: %s\n", src, dst, err)
+							removeEntry(dst, fe)
+							return
+						}
+						log.Tracef("URI (%s), copied to internal cache %s\n", src, dst)
+
+						if _, sterr := os.Stat(dst); sterr != nil {
+							log.Errorf("Stat error: %s - %s\n", dst, sterr.Error())
+							removeEntry(dst, fe)
+						}
+					})
 				}
 			}
 		}()
@@ -324,24 +413,55 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 			if len(uris) == 0 {
 				return
 			}
+			if entry.Disabled() {
+				log.Trace("Sending")
+				return
+			}
+			SelectIndex(w, 0)
 			for _, uri := range uris {
 				if err := addPath(uri.Path()); err != nil {
 					log.Errorf(err.Error())
 				}
 			}
-			SelectIndex(w, 0)
 		})
 	}
 
 	addFileButton := widget.NewButtonWithIcon("", theme.FileIcon(), func() {
 		ShowFileOpen(func(source fyne.URIReadCloser, e error) {
+			if source == nil {
+				return
+			}
 			if e != nil {
+				source.Close()
 				log.Errorf("Open dialog error: %s", e)
 				return
 			}
-			if err := copyFromURC(source); err != nil {
-				log.Errorf("%s\n", err)
+			u := source.URI()
+			name := u.Name()
+			log.Tracef("name %s", name)
+			name = uriBase(u)
+			log.Tracef("name %s", name)
+			dst := filepath.Join(sendDir, name)
+			fe := addEntry(dst)
+			if fe == nil {
+				return
 			}
+
+			src := u.String()
+			copyFromURCProgress(source, fe, func(err error) {
+				// onComplete
+				if err != nil {
+					log.Errorf("URI (%s), copied to internal cache %s error: %s\n", src, dst, err)
+					removeEntry(dst, fe)
+					return
+				}
+				log.Tracef("URI (%s), copied to internal cache %s\n", src, dst)
+
+				if _, sterr := os.Stat(dst); sterr != nil {
+					log.Errorf("Stat error: %s - %s\n", dst, sterr.Error())
+					removeEntry(dst, fe)
+				}
+			})
 		}, w)
 	})
 
@@ -396,8 +516,17 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 			return
 		}
 
+		ready := true
+		for _, fe := range fileentries {
+			//progressBar
+			if fe.Objects[1].Visible() {
+				ready = false
+				break
+			}
+		}
+
 		// Only send if files selected
-		if len(fileentries) < 1 {
+		if len(fileentries) < 1 || !ready {
 			log.Error("no files selected\n")
 			dialog.ShowInformation(
 				lp("Send"),
@@ -413,6 +542,7 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 		if totpCheck.Checked {
 			secret = totp(entry.Text)
 			totpLabel.SetText(secret)
+			secret = TOTP + secret
 			totpProg.Hide()
 		}
 		sender, err := croc.New(croc.Options{
@@ -545,8 +675,8 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 		widget.NewForm(&widget.FormItem{Text: lp("Send Code"), Widget: entry}),
 		container.NewHBox(
 			copyCodeButton,
-			totpLabel,
 			totpCheck,
+			totpLabel,
 			totpProg,
 			layout.NewSpacer(),
 			deleteAllButton,
@@ -716,6 +846,78 @@ func totp(secret string) string {
 		int32(hmacHash[offset+2]&0xff)<<8 |
 		int32(hmacHash[offset+3]&0xff)
 
-	otp := code % int32(math.Pow10(6))
-	return fmt.Sprintf("%06d", otp)
+	otp := code % int32(math.Pow10(8))
+	return fmt.Sprintf("%08d", otp)
+}
+
+type ProgressWriter struct {
+	Writer     io.Writer
+	Total      int64
+	Written    int64
+	OnProgress func(float64)
+}
+
+func (pw *ProgressWriter) Write(p []byte) (int, error) {
+	n, err := pw.Writer.Write(p)
+	if err == nil {
+		pw.Written += int64(n)
+		if pw.OnProgress != nil && pw.Total > 0 {
+			if pw.Written > pw.Total {
+				pw.Total += int64(n) + 1
+			}
+			progress := float64(pw.Written) / float64(pw.Total)
+			pw.OnProgress(progress)
+		}
+	}
+	return n, err
+}
+
+func CopyFileProgress(src, dst string, c *fyne.Container, cb func(err error)) {
+	source, err := os.Open(src)
+	if err != nil {
+		cb(err)
+		return
+	}
+
+	fi, err := os.Stat(src)
+	if err != nil {
+		source.Close()
+		cb(err)
+		return
+	}
+
+	destination, err := os.Create(dst)
+	if err != nil {
+		source.Close()
+		cb(err)
+		return
+	}
+
+	db := c.Objects[0].(*widget.Button)
+	db.Disable()
+
+	pb := c.Objects[1].(*widget.ProgressBar)
+	pb.SetValue(0)
+	pb.Show()
+
+	pw := &ProgressWriter{
+		Writer: destination,
+		Total:  fi.Size(),
+		OnProgress: func(progress float64) {
+			fyne.Do(func() {
+				pb.SetValue(progress)
+			})
+		},
+	}
+
+	go func() {
+		_, err := io.Copy(pw, source)
+		source.Close()
+		destination.Close()
+		fyne.Do(func() {
+			pb.Hide()
+			db.Enable()
+		})
+		cb(err)
+	}()
 }

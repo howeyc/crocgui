@@ -47,8 +47,10 @@ type logwriter struct {
 }
 
 const (
-	LOG_LINES = 20
-	EMULATE   = time.Second * 0
+	LOG_LINES   = 20
+	EMULATE     = time.Second * 0
+	CROC_SECRET = "CROC_SECRET"
+	TOTP        = "TOTP-" + CROC_SECRET
 )
 
 func (lw *logwriter) Write(p []byte) (n int, err error) {
