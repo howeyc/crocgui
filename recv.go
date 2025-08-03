@@ -145,7 +145,11 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 		savedialog.Show()
 	}
 
-	addEntry := func(dst string) {
+	addEntry := func(dst string) (newentry *fyne.Container) {
+		if fe, has := fileentries[dst]; has {
+			log.Tracef("exists %s", dst)
+			return fe
+		}
 		labelFile := widget.NewLabel(filepath.Base(dst))
 
 		saveButton := widget.NewButtonWithIcon("", theme.DocumentSaveIcon(), func() {
@@ -160,7 +164,7 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 		progFile := widget.NewProgressBar()
 		progFile.Hide()
 
-		newentry := container.NewHBox(
+		newentry = container.NewHBox(
 			deleteButton,
 			progFile,
 			saveButton,
@@ -169,6 +173,7 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 
 		fileentries[dst] = newentry
 		boxholder.Add(newentry)
+		return
 	}
 
 	os.MkdirAll(recvDir, 0o700)
@@ -322,6 +327,10 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 			ticker := time.NewTicker(time.Millisecond * 100)
 			defer ticker.Stop()
 			old := 0
+			pw := NewProgressWrapper(prog)
+			lw := NewLabelWrapper(topline)
+			var TotalSent, size, totalMax int64
+			fepw := NewProgressWrapper(nil)
 			for {
 				select {
 				case <-done:
@@ -332,17 +341,39 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 						return
 					}
 					if receiver.Step2FileInfoTransferred {
-						cnum := receiver.FilesToTransferCurrentNum
-						fyne.Do(func() {
-							if old < cnum+1 {
-								old = cnum + 1
-								fi := receiver.FilesToTransfer[cnum]
-								filename = filepath.Base(fi.Name)
-								topline.SetText(fmt.Sprintf("%s: %s(%d/%d)", lp("Receiving file"), filename, cnum+1, len(receiver.FilesToTransfer)))
-								prog.Max = float64(fi.Size)
+						if totalMax == 0 {
+							for _, fi := range receiver.FilesToTransfer {
+								dst := filepath.Join(recvDir, fi.Name)
+								addEntry(dst)
+								totalMax += fi.Size
 							}
-							prog.SetValue(float64(receiver.TotalSent))
-						})
+							pw.SetMax(totalMax)
+						}
+						cnum := receiver.FilesToTransferCurrentNum
+						if old < cnum+1 {
+							old = cnum + 1
+							if cnum > 0 {
+								//100%
+								fepw.Set100()
+							}
+							fi := receiver.FilesToTransfer[cnum]
+							filename = fi.Name
+							lw.SetText(fmt.Sprintf("%s: %s(%d/%d)", lp("Receiving file"), filename, cnum+1, len(receiver.FilesToTransfer)))
+							TotalSent += size
+							size = fi.Size
+							path := filepath.Join(recvDir, fi.Name)
+							log.Trace(path)
+							if fe, ok := fileentries[path]; ok {
+								fepw = NewProgressWrapper(fe.Objects[1].(*widget.ProgressBar))
+								fepw.SetMax(size)
+								fepw.Show()
+							} else {
+								fepw = NewProgressWrapper(nil)
+							}
+
+						}
+						pw.SetValue(TotalSent + receiver.TotalSent)
+						fepw.SetValue(receiver.TotalSent)
 					}
 				case <-donechan:
 					return
@@ -374,12 +405,14 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 			} else {
 				fyne.Do(func() {
 					topline.SetText(fmt.Sprintf("%s: %s", lp("Received"), filename))
-
-					for _, fi := range receiver.FilesToTransfer {
-						dst := filepath.Join(recvDir, filepath.Base(fi.Name))
-						addEntry(dst)
-					}
 				})
+
+				for _, fi := range receiver.FilesToTransfer {
+					dst := filepath.Join(recvDir, fi.Name)
+					fe := addEntry(dst)
+					fepw := NewProgressWrapper(fe.Objects[1].(*widget.ProgressBar))
+					fepw.Hide()
+				}
 			}
 			fyne.Do(reset)
 		}()
@@ -394,9 +427,7 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 				log.Warnf("Receive cancelled. %s: %v\n", recvDir, ls(recvDir))
 				Stop(receiver)
 
-				fyne.Do(func() {
-					reset()
-				})
+				fyne.Do(reset)
 			}
 		}()
 		//  +2 go routines
@@ -465,35 +496,11 @@ func copyToUWCProgress(destination fyne.URIWriteCloser, src string, c *fyne.Cont
 	}
 
 	pw, restore := NewProgressWriter(destination, fi.Size(), c)
-	// db := c.Objects[0].(*widget.Button)
-	// db.Disable()
-
-	// pb := c.Objects[1].(*widget.ProgressBar)
-	// pb.SetValue(0)
-	// pb.Show()
-
-	// sb := c.Objects[2].(*widget.Button)
-	// sb.Hide()
-
-	// pw := &ProgressWriter{
-	// 	Writer: destination,
-	// 	Total:  fi.Size(),
-	// 	OnProgress: func(progress float64) {
-	// 		fyne.Do(func() {
-	// 			pb.SetValue(progress)
-	// 		})
-	// 	},
-	// }
 
 	go func() {
 		_, err := io.Copy(pw, source)
 		source.Close()
 		destination.Close()
-		// fyne.Do(func() {
-		// 	pb.Hide()
-		// 	db.Enable()
-		// 	sb.Show()
-		// })
 		restore()
 		cb(err)
 	}()

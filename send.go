@@ -84,10 +84,12 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 			return
 		}
 
-		totpLabel.SetText(totp(entry.Text))
 		now := time.Now()
 		remaining := 30 - now.Second()%30
-		totpProg.SetValue(float64(remaining) / 30)
+		fyne.Do(func() {
+			totpLabel.SetText(totp(entry.Text))
+			totpProg.SetValue(float64(remaining) / 30)
+		})
 	}
 
 	totpCheck.OnChanged = func(b bool) {
@@ -105,9 +107,7 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 					case <-done:
 						return
 					case <-ticker.C:
-						fyne.Do(func() {
-							update()
-						})
+						update()
 					case <-totpChan:
 						return
 					}
@@ -536,15 +536,19 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 
 		var filename string
 		mainButton.Disable()
-		prog.Show()
 		cancelButton.Show()
 
 		donechan := make(chan bool)
-		sendnames := make(map[string]int)
 		go func() {
 			ticker := time.NewTicker(time.Millisecond * 100)
 			defer ticker.Stop()
 			old := 0
+			pw := NewProgressWrapper(prog)
+			var TotalSent, size int64
+			totalMax := total(sendDir)
+			pw.SetMax(totalMax)
+			lw := NewLabelWrapper(topline)
+			fepw := NewProgressWrapper(nil)
 			for {
 				select {
 				case <-done:
@@ -554,19 +558,34 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 					if sender == nil {
 						return
 					}
+					if !prog.Visible() && hashed(sender) {
+						pw.Show()
+					}
 					if sender.Step2FileInfoTransferred {
 						cnum := sender.FilesToTransferCurrentNum
-						fyne.Do(func() {
-							if old < cnum+1 {
-								old = cnum + 1
-								fi := sender.FilesToTransfer[cnum]
-								filename = filepath.Base(fi.Name)
-								sendnames[filename] = cnum
-								topline.SetText(fmt.Sprintf("%s: %s(%d/%d)", lp("Sending file"), filename, cnum+1, len(sender.FilesToTransfer)))
-								prog.Max = float64(fi.Size)
+						if old < cnum+1 {
+							old = cnum + 1
+							if cnum > 0 {
+								//100%
+								fepw.Set100()
 							}
-							prog.SetValue(float64(sender.TotalSent))
-						})
+							fi := sender.FilesToTransfer[cnum]
+							filename = fi.Name
+							lw.SetText(fmt.Sprintf("%s: %s(%d/%d)", lp("Sending file"), filename, cnum+1, len(sender.FilesToTransfer)))
+							TotalSent += size
+							size = fi.Size
+							path := filepath.Join(fi.FolderSource, fi.Name)
+							log.Trace(path)
+							if fe, ok := fileentries[path]; ok {
+								fepw = NewProgressWrapper(fe.Objects[1].(*widget.ProgressBar))
+								fepw.SetMax(size)
+								fepw.Show()
+							} else {
+								fepw = NewProgressWrapper(nil)
+							}
+						}
+						pw.SetValue(TotalSent + sender.TotalSent)
+						fepw.SetValue(sender.TotalSent)
 					}
 				case <-donechan:
 					return
@@ -829,8 +848,9 @@ type ProgressWriter struct {
 
 var ErrWriteCanceled = errors.New("write canceled")
 
+const minInterval = 200 * time.Millisecond
+
 func (pw *ProgressWriter) Write(p []byte) (n int, err error) {
-	const minInterval = 200 * time.Millisecond
 	select {
 	case <-pw.cancel:
 		return 0, ErrWriteCanceled
@@ -935,4 +955,129 @@ func CopyFileProgress(src, dst string, c *fyne.Container, cb func(err error)) {
 func hashToFilename(data string) string {
 	hash := crc32.ChecksumIEEE([]byte(data))
 	return fmt.Sprintf("%x", hash)
+}
+
+type ProgressWrapper struct {
+	*widget.ProgressBar
+	lastValue float64
+	lastCall  time.Time
+}
+
+func NewProgressWrapper(bar *widget.ProgressBar) *ProgressWrapper {
+	return &ProgressWrapper{
+		ProgressBar: bar,
+		lastValue:   -1,
+	}
+}
+
+func (pw *ProgressWrapper) Show() {
+	if pw.ProgressBar != nil {
+		fyne.Do(func() {
+			pw.ProgressBar.Show()
+		})
+	}
+}
+
+func (pw *ProgressWrapper) Hide() {
+	if pw.ProgressBar != nil {
+		fyne.Do(func() {
+			pw.ProgressBar.Hide()
+		})
+	}
+}
+
+func (pw *ProgressWrapper) Set100() {
+	if pw.ProgressBar == nil {
+		return
+	}
+	pw.SetValue(int64(pw.ProgressBar.Max))
+}
+
+func (pw *ProgressWrapper) SetValue(value int64) {
+	if pw.ProgressBar == nil {
+		return
+	}
+	newValue := float64(value)
+
+	if newValue > pw.lastValue || pw.lastValue == -1 {
+		now := time.Now()
+		if now.Sub(pw.lastCall) >= minInterval || pw.lastValue == -1 {
+			pw.lastValue = newValue
+			pw.lastCall = now
+			fyne.Do(func() {
+				pw.ProgressBar.SetValue(newValue)
+			})
+		}
+	}
+}
+
+func (pw *ProgressWrapper) SetMax(max int64) {
+	if pw.ProgressBar == nil {
+		return
+	}
+	newMax := float64(max)
+
+	if newMax != pw.ProgressBar.Max {
+		fyne.Do(func() {
+			pw.ProgressBar.Max = newMax
+		})
+
+		if newMax < pw.lastValue || pw.lastValue == -1 {
+			pw.lastValue = -1
+		}
+	}
+}
+
+type LabelWrapper struct {
+	*widget.Label
+	lastText string
+	lastCall time.Time
+}
+
+func NewLabelWrapper(label *widget.Label) *LabelWrapper {
+	return &LabelWrapper{
+		Label:    label,
+		lastText: "",
+	}
+}
+
+func (lw *LabelWrapper) SetText(text string) {
+	now := time.Now()
+
+	if text != lw.lastText || now.Sub(lw.lastCall) >= minInterval {
+		lw.lastText = text
+		lw.lastCall = now
+		fyne.Do(func() {
+			lw.Label.SetText(text)
+		})
+	}
+}
+
+func total(dir string) int64 {
+	var size int64
+
+	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil
+		}
+		if !info.IsDir() {
+			size += info.Size()
+		}
+		return nil
+	})
+
+	if err != nil {
+		return 0
+	}
+
+	return size
+}
+
+func hashed(c *croc.Client) bool {
+	for _, file := range c.FilesToTransfer {
+		if len(file.Hash) == 0 {
+			return false
+		}
+	}
+	return true
 }
