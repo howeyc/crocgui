@@ -80,7 +80,7 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 		updateMutex.Lock()
 		defer updateMutex.Unlock()
 
-		if !totpCheck.Checked {
+		if !totpCheck.Checked || totpCheck.Disabled() {
 			return
 		}
 
@@ -506,6 +506,9 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 			secret = TOTP + secret
 			totpProg.Hide()
 		}
+		for _, fe := range fileentries {
+			fe.Objects[0].Hide()
+		}
 		sender, err := croc.New(croc.Options{
 			IsSender:         true,
 			SharedSecret:     secret,
@@ -543,12 +546,13 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 			ticker := time.NewTicker(time.Millisecond * 100)
 			defer ticker.Stop()
 			old := 0
-			pw := NewProgressWrapper(prog)
+			progW := NewProgressWrapper(prog)
 			var TotalSent, size int64
 			totalMax := total(sendDir)
-			pw.SetMax(totalMax)
-			lw := NewLabelWrapper(topline)
+			progW.SetMax(totalMax)
+			toplineW := NewLabelWrapper(topline)
 			fepw := NewProgressWrapper(nil)
+			once := true
 			for {
 				select {
 				case <-done:
@@ -558,8 +562,13 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 					if sender == nil {
 						return
 					}
-					if !prog.Visible() && hashed(sender) {
-						pw.Show()
+					if once && hashed(sender) {
+						once = false
+						fyne.Do(func() {
+							topline.SetText(lp("Download"))
+							prog.Show()
+							SelectIndex(w, 0)
+						})
 					}
 					if sender.Step2FileInfoTransferred {
 						cnum := sender.FilesToTransferCurrentNum
@@ -571,7 +580,7 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 							}
 							fi := sender.FilesToTransfer[cnum]
 							filename = fi.Name
-							lw.SetText(fmt.Sprintf("%s: %s(%d/%d)", lp("Sending file"), filename, cnum+1, len(sender.FilesToTransfer)))
+							toplineW.SetText(fmt.Sprintf("%s: %s(%d/%d)", lp("Sending file"), filename, cnum+1, len(sender.FilesToTransfer)))
 							TotalSent += size
 							size = fi.Size
 							path := filepath.Join(fi.FolderSource, fi.Name)
@@ -584,7 +593,7 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 								fepw = NewProgressWrapper(nil)
 							}
 						}
-						pw.SetValue(TotalSent + sender.TotalSent)
+						progW.SetValue(TotalSent + sender.TotalSent)
 						fepw.SetValue(sender.TotalSent)
 					}
 				case <-donechan:
@@ -910,6 +919,7 @@ func NewProgressWriter(destination io.Writer, total int64, c *fyne.Container) (p
 	}
 
 	pb.SetValue(0)
+	pb.Max = 1.0
 	pb.Show()
 
 	restore = func() {
@@ -972,17 +982,13 @@ func NewProgressWrapper(bar *widget.ProgressBar) *ProgressWrapper {
 
 func (pw *ProgressWrapper) Show() {
 	if pw.ProgressBar != nil {
-		fyne.Do(func() {
-			pw.ProgressBar.Show()
-		})
+		fyne.Do(pw.ProgressBar.Show)
 	}
 }
 
 func (pw *ProgressWrapper) Hide() {
 	if pw.ProgressBar != nil {
-		fyne.Do(func() {
-			pw.ProgressBar.Hide()
-		})
+		fyne.Do(pw.ProgressBar.Hide)
 	}
 }
 

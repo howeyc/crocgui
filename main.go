@@ -94,13 +94,6 @@ func refreshWindow(a fyne.App, w fyne.Window, index int) {
 
 func main() {
 	a := app.NewWithID("com.github.howeyc.crocgui")
-	w := a.NewWindow("croc")
-
-	w.SetCloseIntercept(func() {
-		close(done)
-		w.Close()
-	})
-
 	logbinding = binding.NewString()
 
 	switch runtime.GOOS {
@@ -117,6 +110,21 @@ func main() {
 	default:
 		log.SetOutput(io.MultiWriter(os.Stdout, &logoutput))
 	}
+
+	switch runtime.GOOS {
+	case "linux", "freebsd", "openbsd", "netbsd":
+		if os.Getenv("DISPLAY") == "" {
+			log.Error("The DISPLAY environment variable is missing")
+			return
+		}
+	}
+
+	w := a.NewWindow("croc")
+
+	w.SetCloseIntercept(func() {
+		close(done)
+		w.Close()
+	})
 
 	// Defaults
 	a.Preferences().SetString("lang", a.Preferences().StringWithFallback("lang", "en-US"))

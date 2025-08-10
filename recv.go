@@ -58,7 +58,7 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 		updateMutex.Lock()
 		defer updateMutex.Unlock()
 
-		if !totpCheck.Checked {
+		if !totpCheck.Checked || totpCheck.Disabled() {
 			return
 		}
 
@@ -83,9 +83,7 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 					case <-done:
 						return
 					case <-ticker.C:
-						fyne.Do(func() {
-							update()
-						})
+						fyne.Do(update)
 					case <-totpChan:
 						return
 					}
@@ -327,10 +325,11 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 			ticker := time.NewTicker(time.Millisecond * 100)
 			defer ticker.Stop()
 			old := 0
-			pw := NewProgressWrapper(prog)
-			lw := NewLabelWrapper(topline)
+			progW := NewProgressWrapper(prog)
+			toplineW := NewLabelWrapper(topline)
 			var TotalSent, size, totalMax int64
 			fepw := NewProgressWrapper(nil)
+			once := true
 			for {
 				select {
 				case <-done:
@@ -341,13 +340,16 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 						return
 					}
 					if receiver.Step2FileInfoTransferred {
-						if totalMax == 0 {
+						if once {
+							once = false
 							for _, fi := range receiver.FilesToTransfer {
 								dst := filepath.Join(recvDir, fi.Name)
-								addEntry(dst)
+								fe := addEntry(dst)
+								fyne.Do(fe.Objects[0].Hide)
+								fyne.Do(fe.Objects[2].Hide)
 								totalMax += fi.Size
 							}
-							pw.SetMax(totalMax)
+							progW.SetMax(totalMax)
 						}
 						cnum := receiver.FilesToTransferCurrentNum
 						if old < cnum+1 {
@@ -358,7 +360,7 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 							}
 							fi := receiver.FilesToTransfer[cnum]
 							filename = fi.Name
-							lw.SetText(fmt.Sprintf("%s: %s(%d/%d)", lp("Receiving file"), filename, cnum+1, len(receiver.FilesToTransfer)))
+							toplineW.SetText(fmt.Sprintf("%s: %s(%d/%d)", lp("Receiving file"), filename, cnum+1, len(receiver.FilesToTransfer)))
 							TotalSent += size
 							size = fi.Size
 							path := filepath.Join(recvDir, fi.Name)
@@ -370,9 +372,8 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 							} else {
 								fepw = NewProgressWrapper(nil)
 							}
-
 						}
-						pw.SetValue(TotalSent + receiver.TotalSent)
+						progW.SetValue(TotalSent + receiver.TotalSent)
 						fepw.SetValue(receiver.TotalSent)
 					}
 				case <-donechan:
@@ -410,8 +411,11 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 				for _, fi := range receiver.FilesToTransfer {
 					dst := filepath.Join(recvDir, fi.Name)
 					fe := addEntry(dst)
-					fepw := NewProgressWrapper(fe.Objects[1].(*widget.ProgressBar))
-					fepw.Hide()
+					fyne.Do(func() {
+						fe.Objects[0].Show()
+						fe.Objects[1].Hide()
+						fe.Objects[2].Show()
+					})
 				}
 			}
 			fyne.Do(reset)
