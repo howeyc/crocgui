@@ -13,6 +13,7 @@ import (
 	"fyne.io/fyne/v2/data/binding"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/layout"
+	"fyne.io/fyne/v2/storage"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 )
@@ -33,16 +34,14 @@ func crocDebugLevel() string {
 	return fyne.CurrentApp().Preferences().String("debug-level")
 }
 
-var debugObjects []fyne.CanvasObject
+var exportButton *widget.Button
 
-func setDebugObjects() {
+func setDebug() {
 	debugging := crocDebugMode()
-	for _, obj := range debugObjects {
-		if debugging {
-			obj.Show()
-		} else {
-			obj.Hide()
-		}
+	if debugging {
+		exportButton.Show()
+	} else {
+		exportButton.Hide()
 	}
 }
 
@@ -117,6 +116,57 @@ func settingsTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 	currentHash, _ := hashBinding.Get()
 	hashSelect.SetSelected(currentHash)
 
+	hideLogoBinding := binding.BindPreferenceBool("hide-logo", a.Preferences())
+	toggleLogo := widget.NewButton(lp("Show / Hide"), func() {
+		hideLogo, _ := hideLogoBinding.Get()
+		hideLogoBinding.Set(!hideLogo)
+		refreshWindow(a, w, 2)
+	})
+
+	exportButton = widget.NewButtonWithIcon(lp("Export full log"), theme.ContentCopyIcon(), func() {
+		log.Tracef("Log copied to clipboard")
+		s := logoutput.buf.String()
+		a.Clipboard().SetContent(s)
+
+		child := "crocdebuglog.txt"
+		savedialog := dialog.NewFileSave(func(destination fyne.URIWriteCloser, err error) {
+			if err != nil {
+				// Работает на линуксе и андроиде 10+
+				log.Errorf("NewFileSave %v", err)
+				quit := false
+				dialog.ShowConfirm(lp("Export full log"), lp("Download")+"?", func(b bool) {
+					quit = !b
+				}, w)
+				if quit {
+					return
+				}
+				u, cl, err := ChildDownload(child)
+				if err != nil {
+					log.Errorf("append child %s to Downloads: %v", child, err)
+					return
+				}
+				defer cl()
+				destination, err = storage.Writer(u)
+				if err != nil {
+					log.Errorf("creating writer from URI(%s): %v", u, err)
+					return
+				}
+				destination.Write([]byte(s))
+				destination.Close()
+				return
+			} else if destination == nil {
+				log.Trace("User canceled file selection")
+				logoutput.buf.Reset()
+				return
+			}
+			logoutput.buf.WriteTo(destination)
+			destination.Close()
+		}, w)
+		savedialog.SetFileName(child)
+		savedialog.Resize(w.Canvas().Size())
+		savedialog.Show()
+	})
+
 	debugLevelBinding := binding.BindPreferenceString("debug-level", a.Preferences())
 	debugCheck := widget.NewCheck(lp("Enable Debug Log"), func(debug bool) {
 		if debug {
@@ -126,30 +176,10 @@ func settingsTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 			log.SetLevel("error")
 			debugLevelBinding.Set("error")
 		}
-		setDebugObjects()
+		setDebug()
+		logoutput.buf.Reset()
 	})
 	debugCheck.SetChecked(crocDebugMode())
-
-	hideLogoBinding := binding.BindPreferenceBool("hide-logo", a.Preferences())
-	toggleLogo := widget.NewButton(lp("Show / Hide"), func() {
-		hideLogo, _ := hideLogoBinding.Get()
-		hideLogoBinding.Set(!hideLogo)
-		refreshWindow(a, w, 2)
-	})
-
-	exportButton := widget.NewButtonWithIcon(lp("Export full log"), theme.DocumentSaveIcon(), func() {
-		savedialog := dialog.NewFileSave(func(f fyne.URIWriteCloser, e error) {
-			if f != nil {
-				logoutput.buf.WriteTo(f)
-				f.Close()
-			}
-		}, w)
-		savedialog.SetFileName("crocdebuglog.txt")
-		savedialog.Resize(w.Canvas().Size())
-		savedialog.Show()
-	})
-
-	debugObjects = append(debugObjects, exportButton)
 
 	return container.NewTabItemWithIcon(lp("Settings"), theme.SettingsIcon(), container.NewVScroll(container.NewVBox(
 		widget.NewLabelWithStyle(lp("Appearance"), fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),

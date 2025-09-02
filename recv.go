@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 
@@ -92,6 +93,7 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 		} else {
 			totpLabel.SetText(TOTP)
 			totpProg.Hide()
+			entry.SetText(TOTP + totp(entry.Text))
 		}
 		a.Preferences().SetBool("totp-recv", b)
 	}
@@ -118,27 +120,63 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 	}
 
 	ShowFileLocation := func(src string, parent fyne.Window) {
+		child := filepath.Base(src)
 		savedialog := dialog.NewFileSave(func(destination fyne.URIWriteCloser, err error) {
-			if destination == nil {
-				return
-			}
+			var (
+				u    fyne.URI
+				cl   = func() {}
+				quit bool
+			)
 			if err != nil {
-				destination.Close()
+				// Работает на линуксе и андроиде 10+
+				log.Errorf("NewFileSave %v", err)
+				dialog.ShowConfirm(lp("Saved all files to"), lp("Download")+"?", func(b bool) {
+					quit = !b
+				}, w)
+				if quit {
+					return
+				}
+				u, cl, err = ChildDownload(child)
+				if err != nil {
+					log.Errorf("append child %s to Downloads: %v", child, err)
+					return
+				}
+				destination, err = storage.Writer(u)
+				if err != nil {
+					cl()
+					log.Errorf("creating writer from URI(%s): %v", u, err)
+					return
+				}
+			} else if destination == nil {
 				return
 			}
+
 			if fe, ok := fileentries[src]; ok {
+				if !isMobile {
+					err := os.Rename(src, destination.URI().Path())
+					if err == nil {
+						destination.Close()
+						log.Tracef("File %s moved to %s", src, destination.URI().Path())
+						removeEntry(src, fe)
+						return
+					}
+				}
+
 				copyToUWCProgress(destination, src, fe, func(err error) {
+					cl()
 					if err != nil {
-						log.Errorf("%s\n", err)
+						log.Errorf("Error saving %s to %s error:%v", src, destination.URI().Path(), err)
 					} else {
+						log.Tracef("File %s saved to %s", src, destination.URI().Path())
 						removeEntry(src, fe)
 					}
 				})
 			} else {
+				cl()
 				destination.Close()
 			}
 		}, parent)
-		savedialog.SetFileName(filepath.Base(src))
+		savedialog.SetFileName(child)
 		savedialog.Resize(parent.Canvas().Size())
 		savedialog.Show()
 	}
@@ -198,37 +236,83 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 			return
 		}
 
-		ShowFolderOpen(func(uri fyne.ListableURI, err error) {
-			if err != nil {
-				log.Errorf("Error selecting folder: %v", err)
-				return
-			}
-			if uri == nil {
-				log.Error("User canceled folder selection")
-				return
-			}
+		ShowFolderOpen(func(lu fyne.ListableURI, err error) {
+			var (
+				u    fyne.URI
+				cl   = func() {}
+				quit bool
+			)
 
-			lastSaveDir = uri.Path()
+			if err != nil {
+				// Работает на линуксе и андроиде 10+
+				log.Errorf("ShowFolderOpen %v", err)
+				dialog.ShowConfirm(lp("Save All"), lp("Download")+"?", func(b bool) {
+					quit = !b
+				}, w)
+				if quit {
+					return
+				}
+			} else if lu == nil {
+				log.Trace("User canceled folder selection")
+				return
+			}
 
 			for src, fe := range fileentries {
-				filename := filepath.Base(src)
-				dstURI, _ := storage.Child(uri, filename)
+				child := filepath.Base(src)
 
-				uwc, err := storage.Writer(dstURI)
+				if lu != nil {
+					lastSaveDir = lu.Path()
+					u, cl, err = Child(lu, child)
+					if err != nil {
+						log.Errorf("Error append to URI(%s) child %s error: %v", lu, child, err)
+						u, cl, err = ChildDownload(child)
+					}
+				} else {
+					// Не открылся ShowFolderOpen
+					u, cl, err = ChildDownload(child)
+					if p, err := storage.Parent(u); err == nil {
+						lu, _ = storage.ListerForURI(p)
+					}
+				}
 				if err != nil {
-					log.Errorf("Error creating writer for %s: %v", filename, err)
+					log.Errorf("Error append to Downloads child %s error: %v", child, err)
 					continue
 				}
-				copyToUWCProgress(uwc, src, fe, func(err error) {
-					if err != nil {
-						log.Errorf("Error saving %s: %v", filename, err)
+
+				destination, err := storage.Writer(u)
+				if err != nil {
+					cl()
+					log.Errorf("Error creating writer from URI(%s) error: %v", u.String(), err)
+					continue
+				}
+
+				if !isMobile {
+					err := os.Rename(src, destination.URI().Path())
+					if err == nil {
+						destination.Close()
+						log.Tracef("File %s moved to %s", src, destination.URI().Path())
+						removeEntry(src, fe)
 						fyne.Do(func() {
-							topline.SetText(fmt.Sprintf("Error saving %s: %v", filename, err))
+							if len(fileentries) == 0 {
+								topline.SetText(fmt.Sprintf("%s: %s", lp("Saved all files to"), lastSaveDir))
+							}
+						})
+						continue
+					}
+				}
+
+				copyToUWCProgress(destination, src, fe, func(err error) {
+					cl()
+					if err != nil {
+						log.Errorf("Error saving URI(%s) to %s error:%v", src, destination.URI(), err)
+						fyne.Do(func() {
+							topline.SetText(fmt.Sprintf("Error saving %s: %v", child, err))
 						})
 						return
 					}
-					log.Tracef("File %s saved to %s", filename, dstURI.String())
+					log.Tracef("File %s saved to URI(%s)", src, destination.URI().String())
 					removeEntry(src, fe)
+
 					fyne.Do(func() {
 						if len(fileentries) == 0 {
 							topline.SetText(fmt.Sprintf("%s: %s", lp("Saved all files to"), lastSaveDir))
@@ -443,7 +527,7 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 	})
 	cancelButton.Hide()
 
-	deleteAllButton := widget.NewButtonWithIcon(lp("Delete All"), theme.DeleteIcon(), func() {
+	deleteAllButton := widget.NewButtonWithIcon("*", theme.DeleteIcon(), func() { //lp("Delete All")
 		if len(fileentries) > 0 {
 			removeEntrys()
 		} else {
@@ -451,12 +535,12 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 		}
 	})
 
-	saveAllButton := widget.NewButtonWithIcon(lp("Save All"), theme.FolderOpenIcon(), func() {
+	saveAllButton := widget.NewButtonWithIcon("*", theme.FolderOpenIcon(), func() { //lp("Save All")
 		saveAllFiles()
 	})
-	if android {
-		saveAllButton.Hide()
-	}
+	// if isAndroid {
+	// 	saveAllButton.Hide()
+	// }
 
 	top := container.NewVBox(
 		container.NewHBox(topline, layout.NewSpacer(), pasteCodeButton),
@@ -478,16 +562,16 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 		container.NewBorder(top, nil, nil, nil, scroller))
 }
 
-func copyToUWCProgress(destination fyne.URIWriteCloser, src string, c *fyne.Container, cb func(err error)) {
+func copyToUWCProgress(destination fyne.URIWriteCloser, src string, c *fyne.Container, onComplete func(err error)) {
 	if destination == nil {
-		cb(fmt.Errorf("destination is nil (dialog closed)"))
+		onComplete(fmt.Errorf("destination is nil (dialog closed)"))
 		return
 	}
 
 	source, err := os.Open(src)
 	if err != nil {
 		destination.Close()
-		cb(fmt.Errorf("failed to open source file: %v", err))
+		onComplete(fmt.Errorf("failed to open source file: %v", err))
 		return
 	}
 
@@ -495,7 +579,7 @@ func copyToUWCProgress(destination fyne.URIWriteCloser, src string, c *fyne.Cont
 	if err != nil {
 		destination.Close()
 		source.Close()
-		cb(err)
+		onComplete(err)
 		return
 	}
 
@@ -506,17 +590,73 @@ func copyToUWCProgress(destination fyne.URIWriteCloser, src string, c *fyne.Cont
 		source.Close()
 		destination.Close()
 		restore()
-		cb(err)
+		onComplete(err)
 	}()
 }
 
 // Big File Dialog
 func ShowFolderOpen(callback func(fyne.ListableURI, error), parent fyne.Window) {
-	if mobile {
+	if isMobile {
 		dialog.ShowFolderOpen(callback, parent)
 		return
 	}
 	fd := dialog.NewFolderOpen(callback, parent)
 	fd.Resize(parent.Canvas().Size())
 	fd.Show()
+}
+
+// detectMimeType определяет MIME-тип по расширению файла
+func detectMimeType(fileName string) string {
+	ext := strings.ToLower(filepath.Ext(fileName))
+	mimeTypes := map[string]string{
+		".txt":  "text/plain",
+		".html": "text/html",
+		".htm":  "text/html",
+		".css":  "text/css",
+		".js":   "application/javascript",
+		".json": "application/json",
+		".xml":  "application/xml",
+
+		".pdf":  "application/pdf",
+		".doc":  "application/msword",
+		".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+		".xls":  "application/vnd.ms-excel",
+		".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+		".ppt":  "application/vnd.ms-powerpoint",
+		".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+		".zip":  "application/zip",
+		".rar":  "application/vnd.rar",
+		".7z":   "application/x-7z-compressed",
+
+		".jpg":  "image/jpeg",
+		".jpeg": "image/jpeg",
+		".png":  "image/png",
+		".gif":  "image/gif",
+		".bmp":  "image/bmp",
+		".webp": "image/webp",
+		".svg":  "image/svg+xml",
+		".ico":  "image/x-icon",
+
+		".mp3":  "audio/mpeg",
+		".wav":  "audio/wav",
+		".ogg":  "audio/ogg",
+		".flac": "audio/flac",
+		".aac":  "audio/aac",
+
+		".mp4":  "video/mp4",
+		".avi":  "video/x-msvideo",
+		".mov":  "video/quicktime",
+		".wmv":  "video/x-ms-wmv",
+		".flv":  "video/x-flv",
+		".webm": "video/webm",
+		".mkv":  "video/x-matroska",
+
+		".apk": "application/vnd.android.package-archive",
+	}
+
+	if mime, exists := mimeTypes[ext]; exists {
+		return mime
+	}
+
+	return "application/octet-stream"
 }

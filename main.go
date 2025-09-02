@@ -31,8 +31,8 @@ import (
 var textlogobytes []byte
 
 var (
-	mobile                 bool
-	android                bool
+	isMobile               bool
+	isAndroid              bool
 	done                   = make(chan struct{})
 	ErrApplicationShutdown = errors.New("application shutdown")
 	uriFromIntent          = make(chan string, 100)
@@ -89,7 +89,7 @@ func refreshWindow(a fyne.App, w fyne.Window, index int) {
 	} else {
 		w.SetContent(container.NewBorder(top, nil, nil, nil, at))
 	}
-	setDebugObjects()
+	setDebug()
 }
 
 func main() {
@@ -98,11 +98,11 @@ func main() {
 
 	switch runtime.GOOS {
 	case "android":
-		android = true
+		isAndroid = true
 		fallthrough
 	case "ios":
 		log.SetOutput(&logoutput)
-		mobile = true
+		isMobile = true
 		a.Lifecycle().SetOnStarted(func() {
 			log.Trace("SetOnStarted setupIntentHandler")
 			setupIntentHandler()

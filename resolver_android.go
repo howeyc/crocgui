@@ -122,3 +122,24 @@ func replace(s string) string {
 		":", "_",
 	).Replace(s)
 }
+
+// Проверка существования файла через ContentResolver
+func uriExists(uri fyne.URI) (exists bool) {
+	driver.RunNative(func(ctx interface{}) error {
+		ac := ctx.(*driver.AndroidContext)
+		env := (*C.JNIEnv)(unsafe.Pointer(ac.Env))
+		activity := C.jobject(unsafe.Pointer(ac.Ctx))
+
+		uriStr := C.CString(uri.String())
+		defer C.free(unsafe.Pointer(uriStr))
+
+		cName := C.GetFileName(env, activity, uriStr)
+		if cName != nil {
+			exists = true
+			C.free(unsafe.Pointer(cName))
+		}
+		return nil
+	})
+
+	return
+}

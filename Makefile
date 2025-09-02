@@ -1,4 +1,4 @@
-.PHONY: all clean arm arm64 386 amd64 linux window windowsc darwin ios install darm
+.PHONY: all clean arm arm64 386 amd64 linux window wsl darwin ios install darm
 
 all: android
 
@@ -28,7 +28,8 @@ windows: main.go send.go recv.go settings.go theme.go about.go
 	#sudo apt-get install gcc-mingw-w64-x86-64
 	CC=x86_64-w64-mingw32-gcc fyne package -os windows --release -tags=opengl
 
-windowsc: main.go send.go recv.go settings.go theme.go about.go
+wsl: main.go send.go recv.go settings.go theme.go about.go
+
 	GOOS=windows GOARCH=amd64 CGO_ENABLED=1 CC=x86_64-w64-mingw32-gcc GOFLAGS=-ldflags=-s go build -tags=opengl
 
 darwin: main.go send.go recv.go settings.go theme.go about.go

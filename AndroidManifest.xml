@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.github.howeyc.crocgui"
-    android:versionCode="97"
-    android:versionName="1.11.12">
+    android:versionCode="157"
+    android:versionName="1.11.13">
 
     <application android:label="Croc">
 
@@ -41,6 +41,13 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="*/*" />
             </intent-filter>
+
+            <!-- <intent-filter>
+                <action android:name="android.intent.action.GET_CONTENT" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.OPENABLE" />
+                <data android:mimeType="*/*" />  
+            </intent-filter> -->
         </activity>
 
         <queries>
@@ -52,13 +59,30 @@
                 <action android:name="android.intent.action.SEND" />
                 <data android:mimeType="*/*" />
             </intent>
+            <intent>
+                <action android:name="android.intent.action.GET_CONTENT" />
+                <data android:mimeType="*/*" />
+            </intent>
+            <intent>
+                <action android:name="android.intent.action.OPEN_DOCUMENT" />
+                <data android:mimeType="*/*" />
+            </intent>
+            <intent>
+                <action android:name="android.intent.action.PICK" />
+                <data android:mimeType="*/*" />
+            </intent>
+            <intent>
+                <action android:name="android.intent.action.CREATE_DOCUMENT" />
+                <data android:mimeType="*/*" />
+            </intent>
         </queries>
     </application>
 
     <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" 
+        android:maxSdkVersion="29" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
-    <uses-permission android:name="android.permission.ACCESS_MEDIA_LOCATION"/>
+    <uses-permission android:name="android.permission.ACCESS_MEDIA_LOCATION" />
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
     <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />

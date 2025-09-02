@@ -116,6 +116,7 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 		} else {
 			totpLabel.SetText(TOTP)
 			totpProg.Hide()
+			entry.SetText(TOTP + totp(entry.Text))
 		}
 		a.Preferences().SetBool("totp-send", b)
 	}
@@ -196,8 +197,16 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 			return nil
 		}
 
+		if !isMobile {
+			err := Symlink(src, dst)
+			if err == nil {
+				log.Tracef("Make symlink URI (%s) to internal cache %s\n", src, dst)
+				return nil
+			}
+			log.Errorf("Unable make symlink URI (%s) to internal cache %s, error: %s\n", src, dst, err)
+		}
+
 		CopyFileProgress(src, dst, fe, func(err error) {
-			// onComplete
 			if err != nil {
 				log.Errorf("Unable to copy file, error: %s - %s\n", sendDir, err.Error())
 				removeEntry(dst, fe)
@@ -213,9 +222,9 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 		return nil
 	}
 
-	copyFromURCProgress := func(source fyne.URIReadCloser, c *fyne.Container, cb func(err error)) {
+	copyFromURCProgress := func(source fyne.URIReadCloser, c *fyne.Container, onComplete func(err error)) {
 		if source == nil {
-			cb(fmt.Errorf("User cancel dialog"))
+			onComplete(fmt.Errorf("User cancel dialog"))
 			return
 		}
 		u := source.URI()
@@ -228,7 +237,7 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 		destination, err := os.Create(dst)
 		if err != nil {
 			source.Close()
-			cb(fmt.Errorf("Unable to create file %s error: %s", dst, err.Error()))
+			onComplete(fmt.Errorf("Unable to create file %s error: %s", dst, err.Error()))
 			return
 		}
 
@@ -239,7 +248,7 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 			source.Close()
 			destination.Close()
 			restore()
-			cb(err)
+			onComplete(err)
 		}()
 	}
 
@@ -250,7 +259,7 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 		}
 	}
 
-	if android {
+	if isAndroid {
 		go func() {
 			for {
 				select {
@@ -345,7 +354,6 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 
 					src := u.String()
 					copyFromURCProgress(source, fe, func(err error) {
-						// onComplete
 						if err != nil {
 							log.Errorf("URI (%s), copied to internal cache %s error: %s\n", src, dst, err)
 							removeEntry(dst, fe)
@@ -407,10 +415,18 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 			if fe == nil {
 				return
 			}
-
 			src := u.String()
+
+			if !isMobile {
+				err := Symlink(u.Path(), dst)
+				if err == nil {
+					log.Tracef("Make symlink URI (%s) to internal cache %s\n", src, dst)
+					return
+				}
+				log.Errorf("Unable make symlink URI (%s) to internal cache %s, error: %s\n", src, dst, err)
+			}
+
 			copyFromURCProgress(source, fe, func(err error) {
-				// onComplete
 				if err != nil {
 					log.Errorf("URI (%s), copied to internal cache %s error: %s\n", src, dst, err)
 					removeEntry(dst, fe)
@@ -547,9 +563,7 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 			defer ticker.Stop()
 			old := 0
 			progW := NewProgressWrapper(prog)
-			var TotalSent, size int64
-			totalMax := total(sendDir)
-			progW.SetMax(totalMax)
+			var TotalSent, size, totalMax int64
 			toplineW := NewLabelWrapper(topline)
 			fepw := NewProgressWrapper(nil)
 			once := true
@@ -569,6 +583,10 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 							prog.Show()
 							SelectIndex(w, 0)
 						})
+						for _, fi := range sender.FilesToTransfer {
+							totalMax += fi.Size
+						}
+						progW.SetMax(totalMax)
 					}
 					if sender.Step2FileInfoTransferred {
 						cnum := sender.FilesToTransferCurrentNum
@@ -583,7 +601,7 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 							toplineW.SetText(fmt.Sprintf("%s: %s(%d/%d)", lp("Sending file"), filename, cnum+1, len(sender.FilesToTransfer)))
 							TotalSent += size
 							size = fi.Size
-							path := filepath.Join(fi.FolderSource, fi.Name)
+							path := filepath.Join(sendDir, fi.Name)
 							log.Trace(path)
 							if fe, ok := fileentries[path]; ok {
 								fepw = NewProgressWrapper(fe.Objects[1].(*widget.ProgressBar))
@@ -606,6 +624,11 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 		go func() {
 			var filepaths []string
 			for fpath := range fileentries {
+				if isSymlink(fpath) {
+					if target, err := os.Readlink(fpath); err == nil {
+						fpath = target
+					}
+				}
 				filepaths = append(filepaths, fpath)
 			}
 			fyne.Do(entry.Disable)
@@ -639,7 +662,7 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 			case <-done:
 				return
 			case <-donechan:
-				if !mobile {
+				if !isMobile {
 					log.Tracef("A restart is better than leaving 12 goroutines leaking\n")
 					fyne.Do(func() {
 						restart(a)
@@ -686,7 +709,7 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 
 // Big File Dialog
 func ShowFileOpen(callback func(reader fyne.URIReadCloser, err error), parent fyne.Window) {
-	if mobile {
+	if isMobile {
 		dialog.ShowFileOpen(callback, parent)
 		return
 	}
@@ -737,7 +760,7 @@ func SelectIndex(window fyne.Window, index int) {
 // For mobile Quit.
 // For desktop Restart.
 func restart(a fyne.App) {
-	if !mobile {
+	if !isMobile {
 		cmd := exec.Command(os.Args[0])
 		cmd.Env = os.Environ()
 		cmd.Start()
@@ -930,24 +953,24 @@ func NewProgressWriter(destination io.Writer, total int64, c *fyne.Container) (p
 	return pw, restore
 }
 
-func CopyFileProgress(src, dst string, c *fyne.Container, cb func(err error)) {
+func CopyFileProgress(src, dst string, c *fyne.Container, onComplete func(err error)) {
 	source, err := os.Open(src)
 	if err != nil {
-		cb(err)
+		onComplete(err)
 		return
 	}
 
 	fi, err := os.Stat(src)
 	if err != nil {
 		source.Close()
-		cb(err)
+		onComplete(err)
 		return
 	}
 
 	destination, err := os.Create(dst)
 	if err != nil {
 		source.Close()
-		cb(err)
+		onComplete(err)
 		return
 	}
 
@@ -958,7 +981,7 @@ func CopyFileProgress(src, dst string, c *fyne.Container, cb func(err error)) {
 		source.Close()
 		destination.Close()
 		restore()
-		cb(err)
+		onComplete(err)
 	}()
 }
 
@@ -1059,26 +1082,6 @@ func (lw *LabelWrapper) SetText(text string) {
 	}
 }
 
-func total(dir string) int64 {
-	var size int64
-
-	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return nil
-		}
-		if !info.IsDir() {
-			size += info.Size()
-		}
-		return nil
-	})
-
-	if err != nil {
-		return 0
-	}
-
-	return size
-}
-
 func hashed(c *croc.Client) bool {
 	for _, file := range c.FilesToTransfer {
 		if len(file.Hash) == 0 {
@@ -1086,4 +1089,15 @@ func hashed(c *croc.Client) bool {
 		}
 	}
 	return true
+}
+
+func isSymlink(path string) bool {
+	if isMobile {
+		return false
+	}
+	fileInfo, err := os.Lstat(path)
+	if err != nil {
+		return false
+	}
+	return fileInfo.Mode()&os.ModeSymlink != 0
 }
