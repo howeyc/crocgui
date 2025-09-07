@@ -1,8 +1,14 @@
+//go:generate bash -c "GOFLAGS=-ldflags=-s go install"
+
 package main
 
 import (
 	"bytes"
 	_ "embed"
+	"errors"
+	"io"
+	"os"
+	"runtime"
 	"strings"
 	"time"
 
@@ -24,13 +30,30 @@ import (
 //go:embed metadata/en-US/images/featureGraphic.png
 var textlogobytes []byte
 
+var (
+	isMobile               bool
+	isAndroid              bool
+	done                   = make(chan struct{})
+	ErrApplicationShutdown = errors.New("application shutdown")
+	uriFromIntent          = make(chan string, 100)
+	textFromIntent         = make(chan string, 100)
+
+	logoutput  logwriter
+	logbinding binding.String
+)
+
 type logwriter struct {
 	buf        bytes.Buffer
 	lastlines  []string
 	lastupdate time.Time
 }
 
-const LOG_LINES = 20
+const (
+	LOG_LINES   = 20
+	EMULATE     = time.Second * 0
+	CROC_SECRET = "CROC_SECRET"
+	TOTP        = "TOTP-" + CROC_SECRET
+)
 
 func (lw *logwriter) Write(p []byte) (n int, err error) {
 	n, err = lw.buf.Write(p)
@@ -46,9 +69,6 @@ func (lw *logwriter) Write(p []byte) (n int, err error) {
 	}
 	return
 }
-
-var logoutput logwriter
-var logbinding binding.String
 
 func refreshWindow(a fyne.App, w fyne.Window, index int) {
 	textlogores := fyne.NewStaticResource("text-logo", textlogobytes)
@@ -69,21 +89,48 @@ func refreshWindow(a fyne.App, w fyne.Window, index int) {
 	} else {
 		w.SetContent(container.NewBorder(top, nil, nil, nil, at))
 	}
-	setDebugObjects()
+	setDebug()
 }
 
 func main() {
 	a := app.NewWithID("com.github.howeyc.crocgui")
+	logbinding = binding.NewString()
+
+	switch runtime.GOOS {
+	case "android":
+		isAndroid = true
+		fallthrough
+	case "ios":
+		log.SetOutput(&logoutput)
+		isMobile = true
+		a.Lifecycle().SetOnStarted(func() {
+			log.Trace("SetOnStarted setupIntentHandler")
+			setupIntentHandler()
+		})
+	default:
+		log.SetOutput(io.MultiWriter(os.Stdout, &logoutput))
+	}
+
+	switch runtime.GOOS {
+	case "linux", "freebsd", "openbsd", "netbsd":
+		if os.Getenv("DISPLAY") == "" {
+			log.Error("The DISPLAY environment variable is missing")
+			return
+		}
+	}
+
 	w := a.NewWindow("croc")
 
-	logbinding = binding.NewString()
-	log.SetOutput(&logoutput)
+	w.SetCloseIntercept(func() {
+		close(done)
+		w.Close()
+	})
 
 	// Defaults
 	a.Preferences().SetString("lang", a.Preferences().StringWithFallback("lang", "en-US"))
 	a.Preferences().SetString("relay-address", a.Preferences().StringWithFallback("relay-address", "croc.schollz.com:9009"))
 	a.Preferences().SetString("relay-password", a.Preferences().StringWithFallback("relay-password", "pass123"))
-	a.Preferences().SetString("relay-ports", a.Preferences().StringWithFallback("relay-ports", "9009,9010,9011,9012,9013"))
+	a.Preferences().SetString("relay-ports", a.Preferences().StringWithFallback("relay-ports", "9009,9010,9011,9012,9013,9014,9015,9016,9017"))
 	a.Preferences().SetBool("disable-local", a.Preferences().BoolWithFallback("disable-local", false))
 	a.Preferences().SetBool("force-local", a.Preferences().BoolWithFallback("force-local", false))
 	a.Preferences().SetBool("disable-multiplexing", a.Preferences().BoolWithFallback("disable-multiplexing", false))
@@ -95,6 +142,9 @@ func main() {
 	a.Preferences().SetString("croc-hash", a.Preferences().StringWithFallback("croc-hash", "xxhash"))
 	a.Preferences().SetBool("hide-logo", a.Preferences().BoolWithFallback("hide-logo", false))
 	a.Preferences().SetString("multicast-address", a.Preferences().StringWithFallback("multicast-address", "239.255.255.250"))
+
+	a.Preferences().SetBool("totp-send", a.Preferences().BoolWithFallback("totp-send", false))
+	a.Preferences().SetBool("totp-recv", a.Preferences().BoolWithFallback("totp-recv", false))
 
 	appTheme.color = theme.DefaultTheme()
 	appTheme.size = theme.DefaultTheme()
@@ -115,4 +165,26 @@ func main() {
 	w.Resize(fyne.NewSize(800, 600))
 
 	w.ShowAndRun()
+}
+
+func ls(path string) (files []string) {
+	if path == "" {
+		return
+	}
+	dir, err := os.Open(path)
+	if err != nil {
+		return
+	}
+	defer dir.Close()
+
+	fileInfos, err := dir.Readdir(-1)
+	if err != nil {
+		return
+	}
+
+	for _, fileInfo := range fileInfos {
+		files = append(files, fileInfo.Name())
+	}
+
+	return
 }

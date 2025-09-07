@@ -16,13 +16,6 @@
             "fuzzy": true
         },
         {
-            "id": "Debug log:",
-            "message": "Debug log:",
-            "translation": "Debug log:",
-            "translatorComment": "Copied from source.",
-            "fuzzy": true
-        },
-        {
             "id": "Enter code to download",
             "message": "Enter code to download",
             "translation": "Enter code to download",
@@ -30,16 +23,9 @@
             "fuzzy": true
         },
         {
-            "id": "Receive",
-            "message": "Receive",
-            "translation": "Receive",
-            "translatorComment": "Copied from source.",
-            "fuzzy": true
-        },
-        {
-            "id": "Receive Code",
-            "message": "Receive Code",
-            "translation": "Receive Code",
+            "id": "Saved all files to",
+            "message": "Saved all files to",
+            "translation": "Saved all files to",
             "translatorComment": "Copied from source.",
             "fuzzy": true
         },
@@ -47,6 +33,13 @@
             "id": "Download",
             "message": "Download",
             "translation": "Download",
+            "translatorComment": "Copied from source.",
+            "fuzzy": true
+        },
+        {
+            "id": "Save All",
+            "message": "Save All",
+            "translation": "Save All",
             "translatorComment": "Copied from source.",
             "fuzzy": true
         },
@@ -61,6 +54,41 @@
             "id": "Received",
             "message": "Received",
             "translation": "Received",
+            "translatorComment": "Copied from source.",
+            "fuzzy": true
+        },
+        {
+            "id": "Cancel",
+            "message": "Cancel",
+            "translation": "Cancel",
+            "translatorComment": "Copied from source.",
+            "fuzzy": true
+        },
+        {
+            "id": "Delete All",
+            "message": "Delete All",
+            "translation": "Delete All",
+            "translatorComment": "Copied from source.",
+            "fuzzy": true
+        },
+        {
+            "id": "Are you sure you want to delete all received files?",
+            "message": "Are you sure you want to delete all received files?",
+            "translation": "Are you sure you want to delete all received files?",
+            "translatorComment": "Copied from source.",
+            "fuzzy": true
+        },
+        {
+            "id": "Receive Code",
+            "message": "Receive Code",
+            "translation": "Receive Code",
+            "translatorComment": "Copied from source.",
+            "fuzzy": true
+        },
+        {
+            "id": "Receive",
+            "message": "Receive",
+            "translation": "Receive",
             "translatorComment": "Copied from source.",
             "fuzzy": true
         },
@@ -93,20 +121,6 @@
             "fuzzy": true
         },
         {
-            "id": "Send cancelled.",
-            "message": "Send cancelled.",
-            "translation": "Send cancelled.",
-            "translatorComment": "Copied from source.",
-            "fuzzy": true
-        },
-        {
-            "id": "Cancel",
-            "message": "Cancel",
-            "translation": "Cancel",
-            "translatorComment": "Copied from source.",
-            "fuzzy": true
-        },
-        {
             "id": "Send Code",
             "message": "Send Code",
             "translation": "Send Code",
@@ -124,6 +138,13 @@
             "id": "Show / Hide",
             "message": "Show / Hide",
             "translation": "Show / Hide",
+            "translatorComment": "Copied from source.",
+            "fuzzy": true
+        },
+        {
+            "id": "Export full log",
+            "message": "Export full log",
+            "translation": "Export full log",
             "translatorComment": "Copied from source.",
             "fuzzy": true
         },

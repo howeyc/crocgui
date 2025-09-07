@@ -87,14 +87,14 @@
             "translation": "デバッグログを有効化"
         },
         {
+            "id": "Show / Hide",
+            "message": "Show / Hide",
+            "translation": "表示 / 非表示"
+        },
+        {
             "id": "Settings",
             "message": "Settings",
             "translation": "設定"
-        },
-        {
-            "id": "Language",
-            "message": "Language",
-            "translation": "言語"
         },
         {
             "id": "Appearance",
@@ -102,9 +102,24 @@
             "translation": "外観"
         },
         {
+            "id": "Language",
+            "message": "Language",
+            "translation": "言語"
+        },
+        {
             "id": "Theme",
             "message": "Theme",
             "translation": "テーマ"
+        },
+        {
+            "id": "Font",
+            "message": "Font",
+            "translation": "フォント"
+        },
+        {
+            "id": "Logo",
+            "message": "Logo",
+            "translation": "ロゴ"
         },
         {
             "id": "Relay",
@@ -140,6 +155,11 @@
             "id": "Force Local Only",
             "message": "Force Local Only",
             "translation": "ローカルネットワークのみ使用する"
+        },
+        {
+            "id": "Multicast Address",
+            "message": "Multicast Address",
+            "translation": "マルチキャストアドレス"
         },
         {
             "id": "Transfer Options",

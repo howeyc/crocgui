@@ -1,0 +1,11 @@
+[Details]
+  Icon = "Icon.png"
+  Name = "crocgui"
+  ID = "com.github.howeyc.crocgui"
+  Version = "1.11.13"
+  Build = 158
+
+[LinuxAndBSD]
+  GenericName = "GUI for croc"
+  Categories = ["FileTransfer"]
+  Comment = "A nice simple GUI for croc"

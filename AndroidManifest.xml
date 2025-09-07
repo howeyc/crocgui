@@ -1,24 +1,89 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest
-	xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools"
-	package="com.github.howeyc.crocgui"
-	android:versionCode="40"
-	android:versionName="1.11.5">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.github.howeyc.crocgui"
+    android:versionCode="157"
+    android:versionName="1.11.13">
 
     <application android:label="Croc">
-	<activity android:name="org.golang.app.GoNativeActivity"
-		android:label="Croc"
-		android:configChanges="orientation|keyboardHidden|uiMode"
-		android:theme="@android:style/Theme">
-		<meta-data android:name="android.app.lib_name" android:value="croc" />
-		<intent-filter>
-			<action android:name="android.intent.action.MAIN" />
-			<category android:name="android.intent.category.LAUNCHER" />
-		</intent-filter>
-	</activity>
-	</application>
 
-	<uses-permission android:name="android.permission.INTERNET" />
-	<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+        <activity
+            android:name="org.golang.app.GoNativeActivity"
+            android:label="Croc"
+            android:exported="true"
+            android:launchMode="singleTop"
+            android:theme="@android:style/Theme"
+            android:configChanges="orientation|keyboardHidden|uiMode">
+
+            <meta-data android:name="android.app.lib_name" android:value="croc" />
+
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:mimeType="*/*" />
+                <data android:scheme="file" />
+                <data android:scheme="content" />
+            </intent-filter>
+
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="*/*" />
+            </intent-filter>
+
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="*/*" />
+            </intent-filter>
+
+            <!-- <intent-filter>
+                <action android:name="android.intent.action.GET_CONTENT" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.OPENABLE" />
+                <data android:mimeType="*/*" />  
+            </intent-filter> -->
+        </activity>
+
+        <queries>
+            <intent>
+                <action android:name="android.intent.action.VIEW" />
+                <data android:mimeType="*/*" />
+            </intent>
+            <intent>
+                <action android:name="android.intent.action.SEND" />
+                <data android:mimeType="*/*" />
+            </intent>
+            <intent>
+                <action android:name="android.intent.action.GET_CONTENT" />
+                <data android:mimeType="*/*" />
+            </intent>
+            <intent>
+                <action android:name="android.intent.action.OPEN_DOCUMENT" />
+                <data android:mimeType="*/*" />
+            </intent>
+            <intent>
+                <action android:name="android.intent.action.PICK" />
+                <data android:mimeType="*/*" />
+            </intent>
+            <intent>
+                <action android:name="android.intent.action.CREATE_DOCUMENT" />
+                <data android:mimeType="*/*" />
+            </intent>
+        </queries>
+    </application>
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" 
+        android:maxSdkVersion="29" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.ACCESS_MEDIA_LOCATION" />
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
 </manifest>

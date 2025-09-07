@@ -1,0 +1,230 @@
+{
+    "language": "ru-RU",
+    "messages": [
+        {
+            "id": "License Info",
+            "message": "License Info",
+            "translation": "Лицензионная информация"
+        },
+        {
+            "id": "About",
+            "message": "About",
+            "translation": "Это"
+        },
+        {
+            "id": "Enter code to download",
+            "message": "Enter code to download",
+            "translation": "Секрет должен быть больше 5 знаков"
+        },
+        {
+            "id": "Debug log:",
+            "message": "Debug log:",
+            "translation": "Журнал отладки:"
+        },
+        {
+            "id": "Export full log",
+            "message": "Export full log",
+            "translation": "Сохранить журнал"
+        },
+        {
+            "id": "Saved all files to",
+            "message": "Saved all files to",
+            "translation": "Сохранил всё"
+        },
+        {
+            "id": "Download",
+            "message": "Download",
+            "translation": "Беру"
+        },
+        {
+            "id": "Save All",
+            "message": "Save All",
+            "translation": "Сохранить всё"
+        },
+        {
+            "id": "Receive Code",
+            "message": "Receive Code",
+            "translation": "Секрет"
+        },
+        {
+            "id": "Receiving file",
+            "message": "Receiving file",
+            "translation": "Получаю"
+        },
+        {
+            "id": "Received",
+            "message": "Received",
+            "translation": "Получил"
+        },
+        {
+            "id": "Receive cancelled.",
+            "message": "Receive cancelled.",
+            "translation": "Отмена получения."
+        },
+        {
+            "id": "Cancel",
+            "message": "Cancel",
+            "translation": "Отменить"
+        },
+        {
+            "id": "Delete All",
+            "message": "Delete All",
+            "translation": "Удалить всё"
+        },
+        {
+            "id": "Are you sure you want to delete all received files?",
+            "message": "Are you sure you want to delete all received files?",
+            "translation": "Вы уверены что хотите удалить все полученные файлы?"
+        },
+        {
+            "id": "Receive",
+            "message": "Receive",
+            "translation": "Беру"
+        },
+        {
+            "id": "Pick a file to send",
+            "message": "Pick a file to send",
+            "translation": "Что послать"
+        },
+        {
+            "id": "Send",
+            "message": "Send",
+            "translation": "Шлю"
+        },
+        {
+            "id": "Sending file",
+            "message": "Sending file",
+            "translation": "Шлю"
+        },
+        {
+            "id": "Sent file",
+            "message": "Sent file",
+            "translation": "Послал"
+        },
+        {
+            "id": "Send cancelled.",
+            "message": "Send cancelled.",
+            "translation": "Отмена посылки."
+        },
+        {
+            "id": "Send Code",
+            "message": "Send Code",
+            "translation": "Секрет"
+        },
+        {
+            "id": "Enable Debug Log",
+            "message": "Enable Debug Log",
+            "translation": "Журналировать"
+        },
+        {
+            "id": "Show / Hide",
+            "message": "Show / Hide",
+            "translation": "Вкл / Выкл"
+        },
+        {
+            "id": "Settings",
+            "message": "Settings",
+            "translation": "Как"
+        },
+        {
+            "id": "Appearance",
+            "message": "Appearance",
+            "translation": "Вид"
+        },
+        {
+            "id": "Language",
+            "message": "Language",
+            "translation": "Язык"
+        },
+        {
+            "id": "Theme",
+            "message": "Theme",
+            "translation": "Тема"
+        },
+        {
+            "id": "Font",
+            "message": "Font",
+            "translation": "Шрифт"
+        },
+        {
+            "id": "Logo",
+            "message": "Logo",
+            "translation": "Логотип"
+        },
+        {
+            "id": "Relay",
+            "message": "Relay",
+            "translation": "Посредник"
+        },
+        {
+            "id": "Address",
+            "message": "Address",
+            "translation": "Адрес"
+        },
+        {
+            "id": "Ports",
+            "message": "Ports",
+            "translation": "Порты"
+        },
+        {
+            "id": "Password",
+            "message": "Password",
+            "translation": "Пароль"
+        },
+        {
+            "id": "Network Local",
+            "message": "Network Local",
+            "translation": "сеть"
+        },
+        {
+            "id": "Disable Local",
+            "message": "Disable Local",
+            "translation": "Не локально"
+        },
+        {
+            "id": "Force Local Only",
+            "message": "Force Local Only",
+            "translation": "Локально"
+        },
+        {
+            "id": "Multicast Address",
+            "message": "Multicast Address",
+            "translation": "Группа"
+        },
+        {
+            "id": "Transfer Options",
+            "message": "Transfer Options",
+            "translation": "Обмен"
+        },
+        {
+            "id": "PAKE Curve",
+            "message": "PAKE Curve",
+            "translation": "Тип PAKE"
+        },
+        {
+            "id": "Hash Algorithm",
+            "message": "Hash Algorithm",
+            "translation": "Тип хеша"
+        },
+        {
+            "id": "Disable Multiplexing",
+            "message": "Disable Multiplexing",
+            "translation": "Без мультиплексирования"
+        },
+        {
+            "id": "Disable Compression",
+            "message": "Disable Compression",
+            "translation": "Без сжатия"
+        },
+        {
+            "id": "Upload Speed Throttle",
+            "message": "Upload Speed Throttle",
+            "translation": "Медлить"
+        },
+        {
+            "id": "Debug",
+            "message": "Debug",
+            "translation": "Отладка"
+        }
+    ]
+}

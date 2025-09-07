@@ -2,6 +2,16 @@
     "language": "zh-CN",
     "messages": [
         {
+            "id": "License Info",
+            "message": "License Info",
+            "translation": "许可证信息"
+        },
+        {
+            "id": "About",
+            "message": "About",
+            "translation": "关于"
+        },
+        {
             "id": "Debug log:",
             "message": "Debug log:",
             "translation": "除错记录:"
@@ -77,19 +87,24 @@
             "translation": "启用除错记录"
         },
         {
+            "id": "Show / Hide",
+            "message": "Show / Hide",
+            "translation": "显示 / 隐藏"
+        },
+        {
             "id": "Settings",
             "message": "Settings",
             "translation": "设定"
         },
         {
-            "id": "Language",
-            "message": "Language",
-            "translation": "语言"
-        },
-        {
             "id": "Appearance",
             "message": "Appearance",
             "translation": "外观"
+        },
+        {
+            "id": "Language",
+            "message": "Language",
+            "translation": "语言"
         },
         {
             "id": "Theme",
@@ -100,6 +115,11 @@
             "id": "Font",
             "message": "Font",
             "translation": "字体"
+        },
+        {
+            "id": "Logo",
+            "message": "Logo",
+            "translation": "标志"
         },
         {
             "id": "Relay",
@@ -137,6 +157,11 @@
             "translation": "强制仅限本地"
         },
         {
+            "id": "Multicast Address",
+            "message": "Multicast Address",
+            "translation": "组播地址"
+        },
+        {
             "id": "Transfer Options",
             "message": "Transfer Options",
             "translation": "传输选项"
@@ -170,16 +195,6 @@
             "id": "Debug",
             "message": "Debug",
             "translation": "除错"
-        },
-		{
-			"id": "About",
-			"message": "About",
-			"translation": "关于"
-		},
-		{
-			"id": "License Info",
-			"message": "License Info",
-			"translation": "许可证信息"
-		}
+        }
     ]
 }

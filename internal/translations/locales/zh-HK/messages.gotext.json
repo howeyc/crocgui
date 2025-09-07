@@ -2,6 +2,16 @@
     "language": "zh-HK",
     "messages": [
         {
+            "id": "License Info",
+            "message": "License Info",
+            "translation": "許可證資訊"
+        },
+        {
+            "id": "About",
+            "message": "About",
+            "translation": "關於"
+        },
+        {
             "id": "Debug log:",
             "message": "Debug log:",
             "translation": "除錯記錄:"
@@ -77,19 +87,24 @@
             "translation": "啟用除錯記錄"
         },
         {
+            "id": "Show / Hide",
+            "message": "Show / Hide",
+            "translation": "顯示 / 隱藏"
+        },
+        {
             "id": "Settings",
             "message": "Settings",
             "translation": "設定"
         },
         {
-            "id": "Language",
-            "message": "Language",
-            "translation": "語言"
-        },
-        {
             "id": "Appearance",
             "message": "Appearance",
             "translation": "外觀"
+        },
+        {
+            "id": "Language",
+            "message": "Language",
+            "translation": "語言"
         },
         {
             "id": "Theme",
@@ -100,6 +115,11 @@
             "id": "Font",
             "message": "Font",
             "translation": "字體"
+        },
+        {
+            "id": "Logo",
+            "message": "Logo",
+            "translation": "標誌"
         },
         {
             "id": "Relay",
@@ -137,6 +157,11 @@
             "translation": "強制只限本地"
         },
         {
+            "id": "Multicast Address",
+            "message": "Multicast Address",
+            "translation": "群播位址"
+        },
+        {
             "id": "Transfer Options",
             "message": "Transfer Options",
             "translation": "傳輸選擇"
@@ -170,16 +195,6 @@
             "id": "Debug",
             "message": "Debug",
             "translation": "除錯"
-        },
-		{
-			"id": "About",
-			"message": "About",
-			"translation": "關於"
-		},
-		{
-			"id": "License Info",
-			"message": "License Info",
-			"translation": "許可證資訊"
-		}
+        }
     ]
 }

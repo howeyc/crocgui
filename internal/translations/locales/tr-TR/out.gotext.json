@@ -12,29 +12,24 @@
             "translation": "Hakkında"
         },
         {
-            "id": "Debug log:",
-            "message": "Debug log:",
-            "translation": "Hata ayıklama günlüğü"
-        },
-        {
             "id": "Enter code to download",
             "message": "Enter code to download",
             "translation": "İndirmek için kodu girin"
         },
         {
-            "id": "Receive",
-            "message": "Receive",
-            "translation": "Almak"
-        },
-        {
-            "id": "Receive Code",
-            "message": "Receive Code",
-            "translation": "Kod al"
+            "id": "Saved all files to",
+            "message": "Saved all files to",
+            "translation": ""
         },
         {
             "id": "Download",
             "message": "Download",
             "translation": "İndir"
+        },
+        {
+            "id": "Save All",
+            "message": "Save All",
+            "translation": ""
         },
         {
             "id": "Receiving file",
@@ -45,6 +40,31 @@
             "id": "Received",
             "message": "Received",
             "translation": "Alınan"
+        },
+        {
+            "id": "Cancel",
+            "message": "Cancel",
+            "translation": "İptal"
+        },
+        {
+            "id": "Delete All",
+            "message": "Delete All",
+            "translation": ""
+        },
+        {
+            "id": "Are you sure you want to delete all received files?",
+            "message": "Are you sure you want to delete all received files?",
+            "translation": ""
+        },
+        {
+            "id": "Receive Code",
+            "message": "Receive Code",
+            "translation": "Kod al"
+        },
+        {
+            "id": "Receive",
+            "message": "Receive",
+            "translation": "Almak"
         },
         {
             "id": "Pick a file to send",
@@ -67,16 +87,6 @@
             "translation": "Dosya gönderildi"
         },
         {
-            "id": "Send cancelled.",
-            "message": "Send cancelled.",
-            "translation": "Gönderme iptal edildi"
-        },
-        {
-            "id": "Cancel",
-            "message": "Cancel",
-            "translation": "İptal"
-        },
-        {
             "id": "Send Code",
             "message": "Send Code",
             "translation": "Kod gönder"
@@ -89,6 +99,11 @@
         {
             "id": "Show / Hide",
             "message": "Show / Hide",
+            "translation": ""
+        },
+        {
+            "id": "Export full log",
+            "message": "Export full log",
             "translation": ""
         },
         {
