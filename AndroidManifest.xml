@@ -1,10 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
     package="com.github.howeyc.crocgui"
-    android:versionCode="157"
-    android:versionName="1.11.13">
+    android:versionCode="226"
+    android:versionName="1.11.14">
 
-    <application android:label="Croc">
+    <application 
+        android:label="Croc"
+        tools:ignore="GoogleAppIndexingWarning">
 
         <activity
             android:name="org.golang.app.GoNativeActivity"
@@ -12,7 +15,7 @@
             android:exported="true"
             android:launchMode="singleTop"
             android:theme="@android:style/Theme"
-            android:configChanges="orientation|keyboardHidden|uiMode">
+            android:configChanges="keyboardHidden|orientation|screenSize|screenLayout|uiMode">
 
             <meta-data android:name="android.app.lib_name" android:value="croc" />
 
@@ -42,23 +45,9 @@
                 <data android:mimeType="*/*" />
             </intent-filter>
 
-            <!-- <intent-filter>
-                <action android:name="android.intent.action.GET_CONTENT" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.OPENABLE" />
-                <data android:mimeType="*/*" />  
-            </intent-filter> -->
         </activity>
 
         <queries>
-            <intent>
-                <action android:name="android.intent.action.VIEW" />
-                <data android:mimeType="*/*" />
-            </intent>
-            <intent>
-                <action android:name="android.intent.action.SEND" />
-                <data android:mimeType="*/*" />
-            </intent>
             <intent>
                 <action android:name="android.intent.action.GET_CONTENT" />
                 <data android:mimeType="*/*" />
@@ -68,11 +57,11 @@
                 <data android:mimeType="*/*" />
             </intent>
             <intent>
-                <action android:name="android.intent.action.PICK" />
+                <action android:name="android.intent.action.CREATE_DOCUMENT" />
                 <data android:mimeType="*/*" />
             </intent>
             <intent>
-                <action android:name="android.intent.action.CREATE_DOCUMENT" />
+                <action android:name="android.intent.action.ACTION_OPEN_DOCUMENT_TREE" />
                 <data android:mimeType="*/*" />
             </intent>
         </queries>
@@ -81,9 +70,11 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" 
         android:maxSdkVersion="29" />
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
-    <uses-permission android:name="android.permission.ACCESS_MEDIA_LOCATION" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" 
+        android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
     <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED" 
+        android:maxSdkVersion="33" />
 </manifest>

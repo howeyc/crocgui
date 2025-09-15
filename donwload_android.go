@@ -8,6 +8,71 @@ package main
 #include <string.h>
 #include <android/api-level.h>
 
+// Функция для проверки разрешения
+static jboolean hasPermission(JNIEnv* env, jobject context, const char* permission) {
+    jclass context_class = (*env)->GetObjectClass(env, context);
+    jmethodID check_permission = (*env)->GetMethodID(env, context_class, "checkSelfPermission", "(Ljava/lang/String;)I");
+
+    jstring permission_str = (*env)->NewStringUTF(env, permission);
+    jint result = (*env)->CallIntMethod(env, context, check_permission, permission_str);
+
+    (*env)->DeleteLocalRef(env, permission_str);
+    (*env)->DeleteLocalRef(env, context_class);
+
+    return (result == 0) ? JNI_TRUE : JNI_FALSE; // 0 = PERMISSION_GRANTED
+}
+
+// Функция для запроса разрешений
+static void requestStoragePermissions(JNIEnv* env, jobject activity, const char** permissions, jint size) {
+    jclass activity_class = (*env)->GetObjectClass(env, activity);
+    jmethodID request_permissions = (*env)->GetMethodID(env, activity_class, "requestPermissions", "([Ljava/lang/String;I)V");
+
+    // Создаем массив строк Java
+    jclass string_class = (*env)->FindClass(env, "java/lang/String");
+    jobjectArray permissions_array = (*env)->NewObjectArray(env, size, string_class, NULL);
+
+    for (int i = 0; i < size; i++) {
+        jstring permission = (*env)->NewStringUTF(env, permissions[i]);
+        (*env)->SetObjectArrayElement(env, permissions_array, i, permission);
+        (*env)->DeleteLocalRef(env, permission);
+    }
+
+    // Вызываем requestPermissions
+    (*env)->CallVoidMethod(env, activity, request_permissions, permissions_array, 123); // 123 - request code
+
+    // Очищаем ресурсы
+    (*env)->DeleteLocalRef(env, permissions_array);
+    (*env)->DeleteLocalRef(env, string_class);
+    (*env)->DeleteLocalRef(env, activity_class);
+}
+
+// Проверка и запрос необходимых разрешений для Android < 10
+static jboolean checkAndRequestStoragePermissions(JNIEnv* env, jobject activity) {
+    const char* permissions[] = {
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE"
+    };
+    jint size = sizeof(permissions) / sizeof(permissions[0]);
+
+    jboolean allGranted = JNI_TRUE;
+
+    // Проверяем текущие разрешения
+    for (int i = 0; i < size; i++) {
+        if (!hasPermission(env, activity, permissions[i])) {
+            allGranted = JNI_FALSE;
+            break;
+        }
+    }
+
+    // Если не все разрешения есть - запрашиваем
+    if (!allGranted) {
+        requestStoragePermissions(env, activity, permissions, size);
+        return JNI_FALSE;
+    }
+
+    return JNI_TRUE;
+}
+
 // Объявляем функции ДО их использования
 static char* CreateFileInDownloadsModern(JNIEnv* env, jobject activity, const char* fileName, const char* mimeType);
 static char* CreateFileInDownloadsLegacy(JNIEnv* env, jobject activity, const char* fileName, const char* mimeType);
@@ -22,13 +87,19 @@ static char* CreateFileInDownloadsCompat(JNIEnv* env, jobject activity, const ch
         return CreateFileInDownloadsModern(env, activity, fileName, mimeType);
     } else {
         // Android 7-9 - используем прямой доступ к файлам
+        if (!checkAndRequestStoragePermissions(env, activity)) {
+            char* error = strdup("error: Storage permission required");
+            if (error == NULL) {
+                return strdup("error: Memory allocation failed");
+            }
+            return error;
+        }
         return CreateFileInDownloadsLegacy(env, activity, fileName, mimeType);
     }
 }
 
 // Для Android 10+ (API 29+)
 static char* CreateFileInDownloadsModern(JNIEnv* env, jobject activity, const char* fileName, const char* mimeType) {
-    // 1. Get ContentResolver
     jclass activityClass = (*env)->GetObjectClass(env, activity);
     if (activityClass == NULL) {
         return strdup("error: activityClass == NULL");
@@ -47,7 +118,6 @@ static char* CreateFileInDownloadsModern(JNIEnv* env, jobject activity, const ch
         return strdup("error: contentResolver == NULL");
     }
 
-    // 2. Create ContentValues
     jclass contentValuesClass = (*env)->FindClass(env, "android/content/ContentValues");
     if (contentValuesClass == NULL) {
         (*env)->DeleteLocalRef(env, activityClass);
@@ -71,7 +141,6 @@ static char* CreateFileInDownloadsModern(JNIEnv* env, jobject activity, const ch
         return strdup("error: failed to create ContentValues");
     }
 
-    // 3. Extract directory path and filename
     char* fullPath = strdup(fileName);
     char* dirPath = NULL;
     char* baseName = NULL;
@@ -85,7 +154,6 @@ static char* CreateFileInDownloadsModern(JNIEnv* env, jobject activity, const ch
         baseName = fullPath;
     }
 
-    // 4. Add values to ContentValues
     jmethodID putString = (*env)->GetMethodID(env, contentValuesClass, "put", "(Ljava/lang/String;Ljava/lang/String;)V");
     if (putString == NULL) {
         free(fullPath);
@@ -96,21 +164,18 @@ static char* CreateFileInDownloadsModern(JNIEnv* env, jobject activity, const ch
         return strdup("error: put method not found");
     }
 
-    // Set display name
     jstring displayNameKey = (*env)->NewStringUTF(env, "_display_name");
     jstring displayNameValue = (*env)->NewStringUTF(env, baseName);
     (*env)->CallVoidMethod(env, contentValues, putString, displayNameKey, displayNameValue);
     (*env)->DeleteLocalRef(env, displayNameKey);
     (*env)->DeleteLocalRef(env, displayNameValue);
 
-    // Set MIME type
     jstring mimeTypeKey = (*env)->NewStringUTF(env, "mime_type");
     jstring mimeTypeValue = (*env)->NewStringUTF(env, mimeType);
     (*env)->CallVoidMethod(env, contentValues, putString, mimeTypeKey, mimeTypeValue);
     (*env)->DeleteLocalRef(env, mimeTypeKey);
     (*env)->DeleteLocalRef(env, mimeTypeValue);
 
-    // Set relative path for Android 10+
     if (dirPath != NULL && strlen(dirPath) > 0) {
         jstring relativePathKey = (*env)->NewStringUTF(env, "relative_path");
         char relativePath[512];
@@ -123,7 +188,6 @@ static char* CreateFileInDownloadsModern(JNIEnv* env, jobject activity, const ch
 
     free(fullPath);
 
-    // 5. Get Downloads collection URI
     jclass mediaStoreClass = (*env)->FindClass(env, "android/provider/MediaStore$Downloads");
     if (mediaStoreClass == NULL) {
         (*env)->DeleteLocalRef(env, activityClass);
@@ -154,7 +218,6 @@ static char* CreateFileInDownloadsModern(JNIEnv* env, jobject activity, const ch
         return strdup("error: collectionUri == NULL");
     }
 
-    // 6. Insert file into MediaStore
     jclass resolverClass = (*env)->GetObjectClass(env, contentResolver);
     if (resolverClass == NULL) {
         (*env)->DeleteLocalRef(env, activityClass);
@@ -181,7 +244,6 @@ static char* CreateFileInDownloadsModern(JNIEnv* env, jobject activity, const ch
 
     jobject uri = (*env)->CallObjectMethod(env, contentResolver, insertMethod, collectionUri, contentValues);
 
-    // Cleanup
     (*env)->DeleteLocalRef(env, activityClass);
     (*env)->DeleteLocalRef(env, contentResolver);
     (*env)->DeleteLocalRef(env, contentValuesClass);
@@ -194,7 +256,6 @@ static char* CreateFileInDownloadsModern(JNIEnv* env, jobject activity, const ch
         return strdup("error: MediaStore insert returned NULL");
     }
 
-    // 7. Convert URI to string
     jclass uriClass = (*env)->FindClass(env, "android/net/Uri");
     if (uriClass == NULL) {
         (*env)->DeleteLocalRef(env, uri);
@@ -241,14 +302,12 @@ static char* CreateFileInDownloadsLegacy(JNIEnv* env, jobject activity, const ch
     const char* uriStr = NULL;
     char* result = NULL;
 
-    // 1. Get Environment class
     environmentClass = (*env)->FindClass(env, "android/os/Environment");
     if (environmentClass == NULL) {
         result = strdup("error: Environment class not found");
         goto cleanup;
     }
 
-    // 2. Get Downloads directory
     jmethodID getDownloadDirMethod = (*env)->GetStaticMethodID(env, environmentClass,
         "getExternalStoragePublicDirectory", "(Ljava/lang/String;)Ljava/io/File;");
     if (getDownloadDirMethod == NULL) {
@@ -263,7 +322,6 @@ static char* CreateFileInDownloadsLegacy(JNIEnv* env, jobject activity, const ch
         goto cleanup;
     }
 
-    // 3. Create File object для конечного файла
     fileClass = (*env)->FindClass(env, "java/io/File");
     if (fileClass == NULL) {
         result = strdup("error: File class not found");
@@ -285,20 +343,6 @@ static char* CreateFileInDownloadsLegacy(JNIEnv* env, jobject activity, const ch
         goto cleanup;
     }
 
-    // 4. Проверяем, существует ли уже файл
-    // jmethodID existsMethod = (*env)->GetMethodID(env, fileClass, "exists", "()Z");
-    // if (existsMethod != NULL) {
-    //     jboolean exists = (*env)->CallBooleanMethod(env, fileObj, existsMethod);
-    //     if (exists) {
-    //         // Если файл существует, удаляем его
-    //         jmethodID deleteMethod = (*env)->GetMethodID(env, fileClass, "delete", "()Z");
-    //         if (deleteMethod != NULL) {
-    //             (*env)->CallBooleanMethod(env, fileObj, deleteMethod);
-    //         }
-    //     }
-    // }
-
-    // 5. Создаем файл
     jmethodID createNewFileMethod = (*env)->GetMethodID(env, fileClass, "createNewFile", "()Z");
     if (createNewFileMethod == NULL) {
         result = strdup("error: createNewFile method not found");
@@ -306,12 +350,7 @@ static char* CreateFileInDownloadsLegacy(JNIEnv* env, jobject activity, const ch
     }
 
     jboolean success = (*env)->CallBooleanMethod(env, fileObj, createNewFileMethod);
-    // if (!success) {
-    //     result = strdup("error: failed to create file in existing Downloads directory");
-    //     goto cleanup;
-    // }
 
-    // 6. Convert to URI
     jmethodID toURIMethod = (*env)->GetMethodID(env, fileClass, "toURI", "()Ljava/net/URI;");
     if (toURIMethod == NULL) {
         result = strdup("error: toURI method not found");
@@ -351,12 +390,10 @@ static char* CreateFileInDownloadsLegacy(JNIEnv* env, jobject activity, const ch
     result = strdup(uriStr);
 
 cleanup:
-    // Освобождаем все ресурсы
     if (uriStr != NULL) {
         (*env)->ReleaseStringUTFChars(env, uriString, uriStr);
     }
 
-    // Удаляем все LocalRef
     if (environmentClass != NULL) (*env)->DeleteLocalRef(env, environmentClass);
     if (fileClass != NULL) (*env)->DeleteLocalRef(env, fileClass);
     if (uriClass != NULL) (*env)->DeleteLocalRef(env, uriClass);
@@ -412,7 +449,7 @@ func CreateFileInDownloads(fileName, mimeType string) (string, error) {
 		resultStr := C.GoString(cUri)
 
 		if strings.HasPrefix(resultStr, "error:") {
-			err = errors.New(resultStr)
+			err = errors.New(strings.TrimPrefix(resultStr, "error: "))
 		} else {
 			result = resultStr
 		}
@@ -420,7 +457,7 @@ func CreateFileInDownloads(fileName, mimeType string) (string, error) {
 	})
 
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to create file: %w", err)
 	}
 	if result == "" {
 		return "", errors.New("empty result from ContentResolver")
@@ -432,14 +469,12 @@ func CreateFileInDownloads(fileName, mimeType string) (string, error) {
 func ChildDownload(component string) (child fyne.URI, cleanup func(), err error) {
 	cleanup = func() {}
 
-	// 1. Создаём component в Downloads
 	newFileURL, err := CreateFileInDownloads(component, "")
 	if err != nil {
 		err = fmt.Errorf("createFileInDownloads failed: %v", err)
 		return
 	}
 
-	// 2. Конвертируем в fyne.URI
 	child, err = storage.ParseURI(newFileURL)
 	if err != nil {
 		err = fmt.Errorf("parse URI failed: %v", err)
@@ -447,4 +482,9 @@ func ChildDownload(component string) (child fyne.URI, cleanup func(), err error)
 	}
 
 	return
+}
+
+// apiLevel возвращает уровень API Android устройства
+func apiLevel() int {
+	return int(C.android_get_device_api_level())
 }

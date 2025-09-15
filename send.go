@@ -8,7 +8,6 @@ import (
 	"hash/crc32"
 	"io"
 	"math"
-	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -36,7 +35,14 @@ import (
 	"github.com/schollz/progressbar/v3"
 )
 
+const (
+	MaterialFiles = "https://github.com/zhanghai/MaterialFiles"
+	INSTALL       = "URL " + MaterialFiles + " is already in the clipboard.\nInstall the app to avoid this message."
+)
+
 func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
+	var ti *container.TabItem
+	refresh := func() {}
 	defer func() {
 		if r := recover(); r != nil {
 			log.Error(fmt.Sprint(r))
@@ -48,11 +54,12 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 	entry := widget.NewEntry()
 	randomCode := utils.GetRandomName()
 
-	if secret := os.Getenv(CROC_SECRET); secret != "" {
-		randomCode = secret
+	entryText := os.Getenv(CROC_SECRET)
+	if entryText == "" {
+		entryText = randomCode
 	}
+	entry.SetText(entryText)
 
-	entry.SetText(randomCode)
 	randomCodeButton := widget.NewButtonWithIcon("", theme.ViewRefreshIcon(), func() {
 		randomCode = utils.GetRandomName()
 		entry.SetText(randomCode)
@@ -95,6 +102,9 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 	totpCheck.OnChanged = func(b bool) {
 		totpStop()
 		if b {
+			if strings.HasPrefix(entry.Text, TOTP) {
+				entry.SetText(entryText)
+			}
 			totpProg.Show()
 			update()
 
@@ -116,6 +126,7 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 		} else {
 			totpLabel.SetText(TOTP)
 			totpProg.Hide()
+			entryText = entry.Text
 			entry.SetText(TOTP + totp(entry.Text))
 		}
 		a.Preferences().SetBool("totp-send", b)
@@ -186,36 +197,36 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 		if err != nil {
 			return fmt.Errorf("URI (%s) %s", src, err.Error())
 		} else if fi.IsDir() {
-			log.Tracef("URI (%s), is dir\n", src)
+			log.Tracef("URI (%s), is dir", src)
 			return nil
 		}
 
 		fi, err = os.Stat(dst)
 		if err == nil && fi.Size() == size {
-			log.Tracef("URI (%s), already in internal cache %s\n", src, dst)
+			log.Tracef("URI (%s), already in internal cache %s", src, dst)
 			addEntry(dst)
 			return nil
 		}
 
-		if !isMobile {
+		if !(isMobile || copyDebug) {
 			err := Symlink(src, dst)
 			if err == nil {
-				log.Tracef("Make symlink URI (%s) to internal cache %s\n", src, dst)
+				log.Tracef("Make symlink URI (%s) to internal cache %s", src, dst)
 				return nil
 			}
-			log.Errorf("Unable make symlink URI (%s) to internal cache %s, error: %s\n", src, dst, err)
+			log.Errorf("Unable make symlink URI (%s) to internal cache %s, error: %s", src, dst, err)
 		}
 
 		CopyFileProgress(src, dst, fe, func(err error) {
 			if err != nil {
-				log.Errorf("Unable to copy file, error: %s - %s\n", sendDir, err.Error())
+				log.Errorf("Unable to copy file, error: %s - %s", sendDir, err.Error())
 				removeEntry(dst, fe)
 				return
 			}
-			log.Tracef("URI (%s), copied to internal cache %s\n", src, dst)
+			log.Tracef("URI (%s), copied to internal cache %s", src, dst)
 
 			if _, sterr := os.Stat(dst); sterr != nil {
-				log.Errorf("Stat error: %s - %s\n", dst, sterr.Error())
+				log.Errorf("Stat error: %s - %s", dst, sterr.Error())
 				removeEntry(dst, fe)
 			}
 		})
@@ -228,9 +239,9 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 			return
 		}
 		u := source.URI()
-		name := u.Name()
-		log.Tracef("name %s", name)
-		name = uriBase(u)
+		// name := u.Name()
+		// log.Tracef("name %s", name)
+		name := uriBase(u)
 		log.Tracef("name %s", name)
 
 		dst := filepath.Join(sendDir, name)
@@ -306,64 +317,79 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 						log.Trace("Sending")
 						continue
 					}
-					if _, err := url.Parse(uriString); err == nil {
-						log.Tracef(`Received URI: "%s"`, uriString)
-					} else {
-						log.Errorf(`Received URI: "%s" error: %s`, uriString, err)
-						continue
-					}
+					// if _, err := url.Parse(uriString); err == nil {
+					// 	log.Tracef(`Received URI: "%s"`, uriString)
+					// } else {
+					// 	log.Errorf(`Received URI: "%s" error: %s`, uriString, err)
+					// }
 					u, err := storage.ParseURI(uriString)
+					log.Errorf("ParseURI(%s) error: %v", u, err)
 					if err != nil {
-						log.Errorf("%s", err.Error())
 						continue
 					}
-					listable, err := storage.CanList(u)
-					if err != nil {
-						log.Errorf("%s", err.Error())
+					mimeType := MimeType(u)
+					log.Tracef("URI (%s) has MimeType: %s", u, mimeType)
+					log.Tracef("apiLevel %d", apiLevel())
+					if mimeType == "vnd.android.document/directory" {
+						// totalcmd на 14 Андроиде
+						log.Tracef("URI (%s) is dir", u)
 						continue
 					}
-					if listable {
-						log.Tracef("URI (%s) is dir", uriString)
-						continue
+					if u.Scheme() == "file" {
+						if _, err := storage.ListerForURI(u); err == nil {
+							// totalcmd на 9 Андроиде
+							log.Tracef("URI (%s) is dir", u)
+							continue
+						}
 					}
+					// На Андроиде 9 storage.List крэшит на схеме content как и storage.CanList
+
 					can, err := storage.CanRead(u)
 					if err != nil {
-						log.Errorf("%s", err.Error())
+						log.Errorf("%v", err)
 						continue
 					}
 					if !can {
 						log.Tracef("URI (%s) can't read", uriString)
 						continue
 					}
-					name := u.Name()
-					log.Tracef("name %s", name)
-					name = uriBase(u)
+
+					// name := u.Name()
+					// log.Tracef("name %s", name)
+					name := uriBase(u)
 					log.Tracef("name %s", name)
 					dst := filepath.Join(sendDir, name)
 					fe := addEntry(dst)
 					if fe == nil {
 						continue
 					}
-
 					source, err := storage.Reader(u)
 					if err != nil {
-						log.Errorf("%s", err.Error())
+						log.Errorf("%v", err)
 						continue
 					}
-					SelectIndex(w, 0)
 
-					src := u.String()
+					SelectIndex(w, 0)
 					copyFromURCProgress(source, fe, func(err error) {
 						if err != nil {
-							log.Errorf("URI (%s), copied to internal cache %s error: %s\n", src, dst, err)
+							log.Errorf("URI (%s), copied to internal cache %s error: %s", u, dst, err)
 							removeEntry(dst, fe)
+							// SelectIndex(w, 0)
+							refresh()
 							return
 						}
-						log.Tracef("URI (%s), copied to internal cache %s\n", src, dst)
+						log.Tracef("URI (%s), copied to internal cache %s", u, dst)
 
-						if _, sterr := os.Stat(dst); sterr != nil {
-							log.Errorf("Stat error: %s - %s\n", dst, sterr.Error())
+						if fi, sterr := os.Stat(dst); sterr != nil || fi.IsDir() {
+							if sterr != nil {
+								log.Errorf("Stat(%s) error: %v", dst, sterr)
+							}
+							if fi.IsDir() {
+								log.Tracef("URI (%s) is dir", u)
+							}
 							removeEntry(dst, fe)
+							// SelectIndex(w, 0)
+							refresh()
 						}
 					})
 				}
@@ -396,6 +422,20 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 	}
 
 	addFileButton := widget.NewButtonWithIcon("", theme.FileIcon(), func() {
+		if supported, err := IsFilePickerSupported(); err != nil {
+			log.Errorf("Error checking file picker support: %v", err)
+		} else if !supported {
+			log.Trace("File picker not supported. ", INSTALL)
+			a.Clipboard().SetContent(MaterialFiles)
+			dialog.ShowInformation(
+				lp("Pick a file to send"),
+				INSTALL,
+				w,
+			)
+			return
+		} else {
+			log.Trace("File picker is supported")
+		}
 		ShowFileOpen(func(source fyne.URIReadCloser, e error) {
 			if source == nil {
 				return
@@ -406,9 +446,9 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 				return
 			}
 			u := source.URI()
-			name := u.Name()
-			log.Tracef("name %s", name)
-			name = uriBase(u)
+			// name := u.Name()
+			// log.Tracef("name %s", name)
+			name := uriBase(u)
 			log.Tracef("name %s", name)
 			dst := filepath.Join(sendDir, name)
 			fe := addEntry(dst)
@@ -417,25 +457,25 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 			}
 			src := u.String()
 
-			if !isMobile {
+			if !(isMobile || copyDebug) {
 				err := Symlink(u.Path(), dst)
 				if err == nil {
-					log.Tracef("Make symlink URI (%s) to internal cache %s\n", src, dst)
+					log.Tracef("Make symlink URI (%s) to internal cache %s", src, dst)
 					return
 				}
-				log.Errorf("Unable make symlink URI (%s) to internal cache %s, error: %s\n", src, dst, err)
+				log.Errorf("Unable make symlink URI (%s) to internal cache %s, error: %s", src, dst, err)
 			}
 
 			copyFromURCProgress(source, fe, func(err error) {
 				if err != nil {
-					log.Errorf("URI (%s), copied to internal cache %s error: %s\n", src, dst, err)
+					log.Errorf("URI (%s), copied to internal cache %s error: %s", src, dst, err)
 					removeEntry(dst, fe)
 					return
 				}
-				log.Tracef("URI (%s), copied to internal cache %s\n", src, dst)
+				log.Tracef("URI (%s), copied to internal cache %s", src, dst)
 
 				if _, sterr := os.Stat(dst); sterr != nil {
-					log.Errorf("Stat error: %s - %s\n", dst, sterr.Error())
+					log.Errorf("Stat error: %s - %s", dst, sterr.Error())
 					removeEntry(dst, fe)
 				}
 			})
@@ -484,7 +524,7 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 			ok = len(entry.Text) > 0
 		}
 		if !ok {
-			log.Error("no receive code entered\n")
+			log.Error("no receive code entered")
 			dialog.ShowInformation(
 				lp("Send"),
 				lp("Enter code to download"),
@@ -504,7 +544,7 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 
 		// Only send if files selected
 		if len(fileentries) < 1 || !ready {
-			log.Error("no files selected\n")
+			log.Error("no files selected")
 			dialog.ShowInformation(
 				lp("Send"),
 				lp("Pick a file to send"),
@@ -547,11 +587,11 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 			Exclude:          []string{},
 		})
 		if err != nil {
-			log.Errorf("croc error: %s\n", err.Error())
+			log.Errorf("croc error: %s", err.Error())
 			return
 		}
 		log.SetLevel(crocDebugLevel())
-		log.Trace("croc sender created\n")
+		log.Trace("croc sender created")
 
 		var filename string
 		mainButton.Disable()
@@ -581,7 +621,8 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 						fyne.Do(func() {
 							topline.SetText(lp("Download"))
 							prog.Show()
-							SelectIndex(w, 0)
+							// SelectIndex(w, 0)
+							refresh()
 						})
 						for _, fi := range sender.FilesToTransfer {
 							totalMax += fi.Size
@@ -634,13 +675,13 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 			fyne.Do(entry.Disable)
 			fi, emptyfolders, numFolders, ferr := croc.GetFilesInfo(filepaths, false, false, []string{})
 			if ferr != nil {
-				log.Errorf("file info failed: %s\n", ferr)
+				log.Errorf("file info failed: %s", ferr)
 			}
 			var serr error
 			if EMULATE == 0 {
 				serr = sender.Send(fi, emptyfolders, numFolders)
 			} else {
-				log.Warnf("Send %v %v %v\n", fi, emptyfolders, numFolders)
+				log.Warnf("Send %v %v %v", fi, emptyfolders, numFolders)
 				time.Sleep(EMULATE)
 				defer func() {
 					sender = nil
@@ -649,7 +690,7 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 			donechan <- true
 			fyne.Do(func() {
 				if serr != nil {
-					log.Errorf("Send failed: %s\n", serr)
+					log.Errorf("Send failed: %s", serr)
 					topline.SetText(serr.Error())
 				} else {
 					topline.SetText(fmt.Sprintf("%s: %s", lp("Sent file"), filename))
@@ -663,14 +704,14 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 				return
 			case <-donechan:
 				if !isMobile {
-					log.Tracef("A restart is better than leaving 12 goroutines leaking\n")
+					log.Tracef("A restart is better than leaving 12 goroutines leaking")
 					fyne.Do(func() {
 						restart(a)
 					})
 				}
 				return
 			case <-cancelchan:
-				log.Warnf("Send cancelled. %s: %v\n", sendDir, ls(sendDir))
+				log.Warnf("Send cancelled. %s: %v", sendDir, ls(sendDir))
 				Stop(sender)
 				fyne.Do(func() {
 					restart(a)
@@ -678,7 +719,7 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 			}
 		}()
 		// +12 go routines
-		log.Warnf("NumGoroutine %d\n", runtime.NumGoroutine())
+		log.Warnf("NumGoroutine %d", runtime.NumGoroutine())
 		a.Clipboard().SetContent(entry.Text)
 	})
 
@@ -703,8 +744,10 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 		cancelButton,
 	)
 
-	return container.NewTabItemWithIcon(lp("Send"), theme.MailSendIcon(),
+	ti = container.NewTabItemWithIcon(lp("Send"), theme.MailSendIcon(),
 		container.NewBorder(top, nil, nil, nil, scroller))
+	refresh = func() { ti.Content.Refresh() }
+	return ti
 }
 
 // Big File Dialog
@@ -842,7 +885,7 @@ func Stop(client interface{}) {
 			time.Sleep(time.Millisecond * 333)
 		}
 	} else {
-		log.Errorf("Stop: %v\n", err)
+		log.Errorf("Stop: %v", err)
 	}
 }
 

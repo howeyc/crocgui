@@ -2,10 +2,34 @@
 
 package main
 
-import "fyne.io/fyne/v2"
+import (
+	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/storage"
+)
 
 func setupIntentHandler() {}
 
 func uriBase(uri fyne.URI) string {
 	return uri.Name()
 }
+
+func IsFilePickerSupported() (bool, error)   { return !noDialogDebug, nil }
+func IsSaveDialogSupported() (bool, error)   { return !noDialogDebug, nil }
+func IsFolderPickerSupported() (bool, error) { return !noDialogDebug, nil }
+
+func RequestStoragePermission() {}
+func OpenAppSettings()          {}
+
+func CanList(u fyne.URI) (bool, error) {
+	return storage.CanList(u)
+}
+
+func IsDirectory(u fyne.URI) (ok bool) {
+	ok, _ = storage.CanList(u)
+	return
+}
+
+func fileExists(uri fyne.URI) (exists bool) { return false }
+
+func MimeType(u fyne.URI) string { return u.MimeType() }
+func apiLevel() int              { return 29 }

@@ -99,14 +99,14 @@ func main() {
 	switch runtime.GOOS {
 	case "android":
 		isAndroid = true
-		fallthrough
-	case "ios":
-		log.SetOutput(&logoutput)
-		isMobile = true
 		a.Lifecycle().SetOnStarted(func() {
 			log.Trace("SetOnStarted setupIntentHandler")
 			setupIntentHandler()
 		})
+		fallthrough
+	case "ios":
+		log.SetOutput(&logoutput)
+		isMobile = true
 	default:
 		log.SetOutput(io.MultiWriter(os.Stdout, &logoutput))
 	}
