@@ -4,7 +4,7 @@
         {
             "id": "License Info",
             "message": "License Info",
-            "translation": "許可證資訊"
+            "translation": "授權資訊"
         },
         {
             "id": "About",
@@ -14,12 +14,12 @@
         {
             "id": "Debug log:",
             "message": "Debug log:",
-            "translation": "除錯記錄:"
+            "translation": "偵錯記錄:"
         },
         {
             "id": "Enter code to download",
             "message": "Enter code to download",
-            "translation": "輸入代碼下載"
+            "translation": "輸入下載代碼"
         },
         {
             "id": "Receive",
@@ -39,7 +39,7 @@
         {
             "id": "Receiving file",
             "message": "Receiving file",
-            "translation": "接收檔案"
+            "translation": "正在接收檔案"
         },
         {
             "id": "Received",
@@ -49,27 +49,27 @@
         {
             "id": "Pick a file to send",
             "message": "Pick a file to send",
-            "translation": "選擇要發送的檔案"
+            "translation": "選擇要傳送的檔案"
         },
         {
             "id": "Send",
             "message": "Send",
-            "translation": "發送"
+            "translation": "傳送"
         },
         {
             "id": "Sending file",
             "message": "Sending file",
-            "translation": "發送檔案中"
+            "translation": "正在傳送檔案"
         },
         {
             "id": "Sent file",
             "message": "Sent file",
-            "translation": "已發送檔案"
+            "translation": "已傳送檔案"
         },
         {
             "id": "Send cancelled.",
             "message": "Send cancelled.",
-            "translation": "發送已取消。"
+            "translation": "傳送已取消"
         },
         {
             "id": "Cancel",
@@ -79,17 +79,17 @@
         {
             "id": "Send Code",
             "message": "Send Code",
-            "translation": "發送代碼"
+            "translation": "傳送碼"
         },
         {
             "id": "Enable Debug Log",
             "message": "Enable Debug Log",
-            "translation": "啟用除錯記錄"
+            "translation": "啟用偵錯記錄"
         },
         {
             "id": "Show / Hide",
             "message": "Show / Hide",
-            "translation": "顯示 / 隱藏"
+            "translation": "顯示/隱藏"
         },
         {
             "id": "Settings",
@@ -114,7 +114,7 @@
         {
             "id": "Font",
             "message": "Font",
-            "translation": "字體"
+            "translation": "字型"
         },
         {
             "id": "Logo",
@@ -124,17 +124,17 @@
         {
             "id": "Relay",
             "message": "Relay",
-            "translation": "中繼"
+            "translation": "轉發"
         },
         {
             "id": "Address",
             "message": "Address",
-            "translation": "地址"
+            "translation": "位址"
         },
         {
             "id": "Ports",
             "message": "Ports",
-            "translation": "連接埠"
+            "translation": "埠"
         },
         {
             "id": "Password",
@@ -149,17 +149,17 @@
         {
             "id": "Disable Local",
             "message": "Disable Local",
-            "translation": "停用本地"
+            "translation": "停用本地網路"
         },
         {
             "id": "Force Local Only",
             "message": "Force Local Only",
-            "translation": "強制僅限本地"
+            "translation": "強制僅限本地網路"
         },
         {
             "id": "Multicast Address",
             "message": "Multicast Address",
-            "translation": "群播位址"
+            "translation": "多點傳送位址"
         },
         {
             "id": "Transfer Options",
@@ -169,17 +169,17 @@
         {
             "id": "PAKE Curve",
             "message": "PAKE Curve",
-            "translation": "PAKE 曲線"
+            "translation": "PAKE曲線"
         },
         {
             "id": "Hash Algorithm",
             "message": "Hash Algorithm",
-            "translation": "哈希演算法"
+            "translation": "雜湊演算法"
         },
         {
             "id": "Disable Multiplexing",
             "message": "Disable Multiplexing",
-            "translation": "停用多重化"
+            "translation": "停用多工處理"
         },
         {
             "id": "Disable Compression",
@@ -189,12 +189,12 @@
         {
             "id": "Upload Speed Throttle",
             "message": "Upload Speed Throttle",
-            "translation": "上傳速度調節"
+            "translation": "上傳速度限制"
         },
         {
             "id": "Debug",
             "message": "Debug",
-            "translation": "除錯"
+            "translation": "偵錯"
         }
     ]
 }

@@ -4,7 +4,7 @@
         {
             "id": "License Info",
             "message": "License Info",
-            "translation": "Lisans"
+            "translation": "Lisans Bilgileri"
         },
         {
             "id": "About",
@@ -19,7 +19,7 @@
         {
             "id": "Saved all files to",
             "message": "Saved all files to",
-            "translation": ""
+            "translation": "Tüm dosyalar şuraya kaydedildi:"
         },
         {
             "id": "Download",
@@ -27,19 +27,24 @@
             "translation": "İndir"
         },
         {
-            "id": "Save All",
-            "message": "Save All",
-            "translation": ""
+            "id": "Delete All",
+            "message": "Delete All",
+            "translation": "Tümünü Sil"
+        },
+        {
+            "id": "Are you sure you want to delete all received files?",
+            "message": "Are you sure you want to delete all received files?",
+            "translation": "Tüm alınan dosyaları silmek istediğinizden emin misiniz?"
         },
         {
             "id": "Receiving file",
             "message": "Receiving file",
-            "translation": "Dosya alma"
+            "translation": "Dosya alınıyor"
         },
         {
             "id": "Received",
             "message": "Received",
-            "translation": "Alınan"
+            "translation": "Alındı"
         },
         {
             "id": "Cancel",
@@ -47,29 +52,19 @@
             "translation": "İptal"
         },
         {
-            "id": "Delete All",
-            "message": "Delete All",
-            "translation": ""
-        },
-        {
-            "id": "Are you sure you want to delete all received files?",
-            "message": "Are you sure you want to delete all received files?",
-            "translation": ""
-        },
-        {
             "id": "Receive Code",
             "message": "Receive Code",
-            "translation": "Kod al"
+            "translation": "Kod Al"
         },
         {
             "id": "Receive",
             "message": "Receive",
-            "translation": "Almak"
+            "translation": "Al"
         },
         {
             "id": "Pick a file to send",
             "message": "Pick a file to send",
-            "translation": "Gönderilicek dosyayı seçin"
+            "translation": "Gönderilecek dosyayı seçin"
         },
         {
             "id": "Send",
@@ -89,22 +84,22 @@
         {
             "id": "Send Code",
             "message": "Send Code",
-            "translation": "Kod gönder"
-        },
-        {
-            "id": "Enable Debug Log",
-            "message": "Enable Debug Log",
-            "translation": "Hata ayıklama günlüğünü etkinleştir"
+            "translation": "Kod Gönder"
         },
         {
             "id": "Show / Hide",
             "message": "Show / Hide",
-            "translation": ""
+            "translation": "Göster / Gizle"
         },
         {
             "id": "Export full log",
             "message": "Export full log",
-            "translation": ""
+            "translation": "Tam logu dışa aktar"
+        },
+        {
+            "id": "Enable Debug Log",
+            "message": "Enable Debug Log",
+            "translation": "Hata Ayıklama Günlüğünü Etkinleştir"
         },
         {
             "id": "Settings",
@@ -112,9 +107,14 @@
             "translation": "Ayarlar"
         },
         {
+            "id": "Debug",
+            "message": "Debug",
+            "translation": "Hata Ayıklama"
+        },
+        {
             "id": "Appearance",
             "message": "Appearance",
-            "translation": "Görünüş"
+            "translation": "Görünüm"
         },
         {
             "id": "Language",
@@ -129,12 +129,12 @@
         {
             "id": "Font",
             "message": "Font",
-            "translation": ""
+            "translation": "Yazı Tipi"
         },
         {
             "id": "Logo",
             "message": "Logo",
-            "translation": ""
+            "translation": "Logo"
         },
         {
             "id": "Relay",
@@ -149,7 +149,7 @@
         {
             "id": "Ports",
             "message": "Ports",
-            "translation": "Bağlantı noktası"
+            "translation": "Portlar"
         },
         {
             "id": "Password",
@@ -159,57 +159,52 @@
         {
             "id": "Network Local",
             "message": "Network Local",
-            "translation": "Yerel ağ"
+            "translation": "Yerel Ağ"
         },
         {
             "id": "Disable Local",
             "message": "Disable Local",
-            "translation": "Yerel devre dışı"
+            "translation": "Yerel Ağı Devre Dışı Bırak"
         },
         {
             "id": "Force Local Only",
             "message": "Force Local Only",
-            "translation": "Yalnızca yerel olarak zorla"
+            "translation": "Sadece Yerel Ağı Zorla"
         },
         {
             "id": "Multicast Address",
             "message": "Multicast Address",
-            "translation": ""
+            "translation": "Çok Noktaya Yayın Adresi"
         },
         {
             "id": "Transfer Options",
             "message": "Transfer Options",
-            "translation": "Transfer seçenekleri"
+            "translation": "Transfer Seçenekleri"
         },
         {
             "id": "PAKE Curve",
             "message": "PAKE Curve",
-            "translation": "PAKR eğrisi"
+            "translation": "PAKE Eğrisi"
         },
         {
             "id": "Hash Algorithm",
             "message": "Hash Algorithm",
-            "translation": "Karma algoritma"
+            "translation": "Hash Algoritması"
         },
         {
             "id": "Disable Multiplexing",
             "message": "Disable Multiplexing",
-            "translation": "Çoğullamayı devre dışı bırak"
+            "translation": "Çoğullamayı Devre Dışı Bırak"
         },
         {
             "id": "Disable Compression",
             "message": "Disable Compression",
-            "translation": "Sıkıştırmayı devre dışı bırak"
+            "translation": "Sıkıştırmayı Devre Dışı Bırak"
         },
         {
             "id": "Upload Speed Throttle",
             "message": "Upload Speed Throttle",
-            "translation": "Yükleme hızını kısma "
-        },
-        {
-            "id": "Debug",
-            "message": "Debug",
-            "translation": "Hata ayıklama"
+            "translation": "Yükleme Hızını Sınırla"
         }
     ]
 }

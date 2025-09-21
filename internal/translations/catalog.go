@@ -47,17 +47,17 @@ var messageKeyToIndex = map[string]int{
 	"About":      1,
 	"Address":    28,
 	"Appearance": 22,
-	"Are you sure you want to delete all received files?": 10,
-	"Cancel":                 8,
-	"Debug":                  41,
-	"Delete All":             9,
+	"Are you sure you want to delete all received files?": 6,
+	"Cancel":                 9,
+	"Debug":                  21,
+	"Delete All":             5,
 	"Disable Compression":    39,
 	"Disable Local":          32,
 	"Disable Multiplexing":   38,
 	"Download":               4,
-	"Enable Debug Log":       18,
+	"Enable Debug Log":       19,
 	"Enter code to download": 2,
-	"Export full log":        20,
+	"Export full log":        18,
 	"Font":                   25,
 	"Force Local Only":       33,
 	"Hash Algorithm":         37,
@@ -68,196 +68,200 @@ var messageKeyToIndex = map[string]int{
 	"Network Local":          31,
 	"PAKE Curve":             36,
 	"Password":               30,
-	"Pick a file to send":    13,
+	"Pick a file to send":    12,
 	"Ports":                  29,
-	"Receive":                12,
-	"Receive Code":           11,
-	"Received":               7,
-	"Receiving file":         6,
+	"Receive":                11,
+	"Receive Code":           10,
+	"Received":               8,
+	"Receiving file":         7,
 	"Relay":                  27,
-	"Save All":               5,
 	"Saved all files to":     3,
-	"Send":                   14,
-	"Send Code":              17,
-	"Sending file":           15,
-	"Sent file":              16,
-	"Settings":               21,
-	"Show / Hide":            19,
+	"Send":                   13,
+	"Send Code":              16,
+	"Sending file":           14,
+	"Sent file":              15,
+	"Settings":               20,
+	"Show / Hide":            17,
 	"Theme":                  24,
 	"Transfer Options":       35,
 	"Upload Speed Throttle":  40,
 }
 
-var en_USIndex = []uint32{ // 43 elements
+var en_USIndex = []uint32{ // 42 elements
 	// Entry 0 - 1F
 	0x00000000, 0x0000000d, 0x00000013, 0x0000002a,
-	0x0000003d, 0x00000046, 0x0000004f, 0x0000005e,
-	0x00000067, 0x0000006e, 0x00000079, 0x000000ad,
-	0x000000ba, 0x000000c2, 0x000000d6, 0x000000db,
-	0x000000e8, 0x000000f2, 0x000000fc, 0x0000010d,
-	0x00000119, 0x00000129, 0x00000132, 0x0000013d,
-	0x00000146, 0x0000014c, 0x00000151, 0x00000156,
-	0x0000015c, 0x00000164, 0x0000016a, 0x00000173,
+	0x0000003d, 0x00000046, 0x00000051, 0x00000085,
+	0x00000094, 0x0000009d, 0x000000a4, 0x000000b1,
+	0x000000b9, 0x000000cd, 0x000000d2, 0x000000df,
+	0x000000e9, 0x000000f3, 0x000000ff, 0x0000010f,
+	0x00000120, 0x00000129, 0x0000012f, 0x0000013a,
+	0x00000143, 0x00000149, 0x0000014e, 0x00000153,
+	0x00000159, 0x00000161, 0x00000167, 0x00000170,
 	// Entry 20 - 3F
-	0x00000181, 0x0000018f, 0x000001a0, 0x000001b2,
-	0x000001c3, 0x000001ce, 0x000001dd, 0x000001f2,
-	0x00000206, 0x0000021c, 0x00000222,
-} // Size: 196 bytes
+	0x0000017e, 0x0000018c, 0x0000019d, 0x000001af,
+	0x000001c0, 0x000001cb, 0x000001da, 0x000001ef,
+	0x00000203, 0x00000219,
+} // Size: 192 bytes
 
-const en_USData string = "" + // Size: 546 bytes
+const en_USData string = "" + // Size: 537 bytes
 	"\x02License Info\x02About\x02Enter code to download\x02Saved all files t" +
-	"o\x02Download\x02Save All\x02Receiving file\x02Received\x02Cancel\x02Del" +
-	"ete All\x02Are you sure you want to delete all received files?\x02Receiv" +
-	"e Code\x02Receive\x02Pick a file to send\x02Send\x02Sending file\x02Sent" +
-	" file\x02Send Code\x02Enable Debug Log\x02Show / Hide\x02Export full log" +
-	"\x02Settings\x02Appearance\x02Language\x02Theme\x02Font\x02Logo\x02Relay" +
+	"o\x02Download\x02Delete All\x02Are you sure you want to delete all recei" +
+	"ved files?\x02Receiving file\x02Received\x02Cancel\x02Receive Code\x02Re" +
+	"ceive\x02Pick a file to send\x02Send\x02Sending file\x02Sent file\x02Sen" +
+	"d Code\x02Show / Hide\x02Export full log\x02Enable Debug Log\x02Settings" +
+	"\x02Debug\x02Appearance\x02Language\x02Theme\x02Font\x02Logo\x02Relay" +
 	"\x02Address\x02Ports\x02Password\x02Network Local\x02Disable Local\x02Fo" +
 	"rce Local Only\x02Multicast Address\x02Transfer Options\x02PAKE Curve" +
 	"\x02Hash Algorithm\x02Disable Multiplexing\x02Disable Compression\x02Upl" +
-	"oad Speed Throttle\x02Debug"
+	"oad Speed Throttle"
 
-var ja_JPIndex = []uint32{ // 43 elements
+var ja_JPIndex = []uint32{ // 42 elements
 	// Entry 0 - 1F
 	0x00000000, 0x00000016, 0x0000001d, 0x00000048,
-	0x00000048, 0x0000005b, 0x0000005b, 0x00000074,
-	0x00000087, 0x00000097, 0x00000097, 0x00000097,
-	0x000000a7, 0x000000ae, 0x000000d0, 0x000000d7,
-	0x000000f0, 0x00000112, 0x00000122, 0x00000141,
-	0x00000154, 0x00000154, 0x0000015b, 0x00000162,
-	0x00000169, 0x00000173, 0x00000180, 0x00000187,
-	0x00000191, 0x0000019e, 0x000001a8, 0x000001b8,
+	0x00000077, 0x0000008a, 0x0000009a, 0x000000e9,
+	0x00000102, 0x00000115, 0x00000125, 0x00000135,
+	0x0000013c, 0x0000015e, 0x00000165, 0x0000017e,
+	0x000001a0, 0x000001b0, 0x000001c3, 0x000001e8,
+	0x00000207, 0x0000020e, 0x0000021b, 0x00000222,
+	0x00000229, 0x00000233, 0x00000240, 0x00000247,
+	0x00000251, 0x0000025e, 0x00000268, 0x00000278,
 	// Entry 20 - 3F
-	0x000001d7, 0x00000202, 0x00000233, 0x00000255,
-	0x0000026b, 0x00000276, 0x00000289, 0x000002a5,
-	0x000002b8, 0x000002da, 0x000002e7,
-} // Size: 196 bytes
+	0x00000297, 0x000002c2, 0x000002f3, 0x00000315,
+	0x0000032b, 0x00000336, 0x00000355, 0x00000371,
+	0x00000384, 0x000003a6,
+} // Size: 192 bytes
 
-const ja_JPData string = "" + // Size: 743 bytes
-	"\x02ライセンス情報\x02情報\x02コードを入力してダウンロード\x02ダウンロード\x02ファイルを受信中\x02受信しました\x02キ" +
-	"ャンセル\x02受信コード\x02受信\x02ファイルを選択して送信\x02送信\x02ファイルを送信中\x02ファイルを送信しました" +
-	"\x02受信コード\x02デバッグログを有効化\x02表示 / 非表示\x02設定\x02外観\x02言語\x02テーマ\x02フォント\x02" +
-	"ロゴ\x02リレー\x02アドレス\x02ポート\x02パスワード\x02ローカルネットワーク\x02ローカルネットワークを無効化\x02ロ" +
-	"ーカルネットワークのみ使用する\x02マルチキャストアドレス\x02転送オプション\x02PAKE Curve\x02ハッシュ方式\x02多" +
-	"重化を無効にする\x02圧縮を無効化\x02アップロード速度の制限\x02デバッグ"
+const ja_JPData string = "" + // Size: 934 bytes
+	"\x02ライセンス情報\x02情報\x02コードを入力してダウンロード\x02すべてのファイルを保存しました:\x02ダウンロード\x02すべて" +
+	"削除\x02すべての受信したファイルを削除してもよろしいですか？\x02ファイルを受信中\x02受信しました\x02キャンセル\x02受信コ" +
+	"ード\x02受信\x02ファイルを選択して送信\x02送信\x02ファイルを送信中\x02ファイルを送信しました\x02送信コード\x02表" +
+	"示 / 非表示\x02完全なログをエクスポート\x02デバッグログを有効化\x02設定\x02デバッグ\x02外観\x02言語\x02テーマ" +
+	"\x02フォント\x02ロゴ\x02リレー\x02アドレス\x02ポート\x02パスワード\x02ローカルネットワーク\x02ローカルネットワー" +
+	"クを無効化\x02ローカルネットワークのみ使用する\x02マルチキャストアドレス\x02転送オプション\x02PAKE曲線\x02ハッシュア" +
+	"ルゴリズム\x02多重化を無効にする\x02圧縮を無効化\x02アップロード速度の制限"
 
-var ru_RUIndex = []uint32{ // 43 elements
+var ru_RUIndex = []uint32{ // 42 elements
 	// Entry 0 - 1F
 	0x00000000, 0x0000002e, 0x00000035, 0x00000074,
-	0x0000008c, 0x00000095, 0x000000af, 0x000000be,
-	0x000000cd, 0x000000de, 0x000000f4, 0x00000153,
-	0x00000160, 0x00000169, 0x0000017f, 0x00000186,
-	0x0000018d, 0x0000019a, 0x000001a7, 0x000001c2,
-	0x000001d4, 0x000001f4, 0x000001fb, 0x00000202,
-	0x0000020b, 0x00000214, 0x0000021f, 0x0000022e,
-	0x00000241, 0x0000024c, 0x00000257, 0x00000264,
+	0x0000008f, 0x00000098, 0x000000ae, 0x0000010d,
+	0x0000011c, 0x0000012b, 0x0000013c, 0x00000149,
+	0x00000152, 0x00000168, 0x0000016f, 0x00000176,
+	0x00000183, 0x00000190, 0x000001a2, 0x000001c2,
+	0x000001dd, 0x000001e4, 0x000001f3, 0x000001fa,
+	0x00000203, 0x0000020c, 0x00000217, 0x00000226,
+	0x00000239, 0x00000244, 0x0000024f, 0x0000025c,
 	// Entry 20 - 3F
-	0x0000026d, 0x00000283, 0x00000294, 0x000002a1,
-	0x000002ac, 0x000002b8, 0x000002c8, 0x000002f6,
-	0x0000030a, 0x00000319, 0x00000328,
-} // Size: 196 bytes
+	0x00000265, 0x0000027b, 0x0000028c, 0x00000299,
+	0x000002a4, 0x000002b0, 0x000002c0, 0x000002ee,
+	0x00000302, 0x00000311,
+} // Size: 192 bytes
 
-const ru_RUData string = "" + // Size: 808 bytes
+const ru_RUData string = "" + // Size: 785 bytes
 	"\x02Лицензионная информация\x02Это\x02Секрет должен быть больше 5 знаков" +
-	"\x02Сохранил всё\x02Беру\x02Сохранить всё\x02Получаю\x02Получил\x02Отмен" +
-	"ить\x02Удалить всё\x02Вы уверены что хотите удалить все полученные файл" +
-	"ы?\x02Секрет\x02Беру\x02Что послать\x02Шлю\x02Шлю\x02Послал\x02Секрет" +
-	"\x02Журналировать\x02Вкл / Выкл\x02Сохранить журнал\x02Как\x02Вид\x02Язы" +
-	"к\x02Тема\x02Шрифт\x02Логотип\x02Посредник\x02Адрес\x02Порты\x02Пароль" +
+	"\x02Сохранил всё в\x02Беру\x02Удалить всё\x02Вы уверены что хотите удали" +
+	"ть все полученные файлы?\x02Получаю\x02Получил\x02Отменить\x02Секрет" +
+	"\x02Беру\x02Что послать\x02Шлю\x02Шлю\x02Послал\x02Секрет\x02Вкл / Выкл" +
+	"\x02Сохранить журнал\x02Журналировать\x02Как\x02Отладка\x02Вид\x02Язык" +
+	"\x02Тема\x02Шрифт\x02Логотип\x02Посредник\x02Адрес\x02Порты\x02Пароль" +
 	"\x02сеть\x02Не локально\x02Локально\x02Группа\x02Обмен\x02Тип PAKE\x02Ти" +
-	"п хеша\x02Без мультиплексирования\x02Без сжатия\x02Медлить\x02Отладка"
+	"п хеша\x02Без мультиплексирования\x02Без сжатия\x02Медлить"
 
-var tr_TRIndex = []uint32{ // 43 elements
+var tr_TRIndex = []uint32{ // 42 elements
 	// Entry 0 - 1F
-	0x00000000, 0x00000007, 0x00000011, 0x0000002c,
-	0x0000002c, 0x00000033, 0x00000033, 0x0000003e,
-	0x00000046, 0x0000004d, 0x0000004d, 0x0000004d,
-	0x00000054, 0x0000005a, 0x00000078, 0x00000080,
-	0x00000094, 0x000000a6, 0x000000b2, 0x000000dd,
-	0x000000dd, 0x000000dd, 0x000000e5, 0x000000f1,
-	0x000000f5, 0x000000fa, 0x000000fa, 0x000000fa,
-	0x00000100, 0x00000106, 0x0000011a, 0x00000121,
+	0x00000000, 0x00000011, 0x0000001b, 0x00000036,
+	0x00000058, 0x0000005f, 0x0000006d, 0x000000aa,
+	0x000000bb, 0x000000c4, 0x000000cb, 0x000000d2,
+	0x000000d5, 0x000000f3, 0x000000fb, 0x0000010f,
+	0x00000121, 0x0000012d, 0x0000013d, 0x00000153,
+	0x0000017e, 0x00000186, 0x00000195, 0x000001a0,
+	0x000001a4, 0x000001a9, 0x000001b4, 0x000001b9,
+	0x000001bf, 0x000001c5, 0x000001cd, 0x000001d4,
 	// Entry 20 - 3F
-	0x0000012b, 0x0000013f, 0x0000015c, 0x0000015c,
-	0x00000172, 0x0000017f, 0x0000018f, 0x000001b3,
-	0x000001da, 0x000001f5, 0x00000204,
-} // Size: 196 bytes
+	0x000001de, 0x000001ff, 0x00000218, 0x00000233,
+	0x00000249, 0x00000256, 0x00000268, 0x0000028c,
+	0x000002b3, 0x000002d0,
+} // Size: 192 bytes
 
-const tr_TRData string = "" + // Size: 516 bytes
-	"\x02Lisans\x02Hakkında\x02İndirmek için kodu girin\x02İndir\x02Dosya alm" +
-	"a\x02Alınan\x02İptal\x02Kod al\x02Almak\x02Gönderilicek dosyayı seçin" +
-	"\x02Gönder\x02Dosya gönderiliyor\x02Dosya gönderildi\x02Kod gönder\x02Ha" +
-	"ta ayıklama günlüğünü etkinleştir\x02Ayarlar\x02Görünüş\x02Dil\x02Tema" +
-	"\x02Röle\x02Adres\x02Bağlantı noktası\x02Şifre\x02Yerel ağ\x02Yerel devr" +
-	"e dışı\x02Yalnızca yerel olarak zorla\x02Transfer seçenekleri\x02PAKR eğ" +
-	"risi\x02Karma algoritma\x02Çoğullamayı devre dışı bırak\x02Sıkıştırmayı " +
-	"devre dışı bırak\x02Yükleme hızını kısma \x02Hata ayıklama"
+const tr_TRData string = "" + // Size: 720 bytes
+	"\x02Lisans Bilgileri\x02Hakkında\x02İndirmek için kodu girin\x02Tüm dosy" +
+	"alar şuraya kaydedildi:\x02İndir\x02Tümünü Sil\x02Tüm alınan dosyaları s" +
+	"ilmek istediğinizden emin misiniz?\x02Dosya alınıyor\x02Alındı\x02İptal" +
+	"\x02Kod Al\x02Al\x02Gönderilecek dosyayı seçin\x02Gönder\x02Dosya gönder" +
+	"iliyor\x02Dosya gönderildi\x02Kod Gönder\x02Göster / Gizle\x02Tam logu d" +
+	"ışa aktar\x02Hata Ayıklama Günlüğünü Etkinleştir\x02Ayarlar\x02Hata Ayı" +
+	"klama\x02Görünüm\x02Dil\x02Tema\x02Yazı Tipi\x02Logo\x02Röle\x02Adres" +
+	"\x02Portlar\x02Şifre\x02Yerel Ağ\x02Yerel Ağı Devre Dışı Bırak\x02Sadece" +
+	" Yerel Ağı Zorla\x02Çok Noktaya Yayın Adresi\x02Transfer Seçenekleri\x02" +
+	"PAKE Eğrisi\x02Hash Algoritması\x02Çoğullamayı Devre Dışı Bırak\x02Sıkış" +
+	"tırmayı Devre Dışı Bırak\x02Yükleme Hızını Sınırla"
 
-var zh_CNIndex = []uint32{ // 43 elements
-	// Entry 0 - 1F
-	0x00000000, 0x00000010, 0x00000017, 0x0000002a,
-	0x0000002a, 0x00000031, 0x00000031, 0x0000003e,
-	0x00000048, 0x0000004f, 0x0000004f, 0x0000004f,
-	0x00000059, 0x00000060, 0x00000079, 0x00000080,
-	0x00000090, 0x000000a0, 0x000000ad, 0x000000c0,
-	0x000000d0, 0x000000d0, 0x000000d7, 0x000000de,
-	0x000000e5, 0x000000ec, 0x000000f3, 0x000000fa,
-	0x00000101, 0x00000108, 0x0000010f, 0x00000116,
-	// Entry 20 - 3F
-	0x00000123, 0x00000130, 0x00000143, 0x00000150,
-	0x0000015d, 0x00000169, 0x00000176, 0x00000186,
-	0x00000193, 0x000001a6, 0x000001ad,
-} // Size: 196 bytes
-
-const zh_CNData string = "" + // Size: 429 bytes
-	"\x02许可证信息\x02关于\x02输入代码下载\x02下载\x02接收档案\x02已接收\x02取消\x02接收码\x02接收\x02选择要" +
-	"发送的档案\x02发送\x02发送档案中\x02已发送档案\x02发送代码\x02启用除错记录\x02显示 / 隐藏\x02设定\x02外观" +
-	"\x02语言\x02主题\x02字体\x02标志\x02中继\x02地址\x02端口\x02密码\x02本地网络\x02停用本地\x02强制仅限" +
-	"本地\x02组播地址\x02传输选项\x02PAKE 曲线\x02哈希算法\x02停用多重化\x02停用压缩\x02上传速度调节\x02除错"
-
-var zh_HKIndex = []uint32{ // 43 elements
-	// Entry 0 - 1F
-	0x00000000, 0x00000010, 0x00000017, 0x0000002d,
-	0x0000002d, 0x00000034, 0x00000034, 0x00000041,
-	0x0000004b, 0x00000052, 0x00000052, 0x00000052,
-	0x0000005c, 0x00000063, 0x0000007c, 0x00000083,
-	0x00000093, 0x000000a3, 0x000000b0, 0x000000c3,
-	0x000000d3, 0x000000d3, 0x000000da, 0x000000e1,
-	0x000000e8, 0x000000ef, 0x000000f6, 0x000000fd,
-	0x00000104, 0x0000010b, 0x00000112, 0x00000119,
-	// Entry 20 - 3F
-	0x00000126, 0x00000133, 0x00000146, 0x00000153,
-	0x00000160, 0x0000016c, 0x0000017c, 0x0000018c,
-	0x00000199, 0x000001ac, 0x000001b3,
-} // Size: 196 bytes
-
-const zh_HKData string = "" + // Size: 435 bytes
-	"\x02許可證資訊\x02關於\x02輸入編碼以下載\x02下載\x02接收文件\x02已接收\x02取消\x02接收碼\x02接收\x02選擇" +
-	"要發送的文件\x02發送\x02發送文件中\x02已發送文件\x02發送代碼\x02啟用除錯記錄\x02顯示 / 隱藏\x02設定\x02外" +
-	"觀\x02語言\x02主題\x02字體\x02標誌\x02中繼\x02地址\x02端口\x02密碼\x02本地網絡\x02停用本地\x02強" +
-	"制只限本地\x02群播位址\x02傳輸選擇\x02PAKE 曲線\x02哈希演算法\x02停用多重化\x02停用壓縮\x02上載速度節流" +
-	"\x02除錯"
-
-var zh_TWIndex = []uint32{ // 43 elements
+var zh_CNIndex = []uint32{ // 42 elements
 	// Entry 0 - 1F
 	0x00000000, 0x00000010, 0x00000017, 0x0000002a,
-	0x0000002a, 0x00000031, 0x00000031, 0x0000003e,
-	0x00000048, 0x0000004f, 0x0000004f, 0x0000004f,
-	0x00000059, 0x00000060, 0x00000079, 0x00000080,
-	0x00000090, 0x000000a0, 0x000000ad, 0x000000c0,
-	0x000000d0, 0x000000d0, 0x000000d7, 0x000000de,
-	0x000000e5, 0x000000ec, 0x000000f3, 0x000000fa,
-	0x00000101, 0x00000108, 0x00000112, 0x00000119,
+	0x0000002a, 0x00000031, 0x00000031, 0x00000031,
+	0x00000044, 0x0000004e, 0x00000055, 0x0000005f,
+	0x00000066, 0x0000007f, 0x00000086, 0x00000099,
+	0x000000a9, 0x000000b3, 0x000000c1, 0x000000c1,
+	0x000000d4, 0x000000db, 0x000000e2, 0x000000e9,
+	0x000000f0, 0x000000f7, 0x000000fe, 0x00000105,
+	0x0000010c, 0x00000113, 0x0000011a, 0x00000121,
 	// Entry 20 - 3F
-	0x00000126, 0x00000133, 0x00000146, 0x00000153,
-	0x00000160, 0x0000016c, 0x0000017c, 0x0000018c,
-	0x00000199, 0x000001ac, 0x000001b3,
-} // Size: 196 bytes
+	0x0000012e, 0x00000141, 0x00000157, 0x00000164,
+	0x00000171, 0x0000017c, 0x00000189, 0x0000019c,
+	0x000001a9, 0x000001bc,
+} // Size: 192 bytes
 
-const zh_TWData string = "" + // Size: 435 bytes
-	"\x02許可證資訊\x02關於\x02輸入代碼下載\x02下載\x02接收檔案\x02已接收\x02取消\x02接收碼\x02接收\x02選擇要" +
-	"發送的檔案\x02發送\x02發送檔案中\x02已發送檔案\x02發送代碼\x02啟用除錯記錄\x02顯示 / 隱藏\x02設定\x02外觀" +
-	"\x02語言\x02主題\x02字體\x02標誌\x02中繼\x02地址\x02連接埠\x02密碼\x02本地網路\x02停用本地\x02強制僅" +
-	"限本地\x02群播位址\x02傳輸選項\x02PAKE 曲線\x02哈希演算法\x02停用多重化\x02停用壓縮\x02上傳速度調節\x02" +
-	"除錯"
+const zh_CNData string = "" + // Size: 444 bytes
+	"\x02许可证信息\x02关于\x02输入下载代码\x02下载\x02正在接收文件\x02已接收\x02取消\x02接收码\x02接收\x02选" +
+	"择要发送的文件\x02发送\x02正在发送文件\x02已发送文件\x02发送码\x02显示/隐藏\x02启用调试日志\x02设置\x02调试" +
+	"\x02外观\x02语言\x02主题\x02字体\x02徽标\x02中继\x02地址\x02端口\x02密码\x02本地网络\x02禁用本地网络" +
+	"\x02强制仅本地网络\x02组播地址\x02传输选项\x02PAKE曲线\x02哈希算法\x02禁用多路复用\x02禁用压缩\x02上传速度限" +
+	"制"
 
-	// Total table size 5284 bytes (5KiB); checksum: FF738002
+var zh_HKIndex = []uint32{ // 42 elements
+	// Entry 0 - 1F
+	0x00000000, 0x00000010, 0x00000017, 0x0000002a,
+	0x0000002a, 0x00000031, 0x00000031, 0x00000031,
+	0x00000044, 0x0000004e, 0x00000055, 0x0000005f,
+	0x00000066, 0x0000007f, 0x00000086, 0x00000099,
+	0x000000a9, 0x000000b3, 0x000000c1, 0x000000c1,
+	0x000000d4, 0x000000db, 0x000000e2, 0x000000e9,
+	0x000000f0, 0x000000f7, 0x000000fe, 0x00000105,
+	0x0000010c, 0x00000113, 0x00000117, 0x0000011e,
+	// Entry 20 - 3F
+	0x0000012b, 0x0000013e, 0x00000157, 0x0000016a,
+	0x00000177, 0x00000182, 0x00000192, 0x000001a5,
+	0x000001b2, 0x000001c5,
+} // Size: 192 bytes
+
+const zh_HKData string = "" + // Size: 453 bytes
+	"\x02許可證資訊\x02關於\x02輸入下載代碼\x02下載\x02正在接收檔案\x02已接收\x02取消\x02接收碼\x02接收\x02選" +
+	"擇要傳送的檔案\x02傳送\x02正在傳送檔案\x02已傳送檔案\x02傳送碼\x02顯示/隱藏\x02啟用偵錯記錄\x02設定\x02偵錯" +
+	"\x02外觀\x02語言\x02主題\x02字型\x02標誌\x02轉發\x02地址\x02埠\x02密碼\x02本地網絡\x02停用本地網絡" +
+	"\x02強制僅限本地網絡\x02多點傳送位址\x02傳輸選項\x02PAKE曲線\x02雜湊演算法\x02停用多工處理\x02停用壓縮\x02上" +
+	"傳速度限制"
+
+var zh_TWIndex = []uint32{ // 42 elements
+	// Entry 0 - 1F
+	0x00000000, 0x0000000d, 0x00000014, 0x00000027,
+	0x00000027, 0x0000002e, 0x0000002e, 0x0000002e,
+	0x00000041, 0x0000004b, 0x00000052, 0x0000005c,
+	0x00000063, 0x0000007c, 0x00000083, 0x00000096,
+	0x000000a6, 0x000000b0, 0x000000be, 0x000000be,
+	0x000000d1, 0x000000d8, 0x000000df, 0x000000e6,
+	0x000000ed, 0x000000f4, 0x000000fb, 0x00000102,
+	0x00000109, 0x00000110, 0x00000114, 0x0000011b,
+	// Entry 20 - 3F
+	0x00000128, 0x0000013b, 0x00000154, 0x00000167,
+	0x00000174, 0x0000017f, 0x0000018f, 0x000001a2,
+	0x000001af, 0x000001c2,
+} // Size: 192 bytes
+
+const zh_TWData string = "" + // Size: 450 bytes
+	"\x02授權資訊\x02關於\x02輸入下載代碼\x02下載\x02正在接收檔案\x02已接收\x02取消\x02接收碼\x02接收\x02選擇" +
+	"要傳送的檔案\x02傳送\x02正在傳送檔案\x02已傳送檔案\x02傳送碼\x02顯示/隱藏\x02啟用偵錯記錄\x02設定\x02偵錯" +
+	"\x02外觀\x02語言\x02主題\x02字型\x02標誌\x02轉發\x02位址\x02埠\x02密碼\x02本地網路\x02停用本地網路" +
+	"\x02強制僅限本地網路\x02多點傳送位址\x02傳輸選項\x02PAKE曲線\x02雜湊演算法\x02停用多工處理\x02停用壓縮\x02上" +
+	"傳速度限制"
+
+	// Total table size 5667 bytes (5KiB); checksum: 8E9AF9C2

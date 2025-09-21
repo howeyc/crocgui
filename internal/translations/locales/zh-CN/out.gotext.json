@@ -14,7 +14,7 @@
         {
             "id": "Enter code to download",
             "message": "Enter code to download",
-            "translation": "输入代码下载"
+            "translation": "输入下载代码"
         },
         {
             "id": "Saved all files to",
@@ -27,14 +27,19 @@
             "translation": "下载"
         },
         {
-            "id": "Save All",
-            "message": "Save All",
+            "id": "Delete All",
+            "message": "Delete All",
+            "translation": ""
+        },
+        {
+            "id": "Are you sure you want to delete all received files?",
+            "message": "Are you sure you want to delete all received files?",
             "translation": ""
         },
         {
             "id": "Receiving file",
             "message": "Receiving file",
-            "translation": "接收档案"
+            "translation": "正在接收文件"
         },
         {
             "id": "Received",
@@ -45,16 +50,6 @@
             "id": "Cancel",
             "message": "Cancel",
             "translation": "取消"
-        },
-        {
-            "id": "Delete All",
-            "message": "Delete All",
-            "translation": ""
-        },
-        {
-            "id": "Are you sure you want to delete all received files?",
-            "message": "Are you sure you want to delete all received files?",
-            "translation": ""
         },
         {
             "id": "Receive Code",
@@ -69,7 +64,7 @@
         {
             "id": "Pick a file to send",
             "message": "Pick a file to send",
-            "translation": "选择要发送的档案"
+            "translation": "选择要发送的文件"
         },
         {
             "id": "Send",
@@ -79,27 +74,22 @@
         {
             "id": "Sending file",
             "message": "Sending file",
-            "translation": "发送档案中"
+            "translation": "正在发送文件"
         },
         {
             "id": "Sent file",
             "message": "Sent file",
-            "translation": "已发送档案"
+            "translation": "已发送文件"
         },
         {
             "id": "Send Code",
             "message": "Send Code",
-            "translation": "发送代码"
-        },
-        {
-            "id": "Enable Debug Log",
-            "message": "Enable Debug Log",
-            "translation": "启用除错记录"
+            "translation": "发送码"
         },
         {
             "id": "Show / Hide",
             "message": "Show / Hide",
-            "translation": "显示 / 隐藏"
+            "translation": "显示/隐藏"
         },
         {
             "id": "Export full log",
@@ -107,9 +97,19 @@
             "translation": ""
         },
         {
+            "id": "Enable Debug Log",
+            "message": "Enable Debug Log",
+            "translation": "启用调试日志"
+        },
+        {
             "id": "Settings",
             "message": "Settings",
-            "translation": "设定"
+            "translation": "设置"
+        },
+        {
+            "id": "Debug",
+            "message": "Debug",
+            "translation": "调试"
         },
         {
             "id": "Appearance",
@@ -134,7 +134,7 @@
         {
             "id": "Logo",
             "message": "Logo",
-            "translation": "标志"
+            "translation": "徽标"
         },
         {
             "id": "Relay",
@@ -164,12 +164,12 @@
         {
             "id": "Disable Local",
             "message": "Disable Local",
-            "translation": "停用本地"
+            "translation": "禁用本地网络"
         },
         {
             "id": "Force Local Only",
             "message": "Force Local Only",
-            "translation": "强制仅限本地"
+            "translation": "强制仅本地网络"
         },
         {
             "id": "Multicast Address",
@@ -184,7 +184,7 @@
         {
             "id": "PAKE Curve",
             "message": "PAKE Curve",
-            "translation": "PAKE 曲线"
+            "translation": "PAKE曲线"
         },
         {
             "id": "Hash Algorithm",
@@ -194,22 +194,17 @@
         {
             "id": "Disable Multiplexing",
             "message": "Disable Multiplexing",
-            "translation": "停用多重化"
+            "translation": "禁用多路复用"
         },
         {
             "id": "Disable Compression",
             "message": "Disable Compression",
-            "translation": "停用压缩"
+            "translation": "禁用压缩"
         },
         {
             "id": "Upload Speed Throttle",
             "message": "Upload Speed Throttle",
-            "translation": "上传速度调节"
-        },
-        {
-            "id": "Debug",
-            "message": "Debug",
-            "translation": "除错"
+            "translation": "上传速度限制"
         }
     ]
 }

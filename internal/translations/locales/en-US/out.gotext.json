@@ -37,9 +37,16 @@
             "fuzzy": true
         },
         {
-            "id": "Save All",
-            "message": "Save All",
-            "translation": "Save All",
+            "id": "Delete All",
+            "message": "Delete All",
+            "translation": "Delete All",
+            "translatorComment": "Copied from source.",
+            "fuzzy": true
+        },
+        {
+            "id": "Are you sure you want to delete all received files?",
+            "message": "Are you sure you want to delete all received files?",
+            "translation": "Are you sure you want to delete all received files?",
             "translatorComment": "Copied from source.",
             "fuzzy": true
         },
@@ -61,20 +68,6 @@
             "id": "Cancel",
             "message": "Cancel",
             "translation": "Cancel",
-            "translatorComment": "Copied from source.",
-            "fuzzy": true
-        },
-        {
-            "id": "Delete All",
-            "message": "Delete All",
-            "translation": "Delete All",
-            "translatorComment": "Copied from source.",
-            "fuzzy": true
-        },
-        {
-            "id": "Are you sure you want to delete all received files?",
-            "message": "Are you sure you want to delete all received files?",
-            "translation": "Are you sure you want to delete all received files?",
             "translatorComment": "Copied from source.",
             "fuzzy": true
         },
@@ -128,13 +121,6 @@
             "fuzzy": true
         },
         {
-            "id": "Enable Debug Log",
-            "message": "Enable Debug Log",
-            "translation": "Enable Debug Log",
-            "translatorComment": "Copied from source.",
-            "fuzzy": true
-        },
-        {
             "id": "Show / Hide",
             "message": "Show / Hide",
             "translation": "Show / Hide",
@@ -149,9 +135,23 @@
             "fuzzy": true
         },
         {
+            "id": "Enable Debug Log",
+            "message": "Enable Debug Log",
+            "translation": "Enable Debug Log",
+            "translatorComment": "Copied from source.",
+            "fuzzy": true
+        },
+        {
             "id": "Settings",
             "message": "Settings",
             "translation": "Settings",
+            "translatorComment": "Copied from source.",
+            "fuzzy": true
+        },
+        {
+            "id": "Debug",
+            "message": "Debug",
+            "translation": "Debug",
             "translatorComment": "Copied from source.",
             "fuzzy": true
         },
@@ -285,13 +285,6 @@
             "id": "Upload Speed Throttle",
             "message": "Upload Speed Throttle",
             "translation": "Upload Speed Throttle",
-            "translatorComment": "Copied from source.",
-            "fuzzy": true
-        },
-        {
-            "id": "Debug",
-            "message": "Debug",
-            "translation": "Debug",
             "translatorComment": "Copied from source.",
             "fuzzy": true
         }

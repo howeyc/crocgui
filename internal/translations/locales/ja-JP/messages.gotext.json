@@ -12,29 +12,29 @@
             "translation": "情報"
         },
         {
-            "id": "Debug log:",
-            "message": "Debug log:",
-            "translation": "デバッグログ:"
-        },
-        {
             "id": "Enter code to download",
             "message": "Enter code to download",
             "translation": "コードを入力してダウンロード"
         },
         {
-            "id": "Receive",
-            "message": "Receive",
-            "translation": "受信"
-        },
-        {
-            "id": "Receive Code",
-            "message": "Receive Code",
-            "translation": "受信コード"
+            "id": "Saved all files to",
+            "message": "Saved all files to",
+            "translation": "すべてのファイルを保存しました:"
         },
         {
             "id": "Download",
             "message": "Download",
             "translation": "ダウンロード"
+        },
+        {
+            "id": "Delete All",
+            "message": "Delete All",
+            "translation": "すべて削除"
+        },
+        {
+            "id": "Are you sure you want to delete all received files?",
+            "message": "Are you sure you want to delete all received files?",
+            "translation": "すべての受信したファイルを削除してもよろしいですか？"
         },
         {
             "id": "Receiving file",
@@ -45,6 +45,21 @@
             "id": "Received",
             "message": "Received",
             "translation": "受信しました"
+        },
+        {
+            "id": "Cancel",
+            "message": "Cancel",
+            "translation": "キャンセル"
+        },
+        {
+            "id": "Receive Code",
+            "message": "Receive Code",
+            "translation": "受信コード"
+        },
+        {
+            "id": "Receive",
+            "message": "Receive",
+            "translation": "受信"
         },
         {
             "id": "Pick a file to send",
@@ -67,24 +82,9 @@
             "translation": "ファイルを送信しました"
         },
         {
-            "id": "Send cancelled.",
-            "message": "Send cancelled.",
-            "translation": "送信はキャンセルされました"
-        },
-        {
-            "id": "Cancel",
-            "message": "Cancel",
-            "translation": "キャンセル"
-        },
-        {
             "id": "Send Code",
             "message": "Send Code",
-            "translation": "受信コード"
-        },
-        {
-            "id": "Enable Debug Log",
-            "message": "Enable Debug Log",
-            "translation": "デバッグログを有効化"
+            "translation": "送信コード"
         },
         {
             "id": "Show / Hide",
@@ -92,9 +92,24 @@
             "translation": "表示 / 非表示"
         },
         {
+            "id": "Export full log",
+            "message": "Export full log",
+            "translation": "完全なログをエクスポート"
+        },
+        {
+            "id": "Enable Debug Log",
+            "message": "Enable Debug Log",
+            "translation": "デバッグログを有効化"
+        },
+        {
             "id": "Settings",
             "message": "Settings",
             "translation": "設定"
+        },
+        {
+            "id": "Debug",
+            "message": "Debug",
+            "translation": "デバッグ"
         },
         {
             "id": "Appearance",
@@ -169,12 +184,12 @@
         {
             "id": "PAKE Curve",
             "message": "PAKE Curve",
-            "translation": "PAKE Curve"
+            "translation": "PAKE曲線"
         },
         {
             "id": "Hash Algorithm",
             "message": "Hash Algorithm",
-            "translation": "ハッシュ方式"
+            "translation": "ハッシュアルゴリズム"
         },
         {
             "id": "Disable Multiplexing",
@@ -190,11 +205,6 @@
             "id": "Upload Speed Throttle",
             "message": "Upload Speed Throttle",
             "translation": "アップロード速度の制限"
-        },
-        {
-            "id": "Debug",
-            "message": "Debug",
-            "translation": "デバッグ"
         }
     ]
 }

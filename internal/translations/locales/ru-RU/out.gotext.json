@@ -19,7 +19,7 @@
         {
             "id": "Saved all files to",
             "message": "Saved all files to",
-            "translation": "Сохранил всё"
+            "translation": "Сохранил всё в"
         },
         {
             "id": "Download",
@@ -27,9 +27,14 @@
             "translation": "Беру"
         },
         {
-            "id": "Save All",
-            "message": "Save All",
-            "translation": "Сохранить всё"
+            "id": "Delete All",
+            "message": "Delete All",
+            "translation": "Удалить всё"
+        },
+        {
+            "id": "Are you sure you want to delete all received files?",
+            "message": "Are you sure you want to delete all received files?",
+            "translation": "Вы уверены что хотите удалить все полученные файлы?"
         },
         {
             "id": "Receiving file",
@@ -45,16 +50,6 @@
             "id": "Cancel",
             "message": "Cancel",
             "translation": "Отменить"
-        },
-        {
-            "id": "Delete All",
-            "message": "Delete All",
-            "translation": "Удалить всё"
-        },
-        {
-            "id": "Are you sure you want to delete all received files?",
-            "message": "Are you sure you want to delete all received files?",
-            "translation": "Вы уверены что хотите удалить все полученные файлы?"
         },
         {
             "id": "Receive Code",
@@ -92,11 +87,6 @@
             "translation": "Секрет"
         },
         {
-            "id": "Enable Debug Log",
-            "message": "Enable Debug Log",
-            "translation": "Журналировать"
-        },
-        {
             "id": "Show / Hide",
             "message": "Show / Hide",
             "translation": "Вкл / Выкл"
@@ -107,9 +97,19 @@
             "translation": "Сохранить журнал"
         },
         {
+            "id": "Enable Debug Log",
+            "message": "Enable Debug Log",
+            "translation": "Журналировать"
+        },
+        {
             "id": "Settings",
             "message": "Settings",
             "translation": "Как"
+        },
+        {
+            "id": "Debug",
+            "message": "Debug",
+            "translation": "Отладка"
         },
         {
             "id": "Appearance",
@@ -205,11 +205,6 @@
             "id": "Upload Speed Throttle",
             "message": "Upload Speed Throttle",
             "translation": "Медлить"
-        },
-        {
-            "id": "Debug",
-            "message": "Debug",
-            "translation": "Отладка"
         }
     ]
 }
