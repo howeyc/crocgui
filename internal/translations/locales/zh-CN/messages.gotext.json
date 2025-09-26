@@ -12,29 +12,29 @@
             "translation": "关于"
         },
         {
-            "id": "Debug log:",
-            "message": "Debug log:",
-            "translation": "调试日志:"
-        },
-        {
             "id": "Enter code to download",
             "message": "Enter code to download",
             "translation": "输入下载代码"
         },
         {
-            "id": "Receive",
-            "message": "Receive",
-            "translation": "接收"
-        },
-        {
-            "id": "Receive Code",
-            "message": "Receive Code",
-            "translation": "接收码"
+            "id": "Saved all files to",
+            "message": "Saved all files to",
+            "translation": "所有文件已保存至"
         },
         {
             "id": "Download",
             "message": "Download",
             "translation": "下载"
+        },
+        {
+            "id": "Delete All",
+            "message": "Delete All",
+            "translation": "全部删除"
+        },
+        {
+            "id": "Are you sure you want to delete all received files?",
+            "message": "Are you sure you want to delete all received files?",
+            "translation": "确定要删除所有接收的文件吗？"
         },
         {
             "id": "Receiving file",
@@ -45,6 +45,21 @@
             "id": "Received",
             "message": "Received",
             "translation": "已接收"
+        },
+        {
+            "id": "Cancel",
+            "message": "Cancel",
+            "translation": "取消"
+        },
+        {
+            "id": "Receive Code",
+            "message": "Receive Code",
+            "translation": "接收码"
+        },
+        {
+            "id": "Receive",
+            "message": "Receive",
+            "translation": "接收"
         },
         {
             "id": "Pick a file to send",
@@ -67,24 +82,9 @@
             "translation": "已发送文件"
         },
         {
-            "id": "Send cancelled.",
-            "message": "Send cancelled.",
-            "translation": "发送已取消"
-        },
-        {
-            "id": "Cancel",
-            "message": "Cancel",
-            "translation": "取消"
-        },
-        {
             "id": "Send Code",
             "message": "Send Code",
             "translation": "发送码"
-        },
-        {
-            "id": "Enable Debug Log",
-            "message": "Enable Debug Log",
-            "translation": "启用调试日志"
         },
         {
             "id": "Show / Hide",
@@ -92,9 +92,24 @@
             "translation": "显示/隐藏"
         },
         {
+            "id": "Export full log",
+            "message": "Export full log",
+            "translation": "导出完整日志"
+        },
+        {
+            "id": "Enable Debug Log",
+            "message": "Enable Debug Log",
+            "translation": "启用调试日志"
+        },
+        {
             "id": "Settings",
             "message": "Settings",
             "translation": "设置"
+        },
+        {
+            "id": "Debug",
+            "message": "Debug",
+            "translation": "调试"
         },
         {
             "id": "Appearance",
@@ -190,11 +205,6 @@
             "id": "Upload Speed Throttle",
             "message": "Upload Speed Throttle",
             "translation": "上传速度限制"
-        },
-        {
-            "id": "Debug",
-            "message": "Debug",
-            "translation": "调试"
         }
     ]
 }

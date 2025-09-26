@@ -19,7 +19,7 @@
         {
             "id": "Saved all files to",
             "message": "Saved all files to",
-            "translation": ""
+            "translation": "所有檔案已儲存至"
         },
         {
             "id": "Download",
@@ -29,12 +29,12 @@
         {
             "id": "Delete All",
             "message": "Delete All",
-            "translation": ""
+            "translation": "全部刪除"
         },
         {
             "id": "Are you sure you want to delete all received files?",
             "message": "Are you sure you want to delete all received files?",
-            "translation": ""
+            "translation": "確定要刪除所有接收的檔案嗎？"
         },
         {
             "id": "Receiving file",
@@ -94,7 +94,7 @@
         {
             "id": "Export full log",
             "message": "Export full log",
-            "translation": ""
+            "translation": "匯出完整記錄"
         },
         {
             "id": "Enable Debug Log",

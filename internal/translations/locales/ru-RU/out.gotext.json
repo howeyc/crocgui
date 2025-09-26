@@ -9,7 +9,7 @@
         {
             "id": "About",
             "message": "About",
-            "translation": "Это"
+            "translation": " "
         },
         {
             "id": "Enter code to download",
@@ -24,7 +24,7 @@
         {
             "id": "Download",
             "message": "Download",
-            "translation": "Беру"
+            "translation": "Получить"
         },
         {
             "id": "Delete All",
@@ -59,7 +59,7 @@
         {
             "id": "Receive",
             "message": "Receive",
-            "translation": "Беру"
+            "translation": "Получить"
         },
         {
             "id": "Pick a file to send",
@@ -69,12 +69,12 @@
         {
             "id": "Send",
             "message": "Send",
-            "translation": "Шлю"
+            "translation": "Послать"
         },
         {
             "id": "Sending file",
             "message": "Sending file",
-            "translation": "Шлю"
+            "translation": "Посылаю"
         },
         {
             "id": "Sent file",
@@ -89,7 +89,7 @@
         {
             "id": "Show / Hide",
             "message": "Show / Hide",
-            "translation": "Вкл / Выкл"
+            "translation": "Показать / Скрыть"
         },
         {
             "id": "Export full log",
@@ -104,7 +104,7 @@
         {
             "id": "Settings",
             "message": "Settings",
-            "translation": "Как"
+            "translation": " "
         },
         {
             "id": "Debug",
@@ -184,7 +184,7 @@
         {
             "id": "PAKE Curve",
             "message": "PAKE Curve",
-            "translation": "Тип PAKE"
+            "translation": "Кривая PAKE"
         },
         {
             "id": "Hash Algorithm",
