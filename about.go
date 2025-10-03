@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"embed"
-	_ "embed"
 	"fmt"
 	"strings"
 

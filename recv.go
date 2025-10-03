@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -23,6 +24,8 @@ import (
 )
 
 func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
+	var ti *container.TabItem
+	refresh := func() {}
 	defer func() {
 		if r := recover(); r != nil {
 			log.Error(fmt.Sprint(r))
@@ -117,10 +120,11 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 	scroller := container.NewVScroll(boxholder)
 	fileentries := make(map[string]*fyne.Container)
 
-	removeEntry := func(fpath string, fe *fyne.Container) {
+	removeEntry := func(fpath string, fe *fyne.Container, del bool) {
 		boxholder.Remove(fe)
-		os.Remove(fpath)
-		log.Tracef("Removed received file: %s", fpath)
+		if del {
+			log.Tracef("Removed received file: %s error: %v", fpath, os.Remove(fpath))
+		}
 		delete(fileentries, fpath)
 	}
 
@@ -164,7 +168,7 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 				if err == nil {
 					destination.Close()
 					log.Tracef("File %s moved to %s", src, destination.URI().Path())
-					removeEntry(src, fe)
+					removeEntry(src, fe, true)
 					return
 				}
 			}
@@ -175,7 +179,7 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 					log.Errorf("Error saving %s to %s error:%v", src, destination.URI().Path(), err)
 				} else {
 					log.Tracef("File %s saved to %s", src, destination.URI().Path())
-					removeEntry(src, fe)
+					removeEntry(src, fe, true)
 				}
 			})
 		}
@@ -215,7 +219,7 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 
 		deleteButton := widget.NewButtonWithIcon("", theme.CancelIcon(), func() {
 			if fe, ok := fileentries[dst]; ok {
-				removeEntry(dst, fe)
+				removeEntry(dst, fe, true)
 			}
 		})
 		progFile := widget.NewProgressBar()
@@ -234,20 +238,32 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 	}
 
 	os.MkdirAll(recvDir, 0o700)
+	fpath := a.Preferences().String("DeleteFile")
 	for _, name := range ls(recvDir) {
 		if name != "" {
-			addEntry(filepath.Join(recvDir, name))
+			path := filepath.Join(recvDir, name)
+			if fpath == path {
+				err := os.Remove(fpath)
+				log.Tracef("Removed partially received file: %s error: %v", fpath, err)
+				if err != nil {
+					continue
+				}
+				a.Preferences().SetString("DeleteFile", "")
+			} else {
+				addEntry(path)
+			}
 		}
 	}
 
 	var lastSaveDir string
 
-	cancelchan := make(chan bool)
+	cancelChan := make(chan struct{})
+
 	var cancelButton, mainButton *widget.Button
 
-	removeEntrys := func() {
+	removeEntrys := func(del bool) {
 		for fpath, fe := range fileentries {
-			removeEntry(fpath, fe)
+			removeEntry(fpath, fe, del)
 		}
 	}
 
@@ -304,7 +320,7 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 					if err == nil {
 						destination.Close()
 						log.Tracef("File %s moved to %s", src, destination.URI().Path())
-						removeEntry(src, fe)
+						removeEntry(src, fe, true)
 						fyne.Do(func() {
 							if len(fileentries) == 0 {
 								topline.SetText(fmt.Sprintf("%s %s", lp("Saved all files to"), lastSaveDir))
@@ -324,7 +340,7 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 						return
 					}
 					log.Tracef("File %s saved to URI(%s)", src, destination.URI().String())
-					removeEntry(src, fe)
+					removeEntry(src, fe, true)
 
 					if len(fileentries) == 0 {
 						fyne.Do(func() {
@@ -354,20 +370,6 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 		ShowFolderOpen(filesSave, w)
 	}
 
-	reset := func() {
-		mainButton.Enable()
-		prog.Hide()
-		prog.SetValue(0)
-		cancelButton.Hide()
-
-		totpCheck.Enable()
-		if totpCheck.Checked {
-			totpProg.Show()
-		}
-
-		entry.Enable()
-	}
-
 	mainButton = widget.NewButtonWithIcon(lp("Download"), theme.DownloadIcon(), func() {
 		ok := len(entry.Text) > 5
 		if totpCheck.Checked {
@@ -387,20 +389,18 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 				lp("Delete All"),
 				lp("Are you sure you want to delete all received files?"), func(b bool) {
 					if b {
-						removeEntrys()
+						removeEntrys(true)
 					}
 				},
 				w)
 			return
 		}
 
-		totpCheck.Disable()
 		secret := entry.Text
 		if totpCheck.Checked {
 			secret = totp(entry.Text)
 			totpLabel.SetText(secret)
 			secret = TOTP + secret
-			totpProg.Hide()
 		}
 
 		receiver, err := croc.New(croc.Options{
@@ -436,12 +436,56 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 		var filename string
 		mainButton.Disable()
 		prog.Show()
+		cancelChan = make(chan struct{})
 		cancelButton.Show()
+		entry.Disable()
 
-		donechan := make(chan bool)
+		totpCheck.Disable()
+		if totpCheck.Checked {
+			totpProg.Hide()
+		}
+		refresh()
+
+		doneChan := make(chan struct{})
+		fpath := ""
+
+		//progress
 		go func() {
 			ticker := time.NewTicker(time.Millisecond * 100)
-			defer ticker.Stop()
+			defer func() {
+				ticker.Stop()
+				//reset
+				fyne.Do(func() {
+					mainButton.Enable()
+					prog.Hide()
+					prog.SetValue(0)
+					cancelButton.Hide()
+					entry.Enable()
+
+					totpCheck.Enable()
+					if totpCheck.Checked {
+						totpProg.Show()
+					}
+
+					for _, name := range ls(recvDir) {
+						if name != "" {
+							path := filepath.Join(recvDir, name)
+							if fpath == path {
+								continue
+							}
+
+							fe := addEntry(path)
+							if pb, ok := fe.Objects[feBar].(*widget.ProgressBar); ok {
+								fe.Objects[feDel].Show()
+								fe.Objects[feSave].Show()
+								pb.Hide()
+							}
+						}
+					}
+					refresh()
+				})
+			}()
+
 			old := 0
 			progW := NewProgressWrapper(prog)
 			toplineW := NewLabelWrapper(topline)
@@ -451,7 +495,26 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 			for {
 				select {
 				case <-done:
-					close(donechan)
+					return
+				case <-doneChan:
+					return
+				case <-cancelChan:
+					s := fmt.Sprintf("%s %s", lp("Receive cancelled."), filename)
+					log.Error(s)
+					fyne.Do(func() {
+						topline.SetText(s)
+					})
+					a.Preferences().SetString("DeleteFile", filepath.Join(recvDir, filename))
+					Stop(receiver)
+					if isMobile {
+						w.Close()
+						a.Quit()
+						os.Exit(0)
+						return
+					}
+					fyne.Do(func() {
+						restart(a)
+					})
 					return
 				case <-ticker.C:
 					if receiver == nil {
@@ -463,10 +526,18 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 							for _, fi := range receiver.FilesToTransfer {
 								dst := filepath.Join(recvDir, fi.Name)
 								fe := addEntry(dst)
-								fyne.Do(fe.Objects[0].Hide)
-								fyne.Do(fe.Objects[2].Hide)
+								if pb, ok := fe.Objects[feBar].(*widget.ProgressBar); ok {
+									fyne.Do(func() {
+										fe.Objects[feDel].Hide()
+										fe.Objects[feSave].Hide()
+										pb.SetValue(0)
+										pb.Max = float64(fi.Size)
+										pb.Show()
+									})
+								}
 								totalMax += fi.Size
 							}
+							fyne.Do(refresh)
 							progW.SetMax(totalMax)
 						}
 						cnum := receiver.FilesToTransferCurrentNum
@@ -484,9 +555,7 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 							path := filepath.Join(recvDir, fi.Name)
 							log.Trace(path)
 							if fe, ok := fileentries[path]; ok {
-								fepw = NewProgressWrapper(fe.Objects[1].(*widget.ProgressBar))
-								fepw.SetMax(size)
-								fepw.Show()
+								fepw = NewProgressWrapper(fe.Objects[feBar].(*widget.ProgressBar))
 							} else {
 								fepw = NewProgressWrapper(nil)
 							}
@@ -494,76 +563,53 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 						progW.SetValue(TotalSent + receiver.TotalSent)
 						fepw.SetValue(receiver.TotalSent)
 					}
-				case <-donechan:
-					return
-				case <-cancelchan:
-					return
 				}
 			}
 		}()
 
+		// receiver.Receive
 		go func() {
-			fyne.Do(entry.Disable)
 			var rerr error
 			if EMULATE == 0 {
 				rerr = receiver.Receive()
 			} else {
-				log.Warnf("Receive\n")
+				log.Warnf("Receive")
 				time.Sleep(EMULATE)
 				defer func() {
 					time.Sleep(time.Millisecond * 10)
 					receiver = nil
 				}()
 			}
-			donechan <- true
-			if rerr != nil {
-				log.Errorf("Receive failed: %s\n", rerr)
-				fyne.Do(func() {
-					topline.SetText(rerr.Error())
-				})
-			} else {
-				fyne.Do(func() {
+			fyne.Do(func() {
+				if rerr != nil {
+					if errors.Is(rerr, io.EOF) {
+						rerr = fmt.Errorf("%s", lp("Send cancelled."))
+					}
+					s := fmt.Sprintf("Receive failed: %s", rerr)
+					log.Error(s)
+					topline.SetText(s)
+					fpath = filepath.Join(recvDir, filename)
+					removeEntrys(false)
+				} else {
 					topline.SetText(fmt.Sprintf("%s: %s", lp("Received"), filename))
-				})
-
-				for _, fi := range receiver.FilesToTransfer {
-					dst := filepath.Join(recvDir, fi.Name)
-					fe := addEntry(dst)
-					fyne.Do(func() {
-						fe.Objects[0].Show()
-						fe.Objects[1].Hide()
-						fe.Objects[2].Show()
-					})
 				}
-			}
-			fyne.Do(reset)
+				a.Preferences().SetString("DeleteFile", fpath)
+			})
+			close(doneChan)
 		}()
 
-		go func() {
-			select {
-			case <-done:
-				return
-			case <-donechan:
-				return
-			case <-cancelchan:
-				log.Warnf("Receive cancelled. %s: %v\n", recvDir, ls(recvDir))
-				Stop(receiver)
-
-				fyne.Do(reset)
-			}
-		}()
 		//  +2 go routines
 		log.Warnf("NumGoroutine %d", runtime.NumGoroutine())
 	})
 
 	cancelButton = widget.NewButtonWithIcon(lp("Cancel"), theme.CancelIcon(), func() {
-		cancelchan <- true
+		close(cancelChan)
 	})
 	cancelButton.Hide()
 
 	deleteAllButton := widget.NewButtonWithIcon("*", theme.DeleteIcon(), func() { //lp("Delete All")
 		if len(fileentries) > 0 {
-			removeEntrys()
+			removeEntrys(true)
 		} else {
 			entry.SetText("")
 		}
@@ -572,9 +618,6 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 	saveAllButton := widget.NewButtonWithIcon("*", theme.FolderOpenIcon(), func() { //lp("Save All")
 		saveAllFiles()
 	})
-	// if isAndroid {
-	// 	saveAllButton.Hide()
-	// }
 
 	top := container.NewVBox(
 		container.NewHBox(topline, layout.NewSpacer(), pasteCodeButton),
@@ -591,9 +634,11 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 		prog,
 		cancelButton,
 	)
-
-	return container.NewTabItemWithIcon(lp("Receive"), theme.DownloadIcon(),
+	ti = container.NewTabItemWithIcon(lp("Receive"), theme.DownloadIcon(),
 		container.NewBorder(top, nil, nil, nil, scroller))
+	refresh = func() { ti.Content.Refresh() }
+	return ti
+
 }
 
 func copyToUWCProgress(destination fyne.URIWriteCloser, src string, c *fyne.Container, onComplete func(err error)) {

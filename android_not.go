@@ -29,7 +29,5 @@ func IsDirectory(u fyne.URI) (ok bool) {
 	return
 }
 
-func fileExists(uri fyne.URI) (exists bool) { return false }
-
 func MimeType(u fyne.URI) string { return u.MimeType() }
 func apiLevel() int              { return 29 }

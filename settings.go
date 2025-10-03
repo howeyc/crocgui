@@ -24,6 +24,8 @@ const (
 	copyDebug = false
 	// Чтоб на десктопе или Андроиде 9- отладить план Б при отсутствии com.android.DocumentsUI на мобильной ОС сохранять протокол и полученные файлы в Загрузки.
 	noDialogDebug = false
+	// Чтоб на десктопе не перезапускать приложение при завершении передачи
+	noRestart = false
 )
 
 //go:embed internal/fonts

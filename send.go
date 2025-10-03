@@ -38,6 +38,9 @@ import (
 const (
 	MaterialFiles = "https://github.com/zhanghai/MaterialFiles"
 	INSTALL       = "URL " + MaterialFiles + " is already in the clipboard.\nInstall the app to avoid this message."
+	feDel         = 0
+	feBar         = 1
+	feSave        = 2
 )
 
 func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
@@ -235,7 +238,7 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 
 	copyFromURCProgress := func(source fyne.URIReadCloser, c *fyne.Container, onComplete func(err error)) {
 		if source == nil {
-			onComplete(fmt.Errorf("User cancel dialog"))
+			onComplete(fmt.Errorf("user cancel dialog"))
 			return
 		}
 		u := source.URI()
@@ -248,7 +251,7 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 		destination, err := os.Create(dst)
 		if err != nil {
 			source.Close()
-			onComplete(fmt.Errorf("Unable to create file %s error: %s", dst, err.Error()))
+			onComplete(fmt.Errorf("unable to create file %s error: %s", dst, err.Error()))
 			return
 		}
 
@@ -399,7 +402,7 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 		if len(os.Args) > 0 {
 			for _, src := range os.Args[1:] {
 				if err := addPath(src); err != nil {
-					log.Errorf(err.Error())
+					log.Error(err.Error())
 				}
 			}
 		}
@@ -415,7 +418,7 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 			SelectIndex(w, 0)
 			for _, uri := range uris {
 				if err := addPath(uri.Path()); err != nil {
-					log.Errorf(err.Error())
+					log.Error(err.Error())
 				}
 			}
 		})
@@ -482,7 +485,7 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 		}, w)
 	})
 
-	cancelchan := make(chan bool)
+	cancelChan := make(chan struct{})
 	var cancelButton, mainButton *widget.Button
 
 	removeEntrys := func() {
@@ -498,25 +501,6 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 			entry.SetText("")
 		}
 	})
-
-	reset := func() {
-		mainButton.Enable()
-		prog.Hide()
-		prog.SetValue(0)
-		cancelButton.Hide()
-		removeEntrys()
-		addFileButton.Enable()
-
-		totpCheck.Enable()
-		if totpCheck.Checked {
-			totpProg.Show()
-		} else if entry.Text == randomCode {
-			randomCode = utils.GetRandomName()
-			entry.SetText(randomCode)
-		}
-
-		entry.Enable()
-	}
 
 	mainButton = widget.NewButtonWithIcon(lp("Send"), theme.MailSendIcon(), func() {
 		ok := len(entry.Text) > 5
@@ -535,8 +519,8 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 
 		ready := true
 		for _, fe := range fileentries {
-			//progressBar
-			if fe.Objects[1].Visible() {
+			pb := fe.Objects[feBar].(*widget.ProgressBar)
+			if pb.Visible() && pb.Value < pb.Max {
 				ready = false
 				break
 			}
@@ -553,17 +537,14 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 			return
 		}
 
-		addFileButton.Disable()
-		totpCheck.Disable()
 		secret := entry.Text
 		if totpCheck.Checked {
 			secret = totp(entry.Text)
 			totpLabel.SetText(secret)
 			secret = TOTP + secret
-			totpProg.Hide()
 		}
 		for _, fe := range fileentries {
-			fe.Objects[0].Hide()
+			fe.Objects[feDel].Hide()
 		}
 		sender, err := croc.New(croc.Options{
 			IsSender:         true,
@@ -595,12 +576,42 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 
 		var filename string
 		mainButton.Disable()
+		cancelChan = make(chan struct{})
 		cancelButton.Show()
+		entry.Disable()
 
-		donechan := make(chan bool)
+		addFileButton.Disable()
+		totpCheck.Disable()
+		if totpCheck.Checked {
+			totpProg.Hide()
+		}
+		refresh()
+
+		doneChan := make(chan struct{})
+
 		go func() {
 			ticker := time.NewTicker(time.Millisecond * 100)
-			defer ticker.Stop()
+			defer func() {
+				ticker.Stop()
+				fyne.Do(func() {
+					mainButton.Enable()
+					prog.Hide()
+					prog.SetValue(0)
+					cancelButton.Hide()
+					entry.Enable()
+					addFileButton.Enable()
+
+					totpCheck.Enable()
+					if totpCheck.Checked {
+						totpProg.Show()
+					} else if entry.Text == randomCode {
+						randomCode = utils.GetRandomName()
+						entry.SetText(randomCode)
+					}
+					refresh()
+				})
+			}()
+
 			old := 0
 			progW := NewProgressWrapper(prog)
 			var TotalSent, size, totalMax int64
@@ -610,7 +621,32 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 			for {
 				select {
 				case <-done:
-					close(donechan)
+					return
+				case <-doneChan:
+					removeEntrys()
+					if !isMobile {
+						log.Tracef("A restart is better than leaving 12 goroutines leaking")
+						fyne.Do(func() {
+							restart(a)
+						})
+					}
+					return
+				case <-cancelChan:
+					s := fmt.Sprintf("%s %s", lp("Send cancelled."), filename)
+					log.Error(s)
+					fyne.Do(func() {
+						topline.SetText(s)
+					})
+					Stop(sender)
+					if isMobile {
+						w.Close()
+						a.Quit()
+						os.Exit(0)
+						return
+					}
+					fyne.Do(func() {
+						restart(a)
+					})
 					return
 				case <-ticker.C:
 					if sender == nil {
@@ -621,10 +657,22 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 						fyne.Do(func() {
 							topline.SetText(lp("Download"))
 							prog.Show()
+							for _, fe := range fileentries {
+								pb := fe.Objects[feBar].(*widget.ProgressBar)
+								pb.SetValue(0)
+								pb.Show()
+							}
+
 							// SelectIndex(w, 0)
 							refresh()
 						})
 						for _, fi := range sender.FilesToTransfer {
+							path := filepath.Join(sendDir, fi.Name)
+							if fe, ok := fileentries[path]; ok {
+								if pb, ok := fe.Objects[feBar].(*widget.ProgressBar); ok {
+									pb.Max = float64(fi.Size)
+								}
+							}
 							totalMax += fi.Size
 						}
 						progW.SetMax(totalMax)
@@ -645,9 +693,7 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 							path := filepath.Join(sendDir, fi.Name)
 							log.Trace(path)
 							if fe, ok := fileentries[path]; ok {
-								fepw = NewProgressWrapper(fe.Objects[1].(*widget.ProgressBar))
-								fepw.SetMax(size)
-								fepw.Show()
+								fepw = NewProgressWrapper(fe.Objects[feBar].(*widget.ProgressBar))
 							} else {
 								fepw = NewProgressWrapper(nil)
 							}
@@ -655,13 +701,10 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 						progW.SetValue(TotalSent + sender.TotalSent)
 						fepw.SetValue(sender.TotalSent)
 					}
-				case <-donechan:
-					return
-				case <-cancelchan:
-					return
 				}
 			}
 		}()
+
 		go func() {
 			var filepaths []string
 			for fpath := range fileentries {
@@ -672,7 +715,6 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 				}
 				filepaths = append(filepaths, fpath)
 			}
-			fyne.Do(entry.Disable)
 			fi, emptyfolders, numFolders, ferr := croc.GetFilesInfo(filepaths, false, false, []string{})
 			if ferr != nil {
 				log.Errorf("file info failed: %s", ferr)
@@ -687,44 +729,29 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 					sender = nil
 				}()
 			}
-			donechan <- true
+
 			fyne.Do(func() {
 				if serr != nil {
-					log.Errorf("Send failed: %s", serr)
-					topline.SetText(serr.Error())
+					if errors.Is(serr, io.EOF) {
+						serr = fmt.Errorf("%s", lp("Receive cancelled."))
+					}
+					s := fmt.Sprintf("Send failed: %s", serr)
+					log.Error(s)
+					topline.SetText(s)
 				} else {
 					topline.SetText(fmt.Sprintf("%s: %s", lp("Sent file"), filename))
 				}
-				reset()
 			})
+			close(doneChan)
 		}()
-		go func() {
-			select {
-			case <-done:
-				return
-			case <-donechan:
-				if !isMobile {
-					log.Tracef("A restart is better than leaving 12 goroutines leaking")
-					fyne.Do(func() {
-						restart(a)
-					})
-				}
-				return
-			case <-cancelchan:
-				log.Warnf("Send cancelled. %s: %v", sendDir, ls(sendDir))
-				Stop(sender)
-				fyne.Do(func() {
-					restart(a)
-				})
-			}
-		}()
+
 		// +12 go routines
 		log.Warnf("NumGoroutine %d", runtime.NumGoroutine())
 		a.Clipboard().SetContent(entry.Text)
 	})
 
 	cancelButton = widget.NewButtonWithIcon(lp("Cancel"), theme.CancelIcon(), func() {
-		cancelchan <- true
+		close(cancelChan)
 	})
 	cancelButton.Hide()
 
@@ -803,6 +830,9 @@ func SelectIndex(window fyne.Window, index int) {
 // For mobile Quit.
 // For desktop Restart.
 func restart(a fyne.App) {
+	if noRestart {
+		return
+	}
 	if !isMobile {
 		cmd := exec.Command(os.Args[0])
 		cmd.Env = os.Environ()
@@ -961,8 +991,8 @@ func (pw *ProgressWriter) Write(p []byte) (n int, err error) {
 }
 
 func NewProgressWriter(destination io.Writer, total int64, c *fyne.Container) (pw *ProgressWriter, restore func()) {
-	db := c.Objects[0].(*widget.Button)
-	pb := c.Objects[1].(*widget.ProgressBar)
+	db := c.Objects[feDel].(*widget.Button)
+	pb := c.Objects[feBar].(*widget.ProgressBar)
 	oldOnTapped := db.OnTapped
 
 	cancelChan := make(chan struct{})
@@ -984,9 +1014,11 @@ func NewProgressWriter(destination io.Writer, total int64, c *fyne.Container) (p
 		}
 	}
 
-	pb.SetValue(0)
-	pb.Max = 1.0
-	pb.Show()
+	fyne.Do(func() {
+		pb.SetValue(0)
+		pb.Max = 1.0
+		pb.Show()
+	})
 
 	restore = func() {
 		db.OnTapped = oldOnTapped
@@ -1040,6 +1072,11 @@ type ProgressWrapper struct {
 }
 
 func NewProgressWrapper(bar *widget.ProgressBar) *ProgressWrapper {
+	if bar != nil {
+		fyne.Do(func() {
+			bar.SetValue(0)
+		})
+	}
 	return &ProgressWrapper{
 		ProgressBar: bar,
 		lastValue:   -1,
@@ -1059,10 +1096,9 @@ func (pw *ProgressWrapper) Hide() {
 }
 
 func (pw *ProgressWrapper) Set100() {
-	if pw.ProgressBar == nil {
-		return
+	if pw.ProgressBar != nil {
+		pw.SetValue(int64(pw.ProgressBar.Max))
 	}
-	pw.SetValue(int64(pw.ProgressBar.Max))
 }
 
 func (pw *ProgressWrapper) SetValue(value int64) {
@@ -1103,7 +1139,7 @@ func (pw *ProgressWrapper) SetMax(max int64) {
 type LabelWrapper struct {
 	*widget.Label
 	lastText string
-	lastCall time.Time
+	// lastCall time.Time
 }
 
 func NewLabelWrapper(label *widget.Label) *LabelWrapper {
@@ -1114,11 +1150,12 @@ func NewLabelWrapper(label *widget.Label) *LabelWrapper {
 }
 
 func (lw *LabelWrapper) SetText(text string) {
-	now := time.Now()
+	// now := time.Now()
 
-	if text != lw.lastText || now.Sub(lw.lastCall) >= minInterval {
+	// if text != lw.lastText || now.Sub(lw.lastCall) >= minInterval {
+	if text != lw.lastText {
 		lw.lastText = text
-		lw.lastCall = now
+		// lw.lastCall = now
 		fyne.Do(func() {
 			lw.Label.SetText(text)
 		})
