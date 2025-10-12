@@ -7,19 +7,24 @@
             "translation": "Лицензионная информация"
         },
         {
-            "id": "About",
-            "message": "About",
-            "translation": " "
-        },
-        {
-            "id": "Enter code to download",
-            "message": "Enter code to download",
-            "translation": "Секрет должен быть больше 5 знаков"
+            "id": "Export full log",
+            "message": "Export full log",
+            "translation": "Сохранить журнал"
         },
         {
             "id": "Saved all files to",
             "message": "Saved all files to",
             "translation": "Сохранил всё в"
+        },
+        {
+            "id": "Enable Debug Log",
+            "message": "Enable Debug Log",
+            "translation": "Журналировать"
+        },
+        {
+            "id": "Enter code to download",
+            "message": "Enter code to download",
+            "translation": "Секрет должен быть больше 5 знаков"
         },
         {
             "id": "Download",
@@ -37,9 +42,19 @@
             "translation": "Вы уверены что хотите удалить все полученные файлы?"
         },
         {
+            "id": "Receive cancelled.",
+            "message": "Receive cancelled.",
+            "translation": "Отмена получения."
+        },
+        {
             "id": "Receiving file",
             "message": "Receiving file",
             "translation": "Получаю"
+        },
+        {
+            "id": "Send cancelled.",
+            "message": "Send cancelled.",
+            "translation": "Отмена посылки."
         },
         {
             "id": "Received",
@@ -59,7 +74,7 @@
         {
             "id": "Receive",
             "message": "Receive",
-            "translation": "Получить"
+            "translation": "Взять"
         },
         {
             "id": "Pick a file to send",
@@ -69,7 +84,7 @@
         {
             "id": "Send",
             "message": "Send",
-            "translation": "Послать"
+            "translation": "Дать"
         },
         {
             "id": "Sending file",
@@ -90,26 +105,6 @@
             "id": "Show / Hide",
             "message": "Show / Hide",
             "translation": "Показать / Скрыть"
-        },
-        {
-            "id": "Export full log",
-            "message": "Export full log",
-            "translation": "Сохранить журнал"
-        },
-        {
-            "id": "Enable Debug Log",
-            "message": "Enable Debug Log",
-            "translation": "Журналировать"
-        },
-        {
-            "id": "Settings",
-            "message": "Settings",
-            "translation": " "
-        },
-        {
-            "id": "Debug",
-            "message": "Debug",
-            "translation": "Отладка"
         },
         {
             "id": "Appearance",

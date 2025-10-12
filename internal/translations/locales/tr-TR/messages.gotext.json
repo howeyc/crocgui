@@ -7,19 +7,24 @@
             "translation": "Lisans Bilgileri"
         },
         {
-            "id": "About",
-            "message": "About",
-            "translation": "Hakkında"
-        },
-        {
-            "id": "Enter code to download",
-            "message": "Enter code to download",
-            "translation": "İndirmek için kodu girin"
+            "id": "Export full log",
+            "message": "Export full log",
+            "translation": "Tam logu dışa aktar"
         },
         {
             "id": "Saved all files to",
             "message": "Saved all files to",
             "translation": "Tüm dosyalar şuraya kaydedildi:"
+        },
+        {
+            "id": "Enable Debug Log",
+            "message": "Enable Debug Log",
+            "translation": "Hata Ayıklama Günlüğünü Etkinleştir"
+        },
+        {
+            "id": "Enter code to download",
+            "message": "Enter code to download",
+            "translation": "İndirmek için kodu girin"
         },
         {
             "id": "Download",
@@ -37,9 +42,19 @@
             "translation": "Tüm alınan dosyaları silmek istediğinizden emin misiniz?"
         },
         {
+            "id": "Receive cancelled.",
+            "message": "Receive cancelled.",
+            "translation": "Alma iptal edildi."
+        },
+        {
             "id": "Receiving file",
             "message": "Receiving file",
             "translation": "Dosya alınıyor"
+        },
+        {
+            "id": "Send cancelled.",
+            "message": "Send cancelled.",
+            "translation": "Gönderme iptal edildi."
         },
         {
             "id": "Received",
@@ -90,26 +105,6 @@
             "id": "Show / Hide",
             "message": "Show / Hide",
             "translation": "Göster / Gizle"
-        },
-        {
-            "id": "Export full log",
-            "message": "Export full log",
-            "translation": "Tam logu dışa aktar"
-        },
-        {
-            "id": "Enable Debug Log",
-            "message": "Enable Debug Log",
-            "translation": "Hata Ayıklama Günlüğünü Etkinleştir"
-        },
-        {
-            "id": "Settings",
-            "message": "Settings",
-            "translation": "Ayarlar"
-        },
-        {
-            "id": "Debug",
-            "message": "Debug",
-            "translation": "Hata Ayıklama"
         },
         {
             "id": "Appearance",

@@ -22,7 +22,7 @@ var crocguiLicense string
 //go:embed third-party-licenses.txt
 var thirdPartyLicenses string
 
-func aboutTabItem() *container.TabItem {
+func aboutTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 	longdescbytes, _ := metadata.ReadFile(fmt.Sprintf("metadata/%s/full_description.txt", langCode))
 	longdesc := string(longdescbytes)
 	longdesc = strings.ReplaceAll(longdesc, "<b>", "")
@@ -63,12 +63,12 @@ func aboutTabItem() *container.TabItem {
 	}
 
 	licenseToggle := widget.NewButton(lp("License Info"), func() {
-		w := fyne.CurrentApp().NewWindow(lp("License Info"))
+		w := a.NewWindow(lp("License Info"))
 		w.SetContent(container.NewScroll(acLicense))
 		w.Resize(fyne.NewSize(450, 800))
 		w.Show()
 	})
-	return container.NewTabItemWithIcon(lp("About"), theme.InfoIcon(),
+	return container.NewTabItemWithIcon(ZeroWidthJoiner, theme.InfoIcon(), //lp("About")
 		container.NewVScroll(container.NewVBox(aboutInfo, licenseToggle)),
 	)
 }

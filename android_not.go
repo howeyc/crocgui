@@ -31,3 +31,11 @@ func IsDirectory(u fyne.URI) (ok bool) {
 
 func MimeType(u fyne.URI) string { return u.MimeType() }
 func apiLevel() int              { return 29 }
+
+func sendNotification(a fyne.App, title, content string) {
+	// Стандартное уведомление для других платформ
+	notification := fyne.NewNotification(title, content)
+	a.SendNotification(notification)
+}
+
+func LogD(message string) {}

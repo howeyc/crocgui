@@ -9,16 +9,9 @@
             "fuzzy": true
         },
         {
-            "id": "About",
-            "message": "About",
-            "translation": "About",
-            "translatorComment": "Copied from source.",
-            "fuzzy": true
-        },
-        {
-            "id": "Enter code to download",
-            "message": "Enter code to download",
-            "translation": "Enter code to download",
+            "id": "Export full log",
+            "message": "Export full log",
+            "translation": "Export full log",
             "translatorComment": "Copied from source.",
             "fuzzy": true
         },
@@ -26,6 +19,20 @@
             "id": "Saved all files to",
             "message": "Saved all files to",
             "translation": "Saved all files to",
+            "translatorComment": "Copied from source.",
+            "fuzzy": true
+        },
+        {
+            "id": "Enable Debug Log",
+            "message": "Enable Debug Log",
+            "translation": "Enable Debug Log",
+            "translatorComment": "Copied from source.",
+            "fuzzy": true
+        },
+        {
+            "id": "Enter code to download",
+            "message": "Enter code to download",
+            "translation": "Enter code to download",
             "translatorComment": "Copied from source.",
             "fuzzy": true
         },
@@ -51,9 +58,23 @@
             "fuzzy": true
         },
         {
+            "id": "Receive cancelled.",
+            "message": "Receive cancelled.",
+            "translation": "Receive cancelled.",
+            "translatorComment": "Copied from source.",
+            "fuzzy": true
+        },
+        {
             "id": "Receiving file",
             "message": "Receiving file",
             "translation": "Receiving file",
+            "translatorComment": "Copied from source.",
+            "fuzzy": true
+        },
+        {
+            "id": "Send cancelled.",
+            "message": "Send cancelled.",
+            "translation": "Send cancelled.",
             "translatorComment": "Copied from source.",
             "fuzzy": true
         },
@@ -124,34 +145,6 @@
             "id": "Show / Hide",
             "message": "Show / Hide",
             "translation": "Show / Hide",
-            "translatorComment": "Copied from source.",
-            "fuzzy": true
-        },
-        {
-            "id": "Export full log",
-            "message": "Export full log",
-            "translation": "Export full log",
-            "translatorComment": "Copied from source.",
-            "fuzzy": true
-        },
-        {
-            "id": "Enable Debug Log",
-            "message": "Enable Debug Log",
-            "translation": "Enable Debug Log",
-            "translatorComment": "Copied from source.",
-            "fuzzy": true
-        },
-        {
-            "id": "Settings",
-            "message": "Settings",
-            "translation": "Settings",
-            "translatorComment": "Copied from source.",
-            "fuzzy": true
-        },
-        {
-            "id": "Debug",
-            "message": "Debug",
-            "translation": "Debug",
             "translatorComment": "Copied from source.",
             "fuzzy": true
         },

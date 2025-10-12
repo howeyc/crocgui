@@ -547,23 +547,23 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 			fe.Objects[feDel].Hide()
 		}
 		sender, err := croc.New(croc.Options{
-			IsSender:         true,
-			SharedSecret:     secret,
-			Debug:            crocDebugMode(),
-			RelayAddress:     a.Preferences().String("relay-address"),
-			RelayPorts:       strings.Split(a.Preferences().String("relay-ports"), ","),
-			RelayPassword:    a.Preferences().String("relay-password"),
-			Stdout:           false,
-			NoPrompt:         true,
-			DisableLocal:     a.Preferences().Bool("disable-local"),
-			NoMultiplexing:   a.Preferences().Bool("disable-multiplexing"),
-			OnlyLocal:        a.Preferences().Bool("force-local"),
-			NoCompress:       a.Preferences().Bool("disable-compression"),
-			Curve:            a.Preferences().String("pake-curve"),
-			HashAlgorithm:    a.Preferences().String("croc-hash"),
-			ThrottleUpload:   a.Preferences().String("upload-throttle"),
-			ZipFolder:        false,
-			GitIgnore:        false,
+			IsSender:      true,
+			SharedSecret:  secret,
+			Debug:         debugBool(a),
+			RelayAddress:  a.Preferences().String("relay-address"),
+			RelayPorts:    strings.Split(a.Preferences().String("relay-ports"), ","),
+			RelayPassword: a.Preferences().String("relay-password"),
+			// Stdout:           false,
+			NoPrompt:       true,
+			DisableLocal:   a.Preferences().Bool("disable-local"),
+			NoMultiplexing: a.Preferences().Bool("disable-multiplexing"),
+			OnlyLocal:      a.Preferences().Bool("force-local"),
+			NoCompress:     a.Preferences().Bool("disable-compression"),
+			Curve:          a.Preferences().String("pake-curve"),
+			HashAlgorithm:  a.Preferences().String("croc-hash"),
+			ThrottleUpload: a.Preferences().String("upload-throttle"),
+			// ZipFolder:        false,
+			// GitIgnore:        false,
 			MulticastAddress: a.Preferences().String("multicast-address"),
 			Exclude:          []string{},
 		})
@@ -571,7 +571,7 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 			log.Errorf("croc error: %s", err.Error())
 			return
 		}
-		log.SetLevel(crocDebugLevel())
+		log.SetLevel(debugString(a))
 		log.Trace("croc sender created")
 
 		var filename string
@@ -624,12 +624,10 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 					return
 				case <-doneChan:
 					removeEntrys()
-					if !isMobile {
-						log.Tracef("A restart is better than leaving 12 goroutines leaking")
-						fyne.Do(func() {
-							restart(a)
-						})
-					}
+					log.Tracef("A restart is better than leaving 12 goroutines leaking")
+					fyne.Do(func() {
+						restart(a, w)
+					})
 					return
 				case <-cancelChan:
 					s := fmt.Sprintf("%s %s", lp("Send cancelled."), filename)
@@ -638,14 +636,8 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 						topline.SetText(s)
 					})
 					Stop(sender)
-					if isMobile {
-						w.Close()
-						a.Quit()
-						os.Exit(0)
-						return
-					}
 					fyne.Do(func() {
-						restart(a)
+						restart(a, w)
 					})
 					return
 				case <-ticker.C:
@@ -827,18 +819,25 @@ func SelectIndex(window fyne.Window, index int) {
 	}
 }
 
-// For mobile Quit.
+// For mobile os.Exit.
 // For desktop Restart.
-func restart(a fyne.App) {
+func restart(a fyne.App, w fyne.Window) {
 	if noRestart {
 		return
 	}
-	if !isMobile {
-		cmd := exec.Command(os.Args[0])
-		cmd.Env = os.Environ()
-		cmd.Start()
+	if isMobile {
+		// notification := fyne.NewNotification("CrocGUI", "Application closed")
+		// a.SendNotification(notification)
+		sendNotification(a, "CrocGUI", "Application closed. Tap to start it.")
+		w.Close()
+		os.Exit(0)
+		return
 	}
-	a.Quit()
+	cmd := exec.Command(os.Args[0])
+	cmd.Env = os.Environ()
+	cmd.Start()
+	w.Close()
+	os.Exit(0)
 }
 
 type clientShadow struct {

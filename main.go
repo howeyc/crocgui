@@ -3,7 +3,6 @@
 package main
 
 import (
-	"bytes"
 	_ "embed"
 	"errors"
 	"io"
@@ -20,10 +19,6 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
-	"fyne.io/fyne/v2/canvas"
-	"fyne.io/fyne/v2/container"
-	"fyne.io/fyne/v2/data/binding"
-	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 )
 
@@ -33,95 +28,83 @@ var textlogobytes []byte
 var (
 	isMobile               bool
 	isAndroid              bool
-	done                   = make(chan struct{})
-	ErrApplicationShutdown = errors.New("application shutdown")
-	uriFromIntent          = make(chan string, 100)
-	textFromIntent         = make(chan string, 100)
-
-	logoutput  logwriter
-	logbinding binding.String
+	ErrApplicationShutdown error
+	done                   chan struct{}
+	uriFromIntent          chan string
+	textFromIntent         chan string
+	replacer               *strings.Replacer
+	logOutput              logWriter
 )
-
-type logwriter struct {
-	buf        bytes.Buffer
-	lastlines  []string
-	lastupdate time.Time
-}
 
 const (
-	LOG_LINES   = 20
-	EMULATE     = time.Second * 0
-	CROC_SECRET = "CROC_SECRET"
-	TOTP        = "TOTP-" + CROC_SECRET
+	EMULATE            = time.Second * 0
+	CROC_SECRET        = "CROC_SECRET"
+	TOTP               = "TOTP-" + CROC_SECRET
+	ZeroWidthSpace     = "\u200B" // Пробел нулевой ширины
+	ZeroWidthNonJoiner = "\u200C" // Не-соединитель нулевой ширины
+	ZeroWidthJoiner    = "\u200D" // Соединитель нулевой ширины
+
+	// Чтоб на десктопе отладить копирование вместо переноса как будто это мобильная ОС.
+	copyDebug = false
+	// Чтоб на десктопе или Андроиде 9- отладить план Б при отсутствии com.android.DocumentsUI на мобильной ОС сохранять протокол и полученные файлы в Загрузки.
+	noDialogDebug = false
+	// Чтоб на десктопе не перезапускать приложение при завершении передачи
+	noRestart = false
 )
 
-func (lw *logwriter) Write(p []byte) (n int, err error) {
-	n, err = lw.buf.Write(p)
-
-	lw.lastlines = append([]string{string(p)}, lw.lastlines...)
-	if len(lw.lastlines) > LOG_LINES {
-		lw.lastlines = lw.lastlines[:LOG_LINES]
-	}
-
-	if time.Since(lw.lastupdate) > time.Second {
-		logbinding.Set(strings.Join(lw.lastlines, ""))
-		lw.lastupdate = time.Now()
-	}
-	return
-}
-
-func refreshWindow(a fyne.App, w fyne.Window, index int) {
-	textlogores := fyne.NewStaticResource("text-logo", textlogobytes)
-	textlogo := canvas.NewImageFromResource(textlogores)
-	textlogo.SetMinSize(fyne.NewSize(205, 100))
-	top := container.NewHBox(layout.NewSpacer(), textlogo, layout.NewSpacer())
-
-	at := container.NewAppTabs(
-		sendTabItem(a, w),
-		recvTabItem(a, w),
-		settingsTabItem(a, w),
-		aboutTabItem(),
-	)
-	at.SelectIndex(index)
-
-	if a.Preferences().Bool("hide-logo") {
-		w.SetContent(at)
-	} else {
-		w.SetContent(container.NewBorder(top, nil, nil, nil, at))
-	}
-	setDebug()
-}
-
 func main() {
+	ErrApplicationShutdown = errors.New("application shutdown")
+	done = make(chan struct{})
+	uriFromIntent = make(chan string, 100)
+	textFromIntent = make(chan string, 100)
+	replacer = strings.NewReplacer(
+		"[trace]\t", "",
+		"[debug]\t", "",
+		"[info]\t", "",
+		"[warn]\t", "",
+		"[error]\t", "",
+	)
+	logOutput = newLogWriter()
+
 	a := app.NewWithID("com.github.howeyc.crocgui")
-	logbinding = binding.NewString()
+	a.Lifecycle().SetOnStopped(func() {
+		log.Trace("OnStopped")
+	})
 
 	switch runtime.GOOS {
 	case "android":
 		isAndroid = true
 		a.Lifecycle().SetOnStarted(func() {
-			log.Trace("SetOnStarted setupIntentHandler")
+			log.Trace("OnStarted setupIntentHandler")
 			setupIntentHandler()
 		})
 		fallthrough
 	case "ios":
-		log.SetOutput(&logoutput)
+		log.SetOutput(&logOutput)
 		isMobile = true
-	default:
-		log.SetOutput(io.MultiWriter(os.Stdout, &logoutput))
-	}
-
-	switch runtime.GOOS {
-	case "linux", "freebsd", "openbsd", "netbsd":
+	case "linux":
+		replacer = strings.NewReplacer(
+			"\x1b[0;34;1m[trace]\t\x1b[0m", "",
+			"\x1b[0;36m[debug]\t\x1b[0m", "",
+			"\x1b[0;37m[info]\t\x1b[0m", "",
+			"\x1b[0;33m[warn]\t\x1b[0m", "",
+			"\x1b[0;31;1m[error]\t\x1b[0m", "",
+		)
+		fallthrough
+	case "freebsd", "openbsd", "netbsd":
 		if os.Getenv("DISPLAY") == "" {
 			log.Error("The DISPLAY environment variable is missing")
 			return
 		}
+		fallthrough
+	default:
+		log.SetOutput(io.MultiWriter(os.Stdout, &logOutput))
 	}
 
 	w := a.NewWindow("croc")
 
 	w.SetCloseIntercept(func() {
+		log.Trace("CloseIntercept")
 		close(done)
 		w.Close()
 	})

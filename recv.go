@@ -404,19 +404,19 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 		}
 
 		receiver, err := croc.New(croc.Options{
-			IsSender:         false,
-			SharedSecret:     secret,
-			Debug:            crocDebugMode(),
-			RelayAddress:     a.Preferences().String("relay-address"),
-			RelayPassword:    a.Preferences().String("relay-password"),
-			Stdout:           false,
-			NoPrompt:         true,
-			DisableLocal:     a.Preferences().Bool("disable-local"),
-			NoMultiplexing:   a.Preferences().Bool("disable-multiplexing"),
-			OnlyLocal:        a.Preferences().Bool("force-local"),
-			NoCompress:       a.Preferences().Bool("disable-compression"),
-			Curve:            a.Preferences().String("pake-curve"),
-			HashAlgorithm:    a.Preferences().String("croc-hash"),
+			// IsSender:         false,
+			SharedSecret:  secret,
+			Debug:         debugBool(a),
+			RelayAddress:  a.Preferences().String("relay-address"),
+			RelayPassword: a.Preferences().String("relay-password"),
+			// Stdout:           false,
+			NoPrompt: true,
+			// DisableLocal:     a.Preferences().Bool("disable-local"),
+			// NoMultiplexing:   a.Preferences().Bool("disable-multiplexing"),
+			OnlyLocal: a.Preferences().Bool("force-local"),
+			// NoCompress:       a.Preferences().Bool("disable-compression"),
+			Curve: a.Preferences().String("pake-curve"),
+			// HashAlgorithm:    a.Preferences().String("croc-hash"),
 			Overwrite:        true,
 			MulticastAddress: a.Preferences().String("multicast-address"),
 		})
@@ -424,7 +424,7 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 			log.Errorf("croc setup error: %s\n", err.Error())
 			return
 		}
-		log.SetLevel(crocDebugLevel())
+		log.SetLevel(debugString(a))
 		log.Trace("croc receiver created")
 
 		cderr := os.Chdir(recvDir)
@@ -506,14 +506,8 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 					})
 					a.Preferences().SetString("DeleteFile", filepath.Join(recvDir, filename))
 					Stop(receiver)
-					if isMobile {
-						w.Close()
-						a.Quit()
-						os.Exit(0)
-						return
-					}
 					fyne.Do(func() {
-						restart(a)
+						restart(a, w)
 					})
 					return
 				case <-ticker.C:

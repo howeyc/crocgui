@@ -7,19 +7,24 @@
             "translation": "许可证信息"
         },
         {
-            "id": "About",
-            "message": "About",
-            "translation": "关于"
-        },
-        {
-            "id": "Enter code to download",
-            "message": "Enter code to download",
-            "translation": "输入下载代码"
+            "id": "Export full log",
+            "message": "Export full log",
+            "translation": "导出完整日志"
         },
         {
             "id": "Saved all files to",
             "message": "Saved all files to",
             "translation": "所有文件已保存至"
+        },
+        {
+            "id": "Enable Debug Log",
+            "message": "Enable Debug Log",
+            "translation": "启用调试日志"
+        },
+        {
+            "id": "Enter code to download",
+            "message": "Enter code to download",
+            "translation": "输入下载代码"
         },
         {
             "id": "Download",
@@ -37,9 +42,19 @@
             "translation": "确定要删除所有接收的文件吗？"
         },
         {
+            "id": "Receive cancelled.",
+            "message": "Receive cancelled.",
+            "translation": "接收已取消。"
+        },
+        {
             "id": "Receiving file",
             "message": "Receiving file",
             "translation": "正在接收文件"
+        },
+        {
+            "id": "Send cancelled.",
+            "message": "Send cancelled.",
+            "translation": "发送已取消。"
         },
         {
             "id": "Received",
@@ -90,26 +105,6 @@
             "id": "Show / Hide",
             "message": "Show / Hide",
             "translation": "显示/隐藏"
-        },
-        {
-            "id": "Export full log",
-            "message": "Export full log",
-            "translation": "导出完整日志"
-        },
-        {
-            "id": "Enable Debug Log",
-            "message": "Enable Debug Log",
-            "translation": "启用调试日志"
-        },
-        {
-            "id": "Settings",
-            "message": "Settings",
-            "translation": "设置"
-        },
-        {
-            "id": "Debug",
-            "message": "Debug",
-            "translation": "调试"
         },
         {
             "id": "Appearance",

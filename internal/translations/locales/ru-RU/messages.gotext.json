@@ -9,7 +9,7 @@
         {
             "id": "About",
             "message": "About",
-            "translation": " "
+            "translation": "О croc"
         },
         {
             "id": "Enter code to download",
@@ -79,7 +79,7 @@
         {
             "id": "Receive",
             "message": "Receive",
-            "translation": "Получить"
+            "translation": "Взять"
         },
         {
             "id": "Pick a file to send",
@@ -89,7 +89,7 @@
         {
             "id": "Send",
             "message": "Send",
-            "translation": "Послать"
+            "translation": "Дать"
         },
         {
             "id": "Sending file",

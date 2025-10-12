@@ -7,19 +7,24 @@
             "translation": "ライセンス情報"
         },
         {
-            "id": "About",
-            "message": "About",
-            "translation": "情報"
-        },
-        {
-            "id": "Enter code to download",
-            "message": "Enter code to download",
-            "translation": "コードを入力してダウンロード"
+            "id": "Export full log",
+            "message": "Export full log",
+            "translation": "完全なログをエクスポート"
         },
         {
             "id": "Saved all files to",
             "message": "Saved all files to",
             "translation": "すべてのファイルを保存しました:"
+        },
+        {
+            "id": "Enable Debug Log",
+            "message": "Enable Debug Log",
+            "translation": "デバッグログを有効化"
+        },
+        {
+            "id": "Enter code to download",
+            "message": "Enter code to download",
+            "translation": "コードを入力してダウンロード"
         },
         {
             "id": "Download",
@@ -37,9 +42,19 @@
             "translation": "すべての受信したファイルを削除してもよろしいですか？"
         },
         {
+            "id": "Receive cancelled.",
+            "message": "Receive cancelled.",
+            "translation": "受信がキャンセルされました。"
+        },
+        {
             "id": "Receiving file",
             "message": "Receiving file",
             "translation": "ファイルを受信中"
+        },
+        {
+            "id": "Send cancelled.",
+            "message": "Send cancelled.",
+            "translation": "送信がキャンセルされました。"
         },
         {
             "id": "Received",
@@ -90,26 +105,6 @@
             "id": "Show / Hide",
             "message": "Show / Hide",
             "translation": "表示 / 非表示"
-        },
-        {
-            "id": "Export full log",
-            "message": "Export full log",
-            "translation": "完全なログをエクスポート"
-        },
-        {
-            "id": "Enable Debug Log",
-            "message": "Enable Debug Log",
-            "translation": "デバッグログを有効化"
-        },
-        {
-            "id": "Settings",
-            "message": "Settings",
-            "translation": "設定"
-        },
-        {
-            "id": "Debug",
-            "message": "Debug",
-            "translation": "デバッグ"
         },
         {
             "id": "Appearance",
