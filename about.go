@@ -30,16 +30,18 @@ func aboutTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 	aboutInfo := widget.NewLabel(longdesc)
 	aboutInfo.Wrapping = fyne.TextWrapWord
 
-	acLicense := widget.NewAccordion()
+	// acLicense := widget.NewAccordion()
+	var ais []*widget.AccordionItem
 
 	licenseReader := bytes.NewBufferString(crocguiLicense + thirdPartyLicenses)
 	currentLicense := ""
 	currentLibrary := "croc"
 	scanner := bufio.NewScanner(licenseReader)
+
 	for scanner.Scan() {
 		line := scanner.Text()
 		if strings.HasPrefix(line, "-----") {
-			acLicense.Append(widget.NewAccordionItem(currentLibrary, widget.NewLabel(currentLicense)))
+			ais = append(ais, widget.NewAccordionItem(currentLibrary, widget.NewLabel(currentLicense)))
 			currentLicense = ""
 			scanner.Scan()
 			scanner.Scan()
@@ -57,13 +59,17 @@ func aboutTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 			bfontLicense, rerr := fsFonts.ReadFile(fmt.Sprintf("internal/fonts/%s", fe.Name()))
 			if rerr == nil {
 				strLicense := string(bfontLicense)
-				acLicense.Append(widget.NewAccordionItem(fmt.Sprintf("Font: %s", fbase), widget.NewLabel(strLicense)))
+				// acLicense.Append(widget.NewAccordionItem(fmt.Sprintf("Font: %s", fbase), widget.NewLabel(strLicense)))
+				ais = append(ais, widget.NewAccordionItem(fmt.Sprintf("Font: %s", fbase), widget.NewLabel(strLicense)))
 			}
 		}
 	}
 
 	licenseToggle := widget.NewButton(lp("License Info"), func() {
 		w := a.NewWindow(lp("License Info"))
+
+		acLicense := widget.NewAccordion(ais...)
+
 		w.SetContent(container.NewScroll(acLicense))
 		w.Resize(fyne.NewSize(450, 800))
 		w.Show()

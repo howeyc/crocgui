@@ -1,4 +1,6 @@
-.PHONY: all clean arm arm64 386 amd64 linux window wsl darwin ios install darm emulator adb
+.PHONY: all clean arm arm64 386 amd64 linux window wsl darwin ios install darm emulator adb wsladb logcat
+
+WSL_HOST_IP := $(shell ip route list default | awk '{print $$3}')
 
 all: android
 
@@ -26,6 +28,15 @@ emulator:
 
 adb:
 	adb install crocgui.apk
+
+logcat:
+	adb logcat|grep "croc    :"
+
+wlogcat:
+	cmd.exe /c C:\Users\KAbak\AppData\Local\Android\Sdk\platform-tools\adb logcat|find "croc    :"
+
+wsladb:
+	export ADB_SERVER_SOCKET=tcp:$(WSL_HOST_IP):5037
 
 linux: main.go send.go recv.go settings.go theme.go about.go
 	fyne package -os linux --release

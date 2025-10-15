@@ -2,7 +2,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
     package="com.github.howeyc.crocgui"
-    android:versionCode="364"
+    android:versionCode="443"
     android:versionName="1.11.16">
 
     <application 
@@ -14,6 +14,8 @@
             android:label="Croc"
             android:exported="true"
             android:launchMode="singleTop"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
             android:theme="@android:style/Theme"
             android:configChanges="keyboardHidden|orientation|screenSize|screenLayout|uiMode">
 

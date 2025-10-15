@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"fyne.io/fyne/v2"
-	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/data/binding"
 	"fyne.io/fyne/v2/dialog"
@@ -16,13 +15,6 @@ import (
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 	log "github.com/schollz/logger"
-)
-
-var (
-// logGUI         = widget.NewRichText()
-// logScroll      = container.NewScroll(logGUI)
-// isActive  bool
-
 )
 
 const (
@@ -62,11 +54,11 @@ func (lw *logWriter) active(isActive bool) {
 		if lw.updateTimer != nil {
 			lw.updateTimer.Stop()
 		}
-		fyne.Do(func() {
-			lw.update()
-			lw.lastUpdateTime = time.Now()
-			lw.rapidUpdateCount = 0
-		})
+		// fyne.Do(func() {
+		lw.update()
+		lw.lastUpdateTime = time.Now()
+		lw.rapidUpdateCount = 0
+		// })
 	}
 	lw.isActive = isActive
 }
@@ -86,9 +78,6 @@ func (lw *logWriter) appendLogLine(line string) {
 
 // GUI
 func (lw *logWriter) refresh() {
-	// logGUI.Segments = lw.segments
-	// logGUI.Refresh()
-	// logScroll.ScrollToBottom()
 	lw.RichText.Segments = lw.segments
 	lw.RichText.Refresh()
 	lw.Scroll.ScrollToBottom()
@@ -161,6 +150,7 @@ func (lw *logWriter) Write(p []byte) (n int, err error) {
 			continue
 		}
 		filteredLines = append(filteredLines, line)
+		LogD(line)
 	}
 
 	// Добавляем отфильтрованные строки
@@ -321,40 +311,6 @@ func logTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 	// content := container.NewBorder(top, nil, nil, nil, logScroll)
 	content := container.NewBorder(top, nil, nil, nil, logOutput.Scroll)
 	return container.NewTabItemWithIcon(ZeroWidthSpace, theme.DocumentIcon(), content)
-}
-
-func refreshWindow(a fyne.App, w fyne.Window, index int) {
-	textlogores := fyne.NewStaticResource("text-logo", textlogobytes)
-	textlogo := canvas.NewImageFromResource(textlogores)
-	textlogo.SetMinSize(fyne.NewSize(205, 100))
-	top := container.NewHBox(layout.NewSpacer(), textlogo, layout.NewSpacer())
-
-	at := container.NewAppTabs(
-		sendTabItem(a, w),
-		recvTabItem(a, w),
-		logTabItem(a, w),
-		settingsTabItem(a, w),
-		aboutTabItem(a, w),
-	)
-
-	at.OnSelected = func(tab *container.TabItem) {
-		// wasActive := isActive
-		// isActive = (tab.Text == ZeroWidthSpace)
-
-		// if isActive && !wasActive {
-		// 	logOutput.forceUpdate()
-		// }
-		logOutput.active(tab.Text == ZeroWidthSpace)
-	}
-
-	at.SelectIndex(index)
-
-	if a.Preferences().Bool("hide-logo") {
-		w.SetContent(at)
-	} else {
-		w.SetContent(container.NewBorder(top, nil, nil, nil, at))
-	}
-	// setDebug()
 }
 
 func removeLevel(line string) string {

@@ -19,6 +19,10 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
+	"fyne.io/fyne/v2/canvas"
+	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/layout"
+	"fyne.io/fyne/v2/storage"
 	"fyne.io/fyne/v2/theme"
 )
 
@@ -34,6 +38,7 @@ var (
 	textFromIntent         chan string
 	replacer               *strings.Replacer
 	logOutput              logWriter
+	atSI                   int
 )
 
 const (
@@ -67,17 +72,10 @@ func main() {
 	logOutput = newLogWriter()
 
 	a := app.NewWithID("com.github.howeyc.crocgui")
-	a.Lifecycle().SetOnStopped(func() {
-		log.Trace("OnStopped")
-	})
 
 	switch runtime.GOOS {
 	case "android":
 		isAndroid = true
-		a.Lifecycle().SetOnStarted(func() {
-			log.Trace("OnStarted setupIntentHandler")
-			setupIntentHandler()
-		})
 		fallthrough
 	case "ios":
 		log.SetOutput(&logOutput)
@@ -144,10 +142,39 @@ func main() {
 
 	a.Settings().SetTheme(appTheme)
 
-	refreshWindow(a, w, 0)
-	w.Resize(fyne.NewSize(800, 600))
+	refreshWindow(a, w)
+	// w.Resize(fyne.NewSize(800, 600))
+	w.Resize(fyne.NewSize(300, 900))
 
 	w.ShowAndRun()
+}
+
+func refreshWindow(a fyne.App, w fyne.Window) {
+	textlogores := fyne.NewStaticResource("text-logo", textlogobytes)
+	textlogo := canvas.NewImageFromResource(textlogores)
+	textlogo.SetMinSize(fyne.NewSize(205, 100))
+	top := container.NewHBox(layout.NewSpacer(), textlogo, layout.NewSpacer())
+
+	at := container.NewAppTabs()
+	at.Items = []*container.TabItem{
+		sendTabItem(a, w, at),
+		recvTabItem(a, w),
+		logTabItem(a, w),
+		settingsTabItem(a, w),
+		aboutTabItem(a, w),
+	}
+
+	at.SelectIndex(atSI)
+	at.OnSelected = func(tab *container.TabItem) {
+		atSI = at.SelectedIndex()
+		logOutput.active(tab.Text == ZeroWidthSpace)
+	}
+
+	if a.Preferences().Bool("hide-logo") {
+		w.SetContent(at)
+	} else {
+		w.SetContent(container.NewBorder(top, nil, nil, nil, at))
+	}
 }
 
 func ls(path string) (files []string) {
@@ -170,4 +197,31 @@ func ls(path string) (files []string) {
 	}
 
 	return
+}
+
+func lss(path string) (files []string) {
+	if path == "" {
+		return
+	}
+
+	// pathURI, err := storage.ParseURI("file://" + path)
+	pathURI := storage.NewFileURI(path)
+
+	canList, err := storage.CanList(pathURI)
+	if err != nil || !canList {
+		return
+	}
+
+	childURIs, err := storage.List(pathURI)
+	if err != nil {
+		return
+	}
+
+	for _, uri := range childURIs {
+
+		// files = append(files, uri.Name())
+		files = append(files, uriBase(uri))
+	}
+
+	return files
 }

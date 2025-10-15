@@ -43,8 +43,7 @@ const (
 	feSave        = 2
 )
 
-func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
-	var ti *container.TabItem
+func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *container.TabItem) {
 	refresh := func() {}
 	defer func() {
 		if r := recover(); r != nil {
@@ -175,7 +174,7 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 			}
 		})
 		progFile := widget.NewProgressBar()
-		progFile.Hide()
+		fyne.Do(progFile.Hide)
 
 		newentry = container.NewHBox(
 			deleteButton,
@@ -184,7 +183,9 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 		)
 
 		fileentries[dst] = newentry
-		boxholder.Add(newentry)
+		fyne.Do(func() {
+			boxholder.Add(newentry)
+		})
 		return
 	}
 
@@ -269,135 +270,148 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 	os.MkdirAll(sendDir, 0o700)
 	for _, name := range ls(sendDir) {
 		if name != "" {
+			log.Trace(name)
 			addEntry(filepath.Join(sendDir, name))
 		}
 	}
 
 	if isAndroid {
-		go func() {
-			for {
-				select {
-				case <-done:
-					return
-				case text := <-textFromIntent:
-					if text == "" {
-						log.Errorf(`Received text: ""`)
-						continue
-					}
-					if entry.Disabled() {
-						log.Trace("Sending")
-						continue
-					}
-					log.Tracef(`Received text: "%s"`, text)
-					src := filepath.Join(sendDir, "text"+hashToFilename(text))
-					if fe := addEntry(src); fe == nil {
-						continue
-					}
+		stop := make(chan struct{})
+		a.Lifecycle().SetOnStopped(func() {
+			log.Trace("OnStopped")
+			close(stop)
+		})
+		a.Lifecycle().SetOnStarted(func() {
+			log.Trace("OnStarted")
+			stop = make(chan struct{})
+			go func() {
+				for {
+					select {
+					case <-stop:
+						log.Trace("stop")
+						return
+					case <-done:
+						log.Trace("done")
+						return
+					case text := <-textFromIntent:
+						if text == "" {
+							log.Errorf(`Received text: ""`)
+							continue
+						}
+						if entry.Disabled() {
+							log.Trace("Sending")
+							continue
+						}
+						log.Tracef(`Received text: "%s"`, text)
+						src := filepath.Join(sendDir, "text"+hashToFilename(text))
+						if fe := addEntry(src); fe == nil {
+							continue
+						}
 
-					source, err := os.Create(src)
-					if err != nil {
-						log.Errorf("Failed to create file: %s", err)
-						continue
-					}
+						source, err := os.Create(src)
+						if err != nil {
+							log.Errorf("Failed to create file: %s", err)
+							continue
+						}
 
-					_, err = source.WriteString(text)
-					if err != nil {
+						_, err = source.WriteString(text)
+						if err != nil {
+							source.Close()
+							os.Remove(src)
+							log.Errorf("Failed to write file: %s", err)
+							continue
+						}
+
 						source.Close()
-						os.Remove(src)
-						log.Errorf("Failed to write file: %s", err)
-						continue
-					}
+						fyne.Do(refresh)
 
-					source.Close()
-					SelectIndex(w, 0)
-
-				case uriString := <-uriFromIntent:
-					if uriString == "" {
-						log.Errorf(`Received uri: ""`)
-						continue
-					}
-					if entry.Disabled() {
-						log.Trace("Sending")
-						continue
-					}
-					// if _, err := url.Parse(uriString); err == nil {
-					// 	log.Tracef(`Received URI: "%s"`, uriString)
-					// } else {
-					// 	log.Errorf(`Received URI: "%s" error: %s`, uriString, err)
-					// }
-					u, err := storage.ParseURI(uriString)
-					log.Errorf("ParseURI(%s) error: %v", u, err)
-					if err != nil {
-						continue
-					}
-					mimeType := MimeType(u)
-					log.Tracef("URI (%s) has MimeType: %s", u, mimeType)
-					log.Tracef("apiLevel %d", apiLevel())
-					if mimeType == "vnd.android.document/directory" {
-						// totalcmd на 14 Андроиде
-						log.Tracef("URI (%s) is dir", u)
-						continue
-					}
-					if u.Scheme() == "file" {
-						if _, err := storage.ListerForURI(u); err == nil {
-							// totalcmd на 9 Андроиде
+					case uriString := <-uriFromIntent:
+						if uriString == "" {
+							log.Errorf(`Received uri: ""`)
+							continue
+						}
+						if entry.Disabled() {
+							log.Trace("Sending")
+							continue
+						}
+						// if _, err := url.Parse(uriString); err == nil {
+						// 	log.Tracef(`Received URI: "%s"`, uriString)
+						// } else {
+						// 	log.Errorf(`Received URI: "%s" error: %s`, uriString, err)
+						// }
+						u, err := storage.ParseURI(uriString)
+						if err != nil {
+							log.Errorf("ParseURI(%s) error: %v", u, err)
+							continue
+						}
+						log.Tracef("apiLevel %d", apiLevel())
+						mimeType := MimeType(u)
+						log.Tracef("URI (%s) has MimeType: %s", u, mimeType)
+						if mimeType == "vnd.android.document/directory" {
+							// totalcmd на 14 Андроиде
 							log.Tracef("URI (%s) is dir", u)
 							continue
 						}
-					}
-					// На Андроиде 9 storage.List крэшит на схеме content как и storage.CanList
-
-					can, err := storage.CanRead(u)
-					if err != nil {
-						log.Errorf("%v", err)
-						continue
-					}
-					if !can {
-						log.Tracef("URI (%s) can't read", uriString)
-						continue
-					}
-
-					// name := u.Name()
-					// log.Tracef("name %s", name)
-					name := uriBase(u)
-					log.Tracef("name %s", name)
-					dst := filepath.Join(sendDir, name)
-					fe := addEntry(dst)
-					if fe == nil {
-						continue
-					}
-					source, err := storage.Reader(u)
-					if err != nil {
-						log.Errorf("%v", err)
-						continue
-					}
-
-					SelectIndex(w, 0)
-					copyFromURCProgress(source, fe, func(err error) {
-						if err != nil {
-							log.Errorf("URI (%s), copied to internal cache %s error: %s", u, dst, err)
-							removeEntry(dst, fe)
-							// SelectIndex(w, 0)
-							refresh()
-							return
-						}
-						log.Tracef("URI (%s), copied to internal cache %s", u, dst)
-
-						if fi, sterr := os.Stat(dst); sterr != nil || fi.IsDir() {
-							if sterr != nil {
-								log.Errorf("Stat(%s) error: %v", dst, sterr)
-							}
-							if fi.IsDir() {
+						if u.Scheme() == "file" {
+							if _, err := storage.ListerForURI(u); err == nil {
+								// totalcmd на 9 Андроиде
 								log.Tracef("URI (%s) is dir", u)
+								continue
 							}
-							removeEntry(dst, fe)
-							// SelectIndex(w, 0)
-							refresh()
 						}
-					})
+						// На Андроиде 9 storage.List крэшит на схеме content как и storage.CanList
+
+						can, err := storage.CanRead(u)
+						if err != nil {
+							log.Errorf("%v", err)
+							continue
+						}
+						if !can {
+							log.Tracef("URI (%s) can't read", uriString)
+							continue
+						}
+
+						// name := u.Name()
+						// log.Tracef("name %s", name)
+						name := uriBase(u)
+						log.Tracef("name %s", name)
+						dst := filepath.Join(sendDir, name)
+						fe := addEntry(dst)
+						if fe == nil {
+							continue
+						}
+						source, err := storage.Reader(u)
+						if err != nil {
+							log.Errorf("%v", err)
+							continue
+						}
+
+						fyne.Do(refresh)
+						copyFromURCProgress(source, fe, func(err error) {
+							if err != nil {
+								log.Errorf("URI (%s), copied to internal cache %s error: %s", u, dst, err)
+								removeEntry(dst, fe)
+								fyne.Do(refresh)
+								return
+							}
+							log.Tracef("URI (%s), copied to internal cache %s", u, dst)
+
+							if fi, sterr := os.Stat(dst); sterr != nil || fi.IsDir() {
+								if sterr != nil {
+									log.Errorf("Stat(%s) error: %v", dst, sterr)
+								}
+								if fi.IsDir() {
+									log.Tracef("URI (%s) is dir", u)
+								}
+								removeEntry(dst, fe)
+								fyne.Do(refresh)
+							}
+						})
+					}
 				}
-			}
-		}()
+			}()
+			processIntent()
+		})
 	} else {
 		if len(os.Args) > 0 {
 			for _, src := range os.Args[1:] {
@@ -415,12 +429,12 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 				log.Trace("Sending")
 				return
 			}
-			SelectIndex(w, 0)
 			for _, uri := range uris {
 				if err := addPath(uri.Path()); err != nil {
 					log.Error(err.Error())
 				}
 			}
+			refresh()
 		})
 	}
 
@@ -608,7 +622,7 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 						randomCode = utils.GetRandomName()
 						entry.SetText(randomCode)
 					}
-					refresh()
+					fyne.Do(refresh)
 				})
 			}()
 
@@ -655,8 +669,7 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 								pb.Show()
 							}
 
-							// SelectIndex(w, 0)
-							refresh()
+							fyne.Do(refresh)
 						})
 						for _, fi := range sender.FilesToTransfer {
 							path := filepath.Join(sendDir, fi.Name)
@@ -765,8 +778,13 @@ func sendTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 
 	ti = container.NewTabItemWithIcon(lp("Send"), theme.MailSendIcon(),
 		container.NewBorder(top, nil, nil, nil, scroller))
-	refresh = func() { ti.Content.Refresh() }
-	return ti
+	refresh = func() {
+		if parent.Selected() != ti {
+			parent.Select(ti)
+		}
+		// ti.Content.Refresh()
+	}
+	return
 }
 
 // Big File Dialog
@@ -795,28 +813,6 @@ func CopyFile(src, dst string) error {
 
 	_, err = io.Copy(destination, source)
 	return err
-}
-
-// Dirty refresh
-func SelectIndex(window fyne.Window, index int) {
-	var findTabs func(fyne.CanvasObject) *container.AppTabs
-	findTabs = func(obj fyne.CanvasObject) *container.AppTabs {
-		switch v := obj.(type) {
-		case *container.AppTabs:
-			return v
-		case *fyne.Container:
-			for _, child := range v.Objects {
-				if tabs := findTabs(child); tabs != nil {
-					return tabs
-				}
-			}
-		}
-		return nil
-	}
-	if tabs := findTabs(window.Content()); tabs != nil {
-		tabs.SelectIndex(index)
-		tabs.Refresh()
-	}
 }
 
 // For mobile os.Exit.

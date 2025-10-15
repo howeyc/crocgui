@@ -25,7 +25,7 @@ func settingsTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 			langCode = selection
 			lang := language.MustParse(selection)
 			langPrinter = message.NewPrinter(lang)
-			refreshWindow(a, w, 2)
+			refreshWindow(a, w)
 		}
 	})
 	currentLang, _ := langBinding.Get()
@@ -37,7 +37,7 @@ func settingsTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 		if currentTheme, _ := themeBinding.Get(); currentTheme != selection {
 			themeBinding.Set(selection)
 			a.Settings().SetTheme(appTheme)
-			refreshWindow(a, w, 2)
+			refreshWindow(a, w)
 		}
 	})
 	currentTheme, _ := themeBinding.Get()
@@ -68,7 +68,7 @@ func settingsTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 		if currentFont, _ := fontBinding.Get(); currentFont != selection {
 			fontBinding.Set(selection)
 			a.Settings().SetTheme(appTheme)
-			refreshWindow(a, w, 2)
+			refreshWindow(a, w)
 		}
 	})
 	currentFont, _ := fontBinding.Get()
@@ -92,7 +92,7 @@ func settingsTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 	toggleLogo := widget.NewButton(lp("Show / Hide"), func() {
 		hideLogo, _ := hideLogoBinding.Get()
 		hideLogoBinding.Set(!hideLogo)
-		refreshWindow(a, w, 2)
+		refreshWindow(a, w)
 	})
 
 	return container.NewTabItemWithIcon(ZeroWidthNonJoiner, theme.SettingsIcon(), container.NewVScroll(container.NewVBox( //lp("Settings")

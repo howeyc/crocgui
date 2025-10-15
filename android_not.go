@@ -7,7 +7,7 @@ import (
 	"fyne.io/fyne/v2/storage"
 )
 
-func setupIntentHandler() {}
+func processIntent() {}
 
 func uriBase(uri fyne.URI) string {
 	return uri.Name()
