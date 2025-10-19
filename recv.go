@@ -203,6 +203,7 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 		savedialog := dialog.NewFileSave(fileSave, parent)
 		savedialog.SetFileName(child)
 		savedialog.Resize(parent.Canvas().Size())
+		notFinish = true
 		savedialog.Show()
 	}
 
@@ -670,11 +671,11 @@ func copyToUWCProgress(destination fyne.URIWriteCloser, src string, c *fyne.Cont
 // Big File Dialog
 func ShowFolderOpen(callback func(fyne.ListableURI, error), parent fyne.Window) {
 	if isMobile {
+		notFinish = true
 		dialog.ShowFolderOpen(callback, parent)
 		return
 	}
 	fd := dialog.NewFolderOpen(callback, parent)
-	fd.Resize(parent.Canvas().Size())
 	fd.Show()
 }
 

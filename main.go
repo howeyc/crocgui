@@ -34,11 +34,12 @@ var (
 	isAndroid              bool
 	ErrApplicationShutdown error
 	done                   chan struct{}
-	uriFromIntent          chan string
-	textFromIntent         chan string
+	uriFromIntent          = make(chan string, 100)
+	textFromIntent         = make(chan string, 100)
 	replacer               *strings.Replacer
 	logOutput              logWriter
 	atSI                   int
+	notFinish              bool
 )
 
 const (
@@ -60,8 +61,6 @@ const (
 func main() {
 	ErrApplicationShutdown = errors.New("application shutdown")
 	done = make(chan struct{})
-	uriFromIntent = make(chan string, 100)
-	textFromIntent = make(chan string, 100)
 	replacer = strings.NewReplacer(
 		"[trace]\t", "",
 		"[debug]\t", "",

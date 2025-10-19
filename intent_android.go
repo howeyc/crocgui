@@ -9,26 +9,26 @@ package main
 
 extern void receiveURIFromIntent(char* uri);
 extern void receiveTextFromIntent(char* text);
-extern void logToAndroid(const char* tag, const char* message);
+extern void LogD(const char* message);
 
 // Функция для установки результата активности
 static void setResult(JNIEnv* env, jobject activity, jint resultCode) {
     jclass activity_class = (*env)->GetObjectClass(env, activity);
     if (activity_class == NULL) {
-        logToAndroid("croc", "C: ERROR - Failed to get activity class for setResult");
+        LogD("C: ERROR - Failed to get activity class for setResult");
         return;
     }
 
     jmethodID setResult = (*env)->GetMethodID(env, activity_class, "setResult", "(I)V");
     if (setResult == NULL) {
-        logToAndroid("croc", "C: ERROR - Failed to get setResult method");
+        LogD("C: ERROR - Failed to get setResult method");
         (*env)->DeleteLocalRef(env, activity_class);
         return;
     }
 
     char resultLog[64];
     snprintf(resultLog, sizeof(resultLog), "C: Setting result: %d", resultCode);
-    logToAndroid("croc", resultLog);
+    LogD(resultLog);
 
     (*env)->CallVoidMethod(env, activity, setResult, resultCode);
     (*env)->DeleteLocalRef(env, activity_class);
@@ -38,65 +38,93 @@ static void setResult(JNIEnv* env, jobject activity, jint resultCode) {
 static void finish(JNIEnv* env, jobject activity) {
     jclass activity_class = (*env)->GetObjectClass(env, activity);
     if (activity_class == NULL) {
-        logToAndroid("croc", "C: ERROR - Failed to get activity class for finish");
+        LogD("C: ERROR - Failed to get activity class for finish");
         return;
     }
 
     jmethodID finish = (*env)->GetMethodID(env, activity_class, "finish", "()V");
     if (finish == NULL) {
-        logToAndroid("croc", "C: ERROR - Failed to get finish method");
+        LogD("C: ERROR - Failed to get finish method");
         (*env)->DeleteLocalRef(env, activity_class);
         return;
     }
 
-    logToAndroid("croc", "C: Finishing activity");
+    LogD("C: Finishing activity");
     (*env)->CallVoidMethod(env, activity, finish);
     (*env)->DeleteLocalRef(env, activity_class);
 }
 
+// Функция для исключения активности из недавних приложений и завершения
+static void excludeFromRecents(JNIEnv* env, jobject activity) {
+    jclass activity_class = (*env)->GetObjectClass(env, activity);
+    if (activity_class == NULL) {
+        LogD("C: ERROR - Failed to get activity class for excludeFromRecents");
+        return;
+    }
+
+    // Получаем метод finishAndRemoveTask (доступен с API 21)
+    jmethodID finishAndRemoveTask = (*env)->GetMethodID(env, activity_class, "finishAndRemoveTask", "()V");
+    if (finishAndRemoveTask != NULL) {
+        LogD("C: Using finishAndRemoveTask to exclude from recents");
+        (*env)->CallVoidMethod(env, activity, finishAndRemoveTask);
+    } else {
+        LogD("C: finishAndRemoveTask not available, using finish()");
+
+        // Альтернативный способ: устанавливаем флаг исключения из недавних
+        jmethodID finish = (*env)->GetMethodID(env, activity_class, "finish", "()V");
+        if (finish != NULL) {
+            (*env)->CallVoidMethod(env, activity, finish);
+        } else {
+            LogD("C: ERROR - finish method also not available");
+        }
+    }
+
+    (*env)->DeleteLocalRef(env, activity_class);
+}
+
 static void processIntent(JNIEnv* env, jobject activity) {
-    logToAndroid("croc", "C: === processIntent STARTED ===");
+    LogD("C: === processIntent STARTED ===");
 
     // Получаем класс активности
     jclass activity_class = (*env)->GetObjectClass(env, activity);
     if (activity_class == NULL) {
-        logToAndroid("croc", "C: ERROR - Failed to get activity class");
+        LogD("C: ERROR - Failed to get activity class");
         return;
     }
-    logToAndroid("croc", "C: Activity class obtained successfully");
+    LogD("C: Activity class obtained successfully");
 
     // Получаем метод getIntent
     jmethodID get_intent = (*env)->GetMethodID(env, activity_class, "getIntent", "()Landroid/content/Intent;");
     if (get_intent == NULL) {
-        logToAndroid("croc", "C: ERROR - Failed to get getIntent method");
+        LogD("C: ERROR - Failed to get getIntent method");
         (*env)->DeleteLocalRef(env, activity_class);
         return;
     }
-    logToAndroid("croc", "C: getIntent method obtained");
+    LogD("C: getIntent method obtained");
 
     // Вызываем getIntent()
     jobject intent = (*env)->CallObjectMethod(env, activity, get_intent);
     if (intent == NULL) {
-        logToAndroid("croc", "C: ERROR - Intent is NULL");
+        LogD("C: ERROR - Intent is NULL");
         (*env)->DeleteLocalRef(env, activity_class);
         return;
     }
-    logToAndroid("croc", "C: Intent obtained successfully");
+    LogD("C: Intent obtained successfully");
 
     // Получаем класс Intent
     jclass intent_class = (*env)->GetObjectClass(env, intent);
     if (intent_class == NULL) {
-        logToAndroid("croc", "C: ERROR - Failed to get intent class");
+        LogD("C: ERROR - Failed to get intent class");
         (*env)->DeleteLocalRef(env, activity_class);
         (*env)->DeleteLocalRef(env, intent);
         return;
     }
-    logToAndroid("croc", "C: Intent class obtained");
+    LogD("C: Intent class obtained");
 
     // Получаем Action интента
     jmethodID getAction = (*env)->GetMethodID(env, intent_class, "getAction", "()Ljava/lang/String;");
     if (getAction == NULL) {
-        logToAndroid("croc", "C: ERROR - Failed to get getAction method");
+        LogD("C: ERROR - Failed to get getAction method");
         (*env)->DeleteLocalRef(env, activity_class);
         (*env)->DeleteLocalRef(env, intent_class);
         (*env)->DeleteLocalRef(env, intent);
@@ -117,7 +145,7 @@ static void processIntent(JNIEnv* env, jobject activity) {
         if (actionStr != NULL) {
             char actionLog[256];
             snprintf(actionLog, sizeof(actionLog), "C: Intent action: %s", actionStr);
-            logToAndroid("croc", actionLog);
+            LogD(actionLog);
 
             isSend = strcmp(actionStr, "android.intent.action.SEND") == 0;
             isView = strcmp(actionStr, "android.intent.action.VIEW") == 0;
@@ -128,16 +156,16 @@ static void processIntent(JNIEnv* env, jobject activity) {
         }
         (*env)->DeleteLocalRef(env, action);
     } else {
-        logToAndroid("croc", "C: Intent action is NULL");
+        LogD("C: Intent action is NULL");
     }
 
     // Для ACTION_MAIN - не завершаем активность, это запуск с иконки
     if (isMain) {
-        logToAndroid("croc", "C: MAIN intent - starting main app (not finishing activity)");
+        LogD("C: MAIN intent - starting main app (not finishing activity)");
         (*env)->DeleteLocalRef(env, activity_class);
         (*env)->DeleteLocalRef(env, intent_class);
         (*env)->DeleteLocalRef(env, intent);
-        logToAndroid("croc", "C: === processIntent COMPLETED for MAIN ===");
+        LogD("C: === processIntent COMPLETED for MAIN ===");
         return;
     }
 
@@ -145,13 +173,13 @@ static void processIntent(JNIEnv* env, jobject activity) {
     // shouldFinish = 1;
 
     // First check ClipData
-    logToAndroid("croc", "C: Checking for ClipData...");
+    LogD("C: Checking for ClipData...");
     jmethodID getClipData = (*env)->GetMethodID(env, intent_class, "getClipData", "()Landroid/content/ClipData;");
     if (getClipData != NULL) {
         jobject clipData = (*env)->CallObjectMethod(env, intent, getClipData);
 
         if (clipData != NULL) {
-            logToAndroid("croc", "C: ClipData found! Processing...");
+            LogD("C: ClipData found! Processing...");
 
             jclass clipData_class = (*env)->GetObjectClass(env, clipData);
             jmethodID getItemCount = (*env)->GetMethodID(env, clipData_class, "getItemCount", "()I");
@@ -161,12 +189,12 @@ static void processIntent(JNIEnv* env, jobject activity) {
                 jint itemCount = (*env)->CallIntMethod(env, clipData, getItemCount);
                 char countLog[64];
                 snprintf(countLog, sizeof(countLog), "C: ClipData item count: %d", itemCount);
-                logToAndroid("croc", countLog);
+                LogD(countLog);
 
                 for (int i = 0; i < itemCount; i++) {
                     char itemLog[32];
                     snprintf(itemLog, sizeof(itemLog), "C: Processing item %d", i);
-                    logToAndroid("croc", itemLog);
+                    LogD(itemLog);
 
                     jobject item = (*env)->CallObjectMethod(env, clipData, getItemAt, i);
                     if (item != NULL) {
@@ -177,7 +205,7 @@ static void processIntent(JNIEnv* env, jobject activity) {
                         if (getUri != NULL) {
                             jobject uri = (*env)->CallObjectMethod(env, item, getUri);
                             if (uri != NULL) {
-                                logToAndroid("croc", "C: Found URI in ClipData item");
+                                LogD("C: Found URI in ClipData item");
                                 jclass uri_class = (*env)->GetObjectClass(env, uri);
                                 jmethodID to_string = (*env)->GetMethodID(env, uri_class, "toString", "()Ljava/lang/String;");
                                 if (to_string != NULL) {
@@ -187,7 +215,7 @@ static void processIntent(JNIEnv* env, jobject activity) {
                                         if (utf_str != NULL) {
                                             char uriLog[512];
                                             snprintf(uriLog, sizeof(uriLog), "C: Sending URI to Go: %s", utf_str);
-                                            logToAndroid("croc", uriLog);
+                                            LogD(uriLog);
                                             receiveURIFromIntent(strdup(utf_str));
                                             hasValidData = 1;
                                             (*env)->ReleaseStringUTFChars(env, uri_string, utf_str);
@@ -204,7 +232,7 @@ static void processIntent(JNIEnv* env, jobject activity) {
                         if (getText != NULL) {
                             jobject text = (*env)->CallObjectMethod(env, item, getText);
                             if (text != NULL) {
-                                logToAndroid("croc", "C: Found text in ClipData item");
+                                LogD("C: Found text in ClipData item");
                                 jclass text_class = (*env)->GetObjectClass(env, text);
                                 jmethodID toString = (*env)->GetMethodID(env, text_class, "toString", "()Ljava/lang/String;");
                                 if (toString != NULL) {
@@ -221,7 +249,7 @@ static void processIntent(JNIEnv* env, jobject activity) {
                                             } else {
                                                 snprintf(textLog, sizeof(textLog), "C: Sending text to Go: %s", text_str);
                                             }
-                                            logToAndroid("croc", textLog);
+                                            LogD(textLog);
                                             receiveTextFromIntent(strdup(text_str));
                                             hasValidData = 1;
                                             (*env)->ReleaseStringUTFChars(env, text_string, text_str);
@@ -239,16 +267,16 @@ static void processIntent(JNIEnv* env, jobject activity) {
 
             if (hasValidData) {
                 setResult(env, activity, 0); // RESULT_OK
-                logToAndroid("croc", "C: ClipData processing complete - setting RESULT_OK");
+                LogD("C: ClipData processing complete - setting RESULT_OK");
             } else {
                 setResult(env, activity, -1); // RESULT_CANCELED
-                logToAndroid("croc", "C: ClipData processing complete - no valid data, setting RESULT_CANCELED");
+                LogD("C: ClipData processing complete - no valid data, setting RESULT_CANCELED");
             }
 
             // Завершаем активность только если это не MAIN интент
             if (shouldFinish) {
                 finish(env, activity);
-                logToAndroid("croc", "C: Finishing activity after ClipData processing");
+                LogD("C: Finishing activity after ClipData processing");
             }
 
             (*env)->DeleteLocalRef(env, activity_class);
@@ -256,15 +284,15 @@ static void processIntent(JNIEnv* env, jobject activity) {
             (*env)->DeleteLocalRef(env, intent);
             return;
         } else {
-            logToAndroid("croc", "C: No ClipData found");
+            LogD("C: No ClipData found");
         }
     } else {
-        logToAndroid("croc", "C: getClipData method not available");
+        LogD("C: getClipData method not available");
     }
 
     // Затем проверяем ACTION_SEND text/plain
     if (isSend) {
-        logToAndroid("croc", "C: Checking for SEND text/plain...");
+        LogD("C: Checking for SEND text/plain...");
         jmethodID getType = (*env)->GetMethodID(env, intent_class, "getType", "()Ljava/lang/String;");
         if (getType != NULL) {
             jstring type = (*env)->CallObjectMethod(env, intent, getType);
@@ -273,13 +301,13 @@ static void processIntent(JNIEnv* env, jobject activity) {
                 if (typeStr != NULL) {
                     char typeLog[128];
                     snprintf(typeLog, sizeof(typeLog), "C: Intent type: %s", typeStr);
-                    logToAndroid("croc", typeLog);
+                    LogD(typeLog);
 
                     int isTextPlain = strcmp(typeStr, "text/plain") == 0;
                     (*env)->ReleaseStringUTFChars(env, type, typeStr);
 
                     if (isTextPlain) {
-                        logToAndroid("croc", "C: Processing text/plain SEND intent");
+                        LogD("C: Processing text/plain SEND intent");
                         jmethodID getStringExtra = (*env)->GetMethodID(env, intent_class,
                             "getStringExtra", "(Ljava/lang/String;)Ljava/lang/String;");
                         if (getStringExtra != NULL) {
@@ -299,18 +327,18 @@ static void processIntent(JNIEnv* env, jobject activity) {
                                     } else {
                                         snprintf(textLog, sizeof(textLog), "C: Sending SEND text to Go: %s", textStr);
                                     }
-                                    logToAndroid("croc", textLog);
+                                    LogD(textLog);
                                     receiveTextFromIntent(strdup(textStr));
                                     setResult(env, activity, 0); // RESULT_OK
                                     (*env)->ReleaseStringUTFChars(env, text, textStr);
                                 }
                                 (*env)->DeleteLocalRef(env, text);
-                                logToAndroid("croc", "C: SEND text processing complete - setting RESULT_OK");
+                                LogD("C: SEND text processing complete - setting RESULT_OK");
 
                                 // Завершаем активность только если это не MAIN интент
                                 if (shouldFinish) {
                                     finish(env, activity);
-                                    logToAndroid("croc", "C: Finishing activity after SEND text processing");
+                                    LogD("C: Finishing activity after SEND text processing");
                                 }
 
                                 (*env)->DeleteLocalRef(env, type);
@@ -329,12 +357,12 @@ static void processIntent(JNIEnv* env, jobject activity) {
 
     // Handle ACTION_VIEW (single URI)
     if (isView) {
-        logToAndroid("croc", "C: Checking for VIEW URI...");
+        LogD("C: Checking for VIEW URI...");
         jmethodID get_data = (*env)->GetMethodID(env, intent_class, "getData", "()Landroid/net/Uri;");
         if (get_data != NULL) {
             jobject uri = (*env)->CallObjectMethod(env, intent, get_data);
             if (uri != NULL) {
-                logToAndroid("croc", "C: Found URI in VIEW intent");
+                LogD("C: Found URI in VIEW intent");
                 jclass uri_class = (*env)->GetObjectClass(env, uri);
                 jmethodID to_string = (*env)->GetMethodID(env, uri_class, "toString", "()Ljava/lang/String;");
                 if (to_string != NULL) {
@@ -344,7 +372,7 @@ static void processIntent(JNIEnv* env, jobject activity) {
                         if (utf_str != NULL) {
                             char uriLog[512];
                             snprintf(uriLog, sizeof(uriLog), "C: Sending VIEW URI to Go: %s", utf_str);
-                            logToAndroid("croc", uriLog);
+                            LogD(uriLog);
                             receiveURIFromIntent(strdup(utf_str));
                             setResult(env, activity, 0); // RESULT_OK
                             (*env)->ReleaseStringUTFChars(env, uri_string, utf_str);
@@ -352,12 +380,12 @@ static void processIntent(JNIEnv* env, jobject activity) {
                         (*env)->DeleteLocalRef(env, uri_string);
                     }
                 }
-                logToAndroid("croc", "C: VIEW URI processing complete - setting RESULT_OK");
+                LogD("C: VIEW URI processing complete - setting RESULT_OK");
 
                 // Завершаем активность только если это не MAIN интент
                 if (shouldFinish) {
                     finish(env, activity);
-                    logToAndroid("croc", "C: Finishing activity after VIEW processing");
+                    LogD("C: Finishing activity after VIEW processing");
                 }
 
                 (*env)->DeleteLocalRef(env, uri);
@@ -371,7 +399,7 @@ static void processIntent(JNIEnv* env, jobject activity) {
 
     // Handle ACTION_SEND (single content)
     if (isSend) {
-        logToAndroid("croc", "C: Checking for SEND stream...");
+        LogD("C: Checking for SEND stream...");
         jmethodID get_extra = (*env)->GetMethodID(env, intent_class, "getParcelableExtra", "(Ljava/lang/String;)Landroid/os/Parcelable;");
         if (get_extra != NULL) {
             jstring extra_key = (*env)->NewStringUTF(env, "android.intent.extra.STREAM");
@@ -379,7 +407,7 @@ static void processIntent(JNIEnv* env, jobject activity) {
             (*env)->DeleteLocalRef(env, extra_key);
 
             if (send_uri != NULL) {
-                logToAndroid("croc", "C: Found stream URI in SEND intent");
+                LogD("C: Found stream URI in SEND intent");
                 jclass uri_class = (*env)->GetObjectClass(env, send_uri);
                 jmethodID to_string = (*env)->GetMethodID(env, uri_class, "toString", "()Ljava/lang/String;");
                 if (to_string != NULL) {
@@ -389,7 +417,7 @@ static void processIntent(JNIEnv* env, jobject activity) {
                         if (utf_str != NULL) {
                             char uriLog[512];
                             snprintf(uriLog, sizeof(uriLog), "C: Sending SEND stream URI to Go: %s", utf_str);
-                            logToAndroid("croc", uriLog);
+                            LogD(uriLog);
                             receiveURIFromIntent(strdup(utf_str));
                             setResult(env, activity, 0); // RESULT_OK
                             (*env)->ReleaseStringUTFChars(env, uri_string, utf_str);
@@ -397,12 +425,12 @@ static void processIntent(JNIEnv* env, jobject activity) {
                         (*env)->DeleteLocalRef(env, uri_string);
                     }
                 }
-                logToAndroid("croc", "C: SEND stream processing complete - setting RESULT_OK");
+                LogD("C: SEND stream processing complete - setting RESULT_OK");
 
                 // Завершаем активность только если это не MAIN интент
                 if (shouldFinish) {
                     finish(env, activity);
-                    logToAndroid("croc", "C: Finishing activity after SEND stream processing");
+                    LogD("C: Finishing activity after SEND stream processing");
                 }
 
                 (*env)->DeleteLocalRef(env, send_uri);
@@ -416,7 +444,7 @@ static void processIntent(JNIEnv* env, jobject activity) {
 
     // Handle ACTION_SEND_MULTIPLE (multiple content)
     if (isSendMultiple) {
-        logToAndroid("croc", "C: Checking for SEND_MULTIPLE...");
+        LogD("C: Checking for SEND_MULTIPLE...");
         jmethodID get_array = (*env)->GetMethodID(env, intent_class, "getParcelableArrayListExtra", "(Ljava/lang/String;)Ljava/util/ArrayList;");
         if (get_array != NULL) {
             jstring array_key = (*env)->NewStringUTF(env, "android.intent.extra.STREAM");
@@ -424,7 +452,7 @@ static void processIntent(JNIEnv* env, jobject activity) {
             (*env)->DeleteLocalRef(env, array_key);
 
             if (uri_list != NULL) {
-                logToAndroid("croc", "C: Found URI list in SEND_MULTIPLE intent");
+                LogD("C: Found URI list in SEND_MULTIPLE intent");
                 jclass array_list_class = (*env)->GetObjectClass(env, uri_list);
                 jmethodID get_size = (*env)->GetMethodID(env, array_list_class, "size", "()I");
                 jmethodID get_item = (*env)->GetMethodID(env, array_list_class, "get", "(I)Ljava/lang/Object;");
@@ -433,12 +461,12 @@ static void processIntent(JNIEnv* env, jobject activity) {
                     jint size = (*env)->CallIntMethod(env, uri_list, get_size);
                     char sizeLog[64];
                     snprintf(sizeLog, sizeof(sizeLog), "C: SEND_MULTIPLE URI count: %d", size);
-                    logToAndroid("croc", sizeLog);
+                    LogD(sizeLog);
 
                     for (int i = 0; i < size; i++) {
                         char itemLog[32];
                         snprintf(itemLog, sizeof(itemLog), "C: Processing URI %d", i);
-                        logToAndroid("croc", itemLog);
+                        LogD(itemLog);
 
                         jobject current_uri = (*env)->CallObjectMethod(env, uri_list, get_item, i);
                         if (current_uri != NULL) {
@@ -451,7 +479,7 @@ static void processIntent(JNIEnv* env, jobject activity) {
                                     if (utf_str != NULL) {
                                         char uriLog[512];
                                         snprintf(uriLog, sizeof(uriLog), "C: Sending SEND_MULTIPLE URI to Go: %s", utf_str);
-                                        logToAndroid("croc", uriLog);
+                                        LogD(uriLog);
                                         receiveURIFromIntent(strdup(utf_str));
                                         hasValidData = 1;
                                         (*env)->ReleaseStringUTFChars(env, uri_string, utf_str);
@@ -465,16 +493,16 @@ static void processIntent(JNIEnv* env, jobject activity) {
 
                     if (hasValidData) {
                         setResult(env, activity, 0); // RESULT_OK
-                        logToAndroid("croc", "C: SEND_MULTIPLE processing complete - setting RESULT_OK");
+                        LogD("C: SEND_MULTIPLE processing complete - setting RESULT_OK");
                     } else {
                         setResult(env, activity, -1); // RESULT_CANCELED
-                        logToAndroid("croc", "C: SEND_MULTIPLE processing complete - no valid data, setting RESULT_CANCELED");
+                        LogD("C: SEND_MULTIPLE processing complete - no valid data, setting RESULT_CANCELED");
                     }
 
                     // Завершаем активность только если это не MAIN интент
                     if (shouldFinish) {
                         finish(env, activity);
-                        logToAndroid("croc", "C: Finishing activity after SEND_MULTIPLE processing");
+                        LogD("C: Finishing activity after SEND_MULTIPLE processing");
                     }
                 }
                 (*env)->DeleteLocalRef(env, uri_list);
@@ -487,19 +515,19 @@ static void processIntent(JNIEnv* env, jobject activity) {
     }
 
     // Если дошли сюда - данные не найдены
-    logToAndroid("croc", "C: No matching intent data found");
+    LogD("C: No matching intent data found");
     setResult(env, activity, -1); // RESULT_CANCELED
 
     // Завершаем активность только если это не MAIN интент
     if (shouldFinish) {
         finish(env, activity);
-        logToAndroid("croc", "C: Finishing activity after no data found");
+        LogD("C: Finishing activity after no data found");
     }
 
     (*env)->DeleteLocalRef(env, activity_class);
     (*env)->DeleteLocalRef(env, intent_class);
     (*env)->DeleteLocalRef(env, intent);
-    logToAndroid("croc", "C: === processIntent COMPLETED ===");
+    LogD("C: === processIntent COMPLETED ===");
 }
 */
 import "C"
@@ -558,6 +586,45 @@ func processIntent() {
 		)
 
 		LogD("Go: C.processIntent completed")
+		return nil
+	})
+}
+
+func finish() {
+	LogD("Go: finish called")
+
+	driver.RunNative(func(ctx interface{}) error {
+		LogD("Go: driver.RunNative started")
+
+		ac := ctx.(*driver.AndroidContext)
+		LogD("Go: Calling C.finish")
+
+		C.finish(
+			(*C.JNIEnv)(unsafe.Pointer(ac.Env)),
+			(C.jobject)(unsafe.Pointer(ac.Ctx)),
+		)
+
+		LogD("Go: C.finish completed")
+		return nil
+	})
+}
+
+// excludeFromRecents завершает приложение и исключает его из списка недавних приложений
+func excludeFromRecents() {
+	LogD("Go: excludeFromRecents called")
+
+	driver.RunNative(func(ctx interface{}) error {
+		LogD("Go: driver.RunNative started for excludeFromRecents")
+
+		ac := ctx.(*driver.AndroidContext)
+		LogD("Go: Calling C.excludeFromRecents")
+
+		C.excludeFromRecents(
+			(*C.JNIEnv)(unsafe.Pointer(ac.Env)),
+			(C.jobject)(unsafe.Pointer(ac.Ctx)),
+		)
+
+		LogD("Go: C.excludeFromRecents completed")
 		return nil
 	})
 }

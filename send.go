@@ -276,31 +276,43 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 	}
 
 	if isAndroid {
-		stop := make(chan struct{})
+		// doneProcessIntent := make(chan struct{})
+		a.Lifecycle().SetOnExitedForeground(func() {
+			log.Trace("ExitedForeground")
+			if notFinish {
+				return
+			}
+			excludeFromRecents()
+		})
 		a.Lifecycle().SetOnStopped(func() {
-			log.Trace("OnStopped")
-			close(stop)
+			log.Trace("Stopped")
 		})
 		a.Lifecycle().SetOnStarted(func() {
-			log.Trace("OnStarted")
-			stop = make(chan struct{})
+			log.Trace("Started")
+		})
+		a.Lifecycle().SetOnEnteredForeground(func() {
+			notFinish = false
+			log.Trace("EnteredForeground")
+			close(uriFromIntent)
+			uriFromIntent = make(chan string, 100)
+
+			close(textFromIntent)
+			textFromIntent = make(chan string, 100)
 			go func() {
 				for {
 					select {
-					case <-stop:
-						log.Trace("stop")
-						return
 					case <-done:
 						log.Trace("done")
 						return
 					case text := <-textFromIntent:
 						if text == "" {
-							log.Errorf(`Received text: ""`)
-							continue
+							log.Trace("doneProcessIntent")
+							return
 						}
 						if entry.Disabled() {
 							log.Trace("Sending")
-							continue
+							log.Trace("doneProcessIntent")
+							return
 						}
 						log.Tracef(`Received text: "%s"`, text)
 						src := filepath.Join(sendDir, "text"+hashToFilename(text))
@@ -327,18 +339,14 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 
 					case uriString := <-uriFromIntent:
 						if uriString == "" {
-							log.Errorf(`Received uri: ""`)
-							continue
+							log.Trace("doneProcessIntent")
+							return
 						}
 						if entry.Disabled() {
 							log.Trace("Sending")
-							continue
+							log.Trace("doneProcessIntent")
+							return
 						}
-						// if _, err := url.Parse(uriString); err == nil {
-						// 	log.Tracef(`Received URI: "%s"`, uriString)
-						// } else {
-						// 	log.Errorf(`Received URI: "%s" error: %s`, uriString, err)
-						// }
 						u, err := storage.ParseURI(uriString)
 						if err != nil {
 							log.Errorf("ParseURI(%s) error: %v", u, err)
@@ -790,6 +798,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 // Big File Dialog
 func ShowFileOpen(callback func(reader fyne.URIReadCloser, err error), parent fyne.Window) {
 	if isMobile {
+		notFinish = true
 		dialog.ShowFileOpen(callback, parent)
 		return
 	}

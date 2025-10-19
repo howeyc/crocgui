@@ -39,3 +39,5 @@ func sendNotification(a fyne.App, title, content string) {
 }
 
 func LogD(message string) {}
+func excludeFromRecents() {}
+func finish()             {}
