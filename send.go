@@ -279,10 +279,9 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 		// doneProcessIntent := make(chan struct{})
 		a.Lifecycle().SetOnExitedForeground(func() {
 			log.Trace("ExitedForeground")
-			// if notFinish {
-			// 	return
-			// }
-			excludeFromRecents(!notFinish)
+			if !notFinish {
+				excludeFromRecents()
+			}
 		})
 		a.Lifecycle().SetOnStopped(func() {
 			log.Trace("Stopped")

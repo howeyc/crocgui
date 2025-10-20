@@ -250,10 +250,10 @@ func logTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 			defer destination.Close()
 
 			if _, err := logOutput.buf.WriteTo(destination); err != nil {
-				log.Errorf("Failed to write log to URI(%s) error: %v", u, err)
+				log.Errorf("Failed to write log to URI(%s) error: %v", u.String(), err)
 				return
 			}
-			log.Tracef("Log successfully saved to URI(%s)", u)
+			log.Tracef("Log successfully saved to URI(%s)", u.String())
 		}
 
 		supported, err := IsSaveDialogSupported()

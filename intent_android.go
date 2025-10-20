@@ -55,54 +55,30 @@ static void finish(JNIEnv* env, jobject activity) {
 }
 
 // Функция для исключения активности из недавних приложений
-static void excludeFromRecents(JNIEnv* env, jobject activity, jboolean finish) {
+static void excludeFromRecents(JNIEnv* env, jobject activity) {
     jclass activity_class = (*env)->GetObjectClass(env, activity);
     if (activity_class == NULL) {
         LogD("C: ERROR - Failed to get activity class for excludeFromRecents");
         return;
     }
 
-    jmethodID getIntent = (*env)->GetMethodID(env, activity_class, "getIntent", "()Landroid/content/Intent;");
-    if (getIntent != NULL) {
-        jobject intent = (*env)->CallObjectMethod(env, activity, getIntent);
-        if (intent != NULL) {
-            jclass intent_class = (*env)->GetObjectClass(env, intent);
-            if (intent_class != NULL) {
-                jmethodID addFlags = (*env)->GetMethodID(env, intent_class, "addFlags", "(I)Landroid/content/Intent;");
-                if (addFlags != NULL) {
-                    // FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS = 0x00800000
-                    (*env)->CallObjectMethod(env, intent, addFlags, 0x00800000);
-                    LogD("C: FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS added to intent");
-                } else {
-                    LogD("C: ERROR - addFlags method not found");
-                }
-                (*env)->DeleteLocalRef(env, intent_class);
-            }
-            (*env)->DeleteLocalRef(env, intent);
-        }
-    }
-
-    if (finish == JNI_TRUE) {
-        LogD("C: Finish mode - attempting to remove from recents");
-
-        // Проверяем доступность finishAndRemoveTask (API 21+)
-        jmethodID finishAndRemoveTask = (*env)->GetMethodID(env, activity_class, "finishAndRemoveTask", "()V");
-        if (finishAndRemoveTask != NULL) {
-            LogD("C: Using finishAndRemoveTask");
-            (*env)->CallVoidMethod(env, activity, finishAndRemoveTask);
+    // Проверяем доступность finishAndRemoveTask (API 21+)
+    jmethodID finishAndRemoveTask = (*env)->GetMethodID(env, activity_class, "finishAndRemoveTask", "()V");
+    if (finishAndRemoveTask != NULL) {
+        LogD("C: Using finishAndRemoveTask");
+        (*env)->CallVoidMethod(env, activity, finishAndRemoveTask);
+    } else {
+        // Fallback для старых версий API
+        LogD("C: Using finishAffinity as fallback");
+        jmethodID finishAffinity = (*env)->GetMethodID(env, activity_class, "finishAffinity", "()V");
+        if (finishAffinity != NULL) {
+            (*env)->CallVoidMethod(env, activity, finishAffinity);
         } else {
-            // Fallback для старых версий API
-            LogD("C: Using finishAffinity as fallback");
-            jmethodID finishAffinity = (*env)->GetMethodID(env, activity_class, "finishAffinity", "()V");
-            if (finishAffinity != NULL) {
-                (*env)->CallVoidMethod(env, activity, finishAffinity);
-            } else {
-                // Последний fallback - обычный finish
-                LogD("C: Using finish as last resort");
-                jmethodID finish = (*env)->GetMethodID(env, activity_class, "finish", "()V");
-                if (finish != NULL) {
-                    (*env)->CallVoidMethod(env, activity, finish);
-                }
+            // Последний fallback - обычный finish
+            LogD("C: Using finish as last resort");
+            jmethodID finish = (*env)->GetMethodID(env, activity_class, "finish", "()V");
+            if (finish != NULL) {
+                (*env)->CallVoidMethod(env, activity, finish);
             }
         }
     }
@@ -560,7 +536,6 @@ static void processIntent(JNIEnv* env, jobject activity) {
 */
 import "C"
 import (
-	"fmt"
 	"unsafe"
 
 	"fyne.io/fyne/v2/driver"
@@ -630,25 +605,15 @@ func finish() {
 	})
 }
 
-// excludeFromRecents исключает приложение из списка недавних с опцией завершения
-// finish = true - завершает приложение и исключает из списка
-// finish = false - только исключает из списка недавних без завершения
-func excludeFromRecents(finish bool) {
+// excludeFromRecents исключает приложение из списка недавних
+func excludeFromRecents() {
 	driver.RunNative(func(ctx interface{}) error {
 		ac := ctx.(*driver.AndroidContext)
-		LogD(fmt.Sprintf("Go: excludeFromRecents called, finish=%v", finish))
-
-		var cFinish C.jboolean
-		if finish {
-			cFinish = C.JNI_TRUE
-		} else {
-			cFinish = C.JNI_FALSE
-		}
+		LogD("Go: excludeFromRecents called")
 
 		C.excludeFromRecents(
 			(*C.JNIEnv)(unsafe.Pointer(ac.Env)),
 			(C.jobject)(unsafe.Pointer(ac.Ctx)),
-			cFinish,
 		)
 
 		LogD("Go: C.excludeFromRecents completed")
