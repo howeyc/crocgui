@@ -6,7 +6,6 @@ package main
 #include <jni.h>
 #include <stdlib.h>
 #include <string.h>
-#include <android/api-level.h>
 
 // Функция для проверки разрешения
 static jboolean hasPermission(JNIEnv* env, jobject context, const char* permission) {
@@ -74,14 +73,15 @@ static jboolean checkAndRequestStoragePermissions(JNIEnv* env, jobject activity)
 }
 
 // Объявляем функции ДО их использования
+jint get_api_level(JNIEnv* env);
+
 static char* CreateFileInDownloadsModern(JNIEnv* env, jobject activity, const char* fileName, const char* mimeType);
 static char* CreateFileInDownloadsLegacy(JNIEnv* env, jobject activity, const char* fileName, const char* mimeType);
 
 // Универсальная функция для всех версий Android
 static char* CreateFileInDownloadsCompat(JNIEnv* env, jobject activity, const char* fileName, const char* mimeType) {
     // Получаем версию Android
-    int api_level = android_get_device_api_level();
-
+    jint api_level = get_api_level(env);
     if (api_level >= 29) {
         // Android 10+ - используем MediaStore
         return CreateFileInDownloadsModern(env, activity, fileName, mimeType);
@@ -482,9 +482,4 @@ func ChildDownload(component string) (child fyne.URI, cleanup func(), err error)
 	}
 
 	return
-}
-
-// apiLevel возвращает уровень API Android устройства
-func apiLevel() int {
-	return int(C.android_get_device_api_level())
 }

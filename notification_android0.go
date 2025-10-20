@@ -28,7 +28,7 @@ func showCrocNotification(title, content string) {
 func showAndroidNotification(env *jnigi.Env, context *jnigi.ObjectRef, title, content string) error {
 	log.Trace("=== showAndroidNotification STARTED ===")
 
-	if isOreoOrLater(env) {
+	if apiLevel() >= 26 {
 		if err := createNotificationChannel(env, context); err != nil {
 			return err
 		}
@@ -68,16 +68,6 @@ func showAndroidNotification(env *jnigi.Env, context *jnigi.ObjectRef, title, co
 
 	log.Trace("=== showAndroidNotification COMPLETED ===")
 	return nil
-}
-
-func isOreoOrLater(env *jnigi.Env) bool {
-	var sdkVersion int32
-	err := env.GetStaticField("android/os/Build$VERSION", "SDK_INT", &sdkVersion)
-	if err != nil {
-		log.Trace("Error getting SDK_INT: " + err.Error())
-		return false
-	}
-	return sdkVersion >= 26
 }
 
 func createNotificationChannel(env *jnigi.Env, context *jnigi.ObjectRef) error {
@@ -229,7 +219,7 @@ func getNotificationManager(env *jnigi.Env, context *jnigi.ObjectRef) (*jnigi.Ob
 }
 
 func createNotificationBuilder(env *jnigi.Env, context *jnigi.ObjectRef) (*jnigi.ObjectRef, error) {
-	if isOreoOrLater(env) {
+	if apiLevel() >= 26 {
 		channelID, err := env.NewObject("java/lang/String", []byte("croc_channel"))
 		if err != nil {
 			return nil, err

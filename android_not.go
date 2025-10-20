@@ -38,6 +38,6 @@ func sendNotification(a fyne.App, title, content string) {
 	a.SendNotification(notification)
 }
 
-func LogD(message string) {}
-func excludeFromRecents() {}
-func finish()             {}
+func LogD(string)             {}
+func excludeFromRecents(bool) {}
+func finish()                 {}

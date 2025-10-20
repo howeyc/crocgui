@@ -3,39 +3,35 @@
 package main
 
 /*
-#include <android/log.h>
 #include <jni.h>
 #include <stdlib.h>
 #include <string.h>
 
-extern void LogD(const char* message);
-jboolean checkIsOreoOrLater(JNIEnv* env);
-void createCrocNotificationChannel(JNIEnv* env, jobject context);
-void showCrocNotification(JNIEnv* env, jobject context, char* title, char* content);
+void LogD(const char* message);
 
-// Check if device is Android Oreo or later (renamed to avoid conflict)
-jboolean checkIsOreoOrLater(JNIEnv* env) {
+// Get Android API level
+jint get_api_level(JNIEnv* env) {
     jclass version_class = (*env)->FindClass(env, "android/os/Build$VERSION");
     if (version_class == NULL) {
         LogD("C: ERROR - Build.VERSION class not found");
-        return JNI_FALSE;
+        return -1;
     }
 
     jfieldID sdk_int_field = (*env)->GetStaticFieldID(env, version_class, "SDK_INT", "I");
     if (sdk_int_field == NULL) {
         LogD("C: ERROR - SDK_INT field not found");
         (*env)->DeleteLocalRef(env, version_class);
-        return JNI_FALSE;
+        return -1;
     }
 
     jint sdk_version = (*env)->GetStaticIntField(env, version_class, sdk_int_field);
     (*env)->DeleteLocalRef(env, version_class);
 
-    return sdk_version >= 26 ? JNI_TRUE : JNI_FALSE; // 26 = Android 8.0 Oreo
+    return sdk_version;
 }
 
 // Create notification channel for Android 8+
-void createCrocNotificationChannel(JNIEnv* env, jobject context) {
+static void createCrocNotificationChannel(JNIEnv* env, jobject context) {
     LogD("C: Creating notification channel");
 
     jclass notification_manager_class = (*env)->FindClass(env, "android/app/NotificationManager");
@@ -93,11 +89,12 @@ void createCrocNotificationChannel(JNIEnv* env, jobject context) {
     (*env)->DeleteLocalRef(env, channel_class);
 }
 
-void showCrocNotification(JNIEnv* env, jobject context, char* title, char* content) {
+static void showCrocNotification(JNIEnv* env, jobject context, char* title, char* content) {
     LogD("C: Start showCrocNotification");
 
-    // Create notification channel for Android 8+
-    if (checkIsOreoOrLater(env)) {
+    // Create notification channel for Android 8+ (API level 26+)
+    jint api_level = get_api_level(env);
+    if (api_level >= 26) {
         createCrocNotificationChannel(env, context);
     }
 
@@ -162,7 +159,8 @@ void showCrocNotification(JNIEnv* env, jobject context, char* title, char* conte
     jmethodID builder_constructor;
     jobject builder;
 
-    if (checkIsOreoOrLater(env)) {
+    // Use channel for Android 8+ (API level 26+)
+    if (api_level >= 26) {
         // For Android 8+ use constructor with channel ID
         builder_constructor = (*env)->GetMethodID(env, builder_class, "<init>",
             "(Landroid/content/Context;Ljava/lang/String;)V");
@@ -241,6 +239,17 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/driver"
 )
+
+// apiLevel возвращает уровень API Android устройства
+func apiLevel() int {
+	level := -1
+	driver.RunNative(func(ctx interface{}) error {
+		ac := ctx.(*driver.AndroidContext)
+		level = int(C.get_api_level((*C.JNIEnv)(unsafe.Pointer(ac.Env))))
+		return nil
+	})
+	return level
+}
 
 func showCrocNotification(title, content string) {
 	driver.RunNative(func(ctx interface{}) error {

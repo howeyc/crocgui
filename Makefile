@@ -1,6 +1,38 @@
-.PHONY: all clean arm arm64 386 amd64 linux window wsl darwin ios install darm emulator adb wsladb logcat
-
+VSCODE_DIR := .vscode
+SETTINGS_FILE := $(VSCODE_DIR)/settings.json
 WSL_HOST_IP := $(shell ip route list default | awk '{print $$3}')
+
+.PHONY: all clean arm arm64 386 amd64 linux window wsl darwin ios install darm emulator adb wsladb logcat atags tags wtags t
+
+atags:	
+	@mkdir -p $(VSCODE_DIR)
+	@if [ -f $(SETTINGS_FILE) ]; then \
+		jq '.gopls["build.buildFlags"] = ["-tags=android"]' $(SETTINGS_FILE) > $(SETTINGS_FILE).tmp && \
+		mv $(SETTINGS_FILE).tmp $(SETTINGS_FILE); \
+	else \
+		echo '{"gopls": {"build.buildFlags": ["-tags=android"]}}' > $(SETTINGS_FILE); \
+	fi
+	@echo "Enabling Android build tags for gopls press Ctrl+Shift+P Go: Restart Language Server"
+
+wtags:	
+	@mkdir -p $(VSCODE_DIR)
+	@if [ -f $(SETTINGS_FILE) ]; then \
+		jq '.gopls["build.buildFlags"] = ["-tags=android"]' $(SETTINGS_FILE) > $(SETTINGS_FILE).tmp && \
+		mv $(SETTINGS_FILE).tmp $(SETTINGS_FILE); \
+	else \
+		echo '{"gopls": {"build.buildFlags": ["-tags=windows"]}}' > $(SETTINGS_FILE); \
+	fi
+	@echo "Enabling Windows build tags for gopls press Ctrl+Shift+P Go: Restart Language Server"
+
+tags:
+	@mkdir -p $(VSCODE_DIR)
+	@if [ -f $(SETTINGS_FILE) ]; then \
+		jq 'del(.gopls["build.buildFlags"])' $(SETTINGS_FILE) > $(SETTINGS_FILE).tmp && \
+		mv $(SETTINGS_FILE).tmp $(SETTINGS_FILE); \
+	else \
+		echo '{}' > $(SETTINGS_FILE); \
+	fi
+	@echo "Reset build tags for gopls press Ctrl+Shift+P Go: Restart Language Server"
 
 all: android
 
