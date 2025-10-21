@@ -22,7 +22,7 @@ var crocguiLicense string
 //go:embed third-party-licenses.txt
 var thirdPartyLicenses string
 
-func aboutTabItem(a fyne.App, w fyne.Window) *container.TabItem {
+func aboutTabItem(a fyne.App, _ fyne.Window) *container.TabItem {
 	longdescbytes, _ := metadata.ReadFile(fmt.Sprintf("metadata/%s/full_description.txt", langCode))
 	longdesc := string(longdescbytes)
 	longdesc = strings.ReplaceAll(longdesc, "<b>", "")

@@ -18,7 +18,6 @@ import (
 	"time"
 
 	log "github.com/schollz/logger"
-	"golang.org/x/time/rate"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
@@ -31,8 +30,6 @@ import (
 	"github.com/schollz/croc/v10/src/comm"
 	"github.com/schollz/croc/v10/src/croc"
 	"github.com/schollz/croc/v10/src/utils"
-	"github.com/schollz/pake/v3"
-	"github.com/schollz/progressbar/v3"
 )
 
 const (
@@ -844,55 +841,55 @@ func restart(a fyne.App, w fyne.Window) {
 	os.Exit(0)
 }
 
-type clientShadow struct {
-	Options                         croc.Options
-	Pake                            *pake.Pake
-	Key                             []byte
-	ExternalIP, ExternalIPConnected string
+// type clientShadow struct {
+// 	Options                         croc.Options
+// 	Pake                            *pake.Pake
+// 	Key                             []byte
+// 	ExternalIP, ExternalIPConnected string
 
-	// steps involved in forming relationship
-	Step1ChannelSecured       bool
-	Step2FileInfoTransferred  bool
-	Step3RecipientRequestFile bool
-	Step4FileTransferred      bool
-	Step5CloseChannels        bool
-	SuccessfulTransfer        bool
+// 	// steps involved in forming relationship
+// 	Step1ChannelSecured       bool
+// 	Step2FileInfoTransferred  bool
+// 	Step3RecipientRequestFile bool
+// 	Step4FileTransferred      bool
+// 	Step5CloseChannels        bool
+// 	SuccessfulTransfer        bool
 
-	// send / receive information of all files
-	FilesToTransfer           []croc.FileInfo
-	EmptyFoldersToTransfer    []croc.FileInfo
-	TotalNumberOfContents     int
-	TotalNumberFolders        int
-	FilesToTransferCurrentNum int
-	FilesHasFinished          map[int]struct{}
-	TotalFilesIgnored         int
+// 	// send / receive information of all files
+// 	FilesToTransfer           []croc.FileInfo
+// 	EmptyFoldersToTransfer    []croc.FileInfo
+// 	TotalNumberOfContents     int
+// 	TotalNumberFolders        int
+// 	FilesToTransferCurrentNum int
+// 	FilesHasFinished          map[int]struct{}
+// 	TotalFilesIgnored         int
 
-	// send / receive information of current file
-	CurrentFile            *os.File
-	CurrentFileChunkRanges []int64
-	CurrentFileChunks      []int64
-	CurrentFileIsClosed    bool
-	LastFolder             string
+// 	// send / receive information of current file
+// 	CurrentFile            *os.File
+// 	CurrentFileChunkRanges []int64
+// 	CurrentFileChunks      []int64
+// 	CurrentFileIsClosed    bool
+// 	LastFolder             string
 
-	TotalSent              int64
-	TotalChunksTransferred int
-	chunkMap               map[uint64]struct{}
-	limiter                *rate.Limiter
+// 	TotalSent              int64
+// 	TotalChunksTransferred int
+// 	chunkMap               map[uint64]struct{}
+// 	limiter                *rate.Limiter
 
-	// tcp connections
-	conn []*comm.Comm
+// 	// tcp connections
+// 	conn []*comm.Comm
 
-	bar             *progressbar.ProgressBar
-	longestFilename int
-	firstSend       bool
+// 	bar             *progressbar.ProgressBar
+// 	longestFilename int
+// 	firstSend       bool
 
-	mutex                    *sync.Mutex
-	fread                    *os.File
-	numfinished              int
-	quit                     chan bool
-	finishedNum              int
-	numberOfTransferredFiles int
-}
+// 	mutex                    *sync.Mutex
+// 	fread                    *os.File
+// 	numfinished              int
+// 	quit                     chan bool
+// 	finishedNum              int
+// 	numberOfTransferredFiles int
+// }
 
 func Conns(client interface{}) ([]*comm.Comm, error) {
 	defer func() { recover() }()

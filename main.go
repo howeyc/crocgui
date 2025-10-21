@@ -22,7 +22,6 @@ import (
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/layout"
-	"fyne.io/fyne/v2/storage"
 	"fyne.io/fyne/v2/theme"
 )
 
@@ -198,29 +197,29 @@ func ls(path string) (files []string) {
 	return
 }
 
-func lss(path string) (files []string) {
-	if path == "" {
-		return
-	}
+// func lss(path string) (files []string) {
+// 	if path == "" {
+// 		return
+// 	}
 
-	// pathURI, err := storage.ParseURI("file://" + path)
-	pathURI := storage.NewFileURI(path)
+// 	// pathURI, err := storage.ParseURI("file://" + path)
+// 	pathURI := storage.NewFileURI(path)
 
-	canList, err := storage.CanList(pathURI)
-	if err != nil || !canList {
-		return
-	}
+// 	canList, err := storage.CanList(pathURI)
+// 	if err != nil || !canList {
+// 		return
+// 	}
 
-	childURIs, err := storage.List(pathURI)
-	if err != nil {
-		return
-	}
+// 	childURIs, err := storage.List(pathURI)
+// 	if err != nil {
+// 		return
+// 	}
 
-	for _, uri := range childURIs {
+// 	for _, uri := range childURIs {
 
-		// files = append(files, uri.Name())
-		files = append(files, uriBase(uri))
-	}
+// 		// files = append(files, uri.Name())
+// 		files = append(files, uriBase(uri))
+// 	}
 
-	return files
-}
+// 	return files
+// }
