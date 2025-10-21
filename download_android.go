@@ -7,10 +7,22 @@ package main
 #include <stdlib.h>
 #include <string.h>
 
+void LogD(const char* message);
+
 // Функция для проверки разрешения
 static jboolean hasPermission(JNIEnv* env, jobject context, const char* permission) {
     jclass context_class = (*env)->GetObjectClass(env, context);
+    if (context_class == NULL) {
+        LogD("C: ERROR - Failed to get context class in hasPermission");
+        return JNI_FALSE;
+    }
+
     jmethodID check_permission = (*env)->GetMethodID(env, context_class, "checkSelfPermission", "(Ljava/lang/String;)I");
+    if (check_permission == NULL) {
+        LogD("C: ERROR - Failed to get checkSelfPermission method");
+        (*env)->DeleteLocalRef(env, context_class);
+        return JNI_FALSE;
+    }
 
     jstring permission_str = (*env)->NewStringUTF(env, permission);
     jint result = (*env)->CallIntMethod(env, context, check_permission, permission_str);
@@ -18,13 +30,29 @@ static jboolean hasPermission(JNIEnv* env, jobject context, const char* permissi
     (*env)->DeleteLocalRef(env, permission_str);
     (*env)->DeleteLocalRef(env, context_class);
 
-    return (result == 0) ? JNI_TRUE : JNI_FALSE; // 0 = PERMISSION_GRANTED
+    jboolean has_perm = (result == 0) ? JNI_TRUE : JNI_FALSE;
+
+    char permLog[128];
+    snprintf(permLog, sizeof(permLog), "C: Permission %s: %s", permission, (has_perm == JNI_TRUE) ? "GRANTED" : "DENIED");
+    LogD(permLog);
+
+    return has_perm; // 0 = PERMISSION_GRANTED
 }
 
 // Функция для запроса разрешений
 static void requestStoragePermissions(JNIEnv* env, jobject activity, const char** permissions, jint size) {
     jclass activity_class = (*env)->GetObjectClass(env, activity);
+    if (activity_class == NULL) {
+        LogD("C: ERROR - Failed to get activity class in requestStoragePermissions");
+        return;
+    }
+
     jmethodID request_permissions = (*env)->GetMethodID(env, activity_class, "requestPermissions", "([Ljava/lang/String;I)V");
+    if (request_permissions == NULL) {
+        LogD("C: ERROR - Failed to get requestPermissions method");
+        (*env)->DeleteLocalRef(env, activity_class);
+        return;
+    }
 
     // Создаем массив строк Java
     jclass string_class = (*env)->FindClass(env, "java/lang/String");
@@ -43,6 +71,8 @@ static void requestStoragePermissions(JNIEnv* env, jobject activity, const char*
     (*env)->DeleteLocalRef(env, permissions_array);
     (*env)->DeleteLocalRef(env, string_class);
     (*env)->DeleteLocalRef(env, activity_class);
+
+    LogD("C: Storage permissions requested");
 }
 
 // Проверка и запрос необходимых разрешений для Android < 10
@@ -65,10 +95,12 @@ static jboolean checkAndRequestStoragePermissions(JNIEnv* env, jobject activity)
 
     // Если не все разрешения есть - запрашиваем
     if (!allGranted) {
+        LogD("C: Requesting storage permissions");
         requestStoragePermissions(env, activity, permissions, size);
         return JNI_FALSE;
     }
 
+    LogD("C: All storage permissions granted");
     return JNI_TRUE;
 }
 
@@ -82,17 +114,18 @@ static char* CreateFileInDownloadsLegacy(JNIEnv* env, jobject activity, const ch
 static char* CreateFileInDownloadsCompat(JNIEnv* env, jobject activity, const char* fileName, const char* mimeType) {
     // Получаем версию Android
     jint api_level = get_api_level(env);
+
+    char apiLog[64];
+    snprintf(apiLog, sizeof(apiLog), "C: API level: %d", api_level);
+    LogD(apiLog);
+
     if (api_level >= 29) {
-        // Android 10+ - используем MediaStore
+        LogD("C: Using modern MediaStore approach");
         return CreateFileInDownloadsModern(env, activity, fileName, mimeType);
     } else {
-        // Android 7-9 - используем прямой доступ к файлам
+        LogD("C: Using legacy file approach");
         if (!checkAndRequestStoragePermissions(env, activity)) {
-            char* error = strdup("error: Storage permission required");
-            if (error == NULL) {
-                return strdup("error: Memory allocation failed");
-            }
-            return error;
+            return strdup("error: Storage permission required");
         }
         return CreateFileInDownloadsLegacy(env, activity, fileName, mimeType);
     }
@@ -417,10 +450,13 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/driver"
 	"fyne.io/fyne/v2/storage"
+	log "github.com/schollz/logger"
 )
 
 // CreateFileInDownloads создает файл в папке Downloads с поддержкой всех версий Android
 func CreateFileInDownloads(fileName, mimeType string) (string, error) {
+	log.Trace("Creating file in Downloads: " + fileName)
+
 	var result string
 	var err error
 
@@ -457,6 +493,7 @@ func CreateFileInDownloads(fileName, mimeType string) (string, error) {
 	})
 
 	if err != nil {
+		log.Error("Failed to create file: " + err.Error())
 		return "", fmt.Errorf("failed to create file: %w", err)
 	}
 	if result == "" {

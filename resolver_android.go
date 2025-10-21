@@ -7,30 +7,86 @@ package main
 #include <stdlib.h>
 #include <string.h>
 
+void LogD(const char* message);
+
 static char* GetFileName(JNIEnv* env, jobject activity, const char* uriStr) {
     // 1. Get ContentResolver
     jclass activityClass = (*env)->GetObjectClass(env, activity);
+    if (activityClass == NULL) {
+        LogD("C: ERROR - Failed to get activity class in GetFileName");
+        return NULL;
+    }
+
     jmethodID getContentResolver = (*env)->GetMethodID(env, activityClass,
         "getContentResolver", "()Landroid/content/ContentResolver;");
+    if (getContentResolver == NULL) {
+        LogD("C: ERROR - Failed to get getContentResolver method");
+        (*env)->DeleteLocalRef(env, activityClass);
+        return NULL;
+    }
+
     jobject contentResolver = (*env)->CallObjectMethod(env, activity, getContentResolver);
+    if (contentResolver == NULL) {
+        LogD("C: ERROR - contentResolver is NULL");
+        (*env)->DeleteLocalRef(env, activityClass);
+        return NULL;
+    }
 
     // 2. Parse URI
     jclass uriClass = (*env)->FindClass(env, "android/net/Uri");
+    if (uriClass == NULL) {
+        LogD("C: ERROR - Failed to find Uri class");
+        (*env)->DeleteLocalRef(env, activityClass);
+        (*env)->DeleteLocalRef(env, contentResolver);
+        return NULL;
+    }
+
     jmethodID parseMethod = (*env)->GetStaticMethodID(env, uriClass,
         "parse", "(Ljava/lang/String;)Landroid/net/Uri;");
+    if (parseMethod == NULL) {
+        LogD("C: ERROR - Failed to get parse method");
+        (*env)->DeleteLocalRef(env, activityClass);
+        (*env)->DeleteLocalRef(env, contentResolver);
+        (*env)->DeleteLocalRef(env, uriClass);
+        return NULL;
+    }
+
     jstring juriStr = (*env)->NewStringUTF(env, uriStr);
     jobject uri = (*env)->CallStaticObjectMethod(env, uriClass, parseMethod, juriStr);
     (*env)->DeleteLocalRef(env, juriStr);
 
-    if (uri == NULL) return NULL;
+    if (uri == NULL) {
+        LogD("C: ERROR - Failed to parse URI");
+        (*env)->DeleteLocalRef(env, activityClass);
+        (*env)->DeleteLocalRef(env, contentResolver);
+        (*env)->DeleteLocalRef(env, uriClass);
+        return NULL;
+    }
 
     // 3. Query ContentResolver
     jclass resolverClass = (*env)->GetObjectClass(env, contentResolver);
     jmethodID queryMethod = (*env)->GetMethodID(env, resolverClass, "query",
         "(Landroid/net/Uri;[Ljava/lang/String;Ljava/lang/String;[Ljava/lang/String;Ljava/lang/String;)Landroid/database/Cursor;");
+    if (queryMethod == NULL) {
+        LogD("C: ERROR - Failed to get query method");
+        (*env)->DeleteLocalRef(env, activityClass);
+        (*env)->DeleteLocalRef(env, contentResolver);
+        (*env)->DeleteLocalRef(env, uriClass);
+        (*env)->DeleteLocalRef(env, uri);
+        return NULL;
+    }
 
     // Create projection array
     jclass stringClass = (*env)->FindClass(env, "java/lang/String");
+    if (stringClass == NULL) {
+        LogD("C: ERROR - Failed to find String class");
+        (*env)->DeleteLocalRef(env, activityClass);
+        (*env)->DeleteLocalRef(env, contentResolver);
+        (*env)->DeleteLocalRef(env, uriClass);
+        (*env)->DeleteLocalRef(env, uri);
+        return NULL;
+    }
+
     jobjectArray projection = (*env)->NewObjectArray(env, 1, stringClass, NULL);
     jstring displayName = (*env)->NewStringUTF(env, "_display_name");
     (*env)->SetObjectArrayElement(env, projection, 0, displayName);
@@ -42,14 +98,30 @@ static char* GetFileName(JNIEnv* env, jobject activity, const char* uriStr) {
     // Cleanup
     (*env)->DeleteLocalRef(env, projection);
     (*env)->DeleteLocalRef(env, uri);
+    (*env)->DeleteLocalRef(env, activityClass);
     (*env)->DeleteLocalRef(env, contentResolver);
+    (*env)->DeleteLocalRef(env, uriClass);
 
-    if (cursor == NULL) return NULL;
+    if (cursor == NULL) {
+        LogD("C: ERROR - cursor is NULL");
+        return NULL;
+    }
 
     // 4. Get file name
     jclass cursorClass = (*env)->GetObjectClass(env, cursor);
     jmethodID moveToFirst = (*env)->GetMethodID(env, cursorClass, "moveToFirst", "()Z");
+    if (moveToFirst == NULL) {
+        LogD("C: ERROR - Failed to get moveToFirst method");
+        (*env)->DeleteLocalRef(env, cursor);
+        return NULL;
+    }
+
     jmethodID getString = (*env)->GetMethodID(env, cursorClass, "getString", "(I)Ljava/lang/String;");
+    if (getString == NULL) {
+        LogD("C: ERROR - Failed to get getString method");
+        (*env)->DeleteLocalRef(env, cursor);
+        return NULL;
+    }
 
     char* result = NULL;
     if ((*env)->CallBooleanMethod(env, cursor, moveToFirst)) {
@@ -71,20 +143,54 @@ static jboolean IsDirectoryUri(JNIEnv* env, jobject activity, const char* uriStr
 
     // 1. Get ContentResolver
     jclass activityClass = (*env)->GetObjectClass(env, activity);
+    if (activityClass == NULL) {
+        LogD("C: ERROR - Failed to get activity class in IsDirectoryUri");
+        return JNI_FALSE;
+    }
+
     jmethodID getContentResolver = (*env)->GetMethodID(env, activityClass,
         "getContentResolver", "()Landroid/content/ContentResolver;");
+    if (getContentResolver == NULL) {
+        LogD("C: ERROR - Failed to get getContentResolver method");
+        (*env)->DeleteLocalRef(env, activityClass);
+        return JNI_FALSE;
+    }
+
     jobject contentResolver = (*env)->CallObjectMethod(env, activity, getContentResolver);
+    if (contentResolver == NULL) {
+        LogD("C: ERROR - contentResolver is NULL");
+        (*env)->DeleteLocalRef(env, activityClass);
+        return JNI_FALSE;
+    }
 
     // 2. Parse URI
     jclass uriClass = (*env)->FindClass(env, "android/net/Uri");
+    if (uriClass == NULL) {
+        LogD("C: ERROR - Failed to find Uri class");
+        (*env)->DeleteLocalRef(env, activityClass);
+        (*env)->DeleteLocalRef(env, contentResolver);
+        return JNI_FALSE;
+    }
+
     jmethodID parseMethod = (*env)->GetStaticMethodID(env, uriClass,
         "parse", "(Ljava/lang/String;)Landroid/net/Uri;");
+    if (parseMethod == NULL) {
+        LogD("C: ERROR - Failed to get parse method");
+        (*env)->DeleteLocalRef(env, activityClass);
+        (*env)->DeleteLocalRef(env, contentResolver);
+        (*env)->DeleteLocalRef(env, uriClass);
+        return JNI_FALSE;
+    }
+
     jstring juriStr = (*env)->NewStringUTF(env, uriStr);
     jobject uri = (*env)->CallStaticObjectMethod(env, uriClass, parseMethod, juriStr);
     (*env)->DeleteLocalRef(env, juriStr);
 
     if (uri == NULL) {
+        LogD("C: ERROR - Failed to parse URI");
+        (*env)->DeleteLocalRef(env, activityClass);
         (*env)->DeleteLocalRef(env, contentResolver);
+        (*env)->DeleteLocalRef(env, uriClass);
         return JNI_FALSE;
     }
 
@@ -92,9 +198,26 @@ static jboolean IsDirectoryUri(JNIEnv* env, jobject activity, const char* uriStr
     jclass resolverClass = (*env)->GetObjectClass(env, contentResolver);
     jmethodID queryMethod = (*env)->GetMethodID(env, resolverClass, "query",
         "(Landroid/net/Uri;[Ljava/lang/String;Ljava/lang/String;[Ljava/lang/String;Ljava/lang/String;)Landroid/database/Cursor;");
+    if (queryMethod == NULL) {
+        LogD("C: ERROR - Failed to get query method");
+        (*env)->DeleteLocalRef(env, activityClass);
+        (*env)->DeleteLocalRef(env, contentResolver);
+        (*env)->DeleteLocalRef(env, uriClass);
+        (*env)->DeleteLocalRef(env, uri);
+        return JNI_FALSE;
+    }
 
     // Projection for MIME type
     jclass stringClass = (*env)->FindClass(env, "java/lang/String");
+    if (stringClass == NULL) {
+        LogD("C: ERROR - Failed to find String class");
+        (*env)->DeleteLocalRef(env, activityClass);
+        (*env)->DeleteLocalRef(env, contentResolver);
+        (*env)->DeleteLocalRef(env, uriClass);
+        (*env)->DeleteLocalRef(env, uri);
+        return JNI_FALSE;
+    }
+
     jobjectArray projection = (*env)->NewObjectArray(env, 1, stringClass, NULL);
     jstring mimeTypeCol = (*env)->NewStringUTF(env, "mime_type");
     (*env)->SetObjectArrayElement(env, projection, 0, mimeTypeCol);
@@ -106,16 +229,30 @@ static jboolean IsDirectoryUri(JNIEnv* env, jobject activity, const char* uriStr
     // Cleanup
     (*env)->DeleteLocalRef(env, projection);
     (*env)->DeleteLocalRef(env, uri);
+    (*env)->DeleteLocalRef(env, activityClass);
     (*env)->DeleteLocalRef(env, contentResolver);
+    (*env)->DeleteLocalRef(env, uriClass);
 
     if (cursor == NULL) {
+        LogD("C: ERROR - cursor is NULL");
         return JNI_FALSE;
     }
 
     // 4. Check MIME type
     jclass cursorClass = (*env)->GetObjectClass(env, cursor);
     jmethodID moveToFirst = (*env)->GetMethodID(env, cursorClass, "moveToFirst", "()Z");
+    if (moveToFirst == NULL) {
+        LogD("C: ERROR - Failed to get moveToFirst method");
+        (*env)->DeleteLocalRef(env, cursor);
+        return JNI_FALSE;
+    }
+
     jmethodID getString = (*env)->GetMethodID(env, cursorClass, "getString", "(I)Ljava/lang/String;");
+    if (getString == NULL) {
+        LogD("C: ERROR - Failed to get getString method");
+        (*env)->DeleteLocalRef(env, cursor);
+        return JNI_FALSE;
+    }
 
     if ((*env)->CallBooleanMethod(env, cursor, moveToFirst)) {
         jstring mimeType = (*env)->CallObjectMethod(env, cursor, getString, 0);
@@ -137,45 +274,78 @@ static jboolean IsDirectoryUri(JNIEnv* env, jobject activity, const char* uriStr
 }
 
 static jboolean CanListDirectory(JNIEnv* env, jobject activity, const char* uriStr) {
-    // 1. First check if it's a directory
-    // if (!IsDirectoryUri(env, activity, uriStr)) {
-    //     return JNI_FALSE;
-    // }
-
     jboolean canList = JNI_FALSE;
 
-    // 2. Get ContentResolver (только если это директория)
+    // 1. Get ContentResolver
     jclass activityClass = (*env)->GetObjectClass(env, activity);
+    if (activityClass == NULL) {
+        LogD("C: ERROR - Failed to get activity class in CanListDirectory");
+        return JNI_FALSE;
+    }
+
     jmethodID getContentResolver = (*env)->GetMethodID(env, activityClass,
         "getContentResolver", "()Landroid/content/ContentResolver;");
-    jobject contentResolver = (*env)->CallObjectMethod(env, activity, getContentResolver);
+    if (getContentResolver == NULL) {
+        LogD("C: ERROR - Failed to get getContentResolver method");
+        (*env)->DeleteLocalRef(env, activityClass);
+        return JNI_FALSE;
+    }
 
-    // 3. Parse URI
+    jobject contentResolver = (*env)->CallObjectMethod(env, activity, getContentResolver);
+    if (contentResolver == NULL) {
+        LogD("C: ERROR - contentResolver is NULL");
+        (*env)->DeleteLocalRef(env, activityClass);
+        return JNI_FALSE;
+    }
+
+    // 2. Parse URI
     jclass uriClass = (*env)->FindClass(env, "android/net/Uri");
+    if (uriClass == NULL) {
+        LogD("C: ERROR - Failed to find Uri class");
+        (*env)->DeleteLocalRef(env, activityClass);
+        (*env)->DeleteLocalRef(env, contentResolver);
+        return JNI_FALSE;
+    }
+
     jmethodID parseMethod = (*env)->GetStaticMethodID(env, uriClass,
         "parse", "(Ljava/lang/String;)Landroid/net/Uri;");
+    if (parseMethod == NULL) {
+        LogD("C: ERROR - Failed to get parse method");
+        (*env)->DeleteLocalRef(env, activityClass);
+        (*env)->DeleteLocalRef(env, contentResolver);
+        (*env)->DeleteLocalRef(env, uriClass);
+        return JNI_FALSE;
+    }
+
     jstring juriStr = (*env)->NewStringUTF(env, uriStr);
     jobject uri = (*env)->CallStaticObjectMethod(env, uriClass, parseMethod, juriStr);
     (*env)->DeleteLocalRef(env, juriStr);
 
     if (uri == NULL) {
+        LogD("C: ERROR - Failed to parse URI");
+        (*env)->DeleteLocalRef(env, activityClass);
         (*env)->DeleteLocalRef(env, contentResolver);
+        (*env)->DeleteLocalRef(env, uriClass);
         return JNI_FALSE;
     }
 
-    // 4. Try to list children using DocumentsContract
+    // 3. Try to list children using DocumentsContract
     jclass documentsContractClass = (*env)->FindClass(env, "android/provider/DocumentsContract");
     if (documentsContractClass == NULL) {
+        LogD("C: ERROR - Failed to find DocumentsContract class");
         (*env)->DeleteLocalRef(env, uri);
+        (*env)->DeleteLocalRef(env, activityClass);
         (*env)->DeleteLocalRef(env, contentResolver);
+        (*env)->DeleteLocalRef(env, uriClass);
         return JNI_FALSE;
     }
 
-    // 5. Try to build child documents URI
+    // 4. Try to build child documents URI
     jmethodID buildChildDocumentsUriMethod = (*env)->GetStaticMethodID(env, documentsContractClass,
         "buildChildDocumentsUriUsingTree", "(Landroid/net/Uri;Ljava/lang/String;)Landroid/net/Uri;");
-
-    if (buildChildDocumentsUriMethod != NULL) {
+    if (buildChildDocumentsUriMethod == NULL) {
+        LogD("C: ERROR - Failed to get buildChildDocumentsUriUsingTree method");
+    } else {
         jobject childUri = (*env)->CallStaticObjectMethod(env, documentsContractClass,
             buildChildDocumentsUriMethod, uri, NULL);
 
@@ -185,33 +355,41 @@ static jboolean CanListDirectory(JNIEnv* env, jobject activity, const char* uriS
         }
     }
 
-    // 6. Alternative approach: try to query
+    // 5. Alternative approach: try to query
     if (!canList) {
-        jmethodID queryMethod = (*env)->GetMethodID(env, (*env)->GetObjectClass(env, contentResolver),
+        jclass resolverClass = (*env)->GetObjectClass(env, contentResolver);
+        jmethodID queryMethod = (*env)->GetMethodID(env, resolverClass,
             "query", "(Landroid/net/Uri;[Ljava/lang/String;Ljava/lang/String;[Ljava/lang/String;Ljava/lang/String;)Landroid/database/Cursor;");
-
-        if (queryMethod != NULL) {
+        if (queryMethod == NULL) {
+            LogD("C: ERROR - Failed to get query method for alternative approach");
+        } else {
             jclass stringClass = (*env)->FindClass(env, "java/lang/String");
-            jobjectArray projection = (*env)->NewObjectArray(env, 1, stringClass, NULL);
-            jstring colName = (*env)->NewStringUTF(env, "document_id");
-            (*env)->SetObjectArrayElement(env, projection, 0, colName);
-            (*env)->DeleteLocalRef(env, colName);
+            if (stringClass == NULL) {
+                LogD("C: ERROR - Failed to find String class for alternative approach");
+            } else {
+                jobjectArray projection = (*env)->NewObjectArray(env, 1, stringClass, NULL);
+                jstring colName = (*env)->NewStringUTF(env, "document_id");
+                (*env)->SetObjectArrayElement(env, projection, 0, colName);
+                (*env)->DeleteLocalRef(env, colName);
 
-            jobject cursor = (*env)->CallObjectMethod(env, contentResolver, queryMethod,
-                uri, projection, NULL, NULL, NULL);
+                jobject cursor = (*env)->CallObjectMethod(env, contentResolver, queryMethod,
+                    uri, projection, NULL, NULL, NULL);
 
-            if (cursor != NULL) {
-                canList = JNI_TRUE;
-                (*env)->DeleteLocalRef(env, cursor);
+                if (cursor != NULL) {
+                    canList = JNI_TRUE;
+                    (*env)->DeleteLocalRef(env, cursor);
+                }
+                (*env)->DeleteLocalRef(env, projection);
             }
-            (*env)->DeleteLocalRef(env, projection);
         }
     }
 
     // Cleanup
     (*env)->DeleteLocalRef(env, documentsContractClass);
     (*env)->DeleteLocalRef(env, uri);
+    (*env)->DeleteLocalRef(env, activityClass);
     (*env)->DeleteLocalRef(env, contentResolver);
+    (*env)->DeleteLocalRef(env, uriClass);
 
     return canList;
 }
@@ -219,20 +397,54 @@ static jboolean CanListDirectory(JNIEnv* env, jobject activity, const char* uriS
 static char* getMimeTypeFromUri(JNIEnv* env, jobject activity, const char* uriStr) {
     // 1. Get ContentResolver
     jclass activityClass = (*env)->GetObjectClass(env, activity);
+    if (activityClass == NULL) {
+        LogD("C: ERROR - Failed to get activity class in getMimeTypeFromUri");
+        return NULL;
+    }
+
     jmethodID getContentResolver = (*env)->GetMethodID(env, activityClass,
         "getContentResolver", "()Landroid/content/ContentResolver;");
+    if (getContentResolver == NULL) {
+        LogD("C: ERROR - Failed to get getContentResolver method");
+        (*env)->DeleteLocalRef(env, activityClass);
+        return NULL;
+    }
+
     jobject contentResolver = (*env)->CallObjectMethod(env, activity, getContentResolver);
+    if (contentResolver == NULL) {
+        LogD("C: ERROR - contentResolver is NULL");
+        (*env)->DeleteLocalRef(env, activityClass);
+        return NULL;
+    }
 
     // 2. Parse URI
     jclass uriClass = (*env)->FindClass(env, "android/net/Uri");
+    if (uriClass == NULL) {
+        LogD("C: ERROR - Failed to find Uri class");
+        (*env)->DeleteLocalRef(env, activityClass);
+        (*env)->DeleteLocalRef(env, contentResolver);
+        return NULL;
+    }
+
     jmethodID parseMethod = (*env)->GetStaticMethodID(env, uriClass,
         "parse", "(Ljava/lang/String;)Landroid/net/Uri;");
+    if (parseMethod == NULL) {
+        LogD("C: ERROR - Failed to get parse method");
+        (*env)->DeleteLocalRef(env, activityClass);
+        (*env)->DeleteLocalRef(env, contentResolver);
+        (*env)->DeleteLocalRef(env, uriClass);
+        return NULL;
+    }
+
     jstring juriStr = (*env)->NewStringUTF(env, uriStr);
     jobject uri = (*env)->CallStaticObjectMethod(env, uriClass, parseMethod, juriStr);
     (*env)->DeleteLocalRef(env, juriStr);
 
     if (uri == NULL) {
+        LogD("C: ERROR - Failed to parse URI");
+        (*env)->DeleteLocalRef(env, activityClass);
         (*env)->DeleteLocalRef(env, contentResolver);
+        (*env)->DeleteLocalRef(env, uriClass);
         return NULL;
     }
 
@@ -240,9 +452,26 @@ static char* getMimeTypeFromUri(JNIEnv* env, jobject activity, const char* uriSt
     jclass resolverClass = (*env)->GetObjectClass(env, contentResolver);
     jmethodID queryMethod = (*env)->GetMethodID(env, resolverClass, "query",
         "(Landroid/net/Uri;[Ljava/lang/String;Ljava/lang/String;[Ljava/lang/String;Ljava/lang/String;)Landroid/database/Cursor;");
+    if (queryMethod == NULL) {
+        LogD("C: ERROR - Failed to get query method");
+        (*env)->DeleteLocalRef(env, activityClass);
+        (*env)->DeleteLocalRef(env, contentResolver);
+        (*env)->DeleteLocalRef(env, uriClass);
+        (*env)->DeleteLocalRef(env, uri);
+        return NULL;
+    }
 
     // Projection for MIME type
     jclass stringClass = (*env)->FindClass(env, "java/lang/String");
+    if (stringClass == NULL) {
+        LogD("C: ERROR - Failed to find String class");
+        (*env)->DeleteLocalRef(env, activityClass);
+        (*env)->DeleteLocalRef(env, contentResolver);
+        (*env)->DeleteLocalRef(env, uriClass);
+        (*env)->DeleteLocalRef(env, uri);
+        return NULL;
+    }
+
     jobjectArray projection = (*env)->NewObjectArray(env, 1, stringClass, NULL);
     jstring mimeTypeCol = (*env)->NewStringUTF(env, "mime_type");
     (*env)->SetObjectArrayElement(env, projection, 0, mimeTypeCol);
@@ -254,28 +483,44 @@ static char* getMimeTypeFromUri(JNIEnv* env, jobject activity, const char* uriSt
     // Cleanup
     (*env)->DeleteLocalRef(env, projection);
     (*env)->DeleteLocalRef(env, uri);
+    (*env)->DeleteLocalRef(env, activityClass);
     (*env)->DeleteLocalRef(env, contentResolver);
+    (*env)->DeleteLocalRef(env, uriClass);
 
     char* result = NULL;
 
-    if (cursor != NULL) {
-        // 4. Get MIME type
-        jclass cursorClass = (*env)->GetObjectClass(env, cursor);
-        jmethodID moveToFirst = (*env)->GetMethodID(env, cursorClass, "moveToFirst", "()Z");
-        jmethodID getString = (*env)->GetMethodID(env, cursorClass, "getString", "(I)Ljava/lang/String;");
-
-        if ((*env)->CallBooleanMethod(env, cursor, moveToFirst)) {
-            jstring mimeType = (*env)->CallObjectMethod(env, cursor, getString, 0);
-            if (mimeType != NULL) {
-                const char* mimeTypeStr = (*env)->GetStringUTFChars(env, mimeType, NULL);
-                result = strdup(mimeTypeStr);
-                (*env)->ReleaseStringUTFChars(env, mimeType, mimeTypeStr);
-                (*env)->DeleteLocalRef(env, mimeType);
-            }
-        }
-        (*env)->DeleteLocalRef(env, cursor);
+    if (cursor == NULL) {
+        LogD("C: ERROR - cursor is NULL");
+        return NULL;
     }
 
+    // 4. Get MIME type
+    jclass cursorClass = (*env)->GetObjectClass(env, cursor);
+    jmethodID moveToFirst = (*env)->GetMethodID(env, cursorClass, "moveToFirst", "()Z");
+    if (moveToFirst == NULL) {
+        LogD("C: ERROR - Failed to get moveToFirst method");
+        (*env)->DeleteLocalRef(env, cursor);
+        return NULL;
+    }
+
+    jmethodID getString = (*env)->GetMethodID(env, cursorClass, "getString", "(I)Ljava/lang/String;");
+    if (getString == NULL) {
+        LogD("C: ERROR - Failed to get getString method");
+        (*env)->DeleteLocalRef(env, cursor);
+        return NULL;
+    }
+
+    if ((*env)->CallBooleanMethod(env, cursor, moveToFirst)) {
+        jstring mimeType = (*env)->CallObjectMethod(env, cursor, getString, 0);
+        if (mimeType != NULL) {
+            const char* mimeTypeStr = (*env)->GetStringUTFChars(env, mimeType, NULL);
+            result = strdup(mimeTypeStr);
+            (*env)->ReleaseStringUTFChars(env, mimeType, mimeTypeStr);
+            (*env)->DeleteLocalRef(env, mimeType);
+        }
+    }
+
+    (*env)->DeleteLocalRef(env, cursor);
     return result;
 }
 */
@@ -298,8 +543,8 @@ func CanList(u fyne.URI) (bool, error) {
 
 	if apiLevel() > 28 {
 		return storage.CanList(u)
-
 	}
+
 	var canList C.jboolean = C.JNI_FALSE
 
 	driver.RunNative(func(ctx interface{}) error {

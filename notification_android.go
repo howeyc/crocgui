@@ -32,8 +32,6 @@ jint get_api_level(JNIEnv* env) {
 
 // Create notification channel for Android 8+
 static void createCrocNotificationChannel(JNIEnv* env, jobject context) {
-    LogD("C: Creating notification channel");
-
     jclass notification_manager_class = (*env)->FindClass(env, "android/app/NotificationManager");
     if (notification_manager_class == NULL) {
         LogD("C: ERROR - NotificationManager class not found");
@@ -44,6 +42,11 @@ static void createCrocNotificationChannel(JNIEnv* env, jobject context) {
     jmethodID get_system_service = (*env)->GetMethodID(env,
         (*env)->GetObjectClass(env, context),
         "getSystemService", "(Ljava/lang/String;)Ljava/lang/Object;");
+    if (get_system_service == NULL) {
+        LogD("C: ERROR - getSystemService method not found");
+        (*env)->DeleteLocalRef(env, notification_manager_class);
+        return;
+    }
 
     jstring service_name = (*env)->NewStringUTF(env, "notification");
     jobject notification_manager = (*env)->CallObjectMethod(env, context, get_system_service, service_name);
@@ -63,26 +66,40 @@ static void createCrocNotificationChannel(JNIEnv* env, jobject context) {
 
     jmethodID channel_constructor = (*env)->GetMethodID(env, channel_class, "<init>",
         "(Ljava/lang/String;Ljava/lang/CharSequence;I)V");
+    if (channel_constructor == NULL) {
+        LogD("C: ERROR - NotificationChannel constructor not found");
+        (*env)->DeleteLocalRef(env, channel_id);
+        (*env)->DeleteLocalRef(env, channel_name);
+        (*env)->DeleteLocalRef(env, service_name);
+        (*env)->DeleteLocalRef(env, notification_manager_class);
+        (*env)->DeleteLocalRef(env, channel_class);
+        return;
+    }
+
     jobject channel = (*env)->NewObject(env, channel_class, channel_constructor,
         channel_id, channel_name, importance);
 
     // Set channel description
     jmethodID set_description = (*env)->GetMethodID(env, channel_class, "setDescription",
         "(Ljava/lang/String;)V");
-    jstring description = (*env)->NewStringUTF(env, "Application notifications");
-    (*env)->CallVoidMethod(env, channel, set_description, description);
+    if (set_description != NULL) {
+        jstring description = (*env)->NewStringUTF(env, "Application notifications");
+        (*env)->CallVoidMethod(env, channel, set_description, description);
+        (*env)->DeleteLocalRef(env, description);
+    }
 
     // Create the channel
     jmethodID create_channel = (*env)->GetMethodID(env, notification_manager_class,
         "createNotificationChannel", "(Landroid/app/NotificationChannel;)V");
-    (*env)->CallVoidMethod(env, notification_manager, create_channel, channel);
-
-    LogD("C: Notification channel created");
+    if (create_channel == NULL) {
+        LogD("C: ERROR - createNotificationChannel method not found");
+    } else {
+        (*env)->CallVoidMethod(env, notification_manager, create_channel, channel);
+    }
 
     // Cleanup
     (*env)->DeleteLocalRef(env, channel_id);
     (*env)->DeleteLocalRef(env, channel_name);
-    (*env)->DeleteLocalRef(env, description);
     (*env)->DeleteLocalRef(env, channel);
     (*env)->DeleteLocalRef(env, service_name);
     (*env)->DeleteLocalRef(env, notification_manager_class);
@@ -90,46 +107,107 @@ static void createCrocNotificationChannel(JNIEnv* env, jobject context) {
 }
 
 static void showCrocNotification(JNIEnv* env, jobject context, char* title, char* content) {
-    LogD("C: Start showCrocNotification");
-
     // Create notification channel for Android 8+ (API level 26+)
     jint api_level = get_api_level(env);
     if (api_level >= 26) {
         createCrocNotificationChannel(env, context);
     }
 
-    // === СОЗДАЕМ INTENT ДЛЯ ЗАПУСКА ПРИЛОЖЕНИЯ ===
-    LogD("C: Creating launch intent");
-
     // Создаем Intent для запуска главной активности
     jclass intent_class = (*env)->FindClass(env, "android/content/Intent");
+    if (intent_class == NULL) {
+        LogD("C: ERROR - Intent class not found");
+        return;
+    }
+
     jmethodID intent_constructor = (*env)->GetMethodID(env, intent_class, "<init>", "()V");
+    if (intent_constructor == NULL) {
+        LogD("C: ERROR - Intent constructor not found");
+        (*env)->DeleteLocalRef(env, intent_class);
+        return;
+    }
+
     jobject launch_intent = (*env)->NewObject(env, intent_class, intent_constructor);
 
     // Устанавливаем действие и категорию для запуска приложения
     jmethodID set_action = (*env)->GetMethodID(env, intent_class, "setAction", "(Ljava/lang/String;)Landroid/content/Intent;");
+    if (set_action == NULL) {
+        LogD("C: ERROR - setAction method not found");
+        (*env)->DeleteLocalRef(env, launch_intent);
+        (*env)->DeleteLocalRef(env, intent_class);
+        return;
+    }
+
     jstring action_string = (*env)->NewStringUTF(env, "android.intent.action.MAIN");
     (*env)->CallObjectMethod(env, launch_intent, set_action, action_string);
 
     jmethodID add_category = (*env)->GetMethodID(env, intent_class, "addCategory", "(Ljava/lang/String;)Landroid/content/Intent;");
+    if (add_category == NULL) {
+        LogD("C: ERROR - addCategory method not found");
+        (*env)->DeleteLocalRef(env, action_string);
+        (*env)->DeleteLocalRef(env, launch_intent);
+        (*env)->DeleteLocalRef(env, intent_class);
+        return;
+    }
+
     jstring category_string = (*env)->NewStringUTF(env, "android.intent.category.LAUNCHER");
     (*env)->CallObjectMethod(env, launch_intent, add_category, category_string);
 
     // Устанавлием флаги для правильного запуска
     jmethodID set_flags = (*env)->GetMethodID(env, intent_class, "setFlags", "(I)Landroid/content/Intent;");
+    if (set_flags == NULL) {
+        LogD("C: ERROR - setFlags method not found");
+        (*env)->DeleteLocalRef(env, action_string);
+        (*env)->DeleteLocalRef(env, category_string);
+        (*env)->DeleteLocalRef(env, launch_intent);
+        (*env)->DeleteLocalRef(env, intent_class);
+        return;
+    }
+
     jint flags = 0x10000000 | 0x00200000; // FLAG_ACTIVITY_NEW_TASK | FLAG_ACTIVITY_RESET_TASK_IF_NEEDED
     (*env)->CallObjectMethod(env, launch_intent, set_flags, flags);
 
     // Устанавливаем класс активности для запуска
     jmethodID set_class = (*env)->GetMethodID(env, intent_class, "setClassName", "(Ljava/lang/String;Ljava/lang/String;)Landroid/content/Intent;");
+    if (set_class == NULL) {
+        LogD("C: ERROR - setClassName method not found");
+        (*env)->DeleteLocalRef(env, action_string);
+        (*env)->DeleteLocalRef(env, category_string);
+        (*env)->DeleteLocalRef(env, launch_intent);
+        (*env)->DeleteLocalRef(env, intent_class);
+        return;
+    }
+
     jstring package_name = (*env)->NewStringUTF(env, "com.github.howeyc.crocgui");
     jstring class_name = (*env)->NewStringUTF(env, "org.golang.app.GoNativeActivity");
     (*env)->CallObjectMethod(env, launch_intent, set_class, package_name, class_name);
 
     // Создаем PendingIntent
     jclass pending_intent_class = (*env)->FindClass(env, "android/app/PendingIntent");
+    if (pending_intent_class == NULL) {
+        LogD("C: ERROR - PendingIntent class not found");
+        (*env)->DeleteLocalRef(env, action_string);
+        (*env)->DeleteLocalRef(env, category_string);
+        (*env)->DeleteLocalRef(env, package_name);
+        (*env)->DeleteLocalRef(env, class_name);
+        (*env)->DeleteLocalRef(env, launch_intent);
+        (*env)->DeleteLocalRef(env, intent_class);
+        return;
+    }
+
     jmethodID get_activity_method = (*env)->GetStaticMethodID(env, pending_intent_class,
         "getActivity", "(Landroid/content/Context;ILandroid/content/Intent;I)Landroid/app/PendingIntent;");
+    if (get_activity_method == NULL) {
+        LogD("C: ERROR - getActivity method not found");
+        (*env)->DeleteLocalRef(env, pending_intent_class);
+        (*env)->DeleteLocalRef(env, action_string);
+        (*env)->DeleteLocalRef(env, category_string);
+        (*env)->DeleteLocalRef(env, package_name);
+        (*env)->DeleteLocalRef(env, class_name);
+        (*env)->DeleteLocalRef(env, launch_intent);
+        (*env)->DeleteLocalRef(env, intent_class);
+        return;
+    }
 
     jint request_code = 0;
     jint pending_flags = 0x8000000; // FLAG_UPDATE_CURRENT
@@ -137,12 +215,22 @@ static void showCrocNotification(JNIEnv* env, jobject context, char* title, char
     jobject pending_intent = (*env)->CallStaticObjectMethod(env, pending_intent_class,
         get_activity_method, context, request_code, launch_intent, pending_flags);
 
-    LogD("C: PendingIntent created");
-
     // Get NotificationManager service
     jclass context_class = (*env)->GetObjectClass(env, context);
     jmethodID get_system_service = (*env)->GetMethodID(env, context_class,
         "getSystemService", "(Ljava/lang/String;)Ljava/lang/Object;");
+    if (get_system_service == NULL) {
+        LogD("C: ERROR - getSystemService method not found");
+        (*env)->DeleteLocalRef(env, pending_intent_class);
+        (*env)->DeleteLocalRef(env, action_string);
+        (*env)->DeleteLocalRef(env, category_string);
+        (*env)->DeleteLocalRef(env, package_name);
+        (*env)->DeleteLocalRef(env, class_name);
+        (*env)->DeleteLocalRef(env, launch_intent);
+        (*env)->DeleteLocalRef(env, intent_class);
+        (*env)->DeleteLocalRef(env, context_class);
+        return;
+    }
 
     jstring service_name = (*env)->NewStringUTF(env, "notification");
     jobject notification_manager = (*env)->CallObjectMethod(env, context, get_system_service, service_name);
@@ -153,6 +241,13 @@ static void showCrocNotification(JNIEnv* env, jobject context, char* title, char
         LogD("C: ERROR - Notification.Builder class not found");
         (*env)->DeleteLocalRef(env, service_name);
         (*env)->DeleteLocalRef(env, context_class);
+        (*env)->DeleteLocalRef(env, pending_intent_class);
+        (*env)->DeleteLocalRef(env, action_string);
+        (*env)->DeleteLocalRef(env, category_string);
+        (*env)->DeleteLocalRef(env, package_name);
+        (*env)->DeleteLocalRef(env, class_name);
+        (*env)->DeleteLocalRef(env, launch_intent);
+        (*env)->DeleteLocalRef(env, intent_class);
         return;
     }
 
@@ -164,6 +259,20 @@ static void showCrocNotification(JNIEnv* env, jobject context, char* title, char
         // For Android 8+ use constructor with channel ID
         builder_constructor = (*env)->GetMethodID(env, builder_class, "<init>",
             "(Landroid/content/Context;Ljava/lang/String;)V");
+        if (builder_constructor == NULL) {
+            LogD("C: ERROR - Notification.Builder constructor (with channel) not found");
+            (*env)->DeleteLocalRef(env, service_name);
+            (*env)->DeleteLocalRef(env, context_class);
+            (*env)->DeleteLocalRef(env, builder_class);
+            (*env)->DeleteLocalRef(env, pending_intent_class);
+            (*env)->DeleteLocalRef(env, action_string);
+            (*env)->DeleteLocalRef(env, category_string);
+            (*env)->DeleteLocalRef(env, package_name);
+            (*env)->DeleteLocalRef(env, class_name);
+            (*env)->DeleteLocalRef(env, launch_intent);
+            (*env)->DeleteLocalRef(env, intent_class);
+            return;
+        }
         jstring channel_id = (*env)->NewStringUTF(env, "croc_channel");
         builder = (*env)->NewObject(env, builder_class, builder_constructor, context, channel_id);
         (*env)->DeleteLocalRef(env, channel_id);
@@ -171,6 +280,20 @@ static void showCrocNotification(JNIEnv* env, jobject context, char* title, char
         // For older Android versions
         builder_constructor = (*env)->GetMethodID(env, builder_class, "<init>",
             "(Landroid/content/Context;)V");
+        if (builder_constructor == NULL) {
+            LogD("C: ERROR - Notification.Builder constructor not found");
+            (*env)->DeleteLocalRef(env, service_name);
+            (*env)->DeleteLocalRef(env, context_class);
+            (*env)->DeleteLocalRef(env, builder_class);
+            (*env)->DeleteLocalRef(env, pending_intent_class);
+            (*env)->DeleteLocalRef(env, action_string);
+            (*env)->DeleteLocalRef(env, category_string);
+            (*env)->DeleteLocalRef(env, package_name);
+            (*env)->DeleteLocalRef(env, class_name);
+            (*env)->DeleteLocalRef(env, launch_intent);
+            (*env)->DeleteLocalRef(env, intent_class);
+            return;
+        }
         builder = (*env)->NewObject(env, builder_class, builder_constructor, context);
     }
 
@@ -180,41 +303,73 @@ static void showCrocNotification(JNIEnv* env, jobject context, char* title, char
 
     jmethodID set_title = (*env)->GetMethodID(env, builder_class, "setContentTitle",
         "(Ljava/lang/CharSequence;)Landroid/app/Notification$Builder;");
+    if (set_title == NULL) {
+        LogD("C: ERROR - setContentTitle method not found");
+    } else {
+        (*env)->CallObjectMethod(env, builder, set_title, jtitle);
+    }
+
     jmethodID set_content = (*env)->GetMethodID(env, builder_class, "setContentText",
         "(Ljava/lang/CharSequence;)Landroid/app/Notification$Builder;");
+    if (set_content == NULL) {
+        LogD("C: ERROR - setContentText method not found");
+    } else {
+        (*env)->CallObjectMethod(env, builder, set_content, jcontent);
+    }
+
     jmethodID set_small_icon = (*env)->GetMethodID(env, builder_class, "setSmallIcon",
         "(I)Landroid/app/Notification$Builder;");
+    if (set_small_icon == NULL) {
+        LogD("C: ERROR - setSmallIcon method not found");
+    } else {
+        (*env)->CallObjectMethod(env, builder, set_small_icon, 17301651); // android.R.drawable.ic_dialog_info
+    }
+
     jmethodID set_auto_cancel = (*env)->GetMethodID(env, builder_class, "setAutoCancel",
         "(Z)Landroid/app/Notification$Builder;");
+    if (set_auto_cancel == NULL) {
+        LogD("C: ERROR - setAutoCancel method not found");
+    } else {
+        (*env)->CallObjectMethod(env, builder, set_auto_cancel, JNI_TRUE);
+    }
+
     jmethodID set_content_intent = (*env)->GetMethodID(env, builder_class, "setContentIntent",
         "(Landroid/app/PendingIntent;)Landroid/app/Notification$Builder;");
-
-    // Устанавливаем контент и интент
-    (*env)->CallObjectMethod(env, builder, set_title, jtitle);
-    (*env)->CallObjectMethod(env, builder, set_content, jcontent);
-    (*env)->CallObjectMethod(env, builder, set_small_icon, 17301651); // android.R.drawable.ic_dialog_info
-    (*env)->CallObjectMethod(env, builder, set_auto_cancel, JNI_TRUE);
-    (*env)->CallObjectMethod(env, builder, set_content_intent, pending_intent); // Устанавливаем PendingIntent
+    if (set_content_intent == NULL) {
+        LogD("C: ERROR - setContentIntent method not found");
+    } else {
+        (*env)->CallObjectMethod(env, builder, set_content_intent, pending_intent);
+    }
 
     // Build the notification
     jmethodID build_method = (*env)->GetMethodID(env, builder_class, "build",
         "()Landroid/app/Notification;");
-    jobject notification = (*env)->CallObjectMethod(env, builder, build_method);
+    if (build_method == NULL) {
+        LogD("C: ERROR - build method not found");
+    } else {
+        jobject notification = (*env)->CallObjectMethod(env, builder, build_method);
 
-    // Show the notification
-    jclass notification_manager_class = (*env)->FindClass(env, "android/app/NotificationManager");
-    jmethodID notify_method = (*env)->GetMethodID(env, notification_manager_class,
-        "notify", "(ILandroid/app/Notification;)V");
-    (*env)->CallVoidMethod(env, notification_manager, notify_method, 1, notification);
-
-    LogD("C: Notification with intent created and shown");
+        // Show the notification
+        jclass notification_manager_class = (*env)->FindClass(env, "android/app/NotificationManager");
+        if (notification_manager_class == NULL) {
+            LogD("C: ERROR - NotificationManager class not found for notify");
+        } else {
+            jmethodID notify_method = (*env)->GetMethodID(env, notification_manager_class,
+                "notify", "(ILandroid/app/Notification;)V");
+            if (notify_method == NULL) {
+                LogD("C: ERROR - notify method not found");
+            } else {
+                (*env)->CallVoidMethod(env, notification_manager, notify_method, 1, notification);
+            }
+            (*env)->DeleteLocalRef(env, notification_manager_class);
+        }
+        (*env)->DeleteLocalRef(env, notification);
+    }
 
     // Cleanup
     (*env)->DeleteLocalRef(env, jtitle);
     (*env)->DeleteLocalRef(env, jcontent);
     (*env)->DeleteLocalRef(env, builder);
-    (*env)->DeleteLocalRef(env, notification);
-    (*env)->DeleteLocalRef(env, notification_manager_class);
     (*env)->DeleteLocalRef(env, pending_intent);
     (*env)->DeleteLocalRef(env, launch_intent);
     (*env)->DeleteLocalRef(env, intent_class);
@@ -223,13 +378,9 @@ static void showCrocNotification(JNIEnv* env, jobject context, char* title, char
     (*env)->DeleteLocalRef(env, category_string);
     (*env)->DeleteLocalRef(env, package_name);
     (*env)->DeleteLocalRef(env, class_name);
-
-    // Final cleanup
     (*env)->DeleteLocalRef(env, service_name);
     (*env)->DeleteLocalRef(env, context_class);
     (*env)->DeleteLocalRef(env, builder_class);
-
-    LogD("C: End showCrocNotification");
 }
 */
 import "C"
@@ -238,6 +389,7 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/driver"
+	log "github.com/schollz/logger"
 )
 
 // apiLevel возвращает уровень API Android устройства
@@ -252,6 +404,8 @@ func apiLevel() int {
 }
 
 func showCrocNotification(title, content string) {
+	log.Trace("Showing notification: " + title)
+
 	driver.RunNative(func(ctx interface{}) error {
 		ac := ctx.(*driver.AndroidContext)
 

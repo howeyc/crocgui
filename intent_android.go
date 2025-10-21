@@ -87,16 +87,12 @@ static void excludeFromRecents(JNIEnv* env, jobject activity) {
 }
 
 static void processIntent(JNIEnv* env, jobject activity) {
-    LogD("C: === processIntent STARTED ===");
-
     // Получаем класс активности
     jclass activity_class = (*env)->GetObjectClass(env, activity);
     if (activity_class == NULL) {
         LogD("C: ERROR - Failed to get activity class");
         return;
     }
-    LogD("C: Activity class obtained successfully");
-
     // Получаем метод getIntent
     jmethodID get_intent = (*env)->GetMethodID(env, activity_class, "getIntent", "()Landroid/content/Intent;");
     if (get_intent == NULL) {
@@ -104,7 +100,6 @@ static void processIntent(JNIEnv* env, jobject activity) {
         (*env)->DeleteLocalRef(env, activity_class);
         return;
     }
-    LogD("C: getIntent method obtained");
 
     // Вызываем getIntent()
     jobject intent = (*env)->CallObjectMethod(env, activity, get_intent);
@@ -113,7 +108,6 @@ static void processIntent(JNIEnv* env, jobject activity) {
         (*env)->DeleteLocalRef(env, activity_class);
         return;
     }
-    LogD("C: Intent obtained successfully");
 
     // Получаем класс Intent
     jclass intent_class = (*env)->GetObjectClass(env, intent);
@@ -123,7 +117,6 @@ static void processIntent(JNIEnv* env, jobject activity) {
         (*env)->DeleteLocalRef(env, intent);
         return;
     }
-    LogD("C: Intent class obtained");
 
     // Получаем Action интента
     jmethodID getAction = (*env)->GetMethodID(env, intent_class, "getAction", "()Ljava/lang/String;");
@@ -141,7 +134,6 @@ static void processIntent(JNIEnv* env, jobject activity) {
     int isView = 0;
     int isSendMultiple = 0;
     int isMain = 0;
-    int shouldFinish = 0; // Флаг: нужно ли завершать активность
     int hasValidData = 0; // Флаг для отслеживания успешной обработки
 
     if (action != NULL) {
@@ -163,21 +155,15 @@ static void processIntent(JNIEnv* env, jobject activity) {
         LogD("C: Intent action is NULL");
     }
 
-    // Для ACTION_MAIN - не завершаем активность, это запуск с иконки
     if (isMain) {
-        LogD("C: MAIN intent - starting main app (not finishing activity)");
+        LogD("C: MAIN intent - starting main app");
         (*env)->DeleteLocalRef(env, activity_class);
         (*env)->DeleteLocalRef(env, intent_class);
         (*env)->DeleteLocalRef(env, intent);
-        LogD("C: === processIntent COMPLETED for MAIN ===");
         return;
     }
 
-    // Для всех остальных интентов (SEND, VIEW, SEND_MULTIPLE) - завершаем активность после обработки
-    // shouldFinish = 1;
-
     // First check ClipData
-    LogD("C: Checking for ClipData...");
     jmethodID getClipData = (*env)->GetMethodID(env, intent_class, "getClipData", "()Landroid/content/ClipData;");
     if (getClipData != NULL) {
         jobject clipData = (*env)->CallObjectMethod(env, intent, getClipData);
@@ -277,12 +263,6 @@ static void processIntent(JNIEnv* env, jobject activity) {
                 LogD("C: ClipData processing complete - no valid data, setting RESULT_CANCELED");
             }
 
-            // Завершаем активность только если это не MAIN интент
-            if (shouldFinish) {
-                finish(env, activity);
-                LogD("C: Finishing activity after ClipData processing");
-            }
-
             (*env)->DeleteLocalRef(env, activity_class);
             (*env)->DeleteLocalRef(env, intent_class);
             (*env)->DeleteLocalRef(env, intent);
@@ -339,12 +319,6 @@ static void processIntent(JNIEnv* env, jobject activity) {
                                 (*env)->DeleteLocalRef(env, text);
                                 LogD("C: SEND text processing complete - setting RESULT_OK");
 
-                                // Завершаем активность только если это не MAIN интент
-                                if (shouldFinish) {
-                                    finish(env, activity);
-                                    LogD("C: Finishing activity after SEND text processing");
-                                }
-
                                 (*env)->DeleteLocalRef(env, type);
                                 (*env)->DeleteLocalRef(env, activity_class);
                                 (*env)->DeleteLocalRef(env, intent_class);
@@ -386,12 +360,6 @@ static void processIntent(JNIEnv* env, jobject activity) {
                 }
                 LogD("C: VIEW URI processing complete - setting RESULT_OK");
 
-                // Завершаем активность только если это не MAIN интент
-                if (shouldFinish) {
-                    finish(env, activity);
-                    LogD("C: Finishing activity after VIEW processing");
-                }
-
                 (*env)->DeleteLocalRef(env, uri);
                 (*env)->DeleteLocalRef(env, activity_class);
                 (*env)->DeleteLocalRef(env, intent_class);
@@ -430,12 +398,6 @@ static void processIntent(JNIEnv* env, jobject activity) {
                     }
                 }
                 LogD("C: SEND stream processing complete - setting RESULT_OK");
-
-                // Завершаем активность только если это не MAIN интент
-                if (shouldFinish) {
-                    finish(env, activity);
-                    LogD("C: Finishing activity after SEND stream processing");
-                }
 
                 (*env)->DeleteLocalRef(env, send_uri);
                 (*env)->DeleteLocalRef(env, activity_class);
@@ -503,11 +465,6 @@ static void processIntent(JNIEnv* env, jobject activity) {
                         LogD("C: SEND_MULTIPLE processing complete - no valid data, setting RESULT_CANCELED");
                     }
 
-                    // Завершаем активность только если это не MAIN интент
-                    if (shouldFinish) {
-                        finish(env, activity);
-                        LogD("C: Finishing activity after SEND_MULTIPLE processing");
-                    }
                 }
                 (*env)->DeleteLocalRef(env, uri_list);
                 (*env)->DeleteLocalRef(env, activity_class);
@@ -522,16 +479,9 @@ static void processIntent(JNIEnv* env, jobject activity) {
     LogD("C: No matching intent data found");
     setResult(env, activity, -1); // RESULT_CANCELED
 
-    // Завершаем активность только если это не MAIN интент
-    if (shouldFinish) {
-        finish(env, activity);
-        LogD("C: Finishing activity after no data found");
-    }
-
     (*env)->DeleteLocalRef(env, activity_class);
     (*env)->DeleteLocalRef(env, intent_class);
     (*env)->DeleteLocalRef(env, intent);
-    LogD("C: === processIntent COMPLETED ===");
 }
 */
 import "C"
@@ -539,18 +489,19 @@ import (
 	"unsafe"
 
 	"fyne.io/fyne/v2/driver"
+	log "github.com/schollz/logger"
 )
 
 //export receiveURIFromIntent
 func receiveURIFromIntent(uri *C.char) {
 	if uri != nil {
 		goString := C.GoString(uri)
-		LogD("Go: Received URI from intent: " + goString)
+		log.Trace("Received URI from intent: " + goString)
 		select {
 		case uriFromIntent <- goString:
-			LogD("Go: URI sent to channel successfully")
+			log.Trace("URI sent to channel successfully")
 		default:
-			LogD("Go: WARNING - URI channel full, intent dropped")
+			log.Error("URI channel full, intent dropped")
 		}
 		C.free(unsafe.Pointer(uri))
 	}
@@ -564,12 +515,12 @@ func receiveTextFromIntent(text *C.char) {
 		if len(logText) > 100 {
 			logText = logText[:100] + "..."
 		}
-		LogD("Go: Received text from intent: " + logText)
+		log.Trace("Received text from intent: " + logText)
 		select {
 		case textFromIntent <- goString:
-			LogD("Go: Text sent to channel successfully")
+			log.Trace("Text sent to channel successfully")
 		default:
-			LogD("Go: WARNING - Text channel full, intent dropped")
+			log.Error("Text channel full, intent dropped")
 		}
 		C.free(unsafe.Pointer(text))
 	}
@@ -578,14 +529,14 @@ func receiveTextFromIntent(text *C.char) {
 func processIntent() {
 	driver.RunNative(func(ctx interface{}) error {
 		ac := ctx.(*driver.AndroidContext)
-		LogD("Go: Calling C.processIntent")
+		log.Trace("Calling C.processIntent")
 
 		C.processIntent(
 			(*C.JNIEnv)(unsafe.Pointer(ac.Env)),
 			(C.jobject)(unsafe.Pointer(ac.Ctx)),
 		)
 
-		LogD("Go: C.processIntent completed")
+		log.Trace("C.processIntent completed")
 		return nil
 	})
 }
@@ -593,14 +544,14 @@ func processIntent() {
 func finish() {
 	driver.RunNative(func(ctx interface{}) error {
 		ac := ctx.(*driver.AndroidContext)
-		LogD("Go: Calling C.finish")
+		log.Trace("Calling C.finish")
 
 		C.finish(
 			(*C.JNIEnv)(unsafe.Pointer(ac.Env)),
 			(C.jobject)(unsafe.Pointer(ac.Ctx)),
 		)
 
-		LogD("Go: C.finish completed")
+		log.Trace("C.finish completed")
 		return nil
 	})
 }
@@ -609,14 +560,14 @@ func finish() {
 func excludeFromRecents() {
 	driver.RunNative(func(ctx interface{}) error {
 		ac := ctx.(*driver.AndroidContext)
-		LogD("Go: excludeFromRecents called")
+		log.Trace("excludeFromRecents called")
 
 		C.excludeFromRecents(
 			(*C.JNIEnv)(unsafe.Pointer(ac.Env)),
 			(C.jobject)(unsafe.Pointer(ac.Ctx)),
 		)
 
-		LogD("Go: C.excludeFromRecents completed")
+		log.Trace("C.excludeFromRecents completed")
 		return nil
 	})
 }

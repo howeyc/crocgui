@@ -265,25 +265,14 @@ func Child(parent fyne.URI, component string) (child fyne.URI, cleanup func(), e
 		return
 	}
 
-	// 2. Проверяем, что parent является директорией
-	// canList, err := storage.CanList(parent)
-	// if err != nil {
-	// 	err = fmt.Errorf("cannot check if listable: %v", err)
-	// 	return
-	// }
-	// if !canList {
-	// 	err = fmt.Errorf("URI is not a directory: %s", parent.String())
-	// 	return
-	// }
-
-	// 3. Создаём component в parent
+	// 2. Создаём component в parent
 	newFileURL, err := CreateFileInTree(parent.String(), component, "")
 	if err != nil {
 		err = fmt.Errorf("CreateFileInTree failed: %v", err)
 		return
 	}
 
-	// 4. Конвертируем в fyne.URI
+	// 3. Конвертируем в fyne.URI
 	child, err = storage.ParseURI(newFileURL)
 	if err != nil {
 		err = fmt.Errorf("parse URI failed: %v", err)
