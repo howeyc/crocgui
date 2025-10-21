@@ -432,7 +432,7 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 		if cderr != nil {
 			log.Error("Unable to change to dir:", recvDir, cderr)
 		}
-		log.Trace("cd", recvDir)
+		log.Trace("cd ", recvDir)
 
 		var filename string
 		mainButton.Disable()

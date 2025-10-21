@@ -211,7 +211,7 @@ func IsIntentSupported(action, mimeType string) (bool, error) {
 	})
 
 	if err != nil {
-		log.Error("Error checking intent support: " + err.Error())
+		log.Error("Error checking intent support: ", err.Error())
 		return false, err
 	}
 
@@ -222,7 +222,7 @@ func IsIntentSupported(action, mimeType string) (bool, error) {
 func IsFilePickerSupported() (bool, error) {
 	supported, err := IsIntentSupported("android.intent.action.GET_CONTENT", "*/*")
 	if err != nil {
-		log.Error("File picker support check failed: " + err.Error())
+		log.Error("File picker support check failed: ", err.Error())
 	}
 	return supported, err
 }
@@ -231,7 +231,7 @@ func IsFilePickerSupported() (bool, error) {
 func IsSaveDialogSupported() (bool, error) {
 	supported, err := IsIntentSupported("android.intent.action.CREATE_DOCUMENT", "*/*")
 	if err != nil {
-		log.Error("Save dialog support check failed: " + err.Error())
+		log.Error("Save dialog support check failed: ", err.Error())
 	}
 	return supported, err
 }
@@ -240,7 +240,7 @@ func IsSaveDialogSupported() (bool, error) {
 func IsFolderPickerSupported() (bool, error) {
 	supported, err := IsIntentSupported("android.intent.action.OPEN_DOCUMENT_TREE", "")
 	if err != nil {
-		log.Error("Folder picker support check failed: " + err.Error())
+		log.Error("Folder picker support check failed: ", err.Error())
 	}
 	return supported, err
 }
@@ -249,21 +249,21 @@ func IsFolderPickerSupported() (bool, error) {
 func checkIntents() {
 	// Проверка диалога выбора файлов
 	if supported, err := IsFilePickerSupported(); err != nil {
-		log.Error("Error checking file picker: " + err.Error())
+		log.Error("Error checking file picker: ", err.Error())
 	} else if !supported {
 		log.Warn("File picker not supported - need to install file manager")
 	}
 
 	// Проверка диалога сохранения
 	if supported, err := IsSaveDialogSupported(); err != nil {
-		log.Error("Error checking save dialog: " + err.Error())
+		log.Error("Error checking save dialog: ", err.Error())
 	} else if !supported {
 		log.Warn("Save dialog not supported - need to install file manager")
 	}
 
 	// Проверка диалога выбора папки
 	if supported, err := IsFolderPickerSupported(); err != nil {
-		log.Error("Error checking folder picker: " + err.Error())
+		log.Error("Error checking folder picker: ", err.Error())
 	} else if !supported {
 		log.Warn("Folder picker not supported - need to install file manager")
 	}

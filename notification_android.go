@@ -164,7 +164,8 @@ static void showCrocNotification(JNIEnv* env, jobject context, char* title, char
         return;
     }
 
-    jint flags = 0x10000000 | 0x00200000; // FLAG_ACTIVITY_NEW_TASK | FLAG_ACTIVITY_RESET_TASK_IF_NEEDED
+    // jint flags = 0x10000000 | 0x00200000; // FLAG_ACTIVITY_NEW_TASK | FLAG_ACTIVITY_RESET_TASK_IF_NEEDED
+    jint flags = 0x10000000 | 0x00800000; // NEW_TASK | EXCLUDE_FROM_RECENTS
     (*env)->CallObjectMethod(env, launch_intent, set_flags, flags);
 
     // Устанавливаем класс активности для запуска
@@ -404,7 +405,7 @@ func apiLevel() int {
 }
 
 func showCrocNotification(title, content string) {
-	log.Trace("Showing notification: " + title)
+	log.Trace("Showing notification: ", title)
 
 	driver.RunNative(func(ctx interface{}) error {
 		ac := ctx.(*driver.AndroidContext)

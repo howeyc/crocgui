@@ -455,7 +455,7 @@ import (
 
 // CreateFileInDownloads создает файл в папке Downloads с поддержкой всех версий Android
 func CreateFileInDownloads(fileName, mimeType string) (string, error) {
-	log.Trace("Creating file in Downloads: " + fileName)
+	log.Trace("Creating file in Downloads: ", fileName)
 
 	var result string
 	var err error
@@ -493,7 +493,7 @@ func CreateFileInDownloads(fileName, mimeType string) (string, error) {
 	})
 
 	if err != nil {
-		log.Error("Failed to create file: " + err.Error())
+		log.Error("Failed to create file: ", err.Error())
 		return "", fmt.Errorf("failed to create file: %w", err)
 	}
 	if result == "" {

@@ -216,7 +216,7 @@ func logTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 	// logGUI.Wrapping = fyne.TextWrapWord
 
 	exportButton := widget.NewButtonWithIcon(lp("Export full log"), theme.ContentCopyIcon(), func() {
-		log.Tracef("Log copied to clipboard")
+		log.Trace("Log copied to clipboard")
 		s := logOutput.buf.String()
 		a.Clipboard().SetContent(s)
 
@@ -246,6 +246,8 @@ func logTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 					log.Errorf("creating writer from URI(%s): %v", u, err)
 					return
 				}
+			} else {
+				u = destination.URI()
 			}
 			defer destination.Close()
 
@@ -253,7 +255,7 @@ func logTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 				log.Errorf("Failed to write log to URI(%s) error: %v", u.String(), err)
 				return
 			}
-			log.Tracef("Log successfully saved to URI(%s)", u.String())
+			log.Tracef("Log successfully saved to URI(%s)", u)
 		}
 
 		supported, err := IsSaveDialogSupported()

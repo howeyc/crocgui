@@ -243,7 +243,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 		// name := u.Name()
 		// log.Tracef("name %s", name)
 		name := uriBase(u)
-		log.Tracef("name %s", name)
+		// log.Tracef("name %s", name)
 
 		dst := filepath.Join(sendDir, name)
 		destination, err := os.Create(dst)
@@ -378,7 +378,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 						// name := u.Name()
 						// log.Tracef("name %s", name)
 						name := uriBase(u)
-						log.Tracef("name %s", name)
+						// log.Tracef("name %s", name)
 						dst := filepath.Join(sendDir, name)
 						fe := addEntry(dst)
 						if fe == nil {
@@ -470,7 +470,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 			// name := u.Name()
 			// log.Tracef("name %s", name)
 			name := uriBase(u)
-			log.Tracef("name %s", name)
+			// log.Tracef("name %s", name)
 			dst := filepath.Join(sendDir, name)
 			fe := addEntry(dst)
 			if fe == nil {

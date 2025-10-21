@@ -495,11 +495,8 @@ import (
 //export receiveURIFromIntent
 func receiveURIFromIntent(uri *C.char) {
 	if uri != nil {
-		goString := C.GoString(uri)
-		log.Trace("Received URI from intent: " + goString)
 		select {
-		case uriFromIntent <- goString:
-			log.Trace("URI sent to channel successfully")
+		case uriFromIntent <- C.GoString(uri):
 		default:
 			log.Error("URI channel full, intent dropped")
 		}
@@ -510,15 +507,8 @@ func receiveURIFromIntent(uri *C.char) {
 //export receiveTextFromIntent
 func receiveTextFromIntent(text *C.char) {
 	if text != nil {
-		goString := C.GoString(text)
-		logText := goString
-		if len(logText) > 100 {
-			logText = logText[:100] + "..."
-		}
-		log.Trace("Received text from intent: " + logText)
 		select {
-		case textFromIntent <- goString:
-			log.Trace("Text sent to channel successfully")
+		case textFromIntent <- C.GoString(text):
 		default:
 			log.Error("Text channel full, intent dropped")
 		}
@@ -560,7 +550,7 @@ func finish() {
 func excludeFromRecents() {
 	driver.RunNative(func(ctx interface{}) error {
 		ac := ctx.(*driver.AndroidContext)
-		log.Trace("excludeFromRecents called")
+		log.Trace("Calling C.excludeFromRecents")
 
 		C.excludeFromRecents(
 			(*C.JNIEnv)(unsafe.Pointer(ac.Env)),
