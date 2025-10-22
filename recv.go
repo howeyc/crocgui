@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
-	"sync"
 	"time"
 
 	"fyne.io/fyne/v2"
@@ -58,52 +57,52 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 	totpProg := widget.NewProgressBar()
 	totpProg.Hide()
 
-	var updateMutex sync.Mutex
 	update := func() {
-		updateMutex.Lock()
-		defer updateMutex.Unlock()
+		fyne.Do(func() {
+			if !totpCheck.Checked || totpCheck.Disabled() {
+				return
+			}
 
-		if !totpCheck.Checked || totpCheck.Disabled() {
-			return
-		}
-
-		totpLabel.SetText(totp(entry.Text))
-		now := time.Now()
-		remaining := 30 - now.Second()%30
-		totpProg.SetValue(float64(remaining) / 30)
+			totpLabel.SetText(totp(entry.Text))
+			now := time.Now()
+			remaining := 30 - now.Second()%30
+			totpProg.SetValue(float64(remaining) / 30)
+		})
 	}
 
 	totpCheck.OnChanged = func(b bool) {
-		totpStop()
-		if b {
-			if strings.HasPrefix(entry.Text, TOTP) {
-				entry.SetText(entryText)
-			}
-			totpProg.Show()
-			update()
-
-			totpChan = make(chan struct{})
-			go func() {
-				ticker := time.NewTicker(time.Second)
-				defer ticker.Stop()
-				for {
-					select {
-					case <-done:
-						return
-					case <-ticker.C:
-						fyne.Do(update)
-					case <-totpChan:
-						return
-					}
+		fyne.Do(func() {
+			totpStop()
+			if b {
+				if strings.HasPrefix(entry.Text, TOTP) {
+					entry.SetText(entryText)
 				}
-			}()
-		} else {
-			totpLabel.SetText(TOTP)
-			totpProg.Hide()
-			entryText = entry.Text
-			entry.SetText(TOTP + totp(entry.Text))
-		}
-		a.Preferences().SetBool("totp-recv", b)
+				totpProg.Show()
+				update()
+
+				totpChan = make(chan struct{})
+				go func() {
+					ticker := time.NewTicker(time.Second)
+					defer ticker.Stop()
+					for {
+						select {
+						case <-done:
+							return
+						case <-ticker.C:
+							update() // Уже обернуто в fyne.Do
+						case <-totpChan:
+							return
+						}
+					}
+				}()
+			} else {
+				totpLabel.SetText(TOTP)
+				totpProg.Hide()
+				entryText = entry.Text
+				entry.SetText(TOTP + totp(entry.Text))
+			}
+			a.Preferences().SetBool("totp-recv", b)
+		})
 	}
 	if totpCheck.Checked {
 		totpCheck.OnChanged(true)
@@ -111,7 +110,7 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 
 	entry.OnChanged = func(secret string) {
 		os.Setenv(CROC_SECRET, secret)
-		update()
+		update() // Уже обернуто в fyne.Do
 	}
 
 	recvDir := filepath.Join(os.TempDir(), "crocgui-recv")
@@ -488,11 +487,12 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 			}()
 
 			old := 0
+			oldPath := ""
 			progW := NewProgressWrapper(prog)
 			toplineW := NewLabelWrapper(topline)
 			var TotalSent, size, totalMax int64
 			fepw := NewProgressWrapper(nil)
-			oldPath := ""
+
 			once := true
 			for {
 				select {

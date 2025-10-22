@@ -14,7 +14,6 @@ import (
 	"reflect"
 	"runtime"
 	"strings"
-	"sync"
 	"time"
 
 	log "github.com/schollz/logger"
@@ -78,58 +77,58 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 			totpChan = nil
 		}
 	}
+
 	totpProg := widget.NewProgressBar()
 	totpProg.Hide()
 
-	var updateMutex sync.Mutex
 	update := func() {
-		updateMutex.Lock()
-		defer updateMutex.Unlock()
-
-		if !totpCheck.Checked || totpCheck.Disabled() {
-			return
-		}
-
-		now := time.Now()
-		remaining := 30 - now.Second()%30
 		fyne.Do(func() {
+			if !totpCheck.Checked || totpCheck.Disabled() {
+				return
+			}
+
+			now := time.Now()
+			remaining := 30 - now.Second()%30
 			totpLabel.SetText(totp(entry.Text))
 			totpProg.SetValue(float64(remaining) / 30)
 		})
 	}
 
 	totpCheck.OnChanged = func(b bool) {
-		totpStop()
-		if b {
-			if strings.HasPrefix(entry.Text, TOTP) {
-				entry.SetText(entryText)
-			}
-			totpProg.Show()
-			update()
-
-			totpChan = make(chan struct{})
-			go func() {
-				ticker := time.NewTicker(time.Second)
-				defer ticker.Stop()
-				for {
-					select {
-					case <-done:
-						return
-					case <-ticker.C:
-						update()
-					case <-totpChan:
-						return
-					}
+		fyne.Do(func() {
+			totpStop()
+			if b {
+				if strings.HasPrefix(entry.Text, TOTP) {
+					entry.SetText(entryText)
 				}
-			}()
-		} else {
-			totpLabel.SetText(TOTP)
-			totpProg.Hide()
-			entryText = entry.Text
-			entry.SetText(TOTP + totp(entry.Text))
-		}
-		a.Preferences().SetBool("totp-send", b)
+				totpProg.Show()
+				update()
+
+				totpChan = make(chan struct{})
+				go func() {
+					ticker := time.NewTicker(time.Second)
+					defer ticker.Stop()
+					for {
+						select {
+						case <-done:
+							return
+						case <-ticker.C:
+							update()
+						case <-totpChan:
+							return
+						}
+					}
+				}()
+			} else {
+				totpLabel.SetText(TOTP)
+				totpProg.Hide()
+				entryText = entry.Text
+				entry.SetText(TOTP + totp(entry.Text))
+			}
+			a.Preferences().SetBool("totp-send", b)
+		})
 	}
+
 	if totpCheck.Checked {
 		totpCheck.OnChanged(true)
 	}
@@ -146,7 +145,10 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 	fileentries := make(map[string]*fyne.Container)
 
 	removeEntry := func(fpath string, fe *fyne.Container) {
-		boxholder.Remove(fe)
+		fyne.Do(func() {
+			boxholder.Remove(fe)
+			boxholder.Refresh()
+		})
 		os.Remove(fpath)
 		log.Tracef("Removed file from internal cache: %s", fpath)
 		delete(fileentries, fpath)
@@ -240,11 +242,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 			return
 		}
 		u := source.URI()
-		// name := u.Name()
-		// log.Tracef("name %s", name)
 		name := uriBase(u)
-		// log.Tracef("name %s", name)
-
 		dst := filepath.Join(sendDir, name)
 		destination, err := os.Create(dst)
 		if err != nil {
@@ -273,7 +271,6 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 	}
 
 	if isAndroid {
-		// doneProcessIntent := make(chan struct{})
 		a.Lifecycle().SetOnExitedForeground(func() {
 			log.Trace("ExitedForeground")
 			if !notFinish {
@@ -375,10 +372,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 							continue
 						}
 
-						// name := u.Name()
-						// log.Tracef("name %s", name)
 						name := uriBase(u)
-						// log.Tracef("name %s", name)
 						dst := filepath.Join(sendDir, name)
 						fe := addEntry(dst)
 						if fe == nil {
@@ -467,10 +461,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 				return
 			}
 			u := source.URI()
-			// name := u.Name()
-			// log.Tracef("name %s", name)
 			name := uriBase(u)
-			// log.Tracef("name %s", name)
 			dst := filepath.Join(sendDir, name)
 			fe := addEntry(dst)
 			if fe == nil {
@@ -544,7 +535,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 			}
 		}
 
-		// Only send if files selected
+		// Посылаем если есть файлы
 		if len(fileentries) < 1 || !ready {
 			log.Error("no files selected")
 			dialog.ShowInformation(
@@ -565,23 +556,20 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 			fe.Objects[feDel].Hide()
 		}
 		sender, err := croc.New(croc.Options{
-			IsSender:      true,
-			SharedSecret:  secret,
-			Debug:         debugBool(a),
-			RelayAddress:  a.Preferences().String("relay-address"),
-			RelayPorts:    strings.Split(a.Preferences().String("relay-ports"), ","),
-			RelayPassword: a.Preferences().String("relay-password"),
-			// Stdout:           false,
-			NoPrompt:       true,
-			DisableLocal:   a.Preferences().Bool("disable-local"),
-			NoMultiplexing: a.Preferences().Bool("disable-multiplexing"),
-			OnlyLocal:      a.Preferences().Bool("force-local"),
-			NoCompress:     a.Preferences().Bool("disable-compression"),
-			Curve:          a.Preferences().String("pake-curve"),
-			HashAlgorithm:  a.Preferences().String("croc-hash"),
-			ThrottleUpload: a.Preferences().String("upload-throttle"),
-			// ZipFolder:        false,
-			// GitIgnore:        false,
+			IsSender:         true,
+			SharedSecret:     secret,
+			Debug:            debugBool(a),
+			RelayAddress:     a.Preferences().String("relay-address"),
+			RelayPorts:       strings.Split(a.Preferences().String("relay-ports"), ","),
+			RelayPassword:    a.Preferences().String("relay-password"),
+			NoPrompt:         true,
+			DisableLocal:     a.Preferences().Bool("disable-local"),
+			NoMultiplexing:   a.Preferences().Bool("disable-multiplexing"),
+			OnlyLocal:        a.Preferences().Bool("force-local"),
+			NoCompress:       a.Preferences().Bool("disable-compression"),
+			Curve:            a.Preferences().String("pake-curve"),
+			HashAlgorithm:    a.Preferences().String("croc-hash"),
+			ThrottleUpload:   a.Preferences().String("upload-throttle"),
 			MulticastAddress: a.Preferences().String("multicast-address"),
 			Exclude:          []string{},
 		})
@@ -631,6 +619,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 			}()
 
 			old := 0
+			oldPath := ""
 			progW := NewProgressWrapper(prog)
 			var TotalSent, size, totalMax int64
 			toplineW := NewLabelWrapper(topline)
@@ -690,16 +679,18 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 						cnum := sender.FilesToTransferCurrentNum
 						if old < cnum+1 {
 							old = cnum + 1
-							if cnum > 0 {
-								//100%
-								fepw.Set100()
-							}
 							fi := sender.FilesToTransfer[cnum]
 							filename = fi.Name
 							toplineW.SetText(fmt.Sprintf("%s: %s(%d/%d)", lp("Sending file"), filename, cnum+1, len(sender.FilesToTransfer)))
 							TotalSent += size
 							size = fi.Size
 							path := filepath.Join(sendDir, fi.Name)
+							if oldPath != path {
+								if fe := fileentries[oldPath]; fe != nil {
+									removeEntry(oldPath, fe)
+								}
+								oldPath = path
+							}
 							log.Trace(path)
 							if fe, ok := fileentries[path]; ok {
 								fepw = NewProgressWrapper(fe.Objects[feBar].(*widget.ProgressBar))
@@ -786,13 +777,12 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 		if parent.Selected() != ti {
 			parent.Select(ti)
 		}
-		// ti.Content.Refresh()
 		boxholder.Refresh()
 	}
 	return
 }
 
-// Big File Dialog
+// Большой диалог для десктопа
 func ShowFileOpen(callback func(reader fyne.URIReadCloser, err error), parent fyne.Window) {
 	if isMobile {
 		notFinish = true
@@ -828,8 +818,6 @@ func restart(a fyne.App, w fyne.Window) {
 		return
 	}
 	if isMobile {
-		// notification := fyne.NewNotification("CrocGUI", "Application closed")
-		// a.SendNotification(notification)
 		sendNotification(a, "CrocGUI", "Application closed. Tap to start it.")
 		w.Close()
 		os.Exit(0)
@@ -949,7 +937,6 @@ type ProgressWriter struct {
 	lastCall     time.Time
 	lastProgress float64
 	cancel       <-chan struct{}
-	mu           sync.Mutex
 }
 
 var ErrWriteCanceled = errors.New("write canceled")
@@ -965,13 +952,12 @@ func (pw *ProgressWriter) Write(p []byte) (n int, err error) {
 	default:
 	}
 
-	pw.mu.Lock()
-	defer pw.mu.Unlock()
 	n, err = pw.Writer.Write(p)
 
 	if err != nil || pw.OnProgress == nil || pw.Total <= 0 {
 		return
 	}
+
 	pw.Written += int64(n)
 	progress := float64(pw.Written) / float64(pw.Total)
 	if pw.lastProgress < progress {
@@ -994,9 +980,12 @@ func (pw *ProgressWriter) Write(p []byte) (n int, err error) {
 func NewProgressWriter(destination io.Writer, total int64, c *fyne.Container) (pw *ProgressWriter, restore func()) {
 	db := c.Objects[feDel].(*widget.Button)
 	pb := c.Objects[feBar].(*widget.ProgressBar)
-	var sb *widget.Button
+	sbShow := func() {}
 	if len(c.Objects) > 3 {
-		sb = c.Objects[feSave].(*widget.Button)
+		// Для вкладки Беру
+		sb := c.Objects[feSave]
+		fyne.Do(func() { sb.Hide() })
+		sbShow = func() { fyne.Do(sb.Show) }
 	}
 
 	oldOnTapped := db.OnTapped
@@ -1026,16 +1015,11 @@ func NewProgressWriter(destination io.Writer, total int64, c *fyne.Container) (p
 		pb.Show()
 	})
 
-	if sb != nil {
-		fyne.Do(sb.Hide)
-	}
 	restore = func() {
 		db.OnTapped = oldOnTapped
 		fyne.Do(func() {
 			pb.Hide()
-			if sb != nil {
-				sb.Show()
-			}
+			sbShow()
 		})
 	}
 
@@ -1153,7 +1137,6 @@ func (pw *ProgressWrapper) SetMax(max int64) {
 type LabelWrapper struct {
 	*widget.Label
 	lastText string
-	// lastCall time.Time
 }
 
 func NewLabelWrapper(label *widget.Label) *LabelWrapper {
@@ -1164,12 +1147,8 @@ func NewLabelWrapper(label *widget.Label) *LabelWrapper {
 }
 
 func (lw *LabelWrapper) SetText(text string) {
-	// now := time.Now()
-
-	// if text != lw.lastText || now.Sub(lw.lastCall) >= minInterval {
 	if text != lw.lastText {
 		lw.lastText = text
-		// lw.lastCall = now
 		fyne.Do(func() {
 			lw.Label.SetText(text)
 		})
