@@ -492,6 +492,7 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 			toplineW := NewLabelWrapper(topline)
 			var TotalSent, size, totalMax int64
 			fepw := NewProgressWrapper(nil)
+			oldPath := ""
 			once := true
 			for {
 				select {
@@ -538,18 +539,24 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 						cnum := receiver.FilesToTransferCurrentNum
 						if old < cnum+1 {
 							old = cnum + 1
-							if cnum > 0 {
-								//100%
-								fepw.Set100()
-							}
 							fi := receiver.FilesToTransfer[cnum]
 							filename = fi.Name
 							toplineW.SetText(fmt.Sprintf("%s: %s(%d/%d)", lp("Receiving file"), filename, cnum+1, len(receiver.FilesToTransfer)))
 							TotalSent += size
 							size = fi.Size
 							path := filepath.Join(recvDir, fi.Name)
+							if oldPath != path {
+								if fe := fileentries[oldPath]; fe != nil {
+									fyne.Do(func() {
+										fe.Objects[feDel].Show()
+										fe.Objects[feBar].Hide()
+										fe.Objects[feSave].Show()
+									})
+								}
+								oldPath = path
+							}
 							log.Trace(path)
-							if fe, ok := fileentries[path]; ok {
+							if fe := fileentries[path]; fe != nil {
 								fepw = NewProgressWrapper(fe.Objects[feBar].(*widget.ProgressBar))
 							} else {
 								fepw = NewProgressWrapper(nil)

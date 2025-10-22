@@ -171,8 +171,6 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 			}
 		})
 		progFile := widget.NewProgressBar()
-		fyne.Do(progFile.Hide)
-
 		newentry = container.NewHBox(
 			deleteButton,
 			progFile,
@@ -181,7 +179,9 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 
 		fileentries[dst] = newentry
 		fyne.Do(func() {
+			progFile.Hide()
 			boxholder.Add(newentry)
+			boxholder.Refresh()
 		})
 		return
 	}
@@ -787,6 +787,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 			parent.Select(ti)
 		}
 		// ti.Content.Refresh()
+		boxholder.Refresh()
 	}
 	return
 }
@@ -993,6 +994,11 @@ func (pw *ProgressWriter) Write(p []byte) (n int, err error) {
 func NewProgressWriter(destination io.Writer, total int64, c *fyne.Container) (pw *ProgressWriter, restore func()) {
 	db := c.Objects[feDel].(*widget.Button)
 	pb := c.Objects[feBar].(*widget.ProgressBar)
+	var sb *widget.Button
+	if len(c.Objects) > 3 {
+		sb = c.Objects[feSave].(*widget.Button)
+	}
+
 	oldOnTapped := db.OnTapped
 
 	cancelChan := make(chan struct{})
@@ -1020,9 +1026,17 @@ func NewProgressWriter(destination io.Writer, total int64, c *fyne.Container) (p
 		pb.Show()
 	})
 
+	if sb != nil {
+		fyne.Do(sb.Hide)
+	}
 	restore = func() {
 		db.OnTapped = oldOnTapped
-		fyne.Do(pb.Hide)
+		fyne.Do(func() {
+			pb.Hide()
+			if sb != nil {
+				sb.Show()
+			}
+		})
 	}
 
 	return pw, restore
