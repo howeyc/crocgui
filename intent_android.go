@@ -62,24 +62,38 @@ static void excludeFromRecents(JNIEnv* env, jobject activity) {
         return;
     }
 
-    // Проверяем доступность finishAndRemoveTask (API 21+)
+    // Сначала пробуем finishAndRemoveTask (API 21+)
     jmethodID finishAndRemoveTask = (*env)->GetMethodID(env, activity_class, "finishAndRemoveTask", "()V");
     if (finishAndRemoveTask != NULL) {
-        LogD("C: Using finishAndRemoveTask");
+
+        // Безопасный вызов с обработкой исключений
+        jthrowable exc = NULL;
         (*env)->CallVoidMethod(env, activity, finishAndRemoveTask);
-    } else {
-        // Fallback для старых версий API
-        LogD("C: Using finishAffinity as fallback");
-        jmethodID finishAffinity = (*env)->GetMethodID(env, activity_class, "finishAffinity", "()V");
-        if (finishAffinity != NULL) {
-            (*env)->CallVoidMethod(env, activity, finishAffinity);
+        exc = (*env)->ExceptionOccurred(env);
+
+        if (exc) {
+            (*env)->ExceptionClear(env);
+            // Переходим к fallback
         } else {
-            // Последний fallback - обычный finish
-            LogD("C: Using finish as last resort");
-            jmethodID finish = (*env)->GetMethodID(env, activity_class, "finish", "()V");
-            if (finish != NULL) {
-                (*env)->CallVoidMethod(env, activity, finish);
-            }
+            LogD("C: finishAndRemoveTask succeeded");
+            (*env)->DeleteLocalRef(env, activity_class);
+            return; // Успешно завершили
+        }
+    }
+
+    // Fallback 1: finishAffinity (API 16+)
+    jmethodID finishAffinity = (*env)->GetMethodID(env, activity_class, "finishAffinity", "()V");
+    if (finishAffinity != NULL) {
+        LogD("C: Using finishAffinity");
+        (*env)->CallVoidMethod(env, activity, finishAffinity);
+    } else {
+        // Fallback 2: обычный finish (API 1+)
+        LogD("C: Using basic finish as last resort");
+        jmethodID finish = (*env)->GetMethodID(env, activity_class, "finish", "()V");
+        if (finish != NULL) {
+            (*env)->CallVoidMethod(env, activity, finish);
+        } else {
+            LogD("C: ERROR - No finish method found!");
         }
     }
 
