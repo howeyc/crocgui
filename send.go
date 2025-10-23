@@ -37,6 +37,7 @@ const (
 	feDel         = 0
 	feBar         = 1
 	feSave        = 2
+	PSL           = "→"
 )
 
 func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *container.TabItem) {
@@ -211,13 +212,10 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 			return nil
 		}
 
-		if !(isMobile || copyDebug) {
-			err := Symlink(src, dst)
-			if err == nil {
-				log.Tracef("Make symlink URI (%s) to internal cache %s", src, dst)
-				return nil
-			}
-			log.Errorf("Unable make symlink URI (%s) to internal cache %s, error: %s", src, dst, err)
+		err = Symlink(src, dst)
+		log.Tracef("Make symlink URI (%s) to internal cache %s error: %v", src, dst, err)
+		if err == nil {
+			return nil
 		}
 
 		CopyFileProgress(src, dst, fe, func(err error) {
@@ -469,13 +467,10 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 			}
 			src := u.String()
 
-			if !(isMobile || copyDebug) {
-				err := Symlink(u.Path(), dst)
-				if err == nil {
-					log.Tracef("Make symlink URI (%s) to internal cache %s", src, dst)
-					return
-				}
-				log.Errorf("Unable make symlink URI (%s) to internal cache %s, error: %s", src, dst, err)
+			err := Symlink(u.Path(), dst)
+			log.Tracef("Make symlink URI (%s) to internal cache %s error: %v", src, dst, err)
+			if err == nil {
+				return
 			}
 
 			copyFromURCProgress(source, fe, func(err error) {
@@ -708,10 +703,8 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 		go func() {
 			var filepaths []string
 			for fpath := range fileentries {
-				if isSymlink(fpath) {
-					if target, err := os.Readlink(fpath); err == nil {
-						fpath = target
-					}
+				if target, err := Readlink(fpath); err == nil {
+					fpath = target
 				}
 				filepaths = append(filepaths, fpath)
 			}
@@ -1164,13 +1157,70 @@ func hashed(c *croc.Client) bool {
 	return true
 }
 
-func isSymlink(path string) bool {
+// Symlink создает симлинк или псевдосимлинк в зависимости от CanCreateSymlinks.
+func Symlink(oldname string, newname string) error {
+	if isMobile || copyDebug {
+		return fmt.Errorf("isMobile || copyDebug")
+	}
+	// Создаем директорию для новой ссылки если нужно
+	dir := filepath.Dir(newname)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return err
+	}
+
+	if CanCreateSymlinks() {
+		// Пробуем создать настоящий симлинк
+		return os.Symlink(oldname, newname)
+	}
+
+	// Создаем файл-псевдосимлинк с содержимым "→oldname"
+	content := PSL + oldname
+	return os.WriteFile(newname, []byte(content), 0644)
+}
+
+// Readlink читает симлинк или псевдосимлинк.
+// Если это не симлинк - возвращает ошибку
+func Readlink(name string) (string, error) {
 	if isMobile {
-		return false
+		return "", fmt.Errorf("isMobile")
 	}
-	fileInfo, err := os.Lstat(path)
+	// Пробуем прочитать как настоящий симлинк
+	fileInfo, err := os.Lstat(name)
 	if err != nil {
-		return false
+		return "", err
 	}
-	return fileInfo.Mode()&os.ModeSymlink != 0
+
+	if fileInfo.Mode()&os.ModeSymlink != 0 {
+		return os.Readlink(name)
+	}
+
+	// Пробуем прочитать как псевдосимлинк
+	contentBytes, err := os.ReadFile(name)
+	if err != nil {
+		return "", err
+	}
+
+	content := strings.TrimSpace(string(contentBytes))
+	if !strings.HasPrefix(content, PSL) || len(content) <= len(PSL) {
+		return "", os.ErrInvalid
+	}
+
+	target := strings.TrimSpace(content[len(PSL):])
+	if target == "" {
+		return "", os.ErrInvalid
+	}
+
+	// Проверяем существование цели для псевдосимлинков
+	if _, err := os.Stat(target); err != nil {
+		// Пробуем относительный путь
+		if !filepath.IsAbs(target) {
+			absTarget := filepath.Join(filepath.Dir(name), target)
+			if _, err := os.Stat(absTarget); err == nil {
+				return target, nil
+			}
+		}
+		return "", os.ErrNotExist
+	}
+
+	return target, nil
 }

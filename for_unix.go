@@ -2,10 +2,6 @@
 
 package main
 
-import (
-	"os"
-)
-
-func Symlink(oldname string, newname string) error {
-	return os.Symlink(oldname, newname)
+func CanCreateSymlinks() bool {
+	return !isMobile
 }
