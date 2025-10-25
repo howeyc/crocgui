@@ -202,7 +202,9 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 			return fmt.Errorf("URI (%s) %s", src, err.Error())
 		} else if fi.IsDir() {
 			log.Tracef("URI (%s), is dir", src)
-			return nil
+			if isMobile {
+				return nil
+			}
 		}
 
 		fi, err = os.Stat(dst)
@@ -575,6 +577,13 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 		log.SetLevel(debugString(a))
 		log.Trace("croc sender created")
 
+		tempDir := os.TempDir()
+		cderr := os.Chdir(tempDir)
+		if cderr != nil {
+			log.Error("Unable to change to dir:", tempDir, cderr)
+		}
+		log.Trace("cd ", tempDir)
+
 		var filename string
 		mainButton.Disable()
 		cancelChan = make(chan struct{})
@@ -625,7 +634,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 				case <-done:
 					return
 				case <-doneChan:
-					removeEntrys()
+					os.RemoveAll(sendDir)
 					log.Tracef("A restart is better than leaving 12 goroutines leaking")
 					fyne.Do(func() {
 						restart(a, w)
@@ -648,27 +657,45 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 					}
 					if once && hashed(sender) {
 						once = false
-						fyne.Do(func() {
-							topline.SetText(lp("Download"))
-							prog.Show()
-							for _, fe := range fileentries {
-								pb := fe.Objects[feBar].(*widget.ProgressBar)
-								pb.SetValue(0)
-								pb.Show()
-							}
-
-							fyne.Do(refresh)
-						})
 						for _, fi := range sender.FilesToTransfer {
 							path := filepath.Join(sendDir, fi.Name)
-							if fe, ok := fileentries[path]; ok {
+							fe, ok := fileentries[path]
+							if !ok {
+								fe = addEntry(path)
+								if fe != nil {
+									fyne.Do(func() {
+										fe.Objects[feDel].Hide()
+										fe.Objects[len(fe.Objects)-1].(*widget.Label).SetText(fi.FolderRemote + fi.Name)
+									})
+								}
+								path = filepath.Join(sendDir, fi.FolderRemote)
+								if fr, ok := fileentries[path]; ok {
+									fyne.Do(func() {
+										boxholder.Remove(fr)
+									})
+									delete(fileentries, path)
+								}
+							}
+							if fe != nil {
 								if pb, ok := fe.Objects[feBar].(*widget.ProgressBar); ok {
 									pb.Max = float64(fi.Size)
 								}
 							}
 							totalMax += fi.Size
 						}
+						fyne.Do(func() {
+							topline.SetText(lp("Download"))
+							prog.Show()
+							for _, fe := range fileentries {
+
+								pb := fe.Objects[feBar].(*widget.ProgressBar)
+								pb.SetValue(0)
+								pb.Show()
+							}
+							refresh()
+						})
 						progW.SetMax(totalMax)
+						log.Tracef("totalMax %d", totalMax)
 					}
 					if sender.Step2FileInfoTransferred {
 						cnum := sender.FilesToTransferCurrentNum

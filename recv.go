@@ -120,9 +120,18 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 	fileentries := make(map[string]*fyne.Container)
 
 	removeEntry := func(fpath string, fe *fyne.Container, del bool) {
-		boxholder.Remove(fe)
+		fyne.Do(func() {
+			boxholder.Remove(fe)
+			boxholder.Refresh()
+		})
 		if del {
-			log.Tracef("Removed received file: %s error: %v", fpath, os.Remove(fpath))
+			remove := os.Remove
+			file := "file"
+			if fi, err := os.Stat(fpath); err == nil && fi.IsDir() {
+				remove = os.RemoveAll
+				file = "dir"
+			}
+			log.Tracef("Removed received %s: %s error: %v", file, fpath, remove(fpath))
 		}
 		delete(fileentries, fpath)
 	}
@@ -163,12 +172,24 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 				}
 			}
 			if !(isMobile || copyDebug) {
-				err := os.Rename(src, destination.URI().Path())
-				if err == nil {
+				if fi, err := os.Stat(src); err == nil && fi.IsDir() {
 					destination.Close()
+					err := Rename(src, destination.URI().Path())
+					if err == nil {
+						log.Tracef("File %s moved to %s", src, destination.URI().Path())
+						removeEntry(src, fe, true)
+					} else {
+						log.Warnf("File %s not moved to %s error: %v", src, destination.URI().Path(), err)
+					}
+					return
+				}
+				err := Rename(src, destination.URI().Path())
+				if err == nil {
 					log.Tracef("File %s moved to %s", src, destination.URI().Path())
 					removeEntry(src, fe, true)
 					return
+				} else {
+					log.Warnf("File %s not moved to %s error: %v", src, destination.URI().Path(), err)
 				}
 			}
 
@@ -255,6 +276,29 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 		}
 	}
 
+	reload = func() {
+		for path, fe := range fileentries {
+			if _, err := os.Stat(path); err != nil {
+				removeEntry(path, fe, false)
+			}
+		}
+		for _, name := range ls(recvDir) {
+			if name != "" {
+				path := filepath.Join(recvDir, name)
+				if fpath == path {
+					continue
+				}
+
+				fe := addEntry(path)
+				if pb, ok := fe.Objects[feBar].(*widget.ProgressBar); ok {
+					fe.Objects[feDel].Show()
+					fe.Objects[feSave].Show()
+					pb.Hide()
+				}
+			}
+		}
+	}
+
 	var lastSaveDir string
 
 	cancelChan := make(chan struct{})
@@ -308,18 +352,10 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 					continue
 				}
 
-				destination, err := storage.Writer(u)
-				if err != nil {
-					cl()
-					log.Errorf("Error creating writer from URI(%s) error: %v", u.String(), err)
-					continue
-				}
-
 				if !(isMobile || copyDebug) {
-					err := os.Rename(src, destination.URI().Path())
+					err := Rename(src, u.Path())
 					if err == nil {
-						destination.Close()
-						log.Tracef("File %s moved to %s", src, destination.URI().Path())
+						log.Tracef("File %s moved to %s", src, u.Path())
 						removeEntry(src, fe, true)
 						fyne.Do(func() {
 							if len(fileentries) == 0 {
@@ -327,7 +363,16 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 							}
 						})
 						continue
+					} else {
+						log.Warnf("File %s not moved to %s error: %v", src, u.Path(), err)
 					}
+				}
+
+				destination, err := storage.Writer(u)
+				if err != nil {
+					cl()
+					log.Errorf("creating writer from URI(%s): %v", u, err)
+					continue
 				}
 
 				copyToUWCProgress(destination, src, fe, func(err error) {
@@ -467,27 +512,14 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 						totpProg.Show()
 					}
 
-					for _, name := range ls(recvDir) {
-						if name != "" {
-							path := filepath.Join(recvDir, name)
-							if fpath == path {
-								continue
-							}
-
-							fe := addEntry(path)
-							if pb, ok := fe.Objects[feBar].(*widget.ProgressBar); ok {
-								fe.Objects[feDel].Show()
-								fe.Objects[feSave].Show()
-								pb.Hide()
-							}
-						}
-					}
+					reload()
 					refresh()
 				})
 			}()
 
 			old := 0
 			oldPath := ""
+			// oldTempFile := false
 			progW := NewProgressWrapper(prog)
 			toplineW := NewLabelWrapper(topline)
 			var TotalSent, size, totalMax int64
@@ -529,6 +561,9 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 										pb.SetValue(0)
 										pb.Max = float64(fi.Size)
 										pb.Show()
+										if fi.FolderRemote != "." {
+											fe.Objects[len(fe.Objects)-1].(*widget.Label).SetText(fi.FolderRemote + "/" + fi.Name)
+										}
 									})
 								}
 								totalMax += fi.Size
@@ -686,58 +721,150 @@ func ShowFolderOpen(callback func(fyne.ListableURI, error), parent fyne.Window) 
 	fd.Show()
 }
 
-// detectMimeType определяет MIME-тип по расширению файла
-func detectMimeType(fileName string) string {
-	ext := strings.ToLower(filepath.Ext(fileName))
-	mimeTypes := map[string]string{
-		".txt":  "text/plain",
-		".html": "text/html",
-		".htm":  "text/html",
-		".css":  "text/css",
-		".js":   "application/javascript",
-		".json": "application/json",
-		".xml":  "application/xml",
-
-		".pdf":  "application/pdf",
-		".doc":  "application/msword",
-		".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-		".xls":  "application/vnd.ms-excel",
-		".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-		".ppt":  "application/vnd.ms-powerpoint",
-		".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-		".zip":  "application/zip",
-		".rar":  "application/vnd.rar",
-		".7z":   "application/x-7z-compressed",
-
-		".jpg":  "image/jpeg",
-		".jpeg": "image/jpeg",
-		".png":  "image/png",
-		".gif":  "image/gif",
-		".bmp":  "image/bmp",
-		".webp": "image/webp",
-		".svg":  "image/svg+xml",
-		".ico":  "image/x-icon",
-
-		".mp3":  "audio/mpeg",
-		".wav":  "audio/wav",
-		".ogg":  "audio/ogg",
-		".flac": "audio/flac",
-		".aac":  "audio/aac",
-
-		".mp4":  "video/mp4",
-		".avi":  "video/x-msvideo",
-		".mov":  "video/quicktime",
-		".wmv":  "video/x-ms-wmv",
-		".flv":  "video/x-flv",
-		".webm": "video/webm",
-		".mkv":  "video/x-matroska",
-
-		".apk": "application/vnd.android.package-archive",
+func Rename(src, dst string) error {
+	// Check if source path exists
+	srcStat, err := os.Stat(src)
+	if err != nil {
+		return err
 	}
 
-	if mime, exists := mimeTypes[ext]; exists {
-		return mime
+	// Check that dst is not a subdirectory of src
+	srcAbs, err := filepath.Abs(src)
+	if err != nil {
+		return err
+	}
+	dstAbs, err := filepath.Abs(dst)
+	if err != nil {
+		return err
 	}
 
-	return "application/octet-stream"
+	if strings.HasPrefix(dstAbs, srcAbs+string(filepath.Separator)) {
+		return errors.New("destination cannot be inside source directory")
+	}
+
+	// Try standard rename first
+	if err := os.Rename(src, dst); err == nil {
+		return nil
+	}
+
+	// If standard rename failed, use copy approach
+	if srcStat.IsDir() {
+		return renameDir(src, dst)
+	}
+
+	return renameFile(src, dst)
+}
+
+func renameDir(src, dst string) error {
+	// Check if destination already exists
+	if _, err := os.Stat(dst); err == nil {
+		return os.ErrExist
+	}
+
+	// Create destination directory
+	if err := os.MkdirAll(dst, 0755); err != nil {
+		return err
+	}
+
+	// Copy directory contents
+	if err := copyDirectory(src, dst); err != nil {
+		os.RemoveAll(dst) // cleanup on error
+		return err
+	}
+
+	// Remove source directory
+	if err := os.RemoveAll(src); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func renameFile(src, dst string) error {
+	// Open source file
+	srcFile, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer srcFile.Close()
+
+	// Get source file info for permissions
+	srcInfo, err := srcFile.Stat()
+	if err != nil {
+		return err
+	}
+
+	// Create destination file
+	dstFile, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+
+	// Copy file content
+	if _, err := io.Copy(dstFile, srcFile); err != nil {
+		dstFile.Close()
+		os.Remove(dst) // cleanup on error
+		return err
+	}
+
+	// Close destination file before chmod
+	if err := dstFile.Close(); err != nil {
+		os.Remove(dst) // cleanup on error
+		return err
+	}
+
+	// Copy file permissions
+	if err := os.Chmod(dst, srcInfo.Mode()); err != nil {
+		os.Remove(dst) // cleanup on error
+		return err
+	}
+
+	// Remove source file
+	return os.Remove(src)
+}
+
+func copyDirectory(src, dst string) error {
+	return filepath.Walk(src, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		// Calculate relative path
+		relPath, err := filepath.Rel(src, path)
+		if err != nil {
+			return err
+		}
+
+		dstPath := filepath.Join(dst, relPath)
+
+		if info.IsDir() {
+			return os.MkdirAll(dstPath, info.Mode())
+		}
+
+		return copyFile(path, dstPath, info.Mode())
+	})
+}
+
+func copyFile(src, dst string, mode os.FileMode) error {
+	srcFile, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer srcFile.Close()
+
+	dstFile, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+
+	if _, err := io.Copy(dstFile, srcFile); err != nil {
+		dstFile.Close()
+		return err
+	}
+
+	if err := dstFile.Close(); err != nil {
+		return err
+	}
+
+	return os.Chmod(dst, mode)
 }

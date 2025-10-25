@@ -39,6 +39,7 @@ var (
 	logOutput              logWriter
 	atSI                   int
 	notFinish              bool
+	reload                 = func() {}
 )
 
 const (
@@ -166,6 +167,9 @@ func refreshWindow(a fyne.App, w fyne.Window) {
 	at.OnSelected = func(tab *container.TabItem) {
 		atSI = at.SelectedIndex()
 		logOutput.active(tab.Text == ZeroWidthSpace)
+		if atSI == 1 {
+			reload()
+		}
 	}
 
 	if a.Preferences().Bool("hide-logo") {
