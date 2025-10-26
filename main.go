@@ -40,6 +40,7 @@ var (
 	atSI                   int
 	notFinish              bool
 	reload                 = func() {}
+	wd                     string
 )
 
 const (
@@ -59,6 +60,7 @@ const (
 )
 
 func main() {
+	wd, _ = os.Getwd()
 	ErrApplicationShutdown = errors.New("application shutdown")
 	done = make(chan struct{})
 	replacer = strings.NewReplacer(
@@ -143,7 +145,7 @@ func main() {
 
 	refreshWindow(a, w)
 	// w.Resize(fyne.NewSize(800, 600))
-	w.Resize(fyne.NewSize(300, 900))
+	w.Resize(fyne.NewSize(200, 800))
 
 	w.ShowAndRun()
 }

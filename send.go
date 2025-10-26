@@ -189,28 +189,37 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 		return
 	}
 
+	// Копируем
 	addPath := func(src string) error {
-		dst := filepath.Join(sendDir, filepath.Base(src))
-		fe := addEntry(dst)
-		if fe == nil {
-			return nil
-		}
-
 		fi, err := os.Stat(src)
-		size := fi.Size()
 		if err != nil {
-			return fmt.Errorf("URI (%s) %s", src, err.Error())
-		} else if fi.IsDir() {
+			return fmt.Errorf("URI (%s) error: %v", src, err)
+		}
+		if fi.IsDir() {
 			log.Tracef("URI (%s), is dir", src)
 			if isMobile {
 				return nil
 			}
 		}
 
-		fi, err = os.Stat(dst)
-		if err == nil && fi.Size() == size {
+		base := filepath.Base(src)
+		dst := filepath.Join(sendDir, base)
+
+		fe := addEntry(dst)
+
+		if fe == nil {
+			log.Tracef("URI (%s), already in fileentries %s", src, base)
+			return nil
+		}
+
+		if fi.IsDir() {
+			fyne.Do(func() {
+				fe.Objects[len(fe.Objects)-1].(*widget.Label).SetText(base + "/")
+			})
+		}
+
+		if _, err := os.Stat(dst); err == nil {
 			log.Tracef("URI (%s), already in internal cache %s", src, dst)
-			addEntry(dst)
 			return nil
 		}
 
@@ -262,11 +271,16 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 		}()
 	}
 
-	os.MkdirAll(sendDir, 0o700)
+	os.MkdirAll(sendDir, 0700)
 	for _, name := range ls(sendDir) {
 		if name != "" {
-			log.Trace(name)
-			addEntry(filepath.Join(sendDir, name))
+			fpath := filepath.Join(sendDir, name)
+			if target, err := Readlink(fpath); err == nil {
+				fpath = target
+			}
+			// log.Trace(name)
+			// addEntry(filepath.Join(sendDir, name))
+			addPath(fpath)
 		}
 	}
 
@@ -413,6 +427,11 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 	} else {
 		if len(os.Args) > 0 {
 			for _, src := range os.Args[1:] {
+				src, err := filepath.Abs(src)
+				if err != nil {
+					log.Warnf("filepath.Abs(%s) error: %v", src, err)
+					continue
+				}
 				if err := addPath(src); err != nil {
 					log.Error(err.Error())
 				}
@@ -735,19 +754,19 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 				}
 				filepaths = append(filepaths, fpath)
 			}
-			fi, emptyfolders, numFolders, ferr := croc.GetFilesInfo(filepaths, false, false, []string{})
-			if ferr != nil {
-				log.Errorf("file info failed: %s", ferr)
-			}
-			var serr error
-			if EMULATE == 0 {
-				serr = sender.Send(fi, emptyfolders, numFolders)
+			fi, emptyfolders, numFolders, serr := croc.GetFilesInfo(filepaths, false, false, []string{})
+			if serr != nil {
+				log.Errorf("file info failed: %s", serr)
 			} else {
-				log.Warnf("Send %v %v %v", fi, emptyfolders, numFolders)
-				time.Sleep(EMULATE)
-				defer func() {
-					sender = nil
-				}()
+				if EMULATE == 0 {
+					serr = sender.Send(fi, emptyfolders, numFolders)
+				} else {
+					log.Warnf("Send %v %v %v", fi, emptyfolders, numFolders)
+					time.Sleep(EMULATE)
+					defer func() {
+						sender = nil
+					}()
+				}
 			}
 
 			fyne.Do(func() {
@@ -845,6 +864,7 @@ func restart(a fyne.App, w fyne.Window) {
 	}
 	cmd := exec.Command(os.Args[0])
 	cmd.Env = os.Environ()
+	cmd.Dir = wd
 	cmd.Start()
 	w.Close()
 	os.Exit(0)

@@ -174,6 +174,7 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 			if !(isMobile || copyDebug) {
 				if fi, err := os.Stat(src); err == nil && fi.IsDir() {
 					destination.Close()
+					os.Remove(destination.URI().Path())
 					err := Rename(src, destination.URI().Path())
 					if err == nil {
 						log.Tracef("File %s moved to %s", src, destination.URI().Path())
@@ -227,12 +228,17 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 		savedialog.Show()
 	}
 
+	// Добавим стрчку в boxholder и fileentries
 	addEntry := func(dst string) (newentry *fyne.Container) {
 		if fe, has := fileentries[dst]; has {
 			log.Tracef("exists %s", dst)
 			return fe
 		}
-		labelFile := widget.NewLabel(filepath.Base(dst))
+		base := filepath.Base(dst)
+		if fi, _ := os.Stat(dst); fi != nil && fi.IsDir() {
+			base += "/"
+		}
+		labelFile := widget.NewLabel(base)
 
 		saveButton := widget.NewButtonWithIcon("", theme.DocumentSaveIcon(), func() {
 			ShowFileLocation(dst, w)
@@ -261,18 +267,22 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 	os.MkdirAll(recvDir, 0o700)
 	fpath := a.Preferences().String("DeleteFile")
 	for _, name := range ls(recvDir) {
-		if name != "" {
-			path := filepath.Join(recvDir, name)
-			if fpath == path {
-				err := os.Remove(fpath)
-				log.Tracef("Removed partially received file: %s error: %v", fpath, err)
-				if err != nil {
-					continue
-				}
-				a.Preferences().SetString("DeleteFile", "")
-			} else {
-				addEntry(path)
+		path := filepath.Join(recvDir, name)
+		if name == "" {
+			continue
+		}
+		if fpath == path {
+			err := os.Remove(fpath)
+			log.Tracef("Removed partially received file: %s error: %v", fpath, err)
+			if err != nil {
+				continue
 			}
+			a.Preferences().SetString("DeleteFile", "")
+		} else {
+			if target, err := Readlink(path); err == nil {
+				path = target
+			}
+			addEntry(path)
 		}
 	}
 
