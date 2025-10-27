@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -474,6 +475,7 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 			// HashAlgorithm:    a.Preferences().String("croc-hash"),
 			Overwrite:        true,
 			MulticastAddress: a.Preferences().String("multicast-address"),
+			ZipFolder:        true,
 		})
 		if err != nil {
 			log.Errorf("croc setup error: %s\n", err.Error())
@@ -833,7 +835,7 @@ func renameFile(src, dst string) error {
 	return os.Remove(src)
 }
 
-func copyDirectory(src, dst string) error {
+func copyDirectory0(src, dst string) error {
 	return filepath.Walk(src, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -853,6 +855,53 @@ func copyDirectory(src, dst string) error {
 
 		return copyFile(path, dstPath, info.Mode())
 	})
+}
+func copyDirectory(src, dst string) error {
+	// Создаем целевую директорию с оригинальными правами
+	srcInfo, err := os.Stat(src)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(dst, srcInfo.Mode()); err != nil {
+		return err
+	}
+
+	return filepath.WalkDir(src, func(path string, dirEntry fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+
+		relPath, err := filepath.Rel(src, path)
+		if err != nil {
+			return err
+		}
+
+		// Пропускаем корневую директорию - она уже создана
+		if relPath == "." {
+			return nil
+		}
+
+		dstPath := filepath.Join(dst, relPath)
+
+		if dirEntry.IsDir() {
+			info, err := dirEntry.Info()
+			if err != nil {
+				return err
+			}
+			// Используем Mkdir вместо MkdirAll, так как родительские директории уже созданы
+			// благодаря обходу в глубину и созданию корневой директории
+			return os.Mkdir(dstPath, info.Mode())
+		}
+
+		return copyFileWithMode(path, dstPath, dirEntry)
+	})
+}
+func copyFileWithMode(src, dst string, dirEntry fs.DirEntry) error {
+	info, err := dirEntry.Info()
+	if err != nil {
+		return err
+	}
+	return copyFile(src, dst, info.Mode())
 }
 
 func copyFile(src, dst string, mode os.FileMode) error {
