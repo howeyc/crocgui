@@ -324,9 +324,9 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 
 	var cancelButton, mainButton *widget.Button
 
-	removeEntrys := func(del bool) {
+	removeEntrys := func() {
 		for fpath, fe := range fileentries {
-			removeEntry(fpath, fe, del)
+			removeEntry(fpath, fe, true)
 		}
 	}
 
@@ -453,7 +453,7 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 				lp("Delete All"),
 				lp("Are you sure you want to delete all received files?"), func(b bool) {
 					if b {
-						removeEntrys(true)
+						removeEntrys()
 					}
 				},
 				w)
@@ -654,7 +654,7 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 					log.Error(s)
 					topline.SetText(s)
 					fpath = filepath.Join(recvDir, filename)
-					removeEntrys(false)
+					removeEntrys()
 				} else {
 					topline.SetText(fmt.Sprintf("%s: %s", lp("Received"), filename))
 				}
@@ -674,7 +674,7 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 
 	deleteAllButton := widget.NewButtonWithIcon("*", theme.DeleteIcon(), func() { //lp("Delete All")
 		if len(fileentries) > 0 {
-			removeEntrys(true)
+			removeEntrys()
 		} else {
 			entry.SetText("")
 		}
@@ -738,7 +738,7 @@ func copyToUWCProgress(destination fyne.URIWriteCloser, src string, c *fyne.Cont
 	}()
 }
 
-// Big File Dialog
+// Большой диалог для десктопа
 func ShowFolderOpen(callback func(fyne.ListableURI, error), parent fyne.Window) {
 	if isMobile {
 		notFinish = true
@@ -746,6 +746,7 @@ func ShowFolderOpen(callback func(fyne.ListableURI, error), parent fyne.Window) 
 		return
 	}
 	fd := dialog.NewFolderOpen(callback, parent)
+	fd.Resize(parent.Canvas().Size())
 	fd.Show()
 }
 
@@ -790,7 +791,7 @@ func renameDir(src, dst string) error {
 	}
 
 	// Create destination directory
-	if err := os.MkdirAll(dst, 0755); err != nil {
+	if err := os.MkdirAll(dst, 0700); err != nil {
 		return err
 	}
 

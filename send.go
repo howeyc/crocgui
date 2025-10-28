@@ -145,13 +145,20 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 	scroller := container.NewVScroll(boxholder)
 	fileentries := make(map[string]*fyne.Container)
 
-	removeEntry := func(fpath string, fe *fyne.Container) {
+	removeEntry := func(fpath string, fe *fyne.Container, del bool) {
 		fyne.Do(func() {
 			boxholder.Remove(fe)
 			boxholder.Refresh()
 		})
-		os.Remove(fpath)
-		log.Tracef("Removed file from internal cache: %s", fpath)
+		if del {
+			remove := os.Remove
+			file := "file"
+			if fi, _ := os.Stat(fpath); fi != nil && fi.IsDir() {
+				remove = os.RemoveAll
+				file = "dir"
+			}
+			log.Tracef("Removed cached %s: %s error: %v", file, fpath, remove(fpath))
+		}
 		delete(fileentries, fpath)
 	}
 
@@ -167,7 +174,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 				log.Trace("Sending")
 			} else {
 				if fe, ok := fileentries[dst]; ok {
-					removeEntry(dst, fe)
+					removeEntry(dst, fe, true)
 				} else {
 					os.Remove(dst)
 				}
@@ -232,27 +239,29 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 		CopyFileProgress(src, dst, fe, func(err error) {
 			if err != nil {
 				log.Errorf("Unable to copy file, error: %s - %s", sendDir, err.Error())
-				removeEntry(dst, fe)
+				removeEntry(dst, fe, true)
 				return
 			}
 			log.Tracef("URI (%s), copied to internal cache %s", src, dst)
 
 			if _, sterr := os.Stat(dst); sterr != nil {
 				log.Errorf("Stat error: %s - %s", dst, sterr.Error())
-				removeEntry(dst, fe)
+				removeEntry(dst, fe, true)
 			}
 		})
 		return nil
 	}
 
-	copyFromURCProgress := func(source fyne.URIReadCloser, c *fyne.Container, onComplete func(err error)) {
+	copyFromURCProgress := func(source fyne.URIReadCloser, dst string, c *fyne.Container, onComplete func(err error)) {
 		if source == nil {
 			onComplete(fmt.Errorf("user cancel dialog"))
 			return
 		}
-		u := source.URI()
-		name := uriBase(u)
-		dst := filepath.Join(sendDir, name)
+		if dst == "" {
+			u := source.URI()
+			name := uriBase(u)
+			dst = filepath.Join(sendDir, name)
+		}
 		destination, err := os.Create(dst)
 		if err != nil {
 			source.Close()
@@ -399,23 +408,18 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 						}
 
 						fyne.Do(refresh)
-						copyFromURCProgress(source, fe, func(err error) {
+						copyFromURCProgress(source, "", fe, func(err error) {
 							if err != nil {
 								log.Errorf("URI (%s), copied to internal cache %s error: %s", u, dst, err)
-								removeEntry(dst, fe)
+								removeEntry(dst, fe, true)
 								fyne.Do(refresh)
 								return
 							}
 							log.Tracef("URI (%s), copied to internal cache %s", u, dst)
 
-							if fi, sterr := os.Stat(dst); sterr != nil || fi.IsDir() {
-								if sterr != nil {
-									log.Errorf("Stat(%s) error: %v", dst, sterr)
-								}
-								if fi.IsDir() {
-									log.Tracef("URI (%s) is dir", u)
-								}
-								removeEntry(dst, fe)
+							if fi, err := os.Stat(dst); fi == nil {
+								log.Errorf("Stat(%s) error: %v", dst, err)
+								removeEntry(dst, fe, true)
 								fyne.Do(refresh)
 							}
 						})
@@ -494,20 +498,80 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 				return
 			}
 
-			copyFromURCProgress(source, fe, func(err error) {
+			copyFromURCProgress(source, "", fe, func(err error) {
 				if err != nil {
 					log.Errorf("URI (%s), copied to internal cache %s error: %s", src, dst, err)
-					removeEntry(dst, fe)
+					removeEntry(dst, fe, true)
 					return
 				}
 				log.Tracef("URI (%s), copied to internal cache %s", src, dst)
 
 				if _, sterr := os.Stat(dst); sterr != nil {
 					log.Errorf("Stat error: %s - %s", dst, sterr.Error())
-					removeEntry(dst, fe)
+					removeEntry(dst, fe, true)
 				}
 			})
 		}, w)
+	})
+
+	addFolderButton := widget.NewButtonWithIcon("", theme.FolderOpenIcon(), func() {
+		folderOpen := func(u fyne.ListableURI, e error) {
+			if u == nil {
+				log.Trace("User canceled folder selection")
+				return
+			}
+			if e != nil {
+				log.Errorf("Open dialog error: %s", e)
+				return
+			}
+			name := uriBase(u)
+			dst := filepath.Join(sendDir, name)
+			fe := addEntry(dst)
+			if fe == nil {
+				return
+			}
+			fe.Objects[len(fe.Objects)-1].(*widget.Label).SetText(name + "/")
+
+			err := Symlink(u.Path(), dst)
+			log.Tracef("Make symlink URI (%s) to internal cache %s error: %v", u, dst, err)
+			if err == nil {
+				return
+			}
+
+			copyDir(u, sendDir, func(srcURI fyne.URI, dst string) error {
+				log.Tracef("srcURI %s", srcURI)
+				log.Tracef("dst %s", dst)
+				fe := addEntry(dst)
+				if fe == nil {
+					return nil
+				}
+				rel, err := filepath.Rel(sendDir, dst)
+				if err == nil {
+					fe.Objects[len(fe.Objects)-1].(*widget.Label).SetText(rel)
+				}
+				source, err := storage.Reader(srcURI)
+				if err != nil {
+					removeEntry(dst, fe, true)
+					return nil
+				}
+				src := source.URI()
+				copyFromURCProgress(source, dst, fe, func(err error) {
+					if err != nil {
+						log.Errorf("URI (%s), copied to internal cache %s error: %s", src, dst, err)
+						removeEntry(dst, fe, true)
+						return
+					}
+					log.Tracef("URI (%s), copied to internal cache %s", src, dst)
+
+					if _, err := os.Stat(dst); err != nil {
+						log.Errorf("Stat error: %s - %s", dst, err.Error())
+					}
+					removeEntry(dst, fe, false)
+				})
+				return nil
+			})
+		}
+		ShowFolderOpen(folderOpen, w)
 	})
 
 	cancelChan := make(chan struct{})
@@ -515,7 +579,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 
 	removeEntrys := func() {
 		for fpath, fe := range fileentries {
-			removeEntry(fpath, fe)
+			removeEntry(fpath, fe, true)
 		}
 	}
 
@@ -740,7 +804,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 							path := filepath.Join(sendDir, fi.Name)
 							if oldPath != path {
 								if fe := fileentries[oldPath]; fe != nil {
-									removeEntry(oldPath, fe)
+									removeEntry(oldPath, fe, true)
 								}
 								oldPath = path
 							}
@@ -807,7 +871,11 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 	cancelButton.Hide()
 
 	top := container.NewVBox(
-		container.NewHBox(topline, layout.NewSpacer(), addFileButton, randomCodeButton),
+		container.NewHBox(topline,
+			layout.NewSpacer(),
+			addFolderButton,
+			addFileButton,
+			randomCodeButton),
 		widget.NewForm(&widget.FormItem{Text: lp("Send Code"), Widget: entry}),
 		container.NewHBox(
 			copyCodeButton,
@@ -1226,7 +1294,7 @@ func Symlink(oldname string, newname string) error {
 	}
 	// Создаем директорию для новой ссылки если нужно
 	dir := filepath.Dir(newname)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, 0700); err != nil {
 		return err
 	}
 
@@ -1285,4 +1353,68 @@ func Readlink(name string) (string, error) {
 	}
 
 	return target, nil
+}
+
+type CopyFileFunc func(srcURI fyne.URI, dstPath string) error
+
+func copyDir(srcURI fyne.URI, dstDir string, copyFileFn CopyFileFunc) error {
+	if err := os.MkdirAll(dstDir, 0700); err != nil {
+		return err
+	}
+
+	return storageWalkDir(srcURI, dstDir, "", copyFileFn)
+}
+
+func storageWalkDir(current fyne.URI, dstDir, relPath string, copyFileFn CopyFileFunc) error {
+	select {
+	case <-done:
+		return errors.New("copy operation cancelled")
+	default:
+	}
+
+	exists, err := storage.Exists(current)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return errors.New("resource does not exist: " + current.String())
+	}
+
+	isListable, err := storage.CanList(current)
+	if err != nil {
+		return err
+	}
+
+	// name := current.Name()
+	name := uriBase(current)
+	currentRelPath := filepath.Join(relPath, name)
+	dstPath := filepath.Join(dstDir, currentRelPath)
+
+	if isListable {
+		if err := os.Mkdir(dstPath, 0700); err != nil && !os.IsExist(err) {
+			return err
+		}
+
+		children, err := storage.List(current)
+		if err != nil {
+			return err
+		}
+
+		for _, child := range children {
+			if err := storageWalkDir(child, dstDir, currentRelPath, copyFileFn); err != nil {
+				return err
+			}
+		}
+	} else {
+		dir := filepath.Dir(dstPath)
+		if err := os.MkdirAll(dir, 0700); err != nil {
+			return err
+		}
+
+		if err := copyFileFn(current, dstPath); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
