@@ -52,7 +52,7 @@ const (
 	ZeroWidthJoiner    = "\u200D" // Соединитель нулевой ширины
 
 	// Чтоб на десктопе отладить копирование вместо переноса как будто это мобильная ОС.
-	copyDebug = false
+	asMobile = false
 	// Чтоб на десктопе или Андроиде 9- отладить план Б при отсутствии com.android.DocumentsUI на мобильной ОС сохранять протокол и полученные файлы в Загрузки.
 	noDialogDebug = false
 	// Чтоб не перезапускать приложение при завершении передачи
@@ -127,6 +127,7 @@ func main() {
 
 	a.Preferences().SetBool("totp-send", a.Preferences().BoolWithFallback("totp-send", false))
 	a.Preferences().SetBool("totp-recv", a.Preferences().BoolWithFallback("totp-recv", false))
+	a.Preferences().SetBool("zip-unzip", a.Preferences().BoolWithFallback("zip-unzip", true))
 
 	appTheme.color = theme.DefaultTheme()
 	appTheme.size = theme.DefaultTheme()

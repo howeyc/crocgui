@@ -95,6 +95,11 @@ func settingsTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 		refreshWindow(a, w)
 	})
 
+	s := lp("Zip Folder")
+	if !(isMobile || asMobile) {
+		s += " / " + lp("UnZip File")
+	}
+
 	return container.NewTabItemWithIcon(ZeroWidthNonJoiner, theme.SettingsIcon(), container.NewVScroll(container.NewVBox( //lp("Settings")
 		widget.NewLabelWithStyle(lp("Appearance"), fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
 		widget.NewForm(
@@ -124,6 +129,7 @@ func settingsTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 			widget.NewFormItem(lp("Hash Algorithm"), hashSelect),
 			widget.NewFormItem("", widget.NewCheckWithData(lp("Disable Multiplexing"), binding.BindPreferenceBool("disable-multiplexing", a.Preferences()))),
 			widget.NewFormItem("", widget.NewCheckWithData(lp("Disable Compression"), binding.BindPreferenceBool("disable-compression", a.Preferences()))),
+			widget.NewFormItem("", widget.NewCheckWithData(s, binding.BindPreferenceBool("zip-unzip", a.Preferences()))),
 			widget.NewFormItem(lp("Upload Speed Throttle"), widget.NewEntryWithData(binding.BindPreferenceString("upload-throttle", a.Preferences()))),
 		),
 	)))

@@ -20,6 +20,7 @@ import (
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 	"github.com/schollz/croc/v10/src/croc"
+	"github.com/schollz/croc/v10/src/utils"
 	log "github.com/schollz/logger"
 )
 
@@ -172,7 +173,7 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 					return
 				}
 			}
-			if !(isMobile || copyDebug) {
+			if !(isMobile || asMobile) {
 				if fi, err := os.Stat(src); err == nil && fi.IsDir() {
 					destination.Close()
 					os.Remove(destination.URI().Path())
@@ -299,7 +300,14 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 				if fpath == path {
 					continue
 				}
-
+				if isMobile || asMobile {
+					// Чтоб сохранять на Андроиде свернём каталог в  файл
+					if fi, _ := os.Stat(path); fi != nil && fi.IsDir() {
+						if err := utils.ZipDirectory(name+".zip", path); err == nil {
+							path += ".zip"
+						}
+					}
+				}
 				fe := addEntry(path)
 				if pb, ok := fe.Objects[feBar].(*widget.ProgressBar); ok {
 					fe.Objects[feDel].Show()
@@ -363,7 +371,7 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 					continue
 				}
 
-				if !(isMobile || copyDebug) {
+				if !(isMobile || asMobile) {
 					err := Rename(src, u.Path())
 					if err == nil {
 						log.Tracef("File %s moved to %s", src, u.Path())
@@ -563,7 +571,15 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 					if receiver.Step2FileInfoTransferred {
 						if once {
 							once = false
-							for _, fi := range receiver.FilesToTransfer {
+							for i, fi := range receiver.FilesToTransfer {
+								if isMobile || asMobile {
+									// Запретим разворачивать свёрнутый каталог
+									receiver.FilesToTransfer[i].TempFile = false
+								} else {
+									// Развернём свёрнутый каталог если включена опция zip-unzip
+									receiver.FilesToTransfer[i].TempFile = strings.HasSuffix(strings.ToLower(fi.Name), ".zip") &&
+										a.Preferences().Bool("zip-unzip")
+								}
 								dst := filepath.Join(recvDir, fi.Name)
 								fe := addEntry(dst)
 								if pb, ok := fe.Objects[feBar].(*widget.ProgressBar); ok {

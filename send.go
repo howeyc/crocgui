@@ -571,6 +571,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 		for _, fe := range fileentries {
 			fe.Objects[feDel].Hide()
 		}
+		zipfolder := a.Preferences().Bool("zip-unzip")
 		sender, err := croc.New(croc.Options{
 			IsSender:         true,
 			SharedSecret:     secret,
@@ -588,6 +589,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 			ThrottleUpload:   a.Preferences().String("upload-throttle"),
 			MulticastAddress: a.Preferences().String("multicast-address"),
 			Exclude:          []string{},
+			ZipFolder:        zipfolder,
 		})
 		if err != nil {
 			log.Errorf("croc error: %s", err.Error())
@@ -678,16 +680,26 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 						once = false
 						for _, fi := range sender.FilesToTransfer {
 							path := filepath.Join(sendDir, fi.Name)
+							if fi.TempFile {
+								path = filepath.Join(fi.FolderSource, fi.Name)
+							}
 							fe, ok := fileentries[path]
 							if !ok {
 								fe = addEntry(path)
 								if fe != nil {
 									fyne.Do(func() {
 										fe.Objects[feDel].Hide()
-										fe.Objects[len(fe.Objects)-1].(*widget.Label).SetText(fi.FolderRemote + fi.Name)
+										if !fi.TempFile {
+											fe.Objects[len(fe.Objects)-1].(*widget.Label).SetText(fi.FolderRemote + fi.Name)
+										}
 									})
 								}
+								// Убираем dir/
 								path = filepath.Join(sendDir, fi.FolderRemote)
+								if fi.TempFile {
+									path = filepath.Join(sendDir, strings.TrimSuffix(fi.Name, ".zip"))
+								}
+
 								if fr, ok := fileentries[path]; ok {
 									fyne.Do(func() {
 										boxholder.Remove(fr)
@@ -754,7 +766,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 				}
 				filepaths = append(filepaths, fpath)
 			}
-			fi, emptyfolders, numFolders, serr := croc.GetFilesInfo(filepaths, false, false, []string{})
+			fi, emptyfolders, numFolders, serr := croc.GetFilesInfo(filepaths, zipfolder, false, []string{})
 			if serr != nil {
 				log.Errorf("file info failed: %s", serr)
 			} else {
@@ -1196,6 +1208,9 @@ func (lw *LabelWrapper) SetText(text string) {
 }
 
 func hashed(c *croc.Client) bool {
+	if len(c.FilesToTransfer) == 0 {
+		return false
+	}
 	for _, file := range c.FilesToTransfer {
 		if len(file.Hash) == 0 {
 			return false
@@ -1206,8 +1221,8 @@ func hashed(c *croc.Client) bool {
 
 // Symlink создает симлинк или псевдосимлинк в зависимости от CanCreateSymlinks.
 func Symlink(oldname string, newname string) error {
-	if isMobile || copyDebug {
-		return fmt.Errorf("isMobile || copyDebug")
+	if isMobile {
+		return fmt.Errorf("isMobile")
 	}
 	// Создаем директорию для новой ссылки если нужно
 	dir := filepath.Dir(newname)
