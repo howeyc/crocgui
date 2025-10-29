@@ -153,22 +153,29 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 		if del {
 			remove := os.Remove
 			file := "file"
-			if fi, _ := os.Stat(fpath); fi != nil && fi.IsDir() {
-				remove = os.RemoveAll
-				file = "dir"
+			fi, _ := os.Stat(fpath)
+			if fi != nil {
+				if fi.IsDir() {
+					remove = os.RemoveAll
+					file = "dir"
+				}
+				log.Tracef("Removed cached %s: %s error: %v", file, fpath, remove(fpath))
 			}
-			log.Tracef("Removed cached %s: %s error: %v", file, fpath, remove(fpath))
 		}
 		delete(fileentries, fpath)
 	}
 
 	// nil if exists
-	addEntry := func(dst string) (newentry *fyne.Container) {
+	addEntry := func(dst string, f func(d *widget.Button, p *widget.ProgressBar, l *widget.Label)) (newentry *fyne.Container) {
 		if _, has := fileentries[dst]; has {
 			log.Tracef("exists %s", dst)
 			return nil
 		}
-		labelFile := widget.NewLabel(filepath.Base(dst))
+		base := filepath.Base(dst)
+		if fi, _ := os.Stat(dst); fi != nil && fi.IsDir() {
+			base += "/"
+		}
+		labelFile := widget.NewLabel(base)
 		deleteButton := widget.NewButtonWithIcon("", theme.CancelIcon(), func() {
 			if entry.Disabled() {
 				log.Trace("Sending")
@@ -189,7 +196,11 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 
 		fileentries[dst] = newentry
 		fyne.Do(func() {
-			progFile.Hide()
+			if f == nil {
+				progFile.Hide()
+			} else {
+				f(deleteButton, progFile, labelFile)
+			}
 			boxholder.Add(newentry)
 			boxholder.Refresh()
 		})
@@ -212,17 +223,16 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 		base := filepath.Base(src)
 		dst := filepath.Join(sendDir, base)
 
-		fe := addEntry(dst)
+		fe := addEntry(dst, func(d *widget.Button, p *widget.ProgressBar, l *widget.Label) {
+			p.Hide()
+			if fi.IsDir() {
+				l.SetText(base + "/")
+			}
+		})
 
 		if fe == nil {
 			log.Tracef("URI (%s), already in fileentries %s", src, base)
 			return nil
-		}
-
-		if fi.IsDir() {
-			fyne.Do(func() {
-				fe.Objects[len(fe.Objects)-1].(*widget.Label).SetText(base + "/")
-			})
 		}
 
 		if _, err := os.Stat(dst); err == nil {
@@ -332,7 +342,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 						}
 						log.Tracef(`Received text: "%s"`, text)
 						src := filepath.Join(sendDir, "text"+hashToFilename(text))
-						if fe := addEntry(src); fe == nil {
+						if fe := addEntry(src, nil); fe == nil {
 							continue
 						}
 
@@ -397,7 +407,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 
 						name := uriBase(u)
 						dst := filepath.Join(sendDir, name)
-						fe := addEntry(dst)
+						fe := addEntry(dst, nil)
 						if fe == nil {
 							continue
 						}
@@ -486,7 +496,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 			u := source.URI()
 			name := uriBase(u)
 			dst := filepath.Join(sendDir, name)
-			fe := addEntry(dst)
+			fe := addEntry(dst, nil)
 			if fe == nil {
 				return
 			}
@@ -526,30 +536,38 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 			}
 			name := uriBase(u)
 			dst := filepath.Join(sendDir, name)
-			fe := addEntry(dst)
+			fe := addEntry(dst, func(d *widget.Button, p *widget.ProgressBar, l *widget.Label) {
+				p.Hide()
+				l.SetText(name + "/")
+			})
 			if fe == nil {
 				return
 			}
-			fe.Objects[len(fe.Objects)-1].(*widget.Label).SetText(name + "/")
 
 			err := Symlink(u.Path(), dst)
 			log.Tracef("Make symlink URI (%s) to internal cache %s error: %v", u, dst, err)
 			if err == nil {
+				// Десктоп
 				return
 			}
 
-			copyDir(u, sendDir, func(srcURI fyne.URI, dst string) error {
-				log.Tracef("srcURI %s", srcURI)
+			CopyDirectoryJNI(u.String(), sendDir, func(s, dst string) error {
+				log.Tracef("src %s", s)
 				log.Tracef("dst %s", dst)
-				fe := addEntry(dst)
+				rel, _ := filepath.Rel(sendDir, dst)
+				fe := addEntry(dst, func(d *widget.Button, p *widget.ProgressBar, l *widget.Label) {
+					p.Hide()
+					l.SetText(rel)
+				})
 				if fe == nil {
 					return nil
 				}
-				rel, err := filepath.Rel(sendDir, dst)
-				if err == nil {
-					fe.Objects[len(fe.Objects)-1].(*widget.Label).SetText(rel)
+				u, err := storage.ParseURI(s)
+				if err != nil {
+					removeEntry(dst, fe, true)
+					return nil
 				}
-				source, err := storage.Reader(srcURI)
+				source, err := storage.Reader(u)
 				if err != nil {
 					removeEntry(dst, fe, true)
 					return nil
@@ -747,17 +765,20 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 							if fi.TempFile {
 								path = filepath.Join(fi.FolderSource, fi.Name)
 							}
-							fe, ok := fileentries[path]
-							if !ok {
-								fe = addEntry(path)
-								if fe != nil {
-									fyne.Do(func() {
-										fe.Objects[feDel].Hide()
-										if !fi.TempFile {
-											fe.Objects[len(fe.Objects)-1].(*widget.Label).SetText(fi.FolderRemote + fi.Name)
-										}
-									})
+
+							if fe := fileentries[path]; fe != nil {
+								if pb := fe.Objects[feBar].(*widget.ProgressBar); pb != nil {
+									pb.Max = float64(fi.Size)
 								}
+							} else {
+								addEntry(path, func(d *widget.Button, p *widget.ProgressBar, l *widget.Label) {
+									d.Hide()
+									p.Max = float64(fi.Size)
+									p.Show()
+									if !fi.TempFile {
+										l.SetText(fi.FolderRemote + fi.Name)
+									}
+								})
 								// Убираем dir/
 								path = filepath.Join(sendDir, fi.FolderRemote)
 								if fi.TempFile {
@@ -769,11 +790,6 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 										boxholder.Remove(fr)
 									})
 									delete(fileentries, path)
-								}
-							}
-							if fe != nil {
-								if pb, ok := fe.Objects[feBar].(*widget.ProgressBar); ok {
-									pb.Max = float64(fi.Size)
 								}
 							}
 							totalMax += fi.Size
@@ -1418,3 +1434,6 @@ func storageWalkDir(current fyne.URI, dstDir, relPath string, copyFileFn CopyFil
 
 	return nil
 }
+
+// CopyFunc функция для копирования файла
+type CopyFunc func(srcURI, dstPath string) error

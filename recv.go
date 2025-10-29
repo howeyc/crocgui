@@ -129,11 +129,14 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 		if del {
 			remove := os.Remove
 			file := "file"
-			if fi, err := os.Stat(fpath); err == nil && fi.IsDir() {
-				remove = os.RemoveAll
-				file = "dir"
+			fi, _ := os.Stat(fpath)
+			if fi != nil {
+				if fi.IsDir() {
+					remove = os.RemoveAll
+					file = "dir"
+				}
+				log.Tracef("Removed received %s: %s error: %v", file, fpath, remove(fpath))
 			}
-			log.Tracef("Removed received %s: %s error: %v", file, fpath, remove(fpath))
 		}
 		delete(fileentries, fpath)
 	}
@@ -230,10 +233,26 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 		savedialog.Show()
 	}
 
-	// Добавим стрчку в boxholder и fileentries
-	addEntry := func(dst string) (newentry *fyne.Container) {
-		if fe, has := fileentries[dst]; has {
+	// Добавим строчку в boxholder и fileentries
+	addEntry := func(dst string, f func(d *widget.Button, p *widget.ProgressBar, s *widget.Button, l *widget.Label)) (newentry *fyne.Container) {
+		if fe := fileentries[dst]; fe != nil {
 			log.Tracef("exists %s", dst)
+			deleteButton := fe.Objects[feDel]
+			progFile := fe.Objects[feBar]
+			saveButton := fe.Objects[feSave]
+			labelFile := fe.Objects[len(fe.Objects)-1]
+			fyne.Do(func() {
+				if f == nil {
+					deleteButton.Show()
+					progFile.Hide()
+					saveButton.Show()
+				} else {
+					f(deleteButton.(*widget.Button),
+						progFile.(*widget.ProgressBar),
+						saveButton.(*widget.Button),
+						labelFile.(*widget.Label))
+				}
+			})
 			return fe
 		}
 		base := filepath.Base(dst)
@@ -252,7 +271,6 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 			}
 		})
 		progFile := widget.NewProgressBar()
-		progFile.Hide()
 
 		newentry = container.NewHBox(
 			deleteButton,
@@ -262,7 +280,15 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 		)
 
 		fileentries[dst] = newentry
-		boxholder.Add(newentry)
+		fyne.Do(func() {
+			if f == nil {
+				progFile.Hide()
+			} else {
+				f(deleteButton, progFile, saveButton, labelFile)
+			}
+			boxholder.Add(newentry)
+			boxholder.Refresh()
+		})
 		return
 	}
 
@@ -284,7 +310,7 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 			if target, err := Readlink(path); err == nil {
 				path = target
 			}
-			addEntry(path)
+			addEntry(path, nil)
 		}
 	}
 
@@ -308,12 +334,11 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 						}
 					}
 				}
-				fe := addEntry(path)
-				if pb, ok := fe.Objects[feBar].(*widget.ProgressBar); ok {
-					fe.Objects[feDel].Show()
-					fe.Objects[feSave].Show()
-					pb.Hide()
-				}
+				addEntry(path, func(d *widget.Button, p *widget.ProgressBar, s *widget.Button, l *widget.Label) {
+					d.Show()
+					p.Hide()
+					s.Show()
+				})
 			}
 		}
 	}
@@ -581,19 +606,16 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 										a.Preferences().Bool("zip-unzip")
 								}
 								dst := filepath.Join(recvDir, fi.Name)
-								fe := addEntry(dst)
-								if pb, ok := fe.Objects[feBar].(*widget.ProgressBar); ok {
-									fyne.Do(func() {
-										fe.Objects[feDel].Hide()
-										fe.Objects[feSave].Hide()
-										pb.SetValue(0)
-										pb.Max = float64(fi.Size)
-										pb.Show()
-										if fi.FolderRemote != "." {
-											fe.Objects[len(fe.Objects)-1].(*widget.Label).SetText(fi.FolderRemote + "/" + fi.Name)
-										}
-									})
-								}
+								addEntry(dst, func(d *widget.Button, p *widget.ProgressBar, s *widget.Button, l *widget.Label) {
+									d.Hide()
+									p.SetValue(0)
+									p.Max = float64(fi.Size)
+									p.Show()
+									s.Hide()
+									if fi.FolderRemote != "." {
+										l.SetText(fi.FolderRemote + "/" + fi.Name)
+									}
+								})
 								totalMax += fi.Size
 							}
 							fyne.Do(refresh)
