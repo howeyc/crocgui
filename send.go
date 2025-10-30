@@ -380,32 +380,35 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 							continue
 						}
 						log.Tracef("apiLevel %d", apiLevel())
-						mimeType := MimeType(u)
-						log.Tracef("URI (%s) has MimeType: %s", u, mimeType)
-						if mimeType == "vnd.android.document/directory" {
-							// totalcmd на 14 Андроиде
-							log.Tracef("URI (%s) is dir", u)
+						if canList(u) {
 							continue
 						}
-						if u.Scheme() == "file" {
-							// if _, err := storage.ListerForURI(u); err == nil {
-							if ok, _ := storage.CanList(u); ok {
-								// totalcmd на 9 Андроиде
-								log.Tracef("URI (%s) is dir", u)
-								continue
-							}
-						}
-						// На Андроиде 9 storage.List крэшит на схеме content как и storage.CanList
+						// mimeType := MimeType(u)
+						// log.Tracef("URI (%s) has MimeType: %s", u, mimeType)
+						// if mimeType == "vnd.android.document/directory" {
+						// 	// totalcmd на 14 Андроиде
+						// 	log.Tracef("URI (%s) is dir", u)
+						// 	continue
+						// }
+						// if u.Scheme() == "file" {
+						// 	// if _, err := storage.ListerForURI(u); err == nil {
+						// 	if ok, _ := storage.CanList(u); ok {
+						// 		// totalcmd на 9 Андроиде
+						// 		log.Tracef("URI (%s) is dir", u)
+						// 		continue
+						// 	}
+						// }
+						// // На Андроиде 9 storage.List крэшит на схеме content как и storage.CanList
 
-						can, err := storage.CanRead(u)
-						if err != nil {
-							log.Errorf("%v", err)
-							continue
-						}
-						if !can {
-							log.Tracef("URI (%s) can't read", uriString)
-							continue
-						}
+						// can, err := storage.CanRead(u)
+						// if err != nil {
+						// 	log.Errorf("%v", err)
+						// 	continue
+						// }
+						// if !can {
+						// 	log.Tracef("URI (%s) can't read", uriString)
+						// 	continue
+						// }
 
 						name := uriBase(u)
 						dst := filepath.Join(sendDir, name)
@@ -554,7 +557,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 			}
 
 			fyne.Do(func() {
-				err = copyFiles(u, dst, func(source fyne.URIReadCloser, dstPath string) error {
+				log.Tracef("copyFiles error: %v", copyFiles(u, dst, func(source fyne.URIReadCloser, dstPath string) error {
 					src := source.URI()
 					rel, _ := filepath.Rel(sendDir, dstPath)
 					fe := addEntry(dstPath, func(d *widget.Button, p *widget.ProgressBar, l *widget.Label) {
@@ -578,8 +581,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 						removeEntry(dstPath, fe, false)
 					})
 					return nil
-				})
-				log.Tracef("copyDir error: %v", err)
+				}))
 			})
 		}
 		ShowFolderOpen(folderOpen, w)
@@ -631,6 +633,12 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 			filepaths = append(filepaths, fpath)
 		}
 		zipfolder := a.Preferences().Bool("zip-unzip")
+		tempDir := os.TempDir()
+		cderr := os.Chdir(tempDir)
+		if cderr != nil {
+			log.Error("Unable to change to dir:", tempDir, cderr)
+		}
+		log.Trace("cd ", tempDir)
 		filesInfo, emptyfolders, totalNumberFolders, serr := croc.GetFilesInfo(filepaths, zipfolder, false, []string{})
 
 		// Посылаем если есть файлы
@@ -678,13 +686,6 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 		}
 		log.SetLevel(debugString(a))
 		log.Trace("croc sender created")
-
-		tempDir := os.TempDir()
-		cderr := os.Chdir(tempDir)
-		if cderr != nil {
-			log.Error("Unable to change to dir:", tempDir, cderr)
-		}
-		log.Trace("cd ", tempDir)
 
 		var filename string
 		mainButton.Disable()
