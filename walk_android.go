@@ -8,7 +8,7 @@ package main
 #include <string.h>
 #include <android/log.h>
 
-#define LOG_TAG "FileCopy"
+#define LOG_TAG "croc"
 #define LogD(...) __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, __VA_ARGS__)
 #define LogE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
 
@@ -18,23 +18,8 @@ typedef struct {
     char* dstPath;
 } FileCopyTask;
 
-// Глобальные переменные для кэширования
-static jclass uriClass = NULL;
-static jclass documentsContractClass = NULL;
-static jclass stringClass = NULL;
-static jclass activityClass = NULL;
-
-static jmethodID parseMethod = NULL;
-static jmethodID getContentResolverMethod = NULL;
-static jmethodID buildChildDocumentsUriMethod = NULL;
-static jmethodID buildDocumentUriMethod = NULL;
-static jmethodID queryMethod = NULL;
-static jmethodID moveToFirstMethod = NULL;
-static jmethodID isAfterLastMethod = NULL;
-static jmethodID moveToNextMethod = NULL;
-static jmethodID getStringMethod = NULL;
-static jmethodID getCountMethod = NULL;
-static jmethodID toStringMethod = NULL;
+// Глобальная переменная для хранения оригинального tree URI
+static const char* g_original_tree_uri = NULL;
 
 // Проверка исключений и логирование ошибок
 static jboolean CheckException(JNIEnv* env, const char* context) {
@@ -47,7 +32,7 @@ static jboolean CheckException(JNIEnv* env, const char* context) {
     return JNI_FALSE;
 }
 
-// Безопасное выделение памяти с проверкой OOM
+// Безопасное выделение памяти
 static void* SafeMalloc(size_t size, const char* context) {
     void* ptr = malloc(size);
     if (ptr == NULL) {
@@ -56,20 +41,8 @@ static void* SafeMalloc(size_t size, const char* context) {
     return ptr;
 }
 
-static void* SafeRealloc(void* ptr, size_t size, const char* context) {
-    void* new_ptr = realloc(ptr, size);
-    if (new_ptr == NULL) {
-        LogE("OutOfMemoryError in %s: failed to reallocate %zu bytes", context, size);
-        free(ptr);
-    }
-    return new_ptr;
-}
-
 static char* SafeStrdup(const char* str, const char* context) {
-    if (str == NULL) {
-        LogE("SafeStrdup: NULL string in %s", context);
-        return NULL;
-    }
+    if (str == NULL) return NULL;
     char* new_str = strdup(str);
     if (new_str == NULL) {
         LogE("OutOfMemoryError in %s: failed to duplicate string", context);
@@ -77,653 +50,844 @@ static char* SafeStrdup(const char* str, const char* context) {
     return new_str;
 }
 
-// Инициализация классов и методов
-static jboolean InitializeJNIClasses(JNIEnv* env) {
-    if (uriClass == NULL) {
-        jclass localUriClass = (*env)->FindClass(env, "android/net/Uri");
-        if (localUriClass == NULL) {
-            CheckException(env, "FindClass Uri");
-            return JNI_FALSE;
-        }
-        uriClass = (*env)->NewGlobalRef(env, localUriClass);
-        (*env)->DeleteLocalRef(env, localUriClass);
-
-        parseMethod = (*env)->GetStaticMethodID(env, uriClass, "parse", "(Ljava/lang/String;)Landroid/net/Uri;");
-        if (parseMethod == NULL) {
-            CheckException(env, "GetStaticMethodID parse");
-            return JNI_FALSE;
-        }
-
-        toStringMethod = (*env)->GetMethodID(env, uriClass, "toString", "()Ljava/lang/String;");
-        if (toStringMethod == NULL) {
-            CheckException(env, "GetMethodID toString");
-            return JNI_FALSE;
-        }
-    }
-
-    if (documentsContractClass == NULL) {
-        jclass localDocsClass = (*env)->FindClass(env, "android/provider/DocumentsContract");
-        if (localDocsClass == NULL) {
-            CheckException(env, "FindClass DocumentsContract");
-            return JNI_FALSE;
-        }
-        documentsContractClass = (*env)->NewGlobalRef(env, localDocsClass);
-        (*env)->DeleteLocalRef(env, localDocsClass);
-
-        buildChildDocumentsUriMethod = (*env)->GetStaticMethodID(env, documentsContractClass,
-            "buildChildDocumentsUriUsingTree", "(Landroid/net/Uri;Ljava/lang/String;)Landroid/net/Uri;");
-        if (buildChildDocumentsUriMethod == NULL) {
-            CheckException(env, "GetStaticMethodID buildChildDocumentsUriUsingTree");
-            return JNI_FALSE;
-        }
-
-        buildDocumentUriMethod = (*env)->GetStaticMethodID(env, documentsContractClass,
-            "buildDocumentUriUsingTree", "(Landroid/net/Uri;Ljava/lang/String;)Landroid/net/Uri;");
-        if (buildDocumentUriMethod == NULL) {
-            CheckException(env, "GetStaticMethodID buildDocumentUriUsingTree");
-            return JNI_FALSE;
-        }
-    }
-
-    if (stringClass == NULL) {
-        jclass localStringClass = (*env)->FindClass(env, "java/lang/String");
-        if (localStringClass == NULL) {
-            CheckException(env, "FindClass String");
-            return JNI_FALSE;
-        }
-        stringClass = (*env)->NewGlobalRef(env, localStringClass);
-        (*env)->DeleteLocalRef(env, localStringClass);
-    }
-
-    if (activityClass == NULL) {
-        jclass localActivityClass = (*env)->FindClass(env, "android/app/Activity");
-        if (localActivityClass == NULL) {
-            CheckException(env, "FindClass Activity");
-            return JNI_FALSE;
-        }
-        activityClass = (*env)->NewGlobalRef(env, localActivityClass);
-        (*env)->DeleteLocalRef(env, localActivityClass);
-
-        getContentResolverMethod = (*env)->GetMethodID(env, activityClass, "getContentResolver", "()Landroid/content/ContentResolver;");
-        if (getContentResolverMethod == NULL) {
-            CheckException(env, "GetMethodID getContentResolver");
-            return JNI_FALSE;
-        }
-    }
-
-    return JNI_TRUE;
-}
-
 // Получение ContentResolver
 static jobject GetContentResolver(JNIEnv* env, jobject activity) {
-    jobject resolver = (*env)->CallObjectMethod(env, activity, getContentResolverMethod);
-    if (CheckException(env, "GetContentResolver") || resolver == NULL) {
-        LogE("Failed to get ContentResolver");
+    jclass activityClass = (*env)->GetObjectClass(env, activity);
+    if (activityClass == NULL) return NULL;
+
+    jmethodID getContentResolverMethod = (*env)->GetMethodID(env, activityClass,
+        "getContentResolver", "()Landroid/content/ContentResolver;");
+    if (getContentResolverMethod == NULL) {
+        (*env)->DeleteLocalRef(env, activityClass);
         return NULL;
     }
-    return resolver;
+
+    jobject contentResolver = (*env)->CallObjectMethod(env, activity, getContentResolverMethod);
+    (*env)->DeleteLocalRef(env, activityClass);
+
+    return contentResolver;
 }
 
 // Парсинг URI
 static jobject ParseUri(JNIEnv* env, const char* uriStr) {
-    jstring juriStr = (*env)->NewStringUTF(env, uriStr);
-    if (juriStr == NULL) {
-        CheckException(env, "NewStringUTF for URI");
+    jclass uriClass = (*env)->FindClass(env, "android/net/Uri");
+    if (uriClass == NULL) return NULL;
+
+    jmethodID parseMethod = (*env)->GetStaticMethodID(env, uriClass,
+        "parse", "(Ljava/lang/String;)Landroid/net/Uri;");
+    if (parseMethod == NULL) {
+        (*env)->DeleteLocalRef(env, uriClass);
         return NULL;
     }
 
+    jstring juriStr = (*env)->NewStringUTF(env, uriStr);
     jobject uri = (*env)->CallStaticObjectMethod(env, uriClass, parseMethod, juriStr);
     (*env)->DeleteLocalRef(env, juriStr);
-
-    if (CheckException(env, "ParseUri") || uri == NULL) {
-        LogE("Failed to parse URI: %s", uriStr);
-        return NULL;
-    }
+    (*env)->DeleteLocalRef(env, uriClass);
 
     return uri;
 }
 
-// IsDirectoryUri - проверка, является ли URI директорией
-static jboolean IsDirectoryUri(JNIEnv* env, jobject activity, const char* uriStr) {
-    if (!InitializeJNIClasses(env)) {
-        LogE("Failed to initialize classes in IsDirectoryUri");
-        return JNI_FALSE;
+// Получение documentId из tree URI
+static char* GetTreeDocumentId(JNIEnv* env, jobject activity, const char* treeUriStr) {
+    jobject treeUri = ParseUri(env, treeUriStr);
+    if (treeUri == NULL) {
+        LogE("Failed to parse tree URI: %s", treeUriStr);
+        return NULL;
     }
 
-    jobject uri = ParseUri(env, uriStr);
-    if (uri == NULL) {
-        return JNI_FALSE;
+    jclass documentsContractClass = (*env)->FindClass(env, "android/provider/DocumentsContract");
+    if (documentsContractClass == NULL) {
+        LogE("Failed to find DocumentsContract class");
+        (*env)->DeleteLocalRef(env, treeUri);
+        return NULL;
     }
 
-    jobject contentResolver = GetContentResolver(env, activity);
-    if (contentResolver == NULL) {
-        (*env)->DeleteLocalRef(env, uri);
-        return JNI_FALSE;
+    jmethodID getTreeDocumentIdMethod = (*env)->GetStaticMethodID(env, documentsContractClass,
+        "getTreeDocumentId", "(Landroid/net/Uri;)Ljava/lang/String;");
+    if (getTreeDocumentIdMethod == NULL) {
+        LogE("Failed to get getTreeDocumentId method");
+        (*env)->DeleteLocalRef(env, documentsContractClass);
+        (*env)->DeleteLocalRef(env, treeUri);
+        return NULL;
     }
 
-    // Получаем класс ContentResolver
-    jclass resolverClass = (*env)->GetObjectClass(env, contentResolver);
-    if (resolverClass == NULL) {
-        CheckException(env, "GetObjectClass for ContentResolver");
-        (*env)->DeleteLocalRef(env, uri);
-        (*env)->DeleteLocalRef(env, contentResolver);
-        return JNI_FALSE;
+    jstring jdocumentId = (*env)->CallStaticObjectMethod(env, documentsContractClass,
+        getTreeDocumentIdMethod, treeUri);
+
+    (*env)->DeleteLocalRef(env, documentsContractClass);
+    (*env)->DeleteLocalRef(env, treeUri);
+
+    if (jdocumentId == NULL) {
+        LogE("getTreeDocumentId returned NULL");
+        return NULL;
     }
 
-    // Получаем метод query
-    if (queryMethod == NULL) {
-        queryMethod = (*env)->GetMethodID(env, resolverClass, "query",
-            "(Landroid/net/Uri;[Ljava/lang/String;Ljava/lang/String;[Ljava/lang/String;Ljava/lang/String;)Landroid/database/Cursor;");
-        if (queryMethod == NULL) {
-            CheckException(env, "GetMethodID query");
-            (*env)->DeleteLocalRef(env, resolverClass);
-            (*env)->DeleteLocalRef(env, uri);
-            (*env)->DeleteLocalRef(env, contentResolver);
-            return JNI_FALSE;
-        }
-    }
+    const char* documentIdStr = (*env)->GetStringUTFChars(env, jdocumentId, NULL);
+    char* result = SafeStrdup(documentIdStr, "GetTreeDocumentId");
+    (*env)->ReleaseStringUTFChars(env, jdocumentId, documentIdStr);
+    (*env)->DeleteLocalRef(env, jdocumentId);
 
-    // Создаем проекцию для MIME типа
-    jobjectArray projection = (*env)->NewObjectArray(env, 1, stringClass, NULL);
-    if (projection == NULL) {
-        CheckException(env, "NewObjectArray for projection");
-        (*env)->DeleteLocalRef(env, resolverClass);
-        (*env)->DeleteLocalRef(env, uri);
-        (*env)->DeleteLocalRef(env, contentResolver);
-        return JNI_FALSE;
-    }
-
-    jstring mimeTypeCol = (*env)->NewStringUTF(env, "mime_type");
-    if (mimeTypeCol == NULL) {
-        CheckException(env, "NewStringUTF for mime_type");
-        (*env)->DeleteLocalRef(env, projection);
-        (*env)->DeleteLocalRef(env, resolverClass);
-        (*env)->DeleteLocalRef(env, uri);
-        (*env)->DeleteLocalRef(env, contentResolver);
-        return JNI_FALSE;
-    }
-
-    (*env)->SetObjectArrayElement(env, projection, 0, mimeTypeCol);
-    (*env)->DeleteLocalRef(env, mimeTypeCol);
-
-    // Выполняем запрос
-    jobject cursor = (*env)->CallObjectMethod(env, contentResolver, queryMethod,
-        uri, projection, NULL, NULL, NULL);
-
-    // Очистка
-    (*env)->DeleteLocalRef(env, projection);
-    (*env)->DeleteLocalRef(env, resolverClass);
-    (*env)->DeleteLocalRef(env, uri);
-    (*env)->DeleteLocalRef(env, contentResolver);
-
-    if (CheckException(env, "Query in IsDirectoryUri") || cursor == NULL) {
-        LogE("Failed to query URI in IsDirectoryUri: %s", uriStr);
-        return JNI_FALSE;
-    }
-
-    // Получаем класс Cursor
-    jclass localCursorClass = (*env)->GetObjectClass(env, cursor);
-    if (localCursorClass == NULL) {
-        CheckException(env, "GetObjectClass for Cursor");
-        (*env)->DeleteLocalRef(env, cursor);
-        return JNI_FALSE;
-    }
-
-    // Получаем методы Cursor
-    if (moveToFirstMethod == NULL) {
-        moveToFirstMethod = (*env)->GetMethodID(env, localCursorClass, "moveToFirst", "()Z");
-        if (moveToFirstMethod == NULL) {
-            CheckException(env, "GetMethodID moveToFirst");
-            (*env)->DeleteLocalRef(env, localCursorClass);
-            (*env)->DeleteLocalRef(env, cursor);
-            return JNI_FALSE;
-        }
-    }
-
-    if (getStringMethod == NULL) {
-        getStringMethod = (*env)->GetMethodID(env, localCursorClass, "getString", "(I)Ljava/lang/String;");
-        if (getStringMethod == NULL) {
-            CheckException(env, "GetMethodID getString");
-            (*env)->DeleteLocalRef(env, localCursorClass);
-            (*env)->DeleteLocalRef(env, cursor);
-            return JNI_FALSE;
-        }
-    }
-
-    jboolean isDirectory = JNI_FALSE;
-
-    if ((*env)->CallBooleanMethod(env, cursor, moveToFirstMethod)) {
-        jstring mimeType = (*env)->CallObjectMethod(env, cursor, getStringMethod, 0);
-        if (mimeType != NULL) {
-            const char* mimeTypeStr = (*env)->GetStringUTFChars(env, mimeType, NULL);
-            if (mimeTypeStr != NULL) {
-                if (strcmp(mimeTypeStr, "vnd.android.document/directory") == 0) {
-                    isDirectory = JNI_TRUE;
-                }
-                (*env)->ReleaseStringUTFChars(env, mimeType, mimeTypeStr);
-            }
-            (*env)->DeleteLocalRef(env, mimeType);
-        }
-    }
-
-    (*env)->DeleteLocalRef(env, localCursorClass);
-    (*env)->DeleteLocalRef(env, cursor);
-
-    return isDirectory;
+    LogD("Tree Document ID (root): %s", result);
+    return result;
 }
 
-// GetFileName - получение имени файла из URI
-static char* GetFileName(JNIEnv* env, jobject activity, const char* uriStr) {
-    if (!InitializeJNIClasses(env)) {
-        LogE("Failed to initialize classes in GetFileName");
+// Получение documentId для произвольного document URI
+static char* GetDocumentId(JNIEnv* env, jobject documentUriObj) {
+    jclass documentsContractClass = (*env)->FindClass(env, "android/provider/DocumentsContract");
+    if (documentsContractClass == NULL) {
+        LogE("Failed to find DocumentsContract class in GetDocumentId");
+        return NULL;
+    }
+
+    jmethodID getDocumentIdMethod = (*env)->GetStaticMethodID(env, documentsContractClass,
+        "getDocumentId", "(Landroid/net/Uri;)Ljava/lang/String;");
+    if (getDocumentIdMethod == NULL) {
+        LogE("Failed to get getDocumentId method");
+        (*env)->DeleteLocalRef(env, documentsContractClass);
+        return NULL;
+    }
+
+    jstring jdocumentId = (*env)->CallStaticObjectMethod(env, documentsContractClass,
+        getDocumentIdMethod, documentUriObj);
+
+    (*env)->DeleteLocalRef(env, documentsContractClass);
+
+    if (jdocumentId == NULL) {
+        LogE("getDocumentId returned NULL");
+        return NULL;
+    }
+
+    const char* documentIdStr = (*env)->GetStringUTFChars(env, jdocumentId, NULL);
+    char* result = SafeStrdup(documentIdStr, "GetDocumentId-result");
+    (*env)->ReleaseStringUTFChars(env, jdocumentId, documentIdStr);
+    (*env)->DeleteLocalRef(env, jdocumentId);
+
+    LogD("Got Document ID: %s", result);
+    return result;
+}
+
+// Построение document URI из *original* tree URI и *documentId* (ручное построение)
+static char* BuildDocumentUri(JNIEnv* env, jobject activity, const char* originalTreeUri, const char* documentId) {
+    // Находим начало authority: "content://"
+    const char* prefix = "content://";
+    if (strncmp(originalTreeUri, prefix, strlen(prefix)) != 0) {
+        LogE("Not a content URI: %s", originalTreeUri);
+        return NULL;
+    }
+    const char* after_prefix = originalTreeUri + strlen(prefix);
+
+    // Находим конец authority (первый '/' после "content://" или конец строки)
+    const char* authority_end = strchr(after_prefix, '/');
+    if (authority_end == NULL) {
+        // Если нет '/', вся оставшаяся часть - authority (маловероятно, но на всякий случай)
+        authority_end = originalTreeUri + strlen(originalTreeUri);
+    }
+
+    size_t authority_len = authority_end - after_prefix;
+    size_t documentId_len = strlen(documentId);
+
+    // document_uri = "content://" + authority + "/document/" + documentId
+
+    size_t result_len = strlen(prefix) + authority_len + strlen("/document/") + documentId_len + 1;
+    char* result = SafeMalloc(result_len, "BuildDocumentUri-manual");
+    if (result == NULL) {
+        return NULL;
+    }
+
+    snprintf(result, result_len, "%.*s%.*s%s%s", (int)strlen(prefix), prefix, (int)authority_len, after_prefix, "/document/", documentId);
+
+    LogD("Built document URI (manual): %s", result);
+    return result;
+}
+
+// Получение document URI для корневой директории tree URI
+static char* GetRootDocumentUri(JNIEnv* env, jobject activity, const char* treeUriStr) {
+    char* documentId = GetTreeDocumentId(env, activity, treeUriStr);
+    if (documentId == NULL) {
+        LogE("Failed to get document ID for tree URI");
+        return NULL;
+    }
+
+    char* documentUri = BuildDocumentUri(env, activity, treeUriStr, documentId);
+    free(documentId);
+
+    return documentUri;
+}
+
+// Получение информации о файле (имя и MIME тип)
+static char* GetFileInfo(JNIEnv* env, jobject activity, const char* uriStr, const char* column) {
+    LogD("GetFileInfo for URI: %s, column: %s", uriStr, column);
+
+    jobject contentResolver = GetContentResolver(env, activity);
+    if (contentResolver == NULL) {
+        LogE("ContentResolver is NULL");
         return NULL;
     }
 
     jobject uri = ParseUri(env, uriStr);
     if (uri == NULL) {
-        return NULL;
-    }
-
-    jobject contentResolver = GetContentResolver(env, activity);
-    if (contentResolver == NULL) {
-        (*env)->DeleteLocalRef(env, uri);
+        LogE("Failed to parse URI: %s", uriStr);
+        (*env)->DeleteLocalRef(env, contentResolver);
         return NULL;
     }
 
     jclass resolverClass = (*env)->GetObjectClass(env, contentResolver);
-    if (resolverClass == NULL) {
-        CheckException(env, "GetObjectClass for ContentResolver in GetFileName");
-        (*env)->DeleteLocalRef(env, uri);
-        (*env)->DeleteLocalRef(env, contentResolver);
-        return NULL;
-    }
+    jmethodID queryMethod = (*env)->GetMethodID(env, resolverClass, "query",
+        "(Landroid/net/Uri;[Ljava/lang/String;Ljava/lang/String;[Ljava/lang/String;Ljava/lang/String;)Landroid/database/Cursor;");
 
     if (queryMethod == NULL) {
-        queryMethod = (*env)->GetMethodID(env, resolverClass, "query",
-            "(Landroid/net/Uri;[Ljava/lang/String;Ljava/lang/String;[Ljava/lang/String;Ljava/lang/String;)Landroid/database/Cursor;");
-        if (queryMethod == NULL) {
-            CheckException(env, "GetMethodID query in GetFileName");
-            (*env)->DeleteLocalRef(env, resolverClass);
-            (*env)->DeleteLocalRef(env, uri);
-            (*env)->DeleteLocalRef(env, contentResolver);
-            return NULL;
-        }
+        LogE("Failed to get query method");
+        (*env)->DeleteLocalRef(env, resolverClass);
+        (*env)->DeleteLocalRef(env, uri);
+        (*env)->DeleteLocalRef(env, contentResolver);
+        return NULL;
     }
 
-    // Проекция для имени файла
+    jclass stringClass = (*env)->FindClass(env, "java/lang/String");
     jobjectArray projection = (*env)->NewObjectArray(env, 1, stringClass, NULL);
-    if (projection == NULL) {
-        CheckException(env, "NewObjectArray for projection in GetFileName");
-        (*env)->DeleteLocalRef(env, resolverClass);
-        (*env)->DeleteLocalRef(env, uri);
-        (*env)->DeleteLocalRef(env, contentResolver);
-        return NULL;
-    }
-
-    jstring displayNameCol = (*env)->NewStringUTF(env, "_display_name");
-    if (displayNameCol == NULL) {
-        CheckException(env, "NewStringUTF for _display_name");
-        (*env)->DeleteLocalRef(env, projection);
-        (*env)->DeleteLocalRef(env, resolverClass);
-        (*env)->DeleteLocalRef(env, uri);
-        (*env)->DeleteLocalRef(env, contentResolver);
-        return NULL;
-    }
-
-    (*env)->SetObjectArrayElement(env, projection, 0, displayNameCol);
-    (*env)->DeleteLocalRef(env, displayNameCol);
+    jstring columnName = (*env)->NewStringUTF(env, column);
+    (*env)->SetObjectArrayElement(env, projection, 0, columnName);
 
     jobject cursor = (*env)->CallObjectMethod(env, contentResolver, queryMethod,
         uri, projection, NULL, NULL, NULL);
 
-    // Очистка
+    // Очистка временных ссылок
     (*env)->DeleteLocalRef(env, projection);
+    (*env)->DeleteLocalRef(env, columnName);
+    (*env)->DeleteLocalRef(env, stringClass);
     (*env)->DeleteLocalRef(env, resolverClass);
     (*env)->DeleteLocalRef(env, uri);
     (*env)->DeleteLocalRef(env, contentResolver);
 
-    if (CheckException(env, "Query in GetFileName") || cursor == NULL) {
-        LogE("Failed to query URI in GetFileName: %s", uriStr);
+    if (cursor == NULL) {
+        LogE("Cursor is NULL for query");
         return NULL;
-    }
-
-    jclass localCursorClass = (*env)->GetObjectClass(env, cursor);
-    if (localCursorClass == NULL) {
-        CheckException(env, "GetObjectClass for Cursor in GetFileName");
-        (*env)->DeleteLocalRef(env, cursor);
-        return NULL;
-    }
-
-    if (moveToFirstMethod == NULL) {
-        moveToFirstMethod = (*env)->GetMethodID(env, localCursorClass, "moveToFirst", "()Z");
-    }
-    if (getStringMethod == NULL) {
-        getStringMethod = (*env)->GetMethodID(env, localCursorClass, "getString", "(I)Ljava/lang/String;");
     }
 
     char* result = NULL;
+    jclass cursorClass = (*env)->GetObjectClass(env, cursor);
+    jmethodID moveToFirst = (*env)->GetMethodID(env, cursorClass, "moveToFirst", "()Z");
+    jmethodID getString = (*env)->GetMethodID(env, cursorClass, "getString", "(I)Ljava/lang/String;");
 
-    if ((*env)->CallBooleanMethod(env, cursor, moveToFirstMethod)) {
-        jstring name = (*env)->CallObjectMethod(env, cursor, getStringMethod, 0);
-        if (name != NULL) {
-            const char* utfStr = (*env)->GetStringUTFChars(env, name, NULL);
-            if (utfStr != NULL) {
-                result = SafeStrdup(utfStr, "GetFileName");
-                (*env)->ReleaseStringUTFChars(env, name, utfStr);
+    if (moveToFirst == NULL || getString == NULL) {
+        LogE("Failed to get cursor methods");
+        (*env)->DeleteLocalRef(env, cursorClass);
+        (*env)->DeleteLocalRef(env, cursor);
+        return NULL;
+    }
+
+    if ((*env)->CallBooleanMethod(env, cursor, moveToFirst)) {
+        jstring value = (*env)->CallObjectMethod(env, cursor, getString, 0);
+        if (value != NULL) {
+            const char* valueStr = (*env)->GetStringUTFChars(env, value, NULL);
+            if (valueStr != NULL) {
+                result = SafeStrdup(valueStr, "GetFileInfo");
+                (*env)->ReleaseStringUTFChars(env, value, valueStr);
+                LogD("Got value: %s", result);
             }
-            (*env)->DeleteLocalRef(env, name);
+            (*env)->DeleteLocalRef(env, value);
+        } else {
+            LogD("Value is NULL for column: %s", column);
         }
+    } else {
+        LogD("Cursor is empty");
     }
 
-    (*env)->DeleteLocalRef(env, localCursorClass);
+    (*env)->DeleteLocalRef(env, cursorClass);
     (*env)->DeleteLocalRef(env, cursor);
-
-    if (result == NULL) {
-        LogE("Failed to get file name for URI: %s", uriStr);
-    }
 
     return result;
 }
 
-// ListChildrenUris - получение списка дочерних URI
-static jobjectArray ListChildrenUris(JNIEnv* env, jobject activity, const char* uriStr) {
-    if (!InitializeJNIClasses(env)) {
-        LogE("Failed to initialize classes in ListChildrenUris");
-        return NULL;
+// Проверка, является ли URI директорией
+static jboolean IsDirectoryUri(JNIEnv* env, jobject activity, const char* uriStr) {
+    char* mimeType = GetFileInfo(env, activity, uriStr, "mime_type");
+    if (mimeType == NULL) {
+        LogE("Failed to get MIME type for: %s", uriStr);
+        return JNI_FALSE;
     }
 
-    jobject treeUri = ParseUri(env, uriStr);
-    if (treeUri == NULL) {
-        return NULL;
+    jboolean isDirectory = (strcmp(mimeType, "vnd.android.document/directory") == 0);
+    LogD("MIME type: %s, isDirectory: %d", mimeType, isDirectory);
+    free(mimeType);
+    return isDirectory;
+}
+
+// Получение имени файла
+static char* GetFileName(JNIEnv* env, jobject activity, const char* uriStr) {
+    char* name = GetFileInfo(env, activity, uriStr, "_display_name");
+    if (name == NULL) {
+        LogE("Failed to get name for: %s", uriStr);
+    } else {
+        LogD("Got name: %s for URI: %s", name, uriStr);
     }
+    return name;
+}
 
-    // Строим URI для дочерних документов
-    jobject childrenUri = (*env)->CallStaticObjectMethod(env, documentsContractClass,
-        buildChildDocumentsUriMethod, treeUri, NULL);
+// Получение дочерних элементов для *конкретного* documentId в tree URI
+static jobjectArray ListChildrenUrisForDocumentId(JNIEnv* env, jobject activity, const char* treeUriStr, const char* specificDocumentId) {
+    LogD("ListChildrenUrisForDocumentId for tree URI: %s, documentId: %s", treeUriStr, specificDocumentId);
 
-    if (CheckException(env, "buildChildDocumentsUriUsingTree") || childrenUri == NULL) {
-        LogE("Failed to build children URI for: %s", uriStr);
-        (*env)->DeleteLocalRef(env, treeUri);
-        return NULL;
-    }
-
+    // 1. Получаем ContentResolver
     jobject contentResolver = GetContentResolver(env, activity);
     if (contentResolver == NULL) {
-        (*env)->DeleteLocalRef(env, treeUri);
-        (*env)->DeleteLocalRef(env, childrenUri);
+        LogE("Failed to get ContentResolver in ListChildrenUrisForDocumentId");
         return NULL;
     }
 
-    jclass resolverClass = (*env)->GetObjectClass(env, contentResolver);
-    if (resolverClass == NULL) {
-        CheckException(env, "GetObjectClass for ContentResolver in ListChildrenUris");
-        (*env)->DeleteLocalRef(env, treeUri);
-        (*env)->DeleteLocalRef(env, childrenUri);
+    // 2. Парсим tree URI
+    jobject treeUri = ParseUri(env, treeUriStr);
+    if (treeUri == NULL) {
+        LogE("Failed to parse tree URI in ListChildrenUrisForDocumentId: %s", treeUriStr);
         (*env)->DeleteLocalRef(env, contentResolver);
         return NULL;
     }
+
+    // 3. Получаем DocumentsContract класс
+    jclass documentsContractClass = (*env)->FindClass(env, "android/provider/DocumentsContract");
+    if (documentsContractClass == NULL) {
+        LogE("Failed to find DocumentsContract class in ListChildrenUrisForDocumentId");
+        (*env)->DeleteLocalRef(env, treeUri);
+        (*env)->DeleteLocalRef(env, contentResolver);
+        return NULL;
+    }
+
+    // 4. Строим URI для дочерних документов, используя tree URI и *конкретный* documentId
+    jmethodID buildChildDocumentsUriMethod = (*env)->GetStaticMethodID(env, documentsContractClass,
+        "buildChildDocumentsUriUsingTree", "(Landroid/net/Uri;Ljava/lang/String;)Landroid/net/Uri;");
+    if (buildChildDocumentsUriMethod == NULL) {
+        LogE("Failed to get buildChildDocumentsUriUsingTree method in ListChildrenUrisForDocumentId");
+        (*env)->DeleteLocalRef(env, documentsContractClass);
+        (*env)->DeleteLocalRef(env, treeUri);
+        (*env)->DeleteLocalRef(env, contentResolver);
+        return NULL;
+    }
+
+    jstring jspecificDocumentId = (*env)->NewStringUTF(env, specificDocumentId);
+    if (jspecificDocumentId == NULL) {
+         LogE("Failed to create jstring for specificDocumentId: %s", specificDocumentId);
+         (*env)->DeleteLocalRef(env, documentsContractClass);
+         (*env)->DeleteLocalRef(env, treeUri);
+         (*env)->DeleteLocalRef(env, contentResolver);
+         return NULL;
+    }
+
+    jobject childrenUri = (*env)->CallStaticObjectMethod(env, documentsContractClass,
+        buildChildDocumentsUriMethod, treeUri, jspecificDocumentId);
+
+    (*env)->DeleteLocalRef(env, jspecificDocumentId);
+    (*env)->DeleteLocalRef(env, documentsContractClass);
+    (*env)->DeleteLocalRef(env, treeUri);
+
+    if (childrenUri == NULL) {
+        LogE("buildChildDocumentsUriUsingTree returned NULL in ListChildrenUrisForDocumentId");
+        (*env)->DeleteLocalRef(env, contentResolver);
+        return NULL;
+    }
+
+    // 5. Выполняем запрос
+    jclass resolverClass = (*env)->GetObjectClass(env, contentResolver);
+    jmethodID queryMethod = (*env)->GetMethodID(env, resolverClass, "query",
+        "(Landroid/net/Uri;[Ljava/lang/String;Ljava/lang/String;[Ljava/lang/String;Ljava/lang/String;)Landroid/database/Cursor;");
 
     if (queryMethod == NULL) {
-        queryMethod = (*env)->GetMethodID(env, resolverClass, "query",
-            "(Landroid/net/Uri;[Ljava/lang/String;Ljava/lang/String;[Ljava/lang/String;Ljava/lang/String;)Landroid/database/Cursor;");
+        LogE("Failed to get query method in ListChildrenUrisForDocumentId");
+        (*env)->DeleteLocalRef(env, resolverClass);
+        (*env)->DeleteLocalRef(env, childrenUri);
+        (*env)->DeleteLocalRef(env, contentResolver);
+        return NULL;
     }
 
-    // Проекция для document_id
+    jclass stringClass = (*env)->FindClass(env, "java/lang/String");
+    if (stringClass == NULL) {
+         LogE("Failed to find String class in ListChildrenUrisForDocumentId");
+         (*env)->DeleteLocalRef(env, resolverClass);
+         (*env)->DeleteLocalRef(env, childrenUri);
+         (*env)->DeleteLocalRef(env, contentResolver);
+         return NULL;
+    }
     jobjectArray projection = (*env)->NewObjectArray(env, 1, stringClass, NULL);
     if (projection == NULL) {
-        CheckException(env, "NewObjectArray for projection in ListChildrenUris");
-        (*env)->DeleteLocalRef(env, resolverClass);
-        (*env)->DeleteLocalRef(env, treeUri);
-        (*env)->DeleteLocalRef(env, childrenUri);
-        (*env)->DeleteLocalRef(env, contentResolver);
-        return NULL;
+         LogE("Failed to create projection array in ListChildrenUrisForDocumentId");
+         (*env)->DeleteLocalRef(env, stringClass);
+         (*env)->DeleteLocalRef(env, resolverClass);
+         (*env)->DeleteLocalRef(env, childrenUri);
+         (*env)->DeleteLocalRef(env, contentResolver);
+         return NULL;
     }
-
     jstring docIdCol = (*env)->NewStringUTF(env, "document_id");
     if (docIdCol == NULL) {
-        CheckException(env, "NewStringUTF for document_id");
-        (*env)->DeleteLocalRef(env, projection);
-        (*env)->DeleteLocalRef(env, resolverClass);
-        (*env)->DeleteLocalRef(env, treeUri);
-        (*env)->DeleteLocalRef(env, childrenUri);
-        (*env)->DeleteLocalRef(env, contentResolver);
-        return NULL;
+         LogE("Failed to create jstring for 'document_id' column in ListChildrenUrisForDocumentId");
+         (*env)->DeleteLocalRef(env, projection);
+         (*env)->DeleteLocalRef(env, stringClass);
+         (*env)->DeleteLocalRef(env, resolverClass);
+         (*env)->DeleteLocalRef(env, childrenUri);
+         (*env)->DeleteLocalRef(env, contentResolver);
+         return NULL;
     }
-
     (*env)->SetObjectArrayElement(env, projection, 0, docIdCol);
-    (*env)->DeleteLocalRef(env, docIdCol);
+
+    // Проверим исключение после SetObjectArrayElement
+    if (CheckException(env, "SetObjectArrayElement in ListChildrenUrisForDocumentId setup")) {
+         LogE("Exception occurred during projection setup in ListChildrenUrisForDocumentId");
+         (*env)->DeleteLocalRef(env, docIdCol);
+         (*env)->DeleteLocalRef(env, projection);
+         (*env)->DeleteLocalRef(env, stringClass);
+         (*env)->DeleteLocalRef(env, resolverClass);
+         (*env)->DeleteLocalRef(env, childrenUri);
+         (*env)->DeleteLocalRef(env, contentResolver);
+         return NULL;
+    }
 
     jobject cursor = (*env)->CallObjectMethod(env, contentResolver, queryMethod,
         childrenUri, projection, NULL, NULL, NULL);
 
-    // Очистка временных ссылок
+    // Очистка временных ссылок, использованных для query
+    (*env)->DeleteLocalRef(env, docIdCol);
     (*env)->DeleteLocalRef(env, projection);
+    (*env)->DeleteLocalRef(env, stringClass);
     (*env)->DeleteLocalRef(env, resolverClass);
     (*env)->DeleteLocalRef(env, childrenUri);
-    (*env)->DeleteLocalRef(env, treeUri);
     (*env)->DeleteLocalRef(env, contentResolver);
 
-    if (CheckException(env, "Query in ListChildrenUris") || cursor == NULL) {
-        LogE("Failed to query children for URI: %s", uriStr);
+    if (cursor == NULL) {
+        LogE("Cursor is NULL for children query in ListChildrenUrisForDocumentId");
         return NULL;
     }
 
-    jclass localCursorClass = (*env)->GetObjectClass(env, cursor);
-    if (localCursorClass == NULL) {
-        CheckException(env, "GetObjectClass for Cursor in ListChildrenUris");
+    // 6. Обрабатываем результаты
+    jclass cursorClass = (*env)->GetObjectClass(env, cursor);
+    if (cursorClass == NULL) {
+         LogE("Failed to get Cursor class in ListChildrenUrisForDocumentId");
+         (*env)->DeleteLocalRef(env, cursor);
+         return NULL;
+    }
+    jmethodID moveToFirst = (*env)->GetMethodID(env, cursorClass, "moveToFirst", "()Z");
+    jmethodID isAfterLast = (*env)->GetMethodID(env, cursorClass, "isAfterLast", "()Z");
+    jmethodID moveToNext = (*env)->GetMethodID(env, cursorClass, "moveToNext", "()Z");
+    jmethodID getString = (*env)->GetMethodID(env, cursorClass, "getString", "(I)Ljava/lang/String;");
+    jmethodID getCount = (*env)->GetMethodID(env, cursorClass, "getCount", "()I");
+
+    if (moveToFirst == NULL || isAfterLast == NULL || moveToNext == NULL || getString == NULL || getCount == NULL) {
+        LogE("Failed to get cursor methods in ListChildrenUrisForDocumentId");
+        (*env)->DeleteLocalRef(env, cursorClass);
         (*env)->DeleteLocalRef(env, cursor);
         return NULL;
     }
 
-    if (moveToFirstMethod == NULL) moveToFirstMethod = (*env)->GetMethodID(env, localCursorClass, "moveToFirst", "()Z");
-    if (isAfterLastMethod == NULL) isAfterLastMethod = (*env)->GetMethodID(env, localCursorClass, "isAfterLast", "()Z");
-    if (moveToNextMethod == NULL) moveToNextMethod = (*env)->GetMethodID(env, localCursorClass, "moveToNext", "()Z");
-    if (getStringMethod == NULL) getStringMethod = (*env)->GetMethodID(env, localCursorClass, "getString", "(I)Ljava/lang/String;");
-    if (getCountMethod == NULL) getCountMethod = (*env)->GetMethodID(env, localCursorClass, "getCount", "()I");
+    jint count = (*env)->CallIntMethod(env, cursor, getCount);
+    LogD("Found %d children in cursor in ListChildrenUrisForDocumentId", count);
 
-    // Получаем количество элементов
-    jint count = (*env)->CallIntMethod(env, cursor, getCountMethod);
-    if (CheckException(env, "getCount in ListChildrenUris")) {
-        (*env)->DeleteLocalRef(env, localCursorClass);
-        (*env)->DeleteLocalRef(env, cursor);
-        return NULL;
-    }
-
-    // Создаем массив результатов
+    // --- НАЧАЛО ДОБАВЛЕННОГО ЛОГИРОВАНИЯ ---
+    LogD("ListChildrenUrisForDocumentId: After getting count, about to create result array. count = %d", (int)count);
     jobjectArray result = (*env)->NewObjectArray(env, count, stringClass, NULL);
+    LogD("ListChildrenUrisForDocumentId: After NewObjectArray. result = %p", result);
     if (result == NULL) {
-        CheckException(env, "NewObjectArray for result in ListChildrenUris");
-        (*env)->DeleteLocalRef(env, localCursorClass);
+        LogE("Failed to create result array in ListChildrenUrisForDocumentId");
+        (*env)->DeleteLocalRef(env, cursorClass);
         (*env)->DeleteLocalRef(env, cursor);
         return NULL;
     }
 
-    if ((*env)->CallBooleanMethod(env, cursor, moveToFirstMethod)) {
+    LogD("ListChildrenUrisForDocumentId: About to call cursor.moveToFirst");
+    if ((*env)->CallBooleanMethod(env, cursor, moveToFirst)) {
+        LogD("ListChildrenUrisForDocumentId: moveToFirst returned true, entering while loop");
         jint index = 0;
-        while (!(*env)->CallBooleanMethod(env, cursor, isAfterLastMethod) && index < count) {
-            jstring documentId = (*env)->CallObjectMethod(env, cursor, getStringMethod, 0);
-            if (documentId != NULL) {
-                // Строим полный URI документа
-                jobject documentUri = (*env)->CallStaticObjectMethod(env, documentsContractClass,
-                    buildDocumentUriMethod, treeUri, documentId);
-
-                if (documentUri != NULL) {
-                    jstring uriString = (*env)->CallObjectMethod(env, documentUri, toStringMethod);
-                    (*env)->SetObjectArrayElement(env, result, index, uriString);
-                    (*env)->DeleteLocalRef(env, uriString);
-                    (*env)->DeleteLocalRef(env, documentUri);
+        LogD("ListChildrenUrisForDocumentId: Initial index = %d", (int)index);
+        while (!(*env)->CallBooleanMethod(env, cursor, isAfterLast) && index < count) {
+            LogD("ListChildrenUrisForDocumentId: Inside while loop, index = %d", (int)index);
+            LogD("ListChildrenUrisForDocumentId: About to call cursor.getString(0)");
+            jstring jchildDocumentId = (*env)->CallObjectMethod(env, cursor, getString, 0);
+            LogD("ListChildrenUrisForDocumentId: After cursor.getString(0), jchildDocumentId = %p", jchildDocumentId);
+            if (jchildDocumentId != NULL) {
+                LogD("ListChildrenUrisForDocumentId: jchildDocumentId is not NULL, about to call GetStringUTFChars");
+                const char* childDocIdStr = (*env)->GetStringUTFChars(env, jchildDocumentId, NULL);
+                LogD("ListChildrenUrisForDocumentId: After GetStringUTFChars, childDocIdStr = %p", childDocIdStr);
+                if (childDocIdStr != NULL) {
+                    LogD("ListChildrenUrisForDocumentId: childDocIdStr is not NULL, about to call BuildDocumentUri");
+                    LogD("ListChildrenUrisForDocumentId: g_original_tree_uri = %s", g_original_tree_uri);
+                    LogD("ListChildrenUrisForDocumentId: childDocIdStr = %s", childDocIdStr);
+                    char* childUri = BuildDocumentUri(env, activity, g_original_tree_uri, childDocIdStr);
+                    LogD("ListChildrenUrisForDocumentId: After BuildDocumentUri, childUri = %p", childUri);
+                    if (childUri != NULL) {
+                        LogD("ListChildrenUrisForDocumentId: childUri is not NULL, about to call NewStringUTF");
+                        jstring jchildUri = (*env)->NewStringUTF(env, childUri);
+                        LogD("ListChildrenUrisForDocumentId: After NewStringUTF, jchildUri = %p", jchildUri);
+                        if (jchildUri != NULL) {
+                            LogD("ListChildrenUrisForDocumentId: jchildUri is not NULL, about to call SetObjectArrayElement");
+                            LogD("ListChildrenUrisForDocumentId: result = %p, index = %d, jchildUri = %p", result, (int)index, jchildUri);
+                            (*env)->SetObjectArrayElement(env, result, index, jchildUri);
+                            // Проверим, не возникло ли исключения после SetObjectArrayElement
+                            LogD("ListChildrenUrisForDocumentId: After SetObjectArrayElement, about to check for exception");
+                            if (CheckException(env, "SetObjectArrayElement in ListChildrenUrisForDocumentId loop")) {
+                                LogE("Exception occurred in SetObjectArrayElement, index: %d, childUri: %s", (int)index, childUri);
+                                // Освобождаем ресурсы и выходим из цикла
+                                LogD("ListChildrenUrisForDocumentId: About to ReleaseStringUTFChars");
+                                (*env)->ReleaseStringUTFChars(env, jchildDocumentId, childDocIdStr);
+                                LogD("ListChildrenUrisForDocumentId: About to DeleteLocalRef jchildDocumentId");
+                                (*env)->DeleteLocalRef(env, jchildDocumentId);
+                                LogD("ListChildrenUrisForDocumentId: About to free childUri");
+                                free(childUri);
+                                LogD("ListChildrenUrisForDocumentId: About to DeleteLocalRef jchildUri");
+                                (*env)->DeleteLocalRef(env, jchildUri); // Освобождаем jchildUri, который не был добавлен
+                                LogD("ListChildrenUrisForDocumentId: About to DeleteLocalRef cursorClass");
+                                (*env)->DeleteLocalRef(env, cursorClass);
+                                LogD("ListChildrenUrisForDocumentId: About to DeleteLocalRef cursor");
+                                (*env)->DeleteLocalRef(env, cursor);
+                                LogD("ListChildrenUrisForDocumentId: About to return NULL");
+                                return NULL; // Прерываем выполнение функции
+                            }
+                            LogD("ListChildrenUrisForDocumentId: About to DeleteLocalRef jchildUri (after successful SetObjectArrayElement)");
+                            (*env)->DeleteLocalRef(env, jchildUri);
+                            LogD("ListChildrenUrisForDocumentId: About to free childUri (after successful SetObjectArrayElement)");
+                            free(childUri);
+                            LogD("ListChildrenUrisForDocumentId: About to increment index");
+                            index++;
+                            LogD("ListChildrenUrisForDocumentId: Index incremented, new value = %d", (int)index);
+                            LogD("Added child URI in ListChildrenUrisForDocumentId: %s", childUri);
+                        } else {
+                             LogE("Failed to create jstring for child URI: %s", childUri);
+                             LogD("ListChildrenUrisForDocumentId: About to free childUri (NewStringUTF failed)");
+                             free(childUri);
+                        }
+                    } else {
+                        LogE("Failed to build URI for child document ID: %s", childDocIdStr);
+                    }
+                    LogD("ListChildrenUrisForDocumentId: About to ReleaseStringUTFChars");
+                    (*env)->ReleaseStringUTFChars(env, jchildDocumentId, childDocIdStr);
+                } else {
+                    LogE("GetStringUTFChars returned NULL for child document ID at index %d", (int)index);
                 }
-                (*env)->DeleteLocalRef(env, documentId);
+                LogD("ListChildrenUrisForDocumentId: About to DeleteLocalRef jchildDocumentId");
+                (*env)->DeleteLocalRef(env, jchildDocumentId);
+            } else {
+                LogD("Child document ID is NULL at index %d", (int)index);
+                // Возможно, строка в Cursor пустая или произошла ошибка, но не исключение.
+                // Лучше прерваться, чтобы избежать бесконечного цикла.
+                LogD("ListChildrenUrisForDocumentId: Breaking loop because jchildDocumentId is NULL");
+                break;
             }
-
-            (*env)->CallBooleanMethod(env, cursor, moveToNextMethod);
-            index++;
+            // Переходим к следующему элементу, только если не было критической ошибки выше
+            // CheckException внутри moveToNext не нужен, если он сам вызывает исключение,
+            // оно будет поймано в CheckException на следующей итерации или снаружу.
+            LogD("ListChildrenUrisForDocumentId: About to call cursor.moveToNext");
+            (*env)->CallBooleanMethod(env, cursor, moveToNext);
         }
+        LogD("ListChildrenUrisForDocumentId: Exited while loop");
+    } else {
+         LogD("Cursor is empty or moveToFirst failed in ListChildrenUrisForDocumentId");
     }
 
-    (*env)->DeleteLocalRef(env, localCursorClass);
+    LogD("ListChildrenUrisForDocumentId: About to DeleteLocalRef cursorClass");
+    (*env)->DeleteLocalRef(env, cursorClass);
+    LogD("ListChildrenUrisForDocumentId: About to DeleteLocalRef cursor");
     (*env)->DeleteLocalRef(env, cursor);
 
+    LogD("ListChildrenUrisForDocumentId completed, returning %d URIs", count);
     return result;
 }
 
-// Рекурсивная функция обхода директории
+// Рекурсивный обход директории
 static void WalkDirectory(JNIEnv* env, jobject activity, const char* currentURI,
                          const char* dstDir, const char* relPath,
                          FileCopyTask** tasks, int* taskCount, int* maxTasks) {
 
-    // Проверяем отмену через исключение
     if (CheckException(env, "WalkDirectory entry")) {
+        LogE("Exception at WalkDirectory entry");
         return;
     }
 
-    // Проверяем, является ли URI директорией
-    jboolean isDirectory = IsDirectoryUri(env, activity, currentURI);
-    if (CheckException(env, "IsDirectoryUri in WalkDirectory")) {
-        return;
+    LogD("WalkDirectory processing: %s with relPath: '%s'", currentURI, relPath);
+
+    // Проверяем, является ли это первым вызовом для корня дерева
+    jboolean isInitialRootCall = JNI_FALSE;
+    char* initialRootDocumentId = NULL; // Для хранения documentId корня при initial call
+    if (strlen(relPath) == 0 && strstr(currentURI, "/tree/") != NULL) {
+        isInitialRootCall = JNI_TRUE;
+        LogD("Identified as initial root call for tree URI.");
+        // Получаем documentId корня
+        initialRootDocumentId = GetTreeDocumentId(env, activity, currentURI);
+        if (initialRootDocumentId == NULL) {
+             LogE("Failed to get root document ID for initial root call.");
+             return;
+        }
+        LogD("Initial root document ID: %s", initialRootDocumentId);
+    }
+
+    // Для tree URI (кроме первого вызова) сначала получаем document URI
+    char* documentUri = NULL;
+    if (strstr(currentURI, "/tree/") != NULL && !isInitialRootCall) {
+        LogD("Converting tree URI to document URI (not initial call)");
+        documentUri = GetRootDocumentUri(env, activity, currentURI);
+        if (documentUri == NULL) {
+            LogE("Failed to convert tree URI to document URI: %s", currentURI);
+            free(initialRootDocumentId); // Освобождаем, если был initial call
+            return;
+        }
+        LogD("Converted to document URI: %s", documentUri);
+    } else {
+        // Это уже document URI или это initial root call
+        if (isInitialRootCall) {
+             // Для initial root call documentUri получаем из tree URI и initialRootDocumentId
+             documentUri = BuildDocumentUri(env, activity, currentURI, initialRootDocumentId);
+             if (documentUri == NULL) {
+                 LogE("Failed to build document URI for initial root: %s", currentURI);
+                 free(initialRootDocumentId);
+                 return;
+             }
+             LogD("Initial root document URI: %s", documentUri);
+        } else {
+             // Это document URI
+             documentUri = SafeStrdup(currentURI, "WalkDirectory-documentUri");
+        }
     }
 
     // Получаем имя файла/директории
-    char* name = GetFileName(env, activity, currentURI);
+    char* name = NULL;
+    if (isInitialRootCall) {
+        // Для initial root call мы получили initialRootDocumentId.
+        // Извлекаем имя из initialRootDocumentId вручную.
+        if (initialRootDocumentId != NULL) {
+            const char* lastSlash = strrchr(initialRootDocumentId, ':');
+            if (lastSlash != NULL) {
+                const char* pathPart = lastSlash + 1;
+                const char* finalName = strrchr(pathPart, '/');
+                if (finalName != NULL) {
+                    name = SafeStrdup(finalName + 1, "initial-root-name");
+                } else {
+                    name = SafeStrdup(pathPart, "initial-root-name");
+                }
+            } else {
+                name = SafeStrdup(initialRootDocumentId, "initial-root-name");
+            }
+            LogD("Extracted name for initial root from documentId: %s", name);
+        }
+    } else {
+        // Это не initial root call, получаем имя обычным способом
+        name = GetFileName(env, activity, documentUri);
+    }
     if (name == NULL) {
-        LogE("Failed to get name for URI in WalkDirectory: %s", currentURI);
+        LogE("Failed to get name for document URI: %s", documentUri);
+        free(documentUri);
+        free(initialRootDocumentId); // Освобождаем, если был initial call
         return;
     }
 
     // Строим относительный путь
     char* newRelPath = NULL;
-    if (strlen(relPath) == 0) {
-        newRelPath = SafeStrdup(name, "WalkDirectory relPath1");
-    } else {
-        size_t newLen = strlen(relPath) + strlen(name) + 2;
-        newRelPath = SafeMalloc(newLen, "WalkDirectory relPath2");
-        if (newRelPath != NULL) {
-            snprintf(newRelPath, newLen, "%s/%s", relPath, name);
-        }
-    }
-
-    if (newRelPath == NULL) {
+    if (isInitialRootCall) {
+        // Для корня дерева на первом уровне мы не включаем его имя в путь.
+        // Вместо этого, мы сразу обрабатываем его дочерние элементы с пустым relPath.
+        LogD("Processing initial root directory: %s, skipping name in relPath", name);
         free(name);
-        return;
-    }
-
-    if (isDirectory) {
-        // Рекурсивно обходим дочерние элементы
-        jobjectArray children = ListChildrenUris(env, activity, currentURI);
+        free(documentUri);
+        // Рекурсивно обходим дочерние элементы корня с пустым relPath
+        // Для этого нам нужен initialRootDocumentId, чтобы вызвать ListChildrenUrisForDocumentId
+        // initialRootDocumentId уже доступен
+        jobjectArray children = ListChildrenUrisForDocumentId(env, activity, currentURI, initialRootDocumentId); // currentURI is tree URI, initialRootDocumentId
+        free(initialRootDocumentId); // Освобождаем после использования
         if (children != NULL) {
             jsize childCount = (*env)->GetArrayLength(env, children);
-            LogD("Walking directory %s, found %d children", currentURI, (int)childCount);
+            LogD("Found %d children in initial root directory", (int)childCount);
 
             for (jsize i = 0; i < childCount; i++) {
                 jstring jchildUri = (*env)->GetObjectArrayElement(env, children, i);
-                if (jchildUri == NULL) {
-                    continue;
+                if (jchildUri != NULL) {
+                    const char* childUri = (*env)->GetStringUTFChars(env, jchildUri, NULL);
+                    if (childUri != NULL) {
+                        LogD("Processing initial root child %d: %s", (int)i, childUri);
+                        // Передаём пустой relPath для дочернего элемента корня
+                        WalkDirectory(env, activity, childUri, dstDir, "", tasks, taskCount, maxTasks);
+                        (*env)->ReleaseStringUTFChars(env, jchildUri, childUri);
+                    }
+                    (*env)->DeleteLocalRef(env, jchildUri);
                 }
 
-                const char* childUri = (*env)->GetStringUTFChars(env, jchildUri, NULL);
-                if (childUri != NULL) {
-                    WalkDirectory(env, activity, childUri, dstDir, newRelPath, tasks, taskCount, maxTasks);
-                    (*env)->ReleaseStringUTFChars(env, jchildUri, childUri);
-                }
-                (*env)->DeleteLocalRef(env, jchildUri);
-
-                // Проверяем исключения после каждой итерации
-                if (CheckException(env, "WalkDirectory iteration")) {
+                if (CheckException(env, "WalkDirectory initial root iteration")) {
+                    LogE("Exception in initial root iteration");
                     break;
                 }
             }
             (*env)->DeleteLocalRef(env, children);
         } else {
-            LogE("Failed to list children for directory: %s", currentURI);
+            LogE("Failed to list children for initial root directory");
         }
+        return; // Возвращаемся после обработки дочерних элементов корня
     } else {
-        // Добавляем файл в список задач
-        if (*taskCount >= *maxTasks) {
-            // Увеличиваем размер массива
-            int newMaxTasks = *maxTasks * 2;
-            FileCopyTask* newTasks = SafeRealloc(*tasks, newMaxTasks * sizeof(FileCopyTask),
-                                               "WalkDirectory realloc");
-            if (newTasks == NULL) {
-                free(newRelPath);
-                free(name);
-                return;
-            }
-            *tasks = newTasks;
-            *maxTasks = newMaxTasks;
-            LogD("Increased tasks array to %d", newMaxTasks);
-        }
-
-        // Создаем задачу копирования
-        FileCopyTask* task = &(*tasks)[*taskCount];
-        task->srcURI = SafeStrdup(currentURI, "WalkDirectory srcURI");
-
-        // Строим полный путь назначения
-        size_t dstPathLen = strlen(dstDir) + strlen(newRelPath) + 2;
-        char* dstPath = SafeMalloc(dstPathLen, "WalkDirectory dstPath");
-        if (dstPath != NULL && task->srcURI != NULL) {
-            snprintf(dstPath, dstPathLen, "%s/%s", dstDir, newRelPath);
-            task->dstPath = dstPath;
-            (*taskCount)++;
-            LogD("Added copy task: %s -> %s", task->srcURI, task->dstPath);
+        // Это не initial root call, формируем relPath как обычно
+        if (strlen(relPath) == 0) {
+            newRelPath = SafeStrdup(name, "relPath-normal-root");
         } else {
-            // Освобождаем память в случае ошибки
-            if (task->srcURI != NULL) free(task->srcURI);
-            if (dstPath != NULL) free(dstPath);
-            LogE("Failed to allocate memory for copy task");
+            size_t len = strlen(relPath) + strlen(name) + 2;
+            newRelPath = SafeMalloc(len, "relPath-normal-child");
+            if (newRelPath != NULL) {
+                snprintf(newRelPath, len, "%s/%s", relPath, name);
+            }
         }
     }
 
+
+    if (newRelPath == NULL) {
+        if (!isInitialRootCall) { // name не освобождается в isInitialRootCall
+             free(name);
+        }
+        free(documentUri);
+        free(initialRootDocumentId); // Освобождаем, если был initial call
+        return;
+    }
+
+    LogD("Name: %s, Relative path: %s", name, newRelPath);
+
+    // Проверяем тип
+    jboolean isDirectory = IsDirectoryUri(env, activity, documentUri);
+    if (CheckException(env, "IsDirectoryUri")) {
+        LogE("Exception in IsDirectoryUri");
+        if (!isInitialRootCall) {
+             free(name);
+        }
+        free(newRelPath);
+        free(documentUri);
+        free(initialRootDocumentId); // Освобождаем, если был initial call
+        return;
+    }
+
+    if (isDirectory) {
+        LogD("It's a directory: %s", name);
+
+        // Получаем documentId текущей директории (documentUri)
+        char* currentDirDocumentId = GetDocumentId(env, ParseUri(env, documentUri));
+        if (currentDirDocumentId == NULL) {
+            LogE("Failed to get document ID for directory: %s", documentUri);
+            if (!isInitialRootCall) {
+                 free(name);
+            }
+            free(newRelPath);
+            free(documentUri);
+            free(initialRootDocumentId); // Освобождаем, если был initial call
+            return;
+        }
+
+        // Вызываем исправленную функцию с глобальной переменной
+        // g_original_tree_uri должна быть установлена в GetAllFilesForCopy
+        if (g_original_tree_uri == NULL) {
+             LogE("g_original_tree_uri is NULL in WalkDirectory. This should not happen if called correctly from GetAllFilesForCopy.");
+             free(currentDirDocumentId);
+             if (!isInitialRootCall) {
+                 free(name);
+             }
+             free(newRelPath);
+             free(documentUri);
+             free(initialRootDocumentId); // Освобождаем, если был initial call
+             return;
+        }
+        jobjectArray children = ListChildrenUrisForDocumentId(env, activity, g_original_tree_uri, currentDirDocumentId);
+        free(currentDirDocumentId); // Освобождаем полученный documentId
+
+        if (children != NULL) {
+            jsize childCount = (*env)->GetArrayLength(env, children);
+            LogD("Found %d children in directory %s", (int)childCount, name);
+
+            for (jsize i = 0; i < childCount; i++) {
+                jstring jchildUri = (*env)->GetObjectArrayElement(env, children, i);
+                if (jchildUri != NULL) {
+                    const char* childUri = (*env)->GetStringUTFChars(env, jchildUri, NULL);
+                    if (childUri != NULL) {
+                        LogD("Processing child %d: %s", (int)i, childUri);
+                        // Передаём *новый* relPath (имя текущей директории) в рекурсивный вызов
+                        WalkDirectory(env, activity, childUri, dstDir, newRelPath, tasks, taskCount, maxTasks);
+                        (*env)->ReleaseStringUTFChars(env, jchildUri, childUri);
+                    }
+                    (*env)->DeleteLocalRef(env, jchildUri);
+                }
+
+                if (CheckException(env, "WalkDirectory iteration")) {
+                    LogE("Exception in iteration");
+                    break;
+                }
+            }
+            (*env)->DeleteLocalRef(env, children);
+        } else {
+            LogE("Failed to list children for directory: %s", name);
+        }
+    } else {
+        LogD("It's a file: %s", name);
+
+        // Добавляем файл в список задач
+        if (*taskCount >= *maxTasks) {
+            int newMaxTasks = *maxTasks * 2;
+            FileCopyTask* newTasks = realloc(*tasks, newMaxTasks * sizeof(FileCopyTask));
+            if (newTasks != NULL) {
+                *tasks = newTasks;
+                *maxTasks = newMaxTasks;
+                LogD("Increased tasks array to %d", newMaxTasks);
+            }
+        }
+
+        if (*taskCount < *maxTasks) {
+            FileCopyTask* task = &(*tasks)[*taskCount];
+            task->srcURI = SafeStrdup(documentUri, "task-srcURI");
+
+            size_t dstPathLen = strlen(dstDir) + strlen(newRelPath) + 2;
+            task->dstPath = SafeMalloc(dstPathLen, "task-dstPath");
+
+            if (task->srcURI != NULL && task->dstPath != NULL) {
+                snprintf(task->dstPath, dstPathLen, "%s/%s", dstDir, newRelPath);
+                (*taskCount)++;
+                LogD("Added copy task: %s -> %s", task->srcURI, task->dstPath);
+            } else {
+                LogE("Failed to allocate memory for copy task");
+                if (task->srcURI != NULL) free(task->srcURI);
+                if (task->dstPath != NULL) free(task->dstPath);
+            }
+        }
+    }
+
+    if (!isInitialRootCall) { // name не освобождается в isInitialRootCall
+         free(name);
+    }
     free(newRelPath);
-    free(name);
+    free(documentUri);
+    free(initialRootDocumentId); // Освобождаем, если был initial call (даже если не был, free(NULL) безопасен)
 }
 
-// Основная функция для получения всех файлов для копирования
+// Основная функция
 static FileCopyTask* GetAllFilesForCopy(JNIEnv* env, jobject activity,
                                        const char* srcURI, const char* dstDir,
                                        int* fileCount) {
-
     LogD("GetAllFilesForCopy started: %s -> %s", srcURI, dstDir);
 
-    if (!InitializeJNIClasses(env)) {
-        LogE("Failed to initialize JNI classes");
-        *fileCount = 0;
-        return NULL;
-    }
+    // Устанавливаем глобальную переменную
+    g_original_tree_uri = srcURI;
 
-    // Инициализируем массив задач
     int maxTasks = 100;
     int taskCount = 0;
-    FileCopyTask* tasks = SafeMalloc(maxTasks * sizeof(FileCopyTask), "GetAllFilesForCopy initial");
+    FileCopyTask* tasks = SafeMalloc(maxTasks * sizeof(FileCopyTask), "tasks-init");
     if (tasks == NULL) {
         *fileCount = 0;
+        g_original_tree_uri = NULL; // Сбрасываем
         return NULL;
     }
 
-    // Запускаем рекурсивный обход
     WalkDirectory(env, activity, srcURI, dstDir, "", &tasks, &taskCount, &maxTasks);
 
-    if (CheckException(env, "GetAllFilesForCopy after WalkDirectory")) {
-        LogE("Exception occurred during directory walk");
-        // Продолжаем, возвращаем то, что успели собрать
+    if (CheckException(env, "GetAllFilesForCopy after walk")) {
+        LogE("Exception during directory walk");
     }
 
     *fileCount = taskCount;
+    g_original_tree_uri = NULL; // Сбрасываем
     LogD("GetAllFilesForCopy completed: found %d files", taskCount);
-
     return tasks;
 }
 
-// Освобождение памяти задач
+// Освобождение памяти
 static void FreeFileCopyTasks(FileCopyTask* tasks, int count) {
     if (tasks == NULL) return;
 
     for (int i = 0; i < count; i++) {
-        if (tasks[i].srcURI != NULL) {
-            free(tasks[i].srcURI);
-        }
-        if (tasks[i].dstPath != NULL) {
-            free(tasks[i].dstPath);
-        }
+        if (tasks[i].srcURI != NULL) free(tasks[i].srcURI);
+        if (tasks[i].dstPath != NULL) free(tasks[i].dstPath);
     }
     free(tasks);
 }
@@ -736,6 +900,7 @@ import (
 	"unsafe"
 
 	"fyne.io/fyne/v2/driver"
+	log "github.com/schollz/logger"
 )
 
 // FileCopyTask представляет задачу копирования файла
@@ -767,17 +932,14 @@ func GetAllFilesForCopyJNI(srcURI, dstDir string) ([]FileCopyTask, error) {
 		}
 		defer C.FreeFileCopyTasks(cTasks, fileCount)
 
-		// Конвертируем C массив в Go slice
 		if fileCount > 0 {
 			taskSlice := (*[1 << 30]C.FileCopyTask)(unsafe.Pointer(cTasks))[:fileCount:fileCount]
-
 			for i := 0; i < int(fileCount); i++ {
 				task := taskSlice[i]
-				goTask := FileCopyTask{
+				tasks = append(tasks, FileCopyTask{
 					SrcURI:  C.GoString(task.srcURI),
 					DstPath: C.GoString(task.dstPath),
-				}
-				tasks = append(tasks, goTask)
+				})
 			}
 		}
 
@@ -787,39 +949,36 @@ func GetAllFilesForCopyJNI(srcURI, dstDir string) ([]FileCopyTask, error) {
 	return tasks, err
 }
 
-// createAllDirectories создает все необходимые директории
-func createAllDirectories(tasks []FileCopyTask) error {
-	dirs := make(map[string]bool)
+// CopyDirectoryJNI копирует директорию через JNI
+func CopyDirectoryJNI(srcURI, dstDir string, copyFileFn func(srcURI, dstPath string) error) error {
+	log.Trace(srcURI, dstDir)
+	// Создаём целевую директорию перед копированием
+	if err := os.MkdirAll(dstDir, 0700); err != nil {
+		return err
+	}
 
+	// Передаём dstDir как базовую директорию для копирования
+	// C-код (после исправления) будет формировать пути относительно dstDir,
+	// начиная с содержимого дерева, указанного в srcURI
+	tasks, err := GetAllFilesForCopyJNI(srcURI, dstDir)
+	if err != nil {
+		return err
+	}
+	log.Tracef("tasks %v", tasks)
+
+	// Создаем необходимые директории
+	dirs := make(map[string]bool)
 	for _, task := range tasks {
 		dir := filepath.Dir(task.DstPath)
 		dirs[dir] = true
 	}
-
 	for dir := range dirs {
 		if err := os.MkdirAll(dir, 0700); err != nil {
 			return err
 		}
 	}
 
-	return nil
-}
-
-// CopyDirectoryJNI упрощенная версия без отмены
-func CopyDirectoryJNI(srcURI, dstDir string, copyFileFn CopyFunc) error {
-	if err := os.MkdirAll(dstDir, 0700); err != nil {
-		return err
-	}
-
-	tasks, err := GetAllFilesForCopyJNI(srcURI, dstDir)
-	if err != nil {
-		return err
-	}
-
-	if err := createAllDirectories(tasks); err != nil {
-		return err
-	}
-
+	// Копируем файлы
 	for _, task := range tasks {
 		if err := copyFileFn(task.SrcURI, task.DstPath); err != nil {
 			return err

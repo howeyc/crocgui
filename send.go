@@ -213,12 +213,12 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 		if err != nil {
 			return fmt.Errorf("URI (%s) error: %v", src, err)
 		}
-		if fi.IsDir() {
-			log.Tracef("URI (%s), is dir", src)
-			if isMobile {
-				return nil
-			}
-		}
+		// if fi.IsDir() {
+		// 	log.Tracef("URI (%s), is dir", src)
+		// 	if isMobile {
+		// 		return nil
+		// 	}
+		// }
 
 		base := filepath.Base(src)
 		dst := filepath.Join(sendDir, base)
@@ -550,10 +550,18 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 				// Десктоп
 				return
 			}
+			ch, err := u.List()
+			log.Tracef("List %v err: %s", ch, err)
 
-			CopyDirectoryJNI(u.String(), sendDir, func(s, dst string) error {
-				log.Tracef("src %s", s)
+			// err = CopyDirectoryJNI(u.String(), dst, func(s, dst string) error {
+			err = copyDir(u, dst, func(source fyne.URIReadCloser, dstPath string) error {
+				src := source.URI()
+				log.Tracef("src %s", src)
+
+				name := uriBase(src)
+				dst = filepath.Join(dst, name)
 				log.Tracef("dst %s", dst)
+
 				rel, _ := filepath.Rel(sendDir, dst)
 				fe := addEntry(dst, func(d *widget.Button, p *widget.ProgressBar, l *widget.Label) {
 					p.Hide()
@@ -562,17 +570,16 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 				if fe == nil {
 					return nil
 				}
-				u, err := storage.ParseURI(s)
-				if err != nil {
-					removeEntry(dst, fe, true)
-					return nil
-				}
-				source, err := storage.Reader(u)
-				if err != nil {
-					removeEntry(dst, fe, true)
-					return nil
-				}
-				src := source.URI()
+				// u, err := storage.ParseURI(s)
+				// if err != nil {
+				// 	removeEntry(dst, fe, true)
+				// 	return nil
+				// }
+				// source, err := storage.Reader(u)
+				// if err != nil {
+				// 	removeEntry(dst, fe, true)
+				// 	return nil
+				// }
 				copyFromURCProgress(source, dst, fe, func(err error) {
 					if err != nil {
 						log.Errorf("URI (%s), copied to internal cache %s error: %s", src, dst, err)
@@ -588,6 +595,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 				})
 				return nil
 			})
+			log.Tracef("%v", err)
 		}
 		ShowFolderOpen(folderOpen, w)
 	})
@@ -625,17 +633,24 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 		}
 
 		ready := true
-		for _, fe := range fileentries {
+		filepaths := []string{}
+		for fpath, fe := range fileentries {
 			pb := fe.Objects[feBar].(*widget.ProgressBar)
 			if pb.Visible() && pb.Value < pb.Max {
 				ready = false
 				break
 			}
+			if target, err := Readlink(fpath); err == nil {
+				fpath = target
+			}
+			filepaths = append(filepaths, fpath)
 		}
+		zipfolder := a.Preferences().Bool("zip-unzip")
+		filesInfo, emptyfolders, totalNumberFolders, serr := croc.GetFilesInfo(filepaths, zipfolder, false, []string{})
 
 		// Посылаем если есть файлы
-		if len(fileentries) < 1 || !ready {
-			log.Error("no files selected")
+		if len(filepaths) < 1 || !ready || serr != nil {
+			log.Error("no files ready")
 			dialog.ShowInformation(
 				lp("Send"),
 				lp("Pick a file to send"),
@@ -653,7 +668,6 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 		for _, fe := range fileentries {
 			fe.Objects[feDel].Hide()
 		}
-		zipfolder := a.Preferences().Bool("zip-unzip")
 		sender, err := croc.New(croc.Options{
 			IsSender:         true,
 			SharedSecret:     secret,
@@ -839,27 +853,27 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 		}()
 
 		go func() {
-			var filepaths []string
-			for fpath := range fileentries {
-				if target, err := Readlink(fpath); err == nil {
-					fpath = target
-				}
-				filepaths = append(filepaths, fpath)
-			}
-			fi, emptyfolders, numFolders, serr := croc.GetFilesInfo(filepaths, zipfolder, false, []string{})
-			if serr != nil {
-				log.Errorf("file info failed: %s", serr)
+			// var filepaths []string
+			// for fpath := range fileentries {
+			// 	if target, err := Readlink(fpath); err == nil {
+			// 		fpath = target
+			// 	}
+			// 	filepaths = append(filepaths, fpath)
+			// }
+			// fi, emptyfolders, numFolders, serr := croc.GetFilesInfo(filepaths, zipfolder, false, []string{})
+			// if serr != nil {
+			// 	log.Errorf("file info failed: %s", serr)
+			// } else {
+			if EMULATE == 0 {
+				serr = sender.Send(filesInfo, emptyfolders, totalNumberFolders)
 			} else {
-				if EMULATE == 0 {
-					serr = sender.Send(fi, emptyfolders, numFolders)
-				} else {
-					log.Warnf("Send %v %v %v", fi, emptyfolders, numFolders)
-					time.Sleep(EMULATE)
-					defer func() {
-						sender = nil
-					}()
-				}
+				log.Warnf("Send %v %v %v", filesInfo, emptyfolders, totalNumberFolders)
+				time.Sleep(EMULATE)
+				defer func() {
+					sender = nil
+				}()
 			}
+			// }
 
 			fyne.Do(func() {
 				if serr != nil {
@@ -1371,7 +1385,7 @@ func Readlink(name string) (string, error) {
 	return target, nil
 }
 
-type CopyFileFunc func(srcURI fyne.URI, dstPath string) error
+type CopyFileFunc func(srcURI fyne.URIReadCloser, dstPath string) error
 
 func copyDir(srcURI fyne.URI, dstDir string, copyFileFn CopyFileFunc) error {
 	if err := os.MkdirAll(dstDir, 0700); err != nil {
@@ -1382,31 +1396,16 @@ func copyDir(srcURI fyne.URI, dstDir string, copyFileFn CopyFileFunc) error {
 }
 
 func storageWalkDir(current fyne.URI, dstDir, relPath string, copyFileFn CopyFileFunc) error {
-	select {
-	case <-done:
-		return errors.New("copy operation cancelled")
-	default:
-	}
-
-	exists, err := storage.Exists(current)
-	if err != nil {
-		return err
-	}
-	if !exists {
-		return errors.New("resource does not exist: " + current.String())
-	}
-
-	isListable, err := storage.CanList(current)
-	if err != nil {
-		return err
-	}
-
+	log.Tracef("storageWalkDir current %s dstDir %s relPath %s", current, dstDir, relPath)
 	// name := current.Name()
 	name := uriBase(current)
 	currentRelPath := filepath.Join(relPath, name)
 	dstPath := filepath.Join(dstDir, currentRelPath)
 
-	if isListable {
+	r, err := storage.Reader(current)
+
+	if err != nil {
+		log.Tracef("Reader err: %v", err)
 		if err := os.Mkdir(dstPath, 0700); err != nil && !os.IsExist(err) {
 			return err
 		}
@@ -1422,14 +1421,38 @@ func storageWalkDir(current fyne.URI, dstDir, relPath string, copyFileFn CopyFil
 			}
 		}
 	} else {
-		dir := filepath.Dir(dstPath)
-		if err := os.MkdirAll(dir, 0700); err != nil {
-			return err
+		_, err := r.Read([]byte{0})
+		r.Close()
+		if err == nil {
+			dir := filepath.Dir(dstPath)
+			if err := os.MkdirAll(dir, 0700); err != nil {
+				return err
+			}
+
+			r, _ := storage.Reader(current)
+			if err := copyFileFn(r, dstPath); err != nil {
+				return err
+			}
+		} else {
+			log.Tracef("Read %v", err)
+			if strings.Contains(err.Error(), "EISDIR") {
+				if err := os.Mkdir(dstPath, 0700); err != nil && !os.IsExist(err) {
+					return err
+				}
+
+				children, err := storage.List(current)
+				if err != nil {
+					return err
+				}
+
+				for _, child := range children {
+					if err := storageWalkDir(child, dstDir, currentRelPath, copyFileFn); err != nil {
+						return err
+					}
+				}
+			}
 		}
 
-		if err := copyFileFn(current, dstPath); err != nil {
-			return err
-		}
 	}
 
 	return nil
