@@ -14,7 +14,6 @@ import (
 	"reflect"
 	"runtime"
 	"strings"
-	"syscall"
 	"time"
 
 	log "github.com/schollz/logger"
@@ -805,7 +804,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 								// Убираем dir/
 								path = filepath.Join(sendDir, fi.FolderRemote)
 								if fi.TempFile {
-									path = filepath.Join(sendDir, strings.TrimSuffix(fi.Name, ".zip"))
+									path = filepath.Join(sendDir, strings.TrimSuffix(fi.Name, DOTZIP))
 								}
 
 								if fr, ok := fileentries[path]; ok {
@@ -1392,153 +1391,6 @@ func Readlink(name string) (string, error) {
 	}
 
 	return target, nil
-}
-
-type CopyFileFunc0 func(srcURI fyne.URIReadCloser, dstPath string) error
-
-// Основная функция copyDir
-func copyDir0(srcURI fyne.URI, dstDir string, copyFileFn CopyFileFunc0) error {
-	if err := os.MkdirAll(dstDir, 0700); err != nil {
-		return err
-	}
-
-	// Инициализируем карту visited
-	// Так как функция предполагается запускаемой из GUI потока Fyne,
-	// и рекурсивные вызовы происходят синхронно в том же потоке,
-	// синхронизация не требуется.
-	visited := make(map[string]bool)
-
-	// Получаем имя корня (может пригодиться, если понадобится логика, учитывающая имя корня)
-	// rootBaseName := uriBase(srcURI)
-
-	// Внутренняя рекурсивная функция, использующая замыкание
-	var walk func(current fyne.URI, currentRelPath string, isFirst bool) error
-	walk = func(current fyne.URI, currentRelPath string, isFirst bool) error {
-		currentPathStr := current.Path()
-
-		// Проверяем, посещали ли мы этот URI раньше (защита от циклов)
-		// Безопасно, так как мы в GUI потоке Fyne
-		if visited[currentPathStr] {
-			log.Tracef("Cycle detected, skipping: %s", currentPathStr)
-			return nil // Или return fmt.Errorf("cycle detected at %s", currentPathStr)
-		}
-		// Помечаем как посещенный
-		visited[currentPathStr] = true
-
-		name := uriBase(current)
-		var finalRelPath string
-		if isFirst {
-			// Для первого уровня (корня) не добавляем его имя к relPath
-			finalRelPath = currentRelPath
-		} else {
-			// Для последующих уровней добавляем имя текущего элемента к currentRelPath
-			finalRelPath = filepath.Join(currentRelPath, name)
-		}
-
-		var dstPath string
-		if finalRelPath == "" {
-			dstPath = dstDir
-		} else {
-			dstPath = filepath.Join(dstDir, finalRelPath)
-		}
-
-		r, err := storage.Reader(current)
-		if err != nil {
-			// Ошибка получения Reader сразу указывает, что это не файл (например, каталог или специальный объект)
-			log.Tracef("Reader error for %s: %v (likely directory or special object)", current, err)
-			// Считаем, что это каталог, если Reader не удался
-			// Создаем его в dstPath, если это не корень (dstDir)
-			if dstPath != dstDir {
-				if err := os.Mkdir(dstPath, 0700); err != nil && !os.IsExist(err) {
-					return err
-				}
-			}
-
-			children, err := storage.List(current)
-			log.Tracef("List %v err: %v", children, err)
-			if err != nil {
-				return err // Возвращаем ошибку List, если она произошла
-			}
-
-			for _, child := range children {
-				if err := walk(child, finalRelPath, false); err != nil {
-					return err
-				}
-			}
-			return nil // Завершаем обработку текущего элемента (каталога)
-		}
-		// Если Reader получен успешно, проверяем, можно ли прочитать из него
-		_, readErr := r.Read([]byte{0})
-		r.Close() // Обязательно закрываем Reader после проверки
-
-		// Проверяем конкретную ошибку, указывающую на каталог
-		if readErr != nil {
-			// Проверяем текст ошибки на "Incorrect function." или подобное (Windows-specific)
-			// Для кроссплатформенности можно проверить syscall.Errno или другие признаки,
-			// но простая строковая проверка часто работает для конкретной ОС.
-			// Также стоит учитывать, что на других ОС могут быть другие ошибки для каталогов.
-			// Однако, если Reader был получен успешно, но Read не удался, это может быть связано с особыми файлами (pipes, devices).
-			// Более надежный способ - это проверить ошибку от Reader() или использовать List() первоначально.
-			// Но если мы следуем логике "Read ошибка -> каталог", то проверим ошибку Read.
-			// Предположим, что на Windows это "Incorrect function.".
-			// На других ОС могут быть другие ошибки, например, syscall.EISDIR ("Is a directory").
-			// Для простоты и следуя логике оригинального кода, но уточнив условие:
-			// Проверим, является ли ошибка "Incorrect function." (Windows) или EISDIR (Unix/Linux/macOS)
-
-			if errors.Is(readErr, syscall.EISDIR) || (readErr != nil && strings.Contains(readErr.Error(), "Incorrect function.")) {
-				log.Tracef("Read err (likely directory): %v", readErr)
-				// Считаем, что это каталог
-				// Создаем его в dstPath, если это не корень (dstDir)
-				if dstPath != dstDir {
-					if err := os.Mkdir(dstPath, 0700); err != nil && !os.IsExist(err) {
-						return err
-					}
-				}
-
-				children, err := storage.List(current)
-				log.Tracef("List %v err: %v", children, err)
-				if err != nil {
-					return err
-				}
-
-				for _, child := range children {
-					if err := walk(child, finalRelPath, false); err != nil {
-						return err
-					}
-				}
-			} else {
-				// Это не ошибка, указывающая на каталог. Это настоящая ошибка чтения файла.
-				log.Tracef("Read err (actual file error): %v", readErr)
-				return readErr // Возвращаем ошибку, если это не каталог
-			}
-		} else {
-			// Успешно прочитали 0 байт, но это не означает, что файл не пуст.
-			// Повторно открываем для копирования, так как первый Read был для проверки.
-			// На практике, если Reader от файла succeeded, и первый Read succeeded (даже если 0 байт),
-			// то это файл.
-			// Убедимся, что родительский каталог существует
-			dir := filepath.Dir(dstPath)
-			if err := os.MkdirAll(dir, 0700); err != nil {
-				return err
-			}
-
-			// Повторно получаем Reader для копирования
-			r, err := storage.Reader(current)
-			if err != nil {
-				// Это маловероятно, но на всякий случай
-				return err
-			}
-			log.Tracef("copyFileFn %s->%s", r.URI(), dstPath)
-			if err := copyFileFn(r, dstPath); err != nil {
-				return err
-			}
-		}
-
-		return nil
-	}
-
-	// Запускаем рекурсивное копирование
-	return walk(srcURI, "", true)
 }
 
 // CopyFunc функция для копирования файла

@@ -50,6 +50,7 @@ const (
 	ZeroWidthSpace     = "\u200B" // Пробел нулевой ширины
 	ZeroWidthNonJoiner = "\u200C" // Не-соединитель нулевой ширины
 	ZeroWidthJoiner    = "\u200D" // Соединитель нулевой ширины
+	DOTZIP             = ".zip"
 
 	// Чтоб на десктопе отладить копирование вместо переноса как будто это мобильная ОС.
 	asMobile = false
@@ -160,7 +161,7 @@ func refreshWindow(a fyne.App, w fyne.Window) {
 	at := container.NewAppTabs()
 	at.Items = []*container.TabItem{
 		sendTabItem(a, w, at),
-		recvTabItem(a, w),
+		recvTabItem(a, w, at),
 		logTabItem(a, w),
 		settingsTabItem(a, w),
 		aboutTabItem(a, w),

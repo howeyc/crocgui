@@ -40,6 +40,3 @@ func sendNotification(a fyne.App, title, content string) {
 
 func LogD(string)         {}
 func excludeFromRecents() {}
-
-// func finish()             {}
-func CopyDirectoryJNI(srcURI, dstDir string, copyFileFn CopyFunc) error { return nil }

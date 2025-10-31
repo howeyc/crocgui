@@ -20,11 +20,10 @@ import (
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 	"github.com/schollz/croc/v10/src/croc"
-	"github.com/schollz/croc/v10/src/utils"
 	log "github.com/schollz/logger"
 )
 
-func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
+func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) *container.TabItem {
 	var ti *container.TabItem
 	refresh := func() {}
 	defer func() {
@@ -292,8 +291,68 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 		return
 	}
 
-	os.MkdirAll(recvDir, 0o700)
 	fpath := a.Preferences().String("DeleteFile")
+	os.MkdirAll(recvDir, 0700)
+
+	reload = func() {
+		keysToRemove := []string{}
+		for path, _ := range fileentries {
+			if _, err := os.Stat(path); err != nil {
+				// Помечаем ключ для удаления, не удаляя его сразу
+				keysToRemove = append(keysToRemove, path)
+			}
+		}
+
+		for _, path := range keysToRemove {
+			if fe, exists := fileentries[path]; exists {
+				removeEntry(path, fe, false) // removeEntry уже должен удалять из fileentries
+			}
+		}
+		for _, name := range ls(recvDir) {
+			if name != "" {
+				path := filepath.Join(recvDir, name)
+				if fpath == path {
+					continue
+				}
+				if isMobile || asMobile {
+					log.Trace(path)
+					// Чтоб сохранять на Андроиде свернём каталог в  файл
+					if fi, _ := os.Stat(path); fi != nil && fi.IsDir() {
+						pathZip := path + DOTZIP
+						// if err := utils.ZipDirectory(pathZip, path); err == nil {
+						// 	log.Tracef("zipped %s->%s error: %v", path, pathZip, os.RemoveAll(path))
+						// 	path = pathZip
+						// }
+						if fe := addEntry(pathZip, nil); fe != nil {
+							ZipDirectoryProgress(pathZip, path, fe, func(err error) {
+								if err != nil {
+									log.Errorf("dir (%s), zipped to %s error: %s", path, pathZip, err)
+									removeEntry(pathZip, fe, true)
+									return
+								}
+								log.Tracef("dir (%s), zipped to %s", path, pathZip)
+
+								if _, err := os.Stat(pathZip); err != nil {
+									log.Errorf("Stat(%s) error: %v", pathZip, err)
+									return
+								}
+
+								if feDir, ok := fileentries[path]; ok {
+									removeEntry(path, feDir, true)
+								}
+							})
+						}
+					}
+				}
+				addEntry(path, func(d *widget.Button, p *widget.ProgressBar, s *widget.Button, l *widget.Label) {
+					d.Show()
+					p.Hide()
+					s.Show()
+				})
+			}
+		}
+	}
+
 	for _, name := range ls(recvDir) {
 		path := filepath.Join(recvDir, name)
 		if name == "" {
@@ -307,41 +366,13 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 			}
 			a.Preferences().SetString("DeleteFile", "")
 		} else {
-			if target, err := Readlink(path); err == nil {
-				path = target
-			}
-			addEntry(path, nil)
+			// if target, err := Readlink(path); err == nil {
+			// 	path = target
+			// }
+			// addEntry(path, nil)
 		}
 	}
-
-	reload = func() {
-		for path, fe := range fileentries {
-			if _, err := os.Stat(path); err != nil {
-				removeEntry(path, fe, false)
-			}
-		}
-		for _, name := range ls(recvDir) {
-			if name != "" {
-				path := filepath.Join(recvDir, name)
-				if fpath == path {
-					continue
-				}
-				if isMobile || asMobile {
-					// Чтоб сохранять на Андроиде свернём каталог в  файл
-					if fi, _ := os.Stat(path); fi != nil && fi.IsDir() {
-						if err := utils.ZipDirectory(name+".zip", path); err == nil {
-							path += ".zip"
-						}
-					}
-				}
-				addEntry(path, func(d *widget.Button, p *widget.ProgressBar, s *widget.Button, l *widget.Label) {
-					d.Show()
-					p.Hide()
-					s.Show()
-				})
-			}
-		}
-	}
+	reload()
 
 	var lastSaveDir string
 
@@ -602,7 +633,7 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 									receiver.FilesToTransfer[i].TempFile = false
 								} else {
 									// Развернём свёрнутый каталог если включена опция zip-unzip
-									receiver.FilesToTransfer[i].TempFile = strings.HasSuffix(strings.ToLower(fi.Name), ".zip") &&
+									receiver.FilesToTransfer[i].TempFile = strings.HasSuffix(strings.ToLower(fi.Name), DOTZIP) &&
 										a.Preferences().Bool("zip-unzip")
 								}
 								dst := filepath.Join(recvDir, fi.Name)
@@ -723,7 +754,14 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 	)
 	ti = container.NewTabItemWithIcon(lp("Receive"), theme.DownloadIcon(),
 		container.NewBorder(top, nil, nil, nil, scroller))
-	refresh = func() { ti.Content.Refresh() }
+
+	refresh = func() {
+		// ti.Content.Refresh()
+		if parent.Selected() != ti {
+			parent.Select(ti)
+		}
+		boxholder.Refresh()
+	}
 	return ti
 
 }
@@ -874,27 +912,6 @@ func renameFile(src, dst string) error {
 	return os.Remove(src)
 }
 
-func copyDirectory0(src, dst string) error {
-	return filepath.Walk(src, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-
-		// Calculate relative path
-		relPath, err := filepath.Rel(src, path)
-		if err != nil {
-			return err
-		}
-
-		dstPath := filepath.Join(dst, relPath)
-
-		if info.IsDir() {
-			return os.MkdirAll(dstPath, info.Mode())
-		}
-
-		return copyFile(path, dstPath, info.Mode())
-	})
-}
 func copyDirectory(src, dst string) error {
 	// Создаем целевую директорию с оригинальными правами
 	srcInfo, err := os.Stat(src)
