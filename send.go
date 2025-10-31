@@ -208,18 +208,12 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 		return
 	}
 
-	// Копируем
+	// Пишу ссылку а если не удачно то кэширую
 	addPath := func(src string) error {
 		fi, err := os.Stat(src)
 		if err != nil {
 			return fmt.Errorf("URI (%s) error: %v", src, err)
 		}
-		// if fi.IsDir() {
-		// 	log.Tracef("URI (%s), is dir", src)
-		// 	if isMobile {
-		// 		return nil
-		// 	}
-		// }
 
 		base := filepath.Base(src)
 		dst := filepath.Join(sendDir, base)
@@ -237,6 +231,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 		}
 
 		if _, err := os.Stat(dst); err == nil {
+			// Также и когда src==dst
 			log.Tracef("URI (%s), already in internal cache %s", src, dst)
 			return nil
 		}
@@ -247,19 +242,42 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 			return nil
 		}
 
-		CopyFileProgress(src, dst, fe, func(err error) {
-			if err != nil {
-				log.Errorf("Unable to copy file, error: %s - %s", sendDir, err.Error())
-				removeEntry(dst, fe, true)
-				return
-			}
-			log.Tracef("URI (%s), copied to internal cache %s", src, dst)
+		fyne.Do(func() {
+			log.Tracef("copyFiles error: %v", copyFiles(storage.NewFileURI(src), dst, func(source fyne.URIReadCloser, dstPath string) error {
+				u := source.URI()
+				feTmp := fe
+				if fi.IsDir() {
+					// Покажем временный прогрессбар
+					rel, _ := filepath.Rel(sendDir, dstPath)
+					feTmp = addEntry(dstPath, func(d *widget.Button, p *widget.ProgressBar, l *widget.Label) {
+						p.Hide()
+						l.SetText(rel)
+					})
+					if feTmp == nil {
+						return nil
+					}
 
-			if _, sterr := os.Stat(dst); sterr != nil {
-				log.Errorf("Stat error: %s - %s", dst, sterr.Error())
-				removeEntry(dst, fe, true)
-			}
+				}
+				CopyFileProgress(u.Path(), dstPath, feTmp, func(err error) {
+					if err != nil {
+						log.Errorf("URI (%s), copied to internal cache %s error: %s", u, dstPath, err)
+						removeEntry(dstPath, fe, true)
+						return
+					}
+					log.Tracef("URI (%s), copied to internal cache %s", u, dstPath)
+
+					if _, err := os.Stat(dstPath); err != nil {
+						log.Errorf("Stat(%s) error: %v", dstPath, err)
+					}
+					if fi.IsDir() {
+						// Скроем временный прогрессбар без удаления файла
+						removeEntry(dstPath, feTmp, false)
+					}
+				})
+				return nil
+			}))
 		})
+
 		return nil
 	}
 
@@ -559,18 +577,19 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 			fyne.Do(func() {
 				log.Tracef("copyFiles error: %v", copyFiles(u, dst, func(source fyne.URIReadCloser, dstPath string) error {
 					src := source.URI()
+					// Покажем временный прогрессбар
 					rel, _ := filepath.Rel(sendDir, dstPath)
-					fe := addEntry(dstPath, func(d *widget.Button, p *widget.ProgressBar, l *widget.Label) {
+					feTmp := addEntry(dstPath, func(d *widget.Button, p *widget.ProgressBar, l *widget.Label) {
 						p.Hide()
 						l.SetText(rel)
 					})
-					if fe == nil {
+					if feTmp == nil {
 						return nil
 					}
-					copyFromURCProgress(source, dstPath, fe, func(err error) {
+					copyFromURCProgress(source, dstPath, feTmp, func(err error) {
 						if err != nil {
 							log.Errorf("URI (%s), copied to internal cache %s error: %s", src, dstPath, err)
-							removeEntry(dstPath, fe, true)
+							removeEntry(dstPath, feTmp, true)
 							return
 						}
 						log.Tracef("URI (%s), copied to internal cache %s", src, dstPath)
@@ -578,7 +597,8 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 						if _, err := os.Stat(dstPath); err != nil {
 							log.Errorf("Stat(%s) error: %v", dstPath, err)
 						}
-						removeEntry(dstPath, fe, false)
+						// Скроем временный прогрессбар без удаления файла
+						removeEntry(dstPath, feTmp, false)
 					})
 					return nil
 				}))
@@ -694,6 +714,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 		entry.Disable()
 
 		addFileButton.Disable()
+		addFolderButton.Disable()
 		totpCheck.Disable()
 		if totpCheck.Checked {
 			totpProg.Hide()
@@ -713,6 +734,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 					cancelButton.Hide()
 					entry.Enable()
 					addFileButton.Enable()
+					addFolderButton.Enable()
 
 					totpCheck.Enable()
 					if totpCheck.Checked {
@@ -771,6 +793,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 									pb.Max = float64(fi.Size)
 								}
 							} else {
+								// Временный прогрессбар
 								addEntry(path, func(d *widget.Button, p *widget.ProgressBar, l *widget.Label) {
 									d.Hide()
 									p.Max = float64(fi.Size)
