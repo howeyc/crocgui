@@ -396,8 +396,15 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 							log.Errorf("ParseURI(%s) error: %v", u, err)
 							continue
 						}
+						log.Tracef("URI(%s)", u)
 						log.Tracef("apiLevel %d", apiLevel())
-						if canList(u) {
+						ok, err := canList(u)
+						if err != nil {
+							log.Errorf("canList error: %v", err)
+							continue
+						}
+						if ok {
+							log.Tracef("URI(%s) is dir", u)
 							continue
 						}
 						// mimeType := MimeType(u)

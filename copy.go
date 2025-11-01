@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"syscall"
 
 	"fyne.io/fyne/v2"
@@ -53,7 +54,8 @@ func copyFiles(srcURI fyne.URI, dstDir string, copyFileFn CopyFileFunc) error {
 		deep++
 		defer func() { deep-- }()
 
-		if canList(current) {
+		ok, err := canList(current)
+		if ok {
 			// Добавляем в visited, так как начали обработку каталога.
 			visited[currentStr] = true
 			log.Tracef("walk: %s is directory", current)
@@ -82,6 +84,9 @@ func copyFiles(srcURI fyne.URI, dstDir string, copyFileFn CopyFileFunc) error {
 			}
 			return nil
 		}
+		if err != nil {
+			return err
+		}
 
 		// Файлы не добавляются в visited (они не образуют циклов при рекурсивном обходе).
 		// Убедимся, что родительский каталог существует.
@@ -101,12 +106,16 @@ func copyFiles(srcURI fyne.URI, dstDir string, copyFileFn CopyFileFunc) error {
 
 	// Проверяем srcURI сначала, чтобы определить, файл это или каталог, до запуска рекурсии.
 	dstFilePath := dstDir
-	if canList(srcURI) {
+	ok, err := canList(srcURI)
+	if ok {
 		if err := os.MkdirAll(dstDir, 0700); err != nil {
 			return err
 		}
 		dstFilePath = filepath.Join(dstDir, uriBase(srcURI))
 		return walk(srcURI, "")
+	}
+	if err != nil {
+		return err
 	}
 
 	r, err := storage.Reader(srcURI)
@@ -118,44 +127,80 @@ func copyFiles(srcURI fyne.URI, dstDir string, copyFileFn CopyFileFunc) error {
 	return copyFileFn(r, dstFilePath)
 }
 
-func canList(u fyne.URI) bool {
+func canList(u fyne.URI) (bool, error) {
 	sure := func() bool {
 		if can, err := storage.CanList(u); err == nil && can {
-			if _, err := storage.List(u); err == nil {
+			log.Trace("CanList")
+			if items, err := storage.List(u); err == nil {
+				log.Tracef("List %v", items)
 				return true
+			} else {
+				log.Errorf("List error: %v", err)
 			}
 		}
 		return false
 	}
 	// Проверка MIME-типа для Android
-	if MimeType(u) == "vnd.android.document/directory" {
+	if m := MimeType(u); m == "vnd.android.document/directory" {
+		log.Tracef("MimeType %s", m)
 		if sure() {
-			return true
+			return true, nil
 		}
 	}
 
 	if can, err := storage.CanRead(u); err == nil && !can {
+		log.Trace("!CanRead")
 		if sure() {
-			return true
+			return true, nil
 		}
 	}
+
 	r, err := storage.Reader(u)
 	if err != nil {
+		log.Errorf("Reader error: %v", err)
 		if sure() {
-			return true
+			return true, nil
 		}
 	}
 	defer r.Close()
 
 	p := make([]byte, 1)
 	_, err = r.Read(p)
+	if err == nil {
+		return false, nil
+	}
+	// ok, err := canRead(u)
+	// if err != nil && ok {
+	// 	return false, nil
+	// }
 
 	if eIsDir(err) {
+		log.Trace("eIsDir")
 		if sure() {
-			return true
+			return true, nil
 		}
 	}
-	return false
+
+	return false, err
+}
+
+func canRead(u fyne.URI) (ok bool, err error) {
+	ok, err = storage.CanRead(u)
+	if err != nil || !ok {
+		return
+	}
+	log.Trace("CanRead")
+
+	r, err := storage.Reader(u)
+	if err != nil {
+		log.Errorf("Reader error: %v", err)
+		return false, err
+	}
+	defer r.Close()
+
+	p := make([]byte, 1)
+	_, err = r.Read(p)
+	return err == nil, err
 }
 
 func eIsDir(err error) bool {
@@ -174,12 +219,12 @@ func eIsDir(err error) bool {
 		return true
 	}
 
-	// Проверка текста ошибки для всех платформ
-	// errStr := strings.ToLower(err.Error())
-	// if strings.Contains(errStr, "incorrect function") ||
-	// 	strings.Contains(errStr, "is a directory") {
-	// 	return true
-	// }
+	errStr := strings.ToLower(err.Error())
+	if strings.Contains(errStr, "eisdir") ||
+		strings.Contains(errStr, "is a directory") ||
+		strings.Contains(errStr, "incorrect function") {
+		return true
+	}
 
 	return false
 }

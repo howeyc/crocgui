@@ -298,14 +298,13 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) *containe
 		keysToRemove := []string{}
 		for path, _ := range fileentries {
 			if _, err := os.Stat(path); err != nil {
-				// Помечаем ключ для удаления, не удаляя его сразу
 				keysToRemove = append(keysToRemove, path)
 			}
 		}
 
 		for _, path := range keysToRemove {
 			if fe, exists := fileentries[path]; exists {
-				removeEntry(path, fe, false) // removeEntry уже должен удалять из fileentries
+				removeEntry(path, fe, false)
 			}
 		}
 		for _, name := range ls(recvDir) {
@@ -315,7 +314,6 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) *containe
 					continue
 				}
 				if isMobile || asMobile {
-					log.Trace(path)
 					// Чтоб сохранять на Андроиде свернём каталог в  файл
 					if fi, _ := os.Stat(path); fi != nil && fi.IsDir() {
 						pathZip := path + DOTZIP
@@ -365,11 +363,6 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) *containe
 				continue
 			}
 			a.Preferences().SetString("DeleteFile", "")
-		} else {
-			// if target, err := Readlink(path); err == nil {
-			// 	path = target
-			// }
-			// addEntry(path, nil)
 		}
 	}
 	reload()
