@@ -3,6 +3,10 @@
 package main
 
 import (
+	"fmt"
+	"io"
+	"os"
+
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/storage"
 )
@@ -40,3 +44,58 @@ func sendNotification(a fyne.App, title, content string) {
 
 func LogD(string)         {}
 func excludeFromRecents() {}
+
+func hasChild(uri fyne.URI) (isDir bool, childCount int, err error) {
+	if uri == nil {
+		return false, 0, fmt.Errorf("uri is nil")
+	}
+
+	isDir, err = storage.CanList(uri)
+	if err != nil || !isDir {
+		return
+	}
+
+	children, err := storage.List(uri)
+	childCount = len(children)
+	return
+}
+
+// getSize возвращает размер файла в байтах для не-Android платформ
+func getSize(uri fyne.URI) (size int64, err error) {
+	if uri == nil {
+		return 0, fmt.Errorf("uri is nil")
+	}
+
+	// Проверяем существование файла
+	exists, err := storage.Exists(uri)
+	if err != nil {
+		return 0, fmt.Errorf("failed to check if URI exists: %w", err)
+	}
+	if !exists {
+		return 0, fmt.Errorf("file does not exist: %s", uri.String())
+	}
+
+	// Пытаемся получить размер через os.Stat для локальных файлов
+	if uri.Scheme() == "file" || uri.Scheme() == "" {
+		filePath := uri.Path()
+		fileInfo, err := os.Stat(filePath)
+		if err == nil {
+			return fileInfo.Size(), nil
+		}
+		// Если os.Stat не сработал, продолжаем другими методами
+	}
+
+	// Альтернативный метод: открываем и читаем файл для определения размера
+	readCloser, err := storage.OpenFileFromURI(uri)
+	if err != nil {
+		return 0, fmt.Errorf("failed to open file: %w", err)
+	}
+	defer readCloser.Close()
+
+	written, err := io.Copy(io.Discard, readCloser)
+	if err != nil {
+		return 0, fmt.Errorf("failed to read file content: %w", err)
+	}
+
+	return written, nil
+}

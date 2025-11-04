@@ -297,7 +297,11 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 			return
 		}
 
-		pw, restore := NewProgressWriter(destination, 1<<30, c)
+		total, err := getSize(source.URI())
+		if err != nil {
+			total = 1 << 30
+		}
+		pw, restore := NewProgressWriter(destination, total, c)
 
 		go func() {
 			_, err := io.Copy(pw, source)
@@ -398,42 +402,19 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 						}
 						log.Tracef("URI(%s)", u)
 						log.Tracef("apiLevel %d", apiLevel())
-						ok, err := canList(u)
+
+						isDir, count, err := hasChild(u)
 						if err != nil {
-							log.Errorf("canList error: %v", err)
+							log.Errorf("failed to check directory %s error: %v", u, err)
 							continue
 						}
-						if ok {
-							log.Tracef("URI(%s) is dir", u)
+						if isDir {
+							log.Tracef("URI(%s) is dir with %d child", u, count)
 							continue
 						}
-						// mimeType := MimeType(u)
-						// log.Tracef("URI (%s) has MimeType: %s", u, mimeType)
-						// if mimeType == "vnd.android.document/directory" {
-						// 	// totalcmd на 14 Андроиде
-						// 	log.Tracef("URI (%s) is dir", u)
-						// 	continue
-						// }
-						// if u.Scheme() == "file" {
-						// 	// if _, err := storage.ListerForURI(u); err == nil {
-						// 	if ok, _ := storage.CanList(u); ok {
-						// 		// totalcmd на 9 Андроиде
-						// 		log.Tracef("URI (%s) is dir", u)
-						// 		continue
-						// 	}
-						// }
-						// // На Андроиде 9 storage.List крэшит на схеме content как и storage.CanList
-
-						// can, err := storage.CanRead(u)
-						// if err != nil {
-						// 	log.Errorf("%v", err)
-						// 	continue
-						// }
-						// if !can {
-						// 	log.Tracef("URI (%s) can't read", uriString)
-						// 	continue
-						// }
-
+						if !canRead(u) {
+							continue
+						}
 						name := uriBase(u)
 						dst := filepath.Join(sendDir, name)
 						fe := addEntry(dst, nil)

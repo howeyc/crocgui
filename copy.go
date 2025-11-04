@@ -54,11 +54,17 @@ func copyFiles(srcURI fyne.URI, dstDir string, copyFileFn CopyFileFunc) error {
 		deep++
 		defer func() { deep-- }()
 
-		ok, err := canList(current)
-		if ok {
+		isDir, count, err := hasChild(current)
+		if err != nil {
+			return fmt.Errorf("failed to check directory %s error: %v", current, err)
+		}
+		if isDir {
 			// Добавляем в visited, так как начали обработку каталога.
 			visited[currentStr] = true
-			log.Tracef("walk: %s is directory", current)
+			log.Tracef("walk: %s has %d child", current, count)
+			if count == 0 {
+				return nil
+			}
 
 			children, listErr := storage.List(current)
 			if listErr != nil {
@@ -84,12 +90,7 @@ func copyFiles(srcURI fyne.URI, dstDir string, copyFileFn CopyFileFunc) error {
 			}
 			return nil
 		}
-		if err != nil {
-			return err
-		}
 
-		// Файлы не добавляются в visited (они не образуют циклов при рекурсивном обходе).
-		// Убедимся, что родительский каталог существует.
 		dir := filepath.Dir(dstPath)
 		if err := os.MkdirAll(dir, 0700); err != nil {
 			return err
@@ -105,17 +106,15 @@ func copyFiles(srcURI fyne.URI, dstDir string, copyFileFn CopyFileFunc) error {
 	}
 
 	// Проверяем srcURI сначала, чтобы определить, файл это или каталог, до запуска рекурсии.
-	dstFilePath := dstDir
-	ok, err := canList(srcURI)
-	if ok {
+	isDir, _, err := hasChild(srcURI)
+	if err != nil {
+		return fmt.Errorf("failed to check directory %s: %v", srcURI, err)
+	}
+	if isDir {
 		if err := os.MkdirAll(dstDir, 0700); err != nil {
 			return err
 		}
-		dstFilePath = filepath.Join(dstDir, uriBase(srcURI))
 		return walk(srcURI, "")
-	}
-	if err != nil {
-		return err
 	}
 
 	r, err := storage.Reader(srcURI)
@@ -123,84 +122,60 @@ func copyFiles(srcURI fyne.URI, dstDir string, copyFileFn CopyFileFunc) error {
 		return err
 	}
 
-	log.Tracef("copyFileFn %s->%s", r.URI(), dstFilePath)
-	return copyFileFn(r, dstFilePath)
+	log.Tracef("copyFileFn %s->%s", r.URI(), dstDir)
+	return copyFileFn(r, dstDir)
 }
 
-func canList(u fyne.URI) (bool, error) {
-	sure := func() bool {
-		if can, err := storage.CanList(u); err == nil && can {
-			log.Trace("CanList")
-			if items, err := storage.List(u); err == nil {
-				log.Tracef("List %v", items)
-				return true
-			} else {
-				log.Errorf("List error: %v", err)
-			}
-		}
+func canList(u fyne.URI) bool {
+	ok, err := storage.CanList(u)
+	if err != nil {
+		log.Errorf("CanList error: %v", err)
 		return false
 	}
-	// Проверка MIME-типа для Android
-	if m := MimeType(u); m == "vnd.android.document/directory" {
-		log.Tracef("MimeType %s", m)
-		if sure() {
-			return true, nil
-		}
+	if !ok {
+		return false
 	}
 
-	if can, err := storage.CanRead(u); err == nil && !can {
-		log.Trace("!CanRead")
-		if sure() {
-			return true, nil
-		}
-	}
-
-	r, err := storage.Reader(u)
+	log.Trace("CanList")
+	items, err := storage.List(u)
 	if err != nil {
-		log.Errorf("Reader error: %v", err)
-		if sure() {
-			return true, nil
-		}
-	}
-	defer r.Close()
-
-	p := make([]byte, 1)
-	_, err = r.Read(p)
-	if err == nil {
-		return false, nil
-	}
-	// ok, err := canRead(u)
-	// if err != nil && ok {
-	// 	return false, nil
-	// }
-
-	if eIsDir(err) {
-		log.Trace("eIsDir")
-		if sure() {
-			return true, nil
-		}
+		log.Errorf("List error: %v", err)
+		return false
 	}
 
-	return false, err
+	log.Tracef("List %d", len(items))
+	return true
 }
 
-func canRead(u fyne.URI) (ok bool, err error) {
-	ok, err = storage.CanRead(u)
-	if err != nil || !ok {
-		return
+func canRead(u fyne.URI) bool {
+	if m := MimeType(u); m == "vnd.android.document/directory" {
+		log.Tracef("MimeType %s", m)
+		return false
+	}
+	ok, err := storage.CanRead(u)
+	if err != nil {
+		log.Errorf("CanRead error: %v", err)
+		return false
+	}
+	if !ok {
+		return false
 	}
 	log.Trace("CanRead")
 
 	r, err := storage.Reader(u)
 	if err != nil {
 		log.Errorf("Reader error: %v", err)
-		return false, err
+		return false
 	}
 	defer r.Close()
 
 	p := make([]byte, 1)
 	_, err = r.Read(p)
-	return err == nil, err
+	if err != nil {
+		log.Errorf("Read error: %v", err)
+		return false
+	}
+	return true
 }
 
 func eIsDir(err error) bool {
