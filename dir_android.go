@@ -423,130 +423,6 @@ cleanup:
     return mimeTypeStr;
 }
 
-// checkForSelfReference проверяет циклические ссылки и возвращает количество self-reference
-static jint checkForSelfReference(JNIEnv* env, jobject contentResolver, jobject parentUri, jobject childUri) {
-    jobject cursor = NULL;
-    jclass cursorClass = NULL;
-    jclass uriClass = NULL;
-    jint selfReferenceCount = 0;
-
-    if (contentResolver == NULL || childUri == NULL || parentUri == NULL) {
-        return 0;
-    }
-
-    LogD("checkForSelfReference: Checking children for self-reference");
-
-    uriClass = (*env)->FindClass(env, "android/net/Uri");
-    if (uriClass == NULL) {
-        return 0;
-    }
-
-    jclass resolverClass = (*env)->GetObjectClass(env, contentResolver);
-    if (resolverClass == NULL) {
-        (*env)->DeleteLocalRef(env, uriClass);
-        return 0;
-    }
-
-    jmethodID queryMethod = (*env)->GetMethodID(env, resolverClass, "query",
-        "(Landroid/net/Uri;[Ljava/lang/String;Ljava/lang/String;[Ljava/lang/String;Ljava/lang/String;)Landroid/database/Cursor;");
-    if (queryMethod == NULL) {
-        (*env)->DeleteLocalRef(env, uriClass);
-        (*env)->DeleteLocalRef(env, resolverClass);
-        return 0;
-    }
-
-    cursor = (*env)->CallObjectMethod(env, contentResolver, queryMethod, childUri, NULL, NULL, NULL, NULL);
-    if (caseException(env, "query for self-reference check") || cursor == NULL) {
-        (*env)->DeleteLocalRef(env, uriClass);
-        (*env)->DeleteLocalRef(env, resolverClass);
-        return 0;
-    }
-
-    cursorClass = (*env)->GetObjectClass(env, cursor);
-    if (cursorClass == NULL) {
-        (*env)->DeleteLocalRef(env, cursor);
-        (*env)->DeleteLocalRef(env, uriClass);
-        (*env)->DeleteLocalRef(env, resolverClass);
-        return 0;
-    }
-
-    jmethodID moveToFirst = (*env)->GetMethodID(env, cursorClass, "moveToFirst", "()Z");
-    jmethodID moveToNext = (*env)->GetMethodID(env, cursorClass, "moveToNext", "()Z");
-    jmethodID getString = (*env)->GetMethodID(env, cursorClass, "getString", "(I)Ljava/lang/String;");
-
-    if (moveToFirst == NULL || moveToNext == NULL || getString == NULL) {
-        (*env)->DeleteLocalRef(env, cursor);
-        (*env)->DeleteLocalRef(env, cursorClass);
-        (*env)->DeleteLocalRef(env, uriClass);
-        (*env)->DeleteLocalRef(env, resolverClass);
-        return 0;
-    }
-
-    jmethodID uriToString = (*env)->GetMethodID(env, uriClass, "toString", "()Ljava/lang/String;");
-    if (uriToString == NULL) {
-        (*env)->DeleteLocalRef(env, cursor);
-        (*env)->DeleteLocalRef(env, cursorClass);
-        (*env)->DeleteLocalRef(env, uriClass);
-        (*env)->DeleteLocalRef(env, resolverClass);
-        return 0;
-    }
-
-    jstring parentUriStr = (*env)->CallObjectMethod(env, parentUri, uriToString);
-    if (caseException(env, "parent URI to string") || parentUriStr == NULL) {
-        (*env)->DeleteLocalRef(env, cursor);
-        (*env)->DeleteLocalRef(env, cursorClass);
-        (*env)->DeleteLocalRef(env, uriClass);
-        (*env)->DeleteLocalRef(env, resolverClass);
-        return 0;
-    }
-
-    // Проходим по всем дочерним элементам и считаем self-reference
-    if ((*env)->CallBooleanMethod(env, cursor, moveToFirst)) {
-        do {
-            jstring childDocumentUriStr = (jstring)(*env)->CallObjectMethod(env, cursor, getString, 0);
-            if (caseException(env, "get child document URI") || childDocumentUriStr == NULL) {
-                continue;
-            }
-
-            const char* parentStr = (*env)->GetStringUTFChars(env, parentUriStr, NULL);
-            const char* childStr = (*env)->GetStringUTFChars(env, childDocumentUriStr, NULL);
-
-            if (parentStr != NULL && childStr != NULL && strcmp(parentStr, childStr) == 0) {
-                selfReferenceCount++;
-                LogD("checkForSelfReference: Found self-reference [%d]: %s", selfReferenceCount, parentStr);
-            }
-
-            if (parentStr != NULL) {
-                (*env)->ReleaseStringUTFChars(env, parentUriStr, parentStr);
-            }
-            if (childStr != NULL) {
-                (*env)->ReleaseStringUTFChars(env, childDocumentUriStr, childStr);
-            }
-
-            (*env)->DeleteLocalRef(env, childDocumentUriStr);
-
-        } while ((*env)->CallBooleanMethod(env, cursor, moveToNext));
-    }
-
-    LogD("checkForSelfReference: Found %d self-references", selfReferenceCount);
-
-    // Очистка ресурсов
-    (*env)->DeleteLocalRef(env, parentUriStr);
-    if (cursor) {
-        jmethodID closeMethod = (*env)->GetMethodID(env, cursorClass, "close", "()V");
-        if (closeMethod != NULL) {
-            (*env)->CallVoidMethod(env, cursor, closeMethod);
-            caseException(env, "close cursor in self-reference check");
-        }
-        (*env)->DeleteLocalRef(env, cursor);
-    }
-    (*env)->DeleteLocalRef(env, cursorClass);
-    (*env)->DeleteLocalRef(env, uriClass);
-    (*env)->DeleteLocalRef(env, resolverClass);
-
-    return selfReferenceCount;
-}
-
 // countChildren возвращает количество дочерних элементов (исправленная версия)
 static jint countChildren(JNIEnv* env, jobject activity, const char* uriStr) {
     jint count = -1;
@@ -699,24 +575,6 @@ static jint countChildren(JNIEnv* env, jobject activity, const char* uriStr) {
                             count = -9; // Код ошибки getCount
                         } else {
                             LogD("countChildren: Successfully got count: %d", count);
-
-                            // Проверяем на циклические ссылки и корректируем count
-                            if (count > 0) {
-                                jint selfReferenceCount = checkForSelfReference(env, contentResolver, uri, childUri);
-
-                                if (selfReferenceCount > 0) {
-                                    jint originalCount = count;
-                                    count = count - selfReferenceCount;
-                                    LogD("countChildren: Adjusted count from %d to %d (removed %d self-references)",
-                                         originalCount, count, selfReferenceCount);
-
-                                    // Защита от отрицательных значений
-                                    if (count < 0) {
-                                        LogD("countChildren: Warning: adjusted count is negative (%d), setting to 0", count);
-                                        count = 0;
-                                    }
-                                }
-                            }
                         }
                     } else {
                         LogD("countChildren: Failed to get getCount method");
@@ -943,7 +801,7 @@ func IsDirectory(uri fyne.URI) bool {
 	// log.Tracef("IsDirectory: MIME_TYPE: %s", mime)
 
 	// 4. Специальный случай: me.zhanghai.android.files
-	if size == 4096 && mime == "application/octet-stream" && strings.HasPrefix(uri.String(), "content://me.zhanghai.android.files.file_provider/") {
+	if size == 4096 && mime == "application/octet-stream" && strings.HasPrefix(uri.String(), zhanghai) {
 		return true
 	}
 
@@ -984,7 +842,7 @@ func hasChild(uri fyne.URI) (isDir bool, childCount int, err error) {
 	// Проверка специальных случаев
 	size, sizeErr := getSize(uri)
 	if sizeErr == nil && size == 4096 && mime == "application/octet-stream" &&
-		strings.HasPrefix(uri.String(), "content://me.zhanghai.android.files.file_provider/") {
+		strings.HasPrefix(uri.String(), zhanghai) {
 		// Специальный случай - директория
 		isDir = true
 		childCount, err = countChild(uri)

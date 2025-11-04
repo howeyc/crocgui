@@ -62,7 +62,7 @@ func copyFiles(srcURI fyne.URI, dstDir string, copyFileFn CopyFileFunc) error {
 			// Добавляем в visited, так как начали обработку каталога.
 			visited[currentStr] = true
 			log.Tracef("walk: %s has %d child", current, count)
-			if count == 0 {
+			if (isAndroid && deep > 1) || count == 0 {
 				return nil
 			}
 
@@ -202,4 +202,38 @@ func eIsDir(err error) bool {
 	}
 
 	return false
+}
+
+func storageChild(uri fyne.URI) (isDir bool, childCount int, err error) {
+	if uri == nil {
+		return false, 0, fmt.Errorf("uri is nil")
+	}
+
+	isDir, err = storage.CanList(uri)
+	if err != nil || !isDir {
+		return
+	}
+
+	children, err := storage.List(uri)
+	childCount = len(children)
+	return
+}
+
+func fileChild(path string) (isDir bool, childCount int, err error) {
+	stat, err := os.Stat(path)
+	if err != nil {
+		return false, 0, err
+	}
+
+	if !stat.IsDir() {
+		return false, 0, nil
+	}
+
+	child, err := os.ReadDir(path)
+	if err != nil {
+		return true, 0, err
+	}
+
+	childCount = len(child)
+	return true, childCount, nil
 }

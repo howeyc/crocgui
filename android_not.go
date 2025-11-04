@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/storage"
@@ -46,18 +47,7 @@ func LogD(string)         {}
 func excludeFromRecents() {}
 
 func hasChild(uri fyne.URI) (isDir bool, childCount int, err error) {
-	if uri == nil {
-		return false, 0, fmt.Errorf("uri is nil")
-	}
-
-	isDir, err = storage.CanList(uri)
-	if err != nil || !isDir {
-		return
-	}
-
-	children, err := storage.List(uri)
-	childCount = len(children)
-	return
+	return storageChild(uri)
 }
 
 // getSize возвращает размер файла в байтах для не-Android платформ
@@ -98,4 +88,11 @@ func getSize(uri fyne.URI) (size int64, err error) {
 	}
 
 	return written, nil
+}
+
+func start() {
+	cmd := exec.Command(os.Args[0])
+	cmd.Env = os.Environ()
+	cmd.Dir = wd
+	cmd.Start()
 }

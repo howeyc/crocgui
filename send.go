@@ -9,7 +9,6 @@ import (
 	"io"
 	"math"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"reflect"
 	"runtime"
@@ -313,17 +312,38 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 	}
 
 	os.MkdirAll(sendDir, 0700)
-	for _, name := range ls(sendDir) {
-		if name != "" {
-			fpath := filepath.Join(sendDir, name)
-			if target, err := Readlink(fpath); err == nil {
-				fpath = target
+
+	reset := func() {
+		for _, name := range ls(sendDir) {
+			if name != "" {
+				fpath := filepath.Join(sendDir, name)
+				if target, err := Readlink(fpath); err == nil {
+					fpath = target
+				} else {
+					isDir, count, _ := fileChild(fpath)
+					if isDir && count < 1 {
+						log.Tracef("remove empty dir %s error: %v", fpath, os.RemoveAll(fpath))
+						continue
+					}
+				}
+				addPath(fpath)
 			}
-			// log.Trace(name)
-			// addEntry(filepath.Join(sendDir, name))
-			addPath(fpath)
+		}
+		keysToRemove := []string{}
+		for path, _ := range fileentries {
+			if _, err := os.Stat(path); err != nil {
+				keysToRemove = append(keysToRemove, path)
+			}
+		}
+
+		for _, path := range keysToRemove {
+			if fe, exists := fileentries[path]; exists {
+				removeEntry(path, fe, false)
+			}
 		}
 	}
+
+	reset()
 
 	if isAndroid {
 		a.Lifecycle().SetOnExitedForeground(func() {
@@ -355,6 +375,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 					case text := <-textFromIntent:
 						if text == "" {
 							log.Trace("doneProcessIntent")
+							notFinish = true
 							return
 						}
 						if entry.Disabled() {
@@ -404,13 +425,12 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 						log.Tracef("apiLevel %d", apiLevel())
 
 						isDir, count, err := hasChild(u)
-						if err != nil {
+						if err == nil {
 							log.Errorf("failed to check directory %s error: %v", u, err)
-							continue
-						}
-						if isDir {
-							log.Tracef("URI(%s) is dir with %d child", u, count)
-							continue
+							if isDir {
+								log.Tracef("URI(%s) is dir with %d child", u, count)
+								continue
+							}
 						}
 						if !canRead(u) {
 							continue
@@ -518,10 +538,16 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 				return
 			}
 
+			ra := apiLevel() < 29 && strings.HasPrefix(src, zhanghai)
 			copyFromURCProgress(source, "", fe, func(err error) {
 				if err != nil {
 					log.Errorf("URI (%s), copied to internal cache %s error: %s", src, dst, err)
 					removeEntry(dst, fe, true)
+					if ra {
+						fyne.Do(func() {
+							restart(a, w)
+						})
+					}
 					return
 				}
 				log.Tracef("URI (%s), copied to internal cache %s", src, dst)
@@ -529,6 +555,11 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 				if _, sterr := os.Stat(dst); sterr != nil {
 					log.Errorf("Stat error: %s - %s", dst, sterr.Error())
 					removeEntry(dst, fe, true)
+				}
+				if ra {
+					fyne.Do(func() {
+						restart(a, w)
+					})
 				}
 			})
 		}, w)
@@ -589,6 +620,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 					})
 					return nil
 				}))
+				reset()
 			})
 		}
 		ShowFolderOpen(folderOpen, w)
@@ -962,16 +994,13 @@ func restart(a fyne.App, w fyne.Window) {
 	if noRestart {
 		return
 	}
-	if isMobile {
-		sendNotification(a, "CrocGUI", "Application closed. Tap to start it.")
-		w.Close()
-		os.Exit(0)
-		return
-	}
-	cmd := exec.Command(os.Args[0])
-	cmd.Env = os.Environ()
-	cmd.Dir = wd
-	cmd.Start()
+	// if isMobile {
+	// 	sendNotification(a, "CrocGUI", "Application closed. Tap to start it.")
+	// 	w.Close()
+	// 	os.Exit(0)
+	// 	return
+	// }
+	start()
 	w.Close()
 	os.Exit(0)
 }

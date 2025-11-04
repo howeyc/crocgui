@@ -167,6 +167,11 @@ static void processIntent(JNIEnv* env, jobject activity) {
         (*env)->DeleteLocalRef(env, action);
     } else {
         LogD("C: Intent action is NULL");
+        receiveTextFromIntent(strdup(""));
+        (*env)->DeleteLocalRef(env, activity_class);
+        (*env)->DeleteLocalRef(env, intent_class);
+        (*env)->DeleteLocalRef(env, intent);
+        return;
     }
 
     if (isMain) {
@@ -497,6 +502,62 @@ static void processIntent(JNIEnv* env, jobject activity) {
     (*env)->DeleteLocalRef(env, intent_class);
     (*env)->DeleteLocalRef(env, intent);
 }
+
+// Упрощенная версия - всегда использует класс текущей активности
+static void startActivitySimple(JNIEnv* env, jobject activity) {
+    jclass activityClass = (*env)->GetObjectClass(env, activity);
+    if (activityClass == NULL) {
+        LogD("C: ERROR - Failed to get activity class");
+        return;
+    }
+
+    jclass intentClass = (*env)->FindClass(env, "android/content/Intent");
+    if (intentClass == NULL) {
+        LogD("C: ERROR - Failed to find Intent class");
+        (*env)->DeleteLocalRef(env, activityClass);
+        return;
+    }
+
+    // Создаем Intent для текущего класса активности
+    jmethodID newIntent = (*env)->GetMethodID(env, intentClass, "<init>", "(Landroid/content/Context;Ljava/lang/Class;)V");
+    if (newIntent == NULL) {
+        LogD("C: ERROR - Failed to get Intent constructor");
+        (*env)->DeleteLocalRef(env, intentClass);
+        (*env)->DeleteLocalRef(env, activityClass);
+        return;
+    }
+
+    jobject intent = (*env)->NewObject(env, intentClass, newIntent, activity, activityClass);
+    if (intent == NULL) {
+        LogD("C: ERROR - Failed to create Intent");
+        (*env)->DeleteLocalRef(env, intentClass);
+        (*env)->DeleteLocalRef(env, activityClass);
+        return;
+    }
+
+    LogD("C: Intent created successfully");
+
+    // Устанавливаем флаги для перезапуска
+    jmethodID setFlags = (*env)->GetMethodID(env, intentClass, "setFlags", "(I)Landroid/content/Intent;");
+    if (setFlags != NULL) {
+        (*env)->CallObjectMethod(env, intent, setFlags, 0x20000000 | 0x10000000 | 0x04000000); // SINGLE_TOP | NEW_TASK | CLEAR_TOP
+        LogD("C: Flags set: SINGLE_TOP | NEW_TASK | CLEAR_TOP");
+    }
+
+    // Запускаем активность
+    jmethodID startActivity = (*env)->GetMethodID(env, activityClass, "startActivity", "(Landroid/content/Intent;)V");
+    if (startActivity != NULL) {
+        LogD("C: Starting activity");
+        (*env)->CallVoidMethod(env, activity, startActivity, intent);
+        LogD("C: Activity started successfully");
+    } else {
+        LogD("C: ERROR - Failed to get startActivity method");
+    }
+
+    (*env)->DeleteLocalRef(env, intent);
+    (*env)->DeleteLocalRef(env, intentClass);
+    (*env)->DeleteLocalRef(env, activityClass);
+}
 */
 import "C"
 import (
@@ -545,6 +606,30 @@ func processIntent() {
 	})
 }
 
+func setResult(ok bool) {
+	driver.RunNative(func(ctx interface{}) error {
+		ac := ctx.(*driver.AndroidContext)
+
+		var resultCode C.jint
+		if ok {
+			resultCode = -1 // RESULT_OK
+		} else {
+			resultCode = 0 // RESULT_CANCELED
+		}
+
+		log.Tracef("Calling C.setResult with code: %d", resultCode)
+
+		C.setResult(
+			(*C.JNIEnv)(unsafe.Pointer(ac.Env)),
+			(C.jobject)(unsafe.Pointer(ac.Ctx)),
+			resultCode,
+		)
+
+		log.Trace("C.setResult completed")
+		return nil
+	})
+}
+
 func finish() {
 	driver.RunNative(func(ctx interface{}) error {
 		ac := ctx.(*driver.AndroidContext)
@@ -574,4 +659,25 @@ func excludeFromRecents() {
 		log.Trace("C.excludeFromRecents completed")
 		return nil
 	})
+}
+func startActivity() {
+	driver.RunNative(func(ctx interface{}) error {
+		ac := ctx.(*driver.AndroidContext)
+
+		log.Trace("Calling C.startActivity")
+
+		// Используем упрощенную версию
+		C.startActivitySimple(
+			(*C.JNIEnv)(unsafe.Pointer(ac.Env)),
+			(C.jobject)(unsafe.Pointer(ac.Ctx)),
+		)
+
+		log.Trace("C.startActivity completed")
+		return nil
+	})
+}
+
+func start() {
+	excludeFromRecents()
+	startActivity()
 }

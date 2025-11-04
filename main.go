@@ -51,6 +51,7 @@ const (
 	ZeroWidthNonJoiner = "\u200C" // Не-соединитель нулевой ширины
 	ZeroWidthJoiner    = "\u200D" // Соединитель нулевой ширины
 	DOTZIP             = ".zip"
+	zhanghai           = "content://me.zhanghai.android.files.file_provider/"
 
 	// Чтоб на десктопе отладить копирование вместо переноса как будто это мобильная ОС.
 	asMobile = false
