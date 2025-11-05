@@ -114,7 +114,7 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) *containe
 		update() // Уже обернуто в fyne.Do
 	}
 
-	recvDir := filepath.Join(os.TempDir(), "crocgui-recv")
+	recvDir = filepath.Join(os.TempDir(), "crocgui-recv")
 
 	boxholder := container.NewVBox()
 	scroller := container.NewVScroll(boxholder)
@@ -350,7 +350,7 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) *containe
 			}
 		}
 	}
-	// onSelectedRecv = reload
+	OnSelectedReload[1] = reload
 
 	for _, name := range ls(recvDir) {
 		path := filepath.Join(recvDir, name)
@@ -718,16 +718,36 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) *containe
 	})
 	cancelButton.Hide()
 
+	moveAllLocal := widget.NewButtonWithIcon("*", theme.NavigateBackIcon(), func() {
+		ok := true
+		for src, fe := range fileentries {
+			dst := filepath.Join(sendDir, filepath.Base(src))
+			err := Rename(src, dst)
+			if err == nil {
+				log.Tracef("Entry %s moved to %s", src, dst)
+				removeEntry(src, fe, true)
+			} else {
+				log.Warnf("Entry %s not moved to %s error: %v", src, dst, err)
+				ok = false
+			}
+		}
+		if ok {
+			fyne.Do(func() {
+				parent.SelectIndex(parent.SelectedIndex() - 1)
+			})
+		}
+	})
+
+	saveAllButton := widget.NewButtonWithIcon("*", theme.FolderOpenIcon(), func() { //lp("Save All")
+		saveAllFiles()
+	})
+
 	deleteAllButton := widget.NewButtonWithIcon("*", theme.DeleteIcon(), func() { //lp("Delete All")
 		if len(fileentries) > 0 {
 			removeEntrys()
 		} else {
 			entry.SetText("")
 		}
-	})
-
-	saveAllButton := widget.NewButtonWithIcon("*", theme.FolderOpenIcon(), func() { //lp("Save All")
-		saveAllFiles()
 	})
 
 	top := container.NewVBox(
@@ -738,6 +758,7 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) *containe
 			totpLabel,
 			totpProg,
 			layout.NewSpacer(),
+			moveAllLocal,
 			saveAllButton,
 			deleteAllButton,
 		),

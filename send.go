@@ -138,7 +138,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 		update()
 	}
 
-	sendDir := filepath.Join(os.TempDir(), "crocgui-send")
+	sendDir = filepath.Join(os.TempDir(), "crocgui-send")
 
 	boxholder := container.NewVBox()
 	scroller := container.NewVScroll(boxholder)
@@ -345,6 +345,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 			}
 		}
 	}
+	OnSelectedReload[0] = reload
 
 	reload()
 
@@ -633,11 +634,31 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 		}
 	}
 
-	deleteAllButton := widget.NewButtonWithIcon(lp("Delete All"), theme.DeleteIcon(), func() {
+	deleteAllButton := widget.NewButtonWithIcon("*", theme.DeleteIcon(), func() {
 		if len(fileentries) > 0 {
 			removeEntrys()
 		} else {
 			entry.SetText("")
+		}
+	})
+
+	moveAllLocal := widget.NewButtonWithIcon("*", theme.NavigateNextIcon(), func() {
+		ok := true
+		for src, fe := range fileentries {
+			dst := filepath.Join(recvDir, filepath.Base(src))
+			err := Rename(src, dst)
+			if err == nil {
+				log.Tracef("Entry %s moved to %s", src, dst)
+				removeEntry(src, fe, true)
+			} else {
+				log.Warnf("Entry %s not moved to %s error: %v", src, dst, err)
+				ok = false
+			}
+		}
+		if ok {
+			fyne.Do(func() {
+				parent.SelectIndex(parent.SelectedIndex() + 1)
+			})
 		}
 	})
 
@@ -927,6 +948,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 			totpProg,
 			layout.NewSpacer(),
 			deleteAllButton,
+			moveAllLocal,
 		),
 		mainButton,
 		prog,
@@ -943,6 +965,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 			})
 		}
 	}
+
 	return
 }
 

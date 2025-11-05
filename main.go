@@ -40,6 +40,9 @@ var (
 	atSI                   int
 	notFinish              bool
 	wd                     string
+	sendDir                string
+	recvDir                string
+	OnSelectedReload       = map[int]func(){}
 )
 
 const (
@@ -170,6 +173,9 @@ func refreshWindow(a fyne.App, w fyne.Window) {
 	at.SelectIndex(atSI)
 	at.OnSelected = func(tab *container.TabItem) {
 		atSI = at.SelectedIndex()
+		if f, ok := OnSelectedReload[atSI]; ok && f != nil {
+			f()
+		}
 		logOutput.active(tab.Text == ZeroWidthSpace)
 	}
 
