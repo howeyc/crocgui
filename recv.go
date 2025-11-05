@@ -25,7 +25,7 @@ import (
 
 func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) *container.TabItem {
 	var ti *container.TabItem
-	refresh := func() {}
+	showPage := func() {}
 	defer func() {
 		if r := recover(); r != nil {
 			log.Error(fmt.Sprint(r))
@@ -294,7 +294,7 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) *containe
 	fpath := a.Preferences().String("DeleteFile")
 	os.MkdirAll(recvDir, 0700)
 
-	reload = func() {
+	reload := func() {
 		keysToRemove := []string{}
 		for path, _ := range fileentries {
 			if _, err := os.Stat(path); err != nil {
@@ -350,6 +350,7 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) *containe
 			}
 		}
 	}
+	// onSelectedRecv = reload
 
 	for _, name := range ls(recvDir) {
 		path := filepath.Join(recvDir, name)
@@ -558,7 +559,6 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) *containe
 		if totpCheck.Checked {
 			totpProg.Hide()
 		}
-		refresh()
 
 		doneChan := make(chan struct{})
 		fpath := ""
@@ -567,8 +567,8 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) *containe
 		go func() {
 			ticker := time.NewTicker(time.Millisecond * 100)
 			defer func() {
+				// Взял
 				ticker.Stop()
-				//reset
 				fyne.Do(func() {
 					mainButton.Enable()
 					prog.Hide()
@@ -581,8 +581,8 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) *containe
 						totpProg.Show()
 					}
 
+					showPage()
 					reload()
-					refresh()
 				})
 			}()
 
@@ -610,7 +610,7 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) *containe
 					a.Preferences().SetString("DeleteFile", filepath.Join(recvDir, filename))
 					Stop(receiver)
 					fyne.Do(func() {
-						restart(a, w)
+						restart(w)
 					})
 					return
 				case <-ticker.C:
@@ -642,7 +642,7 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) *containe
 								})
 								totalMax += fi.Size
 							}
-							fyne.Do(refresh)
+							// showPage()
 							progW.SetMax(totalMax)
 						}
 						cnum := receiver.FilesToTransferCurrentNum
@@ -748,12 +748,12 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) *containe
 	ti = container.NewTabItemWithIcon(lp("Receive"), theme.DownloadIcon(),
 		container.NewBorder(top, nil, nil, nil, scroller))
 
-	refresh = func() {
-		// ti.Content.Refresh()
+	showPage = func() {
 		if parent.Selected() != ti {
-			parent.Select(ti)
+			fyne.Do(func() {
+				parent.Select(ti)
+			})
 		}
-		boxholder.Refresh()
 	}
 	return ti
 

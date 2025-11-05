@@ -561,6 +561,7 @@ static void startActivitySimple(JNIEnv* env, jobject activity) {
 */
 import "C"
 import (
+	"time"
 	"unsafe"
 
 	"fyne.io/fyne/v2/driver"
@@ -680,4 +681,5 @@ func startActivity() {
 func start() {
 	excludeFromRecents()
 	startActivity()
+	time.Sleep(time.Millisecond * 50)
 }

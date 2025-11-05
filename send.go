@@ -40,7 +40,7 @@ const (
 )
 
 func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *container.TabItem) {
-	refresh := func() {}
+	showPage := func() {}
 	defer func() {
 		if r := recover(); r != nil {
 			log.Error(fmt.Sprint(r))
@@ -144,6 +144,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 	scroller := container.NewVScroll(boxholder)
 	fileentries := make(map[string]*fyne.Container)
 
+	// fyne.Do
 	removeEntry := func(fpath string, fe *fyne.Container, del bool) {
 		fyne.Do(func() {
 			boxholder.Remove(fe)
@@ -165,6 +166,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 	}
 
 	// nil if exists
+	// fyne.Do
 	addEntry := func(dst string, f func(d *widget.Button, p *widget.ProgressBar, l *widget.Label)) (newentry *fyne.Container) {
 		if _, has := fileentries[dst]; has {
 			log.Tracef("exists %s", dst)
@@ -207,6 +209,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 	}
 
 	// Пишу ссылку а если не удачно то кэширую
+	//  fyne.Do
 	addPath := func(src string) error {
 		fi, err := os.Stat(src)
 		if err != nil {
@@ -313,7 +316,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 
 	os.MkdirAll(sendDir, 0700)
 
-	reset := func() {
+	reload := func() {
 		for _, name := range ls(sendDir) {
 			if name != "" {
 				fpath := filepath.Join(sendDir, name)
@@ -343,7 +346,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 		}
 	}
 
-	reset()
+	reload()
 
 	if isAndroid {
 		a.Lifecycle().SetOnExitedForeground(func() {
@@ -374,13 +377,12 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 						return
 					case text := <-textFromIntent:
 						if text == "" {
-							log.Trace("doneProcessIntent")
+							log.Trace("doneProcessIntent notFinish")
 							notFinish = true
 							return
 						}
 						if entry.Disabled() {
-							log.Trace("Sending")
-							log.Trace("doneProcessIntent")
+							log.Trace("doneProcessIntent Sending")
 							return
 						}
 						log.Tracef(`Received text: "%s"`, text)
@@ -404,7 +406,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 						}
 
 						source.Close()
-						fyne.Do(refresh)
+						showPage() //textFromIntent
 
 					case uriString := <-uriFromIntent:
 						if uriString == "" {
@@ -447,12 +449,11 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 							continue
 						}
 
-						fyne.Do(refresh)
+						showPage() //uriFromIntent
 						copyFromURCProgress(source, "", fe, func(err error) {
 							if err != nil {
 								log.Errorf("URI (%s), copied to internal cache %s error: %s", u, dst, err)
 								removeEntry(dst, fe, true)
-								fyne.Do(refresh)
 								return
 							}
 							log.Tracef("URI (%s), copied to internal cache %s", u, dst)
@@ -460,7 +461,6 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 							if fi, err := os.Stat(dst); fi == nil {
 								log.Errorf("Stat(%s) error: %v", dst, err)
 								removeEntry(dst, fe, true)
-								fyne.Do(refresh)
 							}
 						})
 					}
@@ -495,7 +495,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 					log.Error(err.Error())
 				}
 			}
-			refresh()
+			showPage() //SetOnDropped
 		})
 	}
 
@@ -537,17 +537,19 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 			if err == nil {
 				return
 			}
-
-			ra := apiLevel() < 29 && strings.HasPrefix(src, zhanghai)
+			raf := func() {}
+			if apiLevel() < 29 && strings.HasPrefix(src, zhanghai) {
+				raf = func() {
+					fyne.Do(func() {
+						restart(w)
+					})
+				}
+			}
 			copyFromURCProgress(source, "", fe, func(err error) {
 				if err != nil {
 					log.Errorf("URI (%s), copied to internal cache %s error: %s", src, dst, err)
 					removeEntry(dst, fe, true)
-					if ra {
-						fyne.Do(func() {
-							restart(a, w)
-						})
-					}
+					raf()
 					return
 				}
 				log.Tracef("URI (%s), copied to internal cache %s", src, dst)
@@ -556,11 +558,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 					log.Errorf("Stat error: %s - %s", dst, sterr.Error())
 					removeEntry(dst, fe, true)
 				}
-				if ra {
-					fyne.Do(func() {
-						restart(a, w)
-					})
-				}
+				raf()
 			})
 		}, w)
 	})
@@ -620,7 +618,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 					})
 					return nil
 				}))
-				reset()
+				reload()
 			})
 		}
 		ShowFolderOpen(folderOpen, w)
@@ -738,7 +736,6 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 		if totpCheck.Checked {
 			totpProg.Hide()
 		}
-		refresh()
 
 		doneChan := make(chan struct{})
 
@@ -747,6 +744,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 			defer func() {
 				ticker.Stop()
 				fyne.Do(func() {
+					// Восстанавливаю
 					mainButton.Enable()
 					prog.Hide()
 					prog.SetValue(0)
@@ -762,7 +760,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 						randomCode = utils.GetRandomName()
 						entry.SetText(randomCode)
 					}
-					fyne.Do(refresh)
+					reload()
 				})
 			}()
 
@@ -781,7 +779,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 					os.RemoveAll(sendDir)
 					log.Tracef("A restart is better than leaving 12 goroutines leaking")
 					fyne.Do(func() {
-						restart(a, w)
+						restart(w)
 					})
 					return
 				case <-cancelChan:
@@ -792,7 +790,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 					})
 					Stop(sender)
 					fyne.Do(func() {
-						restart(a, w)
+						restart(w)
 					})
 					return
 				case <-ticker.C:
@@ -800,6 +798,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 						return
 					}
 					if once && hashed(sender) {
+						// Готов давать
 						once = false
 						for _, fi := range sender.FilesToTransfer {
 							path := filepath.Join(sendDir, fi.Name)
@@ -840,12 +839,10 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 							topline.SetText(lp("Download"))
 							prog.Show()
 							for _, fe := range fileentries {
-
 								pb := fe.Objects[feBar].(*widget.ProgressBar)
 								pb.SetValue(0)
 								pb.Show()
 							}
-							refresh()
 						})
 						progW.SetMax(totalMax)
 						log.Tracef("totalMax %d", totalMax)
@@ -881,17 +878,6 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 		}()
 
 		go func() {
-			// var filepaths []string
-			// for fpath := range fileentries {
-			// 	if target, err := Readlink(fpath); err == nil {
-			// 		fpath = target
-			// 	}
-			// 	filepaths = append(filepaths, fpath)
-			// }
-			// fi, emptyfolders, numFolders, serr := croc.GetFilesInfo(filepaths, zipfolder, false, []string{})
-			// if serr != nil {
-			// 	log.Errorf("file info failed: %s", serr)
-			// } else {
 			if EMULATE == 0 {
 				serr = sender.Send(filesInfo, emptyfolders, totalNumberFolders)
 			} else {
@@ -901,7 +887,6 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 					sender = nil
 				}()
 			}
-			// }
 
 			fyne.Do(func() {
 				if serr != nil {
@@ -950,11 +935,13 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 
 	ti = container.NewTabItemWithIcon(lp("Send"), theme.MailSendIcon(),
 		container.NewBorder(top, nil, nil, nil, scroller))
-	refresh = func() {
+	// fyne.Do
+	showPage = func() {
 		if parent.Selected() != ti {
-			parent.Select(ti)
+			fyne.Do(func() {
+				parent.Select(ti)
+			})
 		}
-		boxholder.Refresh()
 	}
 	return
 }
@@ -990,7 +977,7 @@ func CopyFile(src, dst string) error {
 
 // For mobile os.Exit.
 // For desktop Restart.
-func restart(a fyne.App, w fyne.Window) {
+func restart(w fyne.Window) {
 	if noRestart {
 		return
 	}

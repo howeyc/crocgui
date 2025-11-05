@@ -39,7 +39,6 @@ var (
 	logOutput              logWriter
 	atSI                   int
 	notFinish              bool
-	reload                 = func() {}
 	wd                     string
 )
 
@@ -148,7 +147,7 @@ func main() {
 
 	refreshWindow(a, w)
 	// w.Resize(fyne.NewSize(800, 600))
-	w.Resize(fyne.NewSize(200, 800))
+	w.Resize(fyne.NewSize(150, 600))
 
 	w.ShowAndRun()
 }
@@ -172,9 +171,6 @@ func refreshWindow(a fyne.App, w fyne.Window) {
 	at.OnSelected = func(tab *container.TabItem) {
 		atSI = at.SelectedIndex()
 		logOutput.active(tab.Text == ZeroWidthSpace)
-		if atSI == 1 {
-			reload()
-		}
 	}
 
 	if a.Preferences().Bool("hide-logo") {
@@ -205,30 +201,6 @@ func ls(path string) (files []string) {
 
 	return
 }
-
-// func lss(path string) (files []string) {
-// 	if path == "" {
-// 		return
-// 	}
-
-// 	// pathURI, err := storage.ParseURI("file://" + path)
-// 	pathURI := storage.NewFileURI(path)
-
-// 	canList, err := storage.CanList(pathURI)
-// 	if err != nil || !canList {
-// 		return
-// 	}
-
-// 	childURIs, err := storage.List(pathURI)
-// 	if err != nil {
-// 		return
-// 	}
-
-// 	for _, uri := range childURIs {
-
-// 		// files = append(files, uri.Name())
-// 		files = append(files, uriBase(uri))
-// 	}
 
 // 	return files
 // }
