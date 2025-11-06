@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
@@ -40,9 +41,9 @@ var (
 	atSI                   int
 	notFinish              bool
 	wd                     string
-	sendDir                string
-	recvDir                string
-	OnSelectedReload       = map[int]func(){}
+	OnSelectedReload       = make(map[int]func(), 2)
+	swap                   bool
+	temp                   string
 )
 
 const (
@@ -65,6 +66,7 @@ const (
 
 func main() {
 	wd, _ = os.Getwd()
+	temp = os.TempDir()
 	ErrApplicationShutdown = errors.New("application shutdown")
 	done = make(chan struct{})
 	replacer = strings.NewReplacer(
@@ -150,7 +152,7 @@ func main() {
 
 	refreshWindow(a, w)
 	// w.Resize(fyne.NewSize(800, 600))
-	w.Resize(fyne.NewSize(150, 600))
+	w.Resize(fyne.NewSize(180, 720))
 
 	w.ShowAndRun()
 }
@@ -208,5 +210,11 @@ func ls(path string) (files []string) {
 	return
 }
 
-// 	return files
-// }
+func swapDir(index int) string {
+	isReceiver := index == 1 || swap
+
+	if isReceiver {
+		return filepath.Join(temp, "crocgui-recv")
+	}
+	return filepath.Join(temp, "crocgui-send")
+}

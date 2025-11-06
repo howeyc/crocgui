@@ -24,6 +24,7 @@ import (
 )
 
 func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) *container.TabItem {
+	index := 1
 	var ti *container.TabItem
 	showPage := func() {}
 	defer func() {
@@ -114,7 +115,7 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) *containe
 		update() // Уже обернуто в fyne.Do
 	}
 
-	recvDir = filepath.Join(os.TempDir(), "crocgui-recv")
+	// recvDir = filepath.Join(os.TempDir(), "crocgui-recv")
 
 	boxholder := container.NewVBox()
 	scroller := container.NewVScroll(boxholder)
@@ -292,7 +293,7 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) *containe
 	}
 
 	fpath := a.Preferences().String("DeleteFile")
-	os.MkdirAll(recvDir, 0700)
+	os.MkdirAll(swapDir(index), 0700)
 
 	reload := func() {
 		keysToRemove := []string{}
@@ -307,9 +308,9 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) *containe
 				removeEntry(path, fe, false)
 			}
 		}
-		for _, name := range ls(recvDir) {
+		for _, name := range ls(swapDir(index)) {
 			if name != "" {
-				path := filepath.Join(recvDir, name)
+				path := filepath.Join(swapDir(index), name)
 				if fpath == path {
 					continue
 				}
@@ -350,10 +351,10 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) *containe
 			}
 		}
 	}
-	OnSelectedReload[1] = reload
+	OnSelectedReload[index] = reload
 
-	for _, name := range ls(recvDir) {
-		path := filepath.Join(recvDir, name)
+	for _, name := range ls(swapDir(index)) {
+		path := filepath.Join(swapDir(index), name)
 		if name == "" {
 			continue
 		}
@@ -542,11 +543,11 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) *containe
 		log.SetLevel(debugString(a))
 		log.Trace("croc receiver created")
 
-		cderr := os.Chdir(recvDir)
+		cderr := os.Chdir(swapDir(index))
 		if cderr != nil {
-			log.Error("Unable to change to dir:", recvDir, cderr)
+			log.Error("Unable to change to dir:", swapDir(index), cderr)
 		}
-		log.Trace("cd ", recvDir)
+		log.Trace("cd ", swapDir(index))
 
 		var filename string
 		mainButton.Disable()
@@ -607,7 +608,7 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) *containe
 					fyne.Do(func() {
 						topline.SetText(s)
 					})
-					a.Preferences().SetString("DeleteFile", filepath.Join(recvDir, filename))
+					a.Preferences().SetString("DeleteFile", filepath.Join(swapDir(index), filename))
 					Stop(receiver)
 					fyne.Do(func() {
 						restart(w)
@@ -629,7 +630,7 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) *containe
 									receiver.FilesToTransfer[i].TempFile = strings.HasSuffix(strings.ToLower(fi.Name), DOTZIP) &&
 										a.Preferences().Bool("zip-unzip")
 								}
-								dst := filepath.Join(recvDir, fi.Name)
+								dst := filepath.Join(swapDir(index), fi.Name)
 								addEntry(dst, func(d *widget.Button, p *widget.ProgressBar, s *widget.Button, l *widget.Label) {
 									d.Hide()
 									p.SetValue(0)
@@ -653,7 +654,7 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) *containe
 							toplineW.SetText(fmt.Sprintf("%s: %s(%d/%d)", lp("Receiving file"), filename, cnum+1, len(receiver.FilesToTransfer)))
 							TotalSent += size
 							size = fi.Size
-							path := filepath.Join(recvDir, fi.Name)
+							path := filepath.Join(swapDir(index), fi.Name)
 							if oldPath != path {
 								if fe := fileentries[oldPath]; fe != nil {
 									fyne.Do(func() {
@@ -699,7 +700,7 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) *containe
 					s := fmt.Sprintf("Receive failed: %s", rerr)
 					log.Error(s)
 					topline.SetText(s)
-					fpath = filepath.Join(recvDir, filename)
+					fpath = filepath.Join(swapDir(index), filename)
 					removeEntrys()
 				} else {
 					topline.SetText(fmt.Sprintf("%s: %s", lp("Received"), filename))
@@ -717,26 +718,6 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) *containe
 		close(cancelChan)
 	})
 	cancelButton.Hide()
-
-	moveAllLocal := widget.NewButtonWithIcon("*", theme.NavigateBackIcon(), func() {
-		ok := true
-		for src, fe := range fileentries {
-			dst := filepath.Join(sendDir, filepath.Base(src))
-			err := Rename(src, dst)
-			if err == nil {
-				log.Tracef("Entry %s moved to %s", src, dst)
-				removeEntry(src, fe, true)
-			} else {
-				log.Warnf("Entry %s not moved to %s error: %v", src, dst, err)
-				ok = false
-			}
-		}
-		if ok {
-			fyne.Do(func() {
-				parent.SelectIndex(parent.SelectedIndex() - 1)
-			})
-		}
-	})
 
 	saveAllButton := widget.NewButtonWithIcon("*", theme.FolderOpenIcon(), func() { //lp("Save All")
 		saveAllFiles()
@@ -758,7 +739,6 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) *containe
 			totpLabel,
 			totpProg,
 			layout.NewSpacer(),
-			moveAllLocal,
 			saveAllButton,
 			deleteAllButton,
 		),

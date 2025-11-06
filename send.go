@@ -40,6 +40,7 @@ const (
 )
 
 func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *container.TabItem) {
+	index := 0
 	showPage := func() {}
 	defer func() {
 		if r := recover(); r != nil {
@@ -138,7 +139,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 		update()
 	}
 
-	sendDir = filepath.Join(os.TempDir(), "crocgui-send")
+	// sendDir = filepath.Join(os.TempDir(), "crocgui-send")
 
 	boxholder := container.NewVBox()
 	scroller := container.NewVScroll(boxholder)
@@ -217,7 +218,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 		}
 
 		base := filepath.Base(src)
-		dst := filepath.Join(sendDir, base)
+		dst := filepath.Join(swapDir(index), base)
 
 		fe := addEntry(dst, func(d *widget.Button, p *widget.ProgressBar, l *widget.Label) {
 			p.Hide()
@@ -249,7 +250,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 				feTmp := fe
 				if fi.IsDir() {
 					// Покажем временный прогрессбар
-					rel, _ := filepath.Rel(sendDir, dstPath)
+					rel, _ := filepath.Rel(swapDir(index), dstPath)
 					feTmp = addEntry(dstPath, func(d *widget.Button, p *widget.ProgressBar, l *widget.Label) {
 						p.Hide()
 						l.SetText(rel)
@@ -290,7 +291,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 		if dst == "" {
 			u := source.URI()
 			name := uriBase(u)
-			dst = filepath.Join(sendDir, name)
+			dst = filepath.Join(swapDir(index), name)
 		}
 		destination, err := os.Create(dst)
 		if err != nil {
@@ -314,12 +315,12 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 		}()
 	}
 
-	os.MkdirAll(sendDir, 0700)
+	os.MkdirAll(swapDir(index), 0700)
 
 	reload := func() {
-		for _, name := range ls(sendDir) {
+		for _, name := range ls(swapDir(index)) {
 			if name != "" {
-				fpath := filepath.Join(sendDir, name)
+				fpath := filepath.Join(swapDir(index), name)
 				if target, err := Readlink(fpath); err == nil {
 					fpath = target
 				} else {
@@ -345,7 +346,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 			}
 		}
 	}
-	OnSelectedReload[0] = reload
+	OnSelectedReload[index] = reload
 
 	reload()
 
@@ -387,7 +388,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 							return
 						}
 						log.Tracef(`Received text: "%s"`, text)
-						src := filepath.Join(sendDir, "text"+hashToFilename(text))
+						src := filepath.Join(swapDir(index), "text"+hashToFilename(text))
 						if fe := addEntry(src, nil); fe == nil {
 							continue
 						}
@@ -439,7 +440,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 							continue
 						}
 						name := uriBase(u)
-						dst := filepath.Join(sendDir, name)
+						dst := filepath.Join(swapDir(index), name)
 						fe := addEntry(dst, nil)
 						if fe == nil {
 							continue
@@ -526,7 +527,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 			}
 			u := source.URI()
 			name := uriBase(u)
-			dst := filepath.Join(sendDir, name)
+			dst := filepath.Join(swapDir(index), name)
 			fe := addEntry(dst, nil)
 			if fe == nil {
 				return
@@ -575,7 +576,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 				return
 			}
 			name := uriBase(u)
-			dst := filepath.Join(sendDir, name)
+			dst := filepath.Join(swapDir(index), name)
 			fe := addEntry(dst, func(d *widget.Button, p *widget.ProgressBar, l *widget.Label) {
 				p.Hide()
 				l.SetText(name + "/")
@@ -595,7 +596,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 				log.Tracef("copyFiles error: %v", copyFiles(u, dst, func(source fyne.URIReadCloser, dstPath string) error {
 					src := source.URI()
 					// Покажем временный прогрессбар
-					rel, _ := filepath.Rel(sendDir, dstPath)
+					rel, _ := filepath.Rel(swapDir(index), dstPath)
 					feTmp := addEntry(dstPath, func(d *widget.Button, p *widget.ProgressBar, l *widget.Label) {
 						p.Hide()
 						l.SetText(rel)
@@ -642,24 +643,21 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 		}
 	})
 
-	moveAllLocal := widget.NewButtonWithIcon("*", theme.NavigateNextIcon(), func() {
-		ok := true
-		for src, fe := range fileentries {
-			dst := filepath.Join(recvDir, filepath.Base(src))
-			err := Rename(src, dst)
-			if err == nil {
-				log.Tracef("Entry %s moved to %s", src, dst)
-				removeEntry(src, fe, true)
+	var reDir *widget.Button
+
+	reDir = widget.NewButtonWithIcon("", theme.MailSendIcon(), func() {
+		fyne.Do(func() {
+			swap = !swap
+			if swap {
+				reDir.SetIcon(theme.DownloadIcon())
 			} else {
-				log.Warnf("Entry %s not moved to %s error: %v", src, dst, err)
-				ok = false
+				reDir.SetIcon(theme.MailSendIcon())
 			}
-		}
-		if ok {
-			fyne.Do(func() {
-				parent.SelectIndex(parent.SelectedIndex() + 1)
-			})
-		}
+			for path, fe := range fileentries {
+				removeEntry(path, fe, false)
+			}
+			reload()
+		})
 	})
 
 	mainButton = widget.NewButtonWithIcon(lp("Send"), theme.MailSendIcon(), func() {
@@ -797,7 +795,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 				case <-done:
 					return
 				case <-doneChan:
-					os.RemoveAll(sendDir)
+					os.RemoveAll(swapDir(index))
 					log.Tracef("A restart is better than leaving 12 goroutines leaking")
 					fyne.Do(func() {
 						restart(w)
@@ -822,7 +820,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 						// Готов давать
 						once = false
 						for _, fi := range sender.FilesToTransfer {
-							path := filepath.Join(sendDir, fi.Name)
+							path := filepath.Join(swapDir(index), fi.Name)
 							if fi.TempFile {
 								path = filepath.Join(fi.FolderSource, fi.Name)
 							}
@@ -842,9 +840,9 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 									}
 								})
 								// Убираем dir/
-								path = filepath.Join(sendDir, fi.FolderRemote)
+								path = filepath.Join(swapDir(index), fi.FolderRemote)
 								if fi.TempFile {
-									path = filepath.Join(sendDir, strings.TrimSuffix(fi.Name, DOTZIP))
+									path = filepath.Join(swapDir(index), strings.TrimSuffix(fi.Name, DOTZIP))
 								}
 
 								if fr, ok := fileentries[path]; ok {
@@ -877,7 +875,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 							toplineW.SetText(fmt.Sprintf("%s: %s(%d/%d)", lp("Sending file"), filename, cnum+1, len(sender.FilesToTransfer)))
 							TotalSent += size
 							size = fi.Size
-							path := filepath.Join(sendDir, fi.Name)
+							path := filepath.Join(swapDir(index), fi.Name)
 							if oldPath != path {
 								if fe := fileentries[oldPath]; fe != nil {
 									removeEntry(oldPath, fe, true)
@@ -948,7 +946,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 			totpProg,
 			layout.NewSpacer(),
 			deleteAllButton,
-			moveAllLocal,
+			reDir,
 		),
 		mainButton,
 		prog,
