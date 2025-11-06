@@ -115,11 +115,25 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) *containe
 		update() // Уже обернуто в fyne.Do
 	}
 
-	// recvDir = filepath.Join(os.TempDir(), "crocgui-recv")
+	recvDir := filepath.Join(tempDir, RECV)
 
 	boxholder := container.NewVBox()
 	scroller := container.NewVScroll(boxholder)
 	fileentries := make(map[string]*fyne.Container)
+	recvReady = func() (ok bool) {
+		for _, fe := range fileentries {
+			if fe == nil {
+				return
+			}
+			if len(fe.Objects) <= feBar {
+				return
+			}
+			if fe.Objects[feBar].Visible() {
+				return
+			}
+		}
+		return true
+	}
 
 	removeEntry := func(fpath string, fe *fyne.Container, del bool) {
 		fyne.Do(func() {
@@ -234,7 +248,8 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) *containe
 	}
 
 	// Добавим строчку в boxholder и fileentries
-	addEntry := func(dst string, f func(d *widget.Button, p *widget.ProgressBar, s *widget.Button, l *widget.Label)) (newentry *fyne.Container) {
+	var addEntry func(dst string, f func(d *widget.Button, p *widget.ProgressBar, s *widget.Button, l *widget.Label)) (newentry *fyne.Container)
+	addEntry = func(dst string, f func(d *widget.Button, p *widget.ProgressBar, s *widget.Button, l *widget.Label)) (newentry *fyne.Container) {
 		if fe := fileentries[dst]; fe != nil {
 			log.Tracef("exists %s", dst)
 			deleteButton := fe.Objects[feDel]
@@ -262,6 +277,50 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) *containe
 		labelFile := widget.NewLabel(base)
 
 		saveButton := widget.NewButtonWithIcon("", theme.DocumentSaveIcon(), func() {
+			if isMobile || asMobile {
+				// На Андроиде свернём каталог в  файл
+				if fi, _ := os.Stat(dst); fi != nil && fi.IsDir() {
+					pathZip := dst + DOTZIP
+					if _, err := os.Stat(pathZip); err == nil {
+						log.Errorf("zip file %s exists", pathZip)
+						return
+					}
+
+					if fe := addEntry(pathZip, nil); fe != nil {
+						if false {
+							// if err := utils.ZipDirectory(pathZip, dst); err == nil {
+							// 	log.Tracef("zipped %s->%s error: %v", dst, pathZip, os.RemoveAll(dst))
+							// 	if feDir, ok := fileentries[dst]; ok {
+							// 		removeEntry(dst, feDir, true)
+							// 	}
+							// 	ShowFileLocation(pathZip, w)
+							// }
+						} else {
+							ZipDirectoryProgress(pathZip, dst, fe, func(err error) {
+								if err != nil {
+									log.Errorf("dir (%s), zipped to %s error: %s", dst, pathZip, err)
+									removeEntry(pathZip, fe, true)
+									return
+								}
+								log.Tracef("dir (%s), zipped to %s", dst, pathZip)
+
+								if _, err := os.Stat(pathZip); err != nil {
+									log.Errorf("Stat(%s) error: %v", pathZip, err)
+									return
+								}
+
+								if feDir, ok := fileentries[dst]; ok {
+									removeEntry(dst, feDir, true)
+								}
+								fyne.Do(func() {
+									ShowFileLocation(pathZip, w)
+								})
+							})
+						}
+					}
+					return
+				}
+			}
 			ShowFileLocation(dst, w)
 		})
 
@@ -293,9 +352,27 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) *containe
 	}
 
 	fpath := a.Preferences().String("DeleteFile")
-	os.MkdirAll(swapDir(index), 0700)
+	os.MkdirAll(recvDir, 0700)
 
 	reload := func() {
+		for _, name := range ls(recvDir) {
+			if name != "" {
+				path := filepath.Join(recvDir, name)
+				if fpath == path {
+					continue
+				}
+				isDir, count, _ := fileChild(path)
+				if isDir && count < 1 {
+					log.Tracef("remove empty dir %s error: %v", path, os.RemoveAll(path))
+					continue
+				}
+				addEntry(path, func(d *widget.Button, p *widget.ProgressBar, s *widget.Button, l *widget.Label) {
+					d.Show()
+					p.Hide()
+					s.Show()
+				})
+			}
+		}
 		keysToRemove := []string{}
 		for path, _ := range fileentries {
 			if _, err := os.Stat(path); err != nil {
@@ -308,53 +385,11 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) *containe
 				removeEntry(path, fe, false)
 			}
 		}
-		for _, name := range ls(swapDir(index)) {
-			if name != "" {
-				path := filepath.Join(swapDir(index), name)
-				if fpath == path {
-					continue
-				}
-				if isMobile || asMobile {
-					// Чтоб сохранять на Андроиде свернём каталог в  файл
-					if fi, _ := os.Stat(path); fi != nil && fi.IsDir() {
-						pathZip := path + DOTZIP
-						// if err := utils.ZipDirectory(pathZip, path); err == nil {
-						// 	log.Tracef("zipped %s->%s error: %v", path, pathZip, os.RemoveAll(path))
-						// 	path = pathZip
-						// }
-						if fe := addEntry(pathZip, nil); fe != nil {
-							ZipDirectoryProgress(pathZip, path, fe, func(err error) {
-								if err != nil {
-									log.Errorf("dir (%s), zipped to %s error: %s", path, pathZip, err)
-									removeEntry(pathZip, fe, true)
-									return
-								}
-								log.Tracef("dir (%s), zipped to %s", path, pathZip)
-
-								if _, err := os.Stat(pathZip); err != nil {
-									log.Errorf("Stat(%s) error: %v", pathZip, err)
-									return
-								}
-
-								if feDir, ok := fileentries[path]; ok {
-									removeEntry(path, feDir, true)
-								}
-							})
-						}
-					}
-				}
-				addEntry(path, func(d *widget.Button, p *widget.ProgressBar, s *widget.Button, l *widget.Label) {
-					d.Show()
-					p.Hide()
-					s.Show()
-				})
-			}
-		}
 	}
 	OnSelectedReload[index] = reload
 
-	for _, name := range ls(swapDir(index)) {
-		path := filepath.Join(swapDir(index), name)
+	for _, name := range ls(recvDir) {
+		path := filepath.Join(recvDir, name)
 		if name == "" {
 			continue
 		}
@@ -367,7 +402,7 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) *containe
 			a.Preferences().SetString("DeleteFile", "")
 		}
 	}
-	reload()
+	// reload()
 
 	var lastSaveDir string
 
@@ -402,6 +437,11 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) *containe
 
 			for src, fe := range fileentries {
 				child := filepath.Base(src)
+				if isMobile || asMobile {
+					if fi, _ := os.Stat(src); fi != nil && fi.IsDir() {
+						child += DOTZIP
+					}
+				}
 
 				if lu != nil {
 					lastSaveDir = lu.Path()
@@ -445,24 +485,54 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) *containe
 					continue
 				}
 
-				copyToUWCProgress(destination, src, fe, func(err error) {
-					cl()
-					if err != nil {
-						log.Errorf("Error saving URI(%s) to %s error:%v", src, destination.URI(), err)
-						fyne.Do(func() {
-							topline.SetText(fmt.Sprintf("Error saving %s: %v", child, err))
-						})
-						return
-					}
-					log.Tracef("File %s saved to URI(%s)", src, destination.URI().String())
-					removeEntry(src, fe, true)
+				copyFrom := func(src string) {
+					copyToUWCProgress(destination, src, fe, func(err error) {
+						cl()
+						if err != nil {
+							log.Errorf("Error saving URI(%s) to %s error:%v", src, destination.URI(), err)
+							fyne.Do(func() {
+								topline.SetText(fmt.Sprintf("Error saving %s: %v", child, err))
+							})
+							return
+						}
+						log.Tracef("File %s saved to URI(%s)", src, destination.URI().String())
+						removeEntry(src, fe, true)
 
-					if len(fileentries) == 0 {
-						fyne.Do(func() {
-							topline.SetText(fmt.Sprintf("%s %s", lp("Saved all files to"), lastSaveDir))
-						})
+						if len(fileentries) == 0 {
+							fyne.Do(func() {
+								topline.SetText(fmt.Sprintf("%s %s", lp("Saved all files to"), lastSaveDir))
+							})
+						}
+					})
+				}
+				if fi, _ := os.Stat(src); fi != nil && fi.IsDir() {
+					// На Андроиде свернём каталог в файл
+					pathZip := src + DOTZIP
+					if _, err := os.Stat(pathZip); err == nil {
+						log.Errorf("zip file %s exists", pathZip)
+						continue
 					}
-				})
+					ZipDirectoryProgress(pathZip, src, fe, func(err error) {
+						if err != nil {
+							log.Errorf("dir (%s), zipped to %s error: %s", src, pathZip, err)
+							removeEntry(pathZip, fe, true)
+							return
+						}
+						log.Tracef("dir (%s), zipped to %s", src, pathZip)
+
+						if _, err := os.Stat(pathZip); err != nil {
+							log.Errorf("Stat(%s) error: %v", pathZip, err)
+							return
+						}
+
+						if feDir, ok := fileentries[src]; ok {
+							removeEntry(src, feDir, true)
+						}
+						copyFrom(pathZip)
+					})
+					continue
+				}
+				copyFrom(src)
 			}
 		}
 
@@ -543,11 +613,11 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) *containe
 		log.SetLevel(debugString(a))
 		log.Trace("croc receiver created")
 
-		cderr := os.Chdir(swapDir(index))
+		cderr := os.Chdir(recvDir)
 		if cderr != nil {
-			log.Error("Unable to change to dir:", swapDir(index), cderr)
+			log.Error("Unable to change to dir:", recvDir, cderr)
 		}
-		log.Trace("cd ", swapDir(index))
+		log.Trace("cd ", recvDir)
 
 		var filename string
 		mainButton.Disable()
@@ -608,7 +678,7 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) *containe
 					fyne.Do(func() {
 						topline.SetText(s)
 					})
-					a.Preferences().SetString("DeleteFile", filepath.Join(swapDir(index), filename))
+					a.Preferences().SetString("DeleteFile", filepath.Join(recvDir, filename))
 					Stop(receiver)
 					fyne.Do(func() {
 						restart(w)
@@ -630,7 +700,7 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) *containe
 									receiver.FilesToTransfer[i].TempFile = strings.HasSuffix(strings.ToLower(fi.Name), DOTZIP) &&
 										a.Preferences().Bool("zip-unzip")
 								}
-								dst := filepath.Join(swapDir(index), fi.Name)
+								dst := filepath.Join(recvDir, fi.Name)
 								addEntry(dst, func(d *widget.Button, p *widget.ProgressBar, s *widget.Button, l *widget.Label) {
 									d.Hide()
 									p.SetValue(0)
@@ -654,7 +724,7 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) *containe
 							toplineW.SetText(fmt.Sprintf("%s: %s(%d/%d)", lp("Receiving file"), filename, cnum+1, len(receiver.FilesToTransfer)))
 							TotalSent += size
 							size = fi.Size
-							path := filepath.Join(swapDir(index), fi.Name)
+							path := filepath.Join(recvDir, fi.Name)
 							if oldPath != path {
 								if fe := fileentries[oldPath]; fe != nil {
 									fyne.Do(func() {
@@ -700,7 +770,7 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) *containe
 					s := fmt.Sprintf("Receive failed: %s", rerr)
 					log.Error(s)
 					topline.SetText(s)
-					fpath = filepath.Join(swapDir(index), filename)
+					fpath = filepath.Join(recvDir, filename)
 					removeEntrys()
 				} else {
 					topline.SetText(fmt.Sprintf("%s: %s", lp("Received"), filename))

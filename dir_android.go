@@ -801,7 +801,7 @@ func IsDirectory(uri fyne.URI) bool {
 	// log.Tracef("IsDirectory: MIME_TYPE: %s", mime)
 
 	// 4. Специальный случай: me.zhanghai.android.files
-	if size == 4096 && mime == "application/octet-stream" && strings.HasPrefix(uri.String(), zhanghai) {
+	if size == 4096 && mime == "application/octet-stream" && strings.HasPrefix(uri.String(), ZhangHai) {
 		return true
 	}
 
@@ -842,7 +842,7 @@ func hasChild(uri fyne.URI) (isDir bool, childCount int, err error) {
 	// Проверка специальных случаев
 	size, sizeErr := getSize(uri)
 	if sizeErr == nil && size == 4096 && mime == "application/octet-stream" &&
-		strings.HasPrefix(uri.String(), zhanghai) {
+		strings.HasPrefix(uri.String(), ZhangHai) {
 		// Специальный случай - директория
 		isDir = true
 		childCount, err = countChild(uri)

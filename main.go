@@ -43,7 +43,9 @@ var (
 	wd                     string
 	OnSelectedReload       = make(map[int]func(), 2)
 	swap                   bool
-	temp                   string
+	tempDir                string
+	recvReady              func() bool
+	swapDir                func() string
 )
 
 const (
@@ -54,7 +56,9 @@ const (
 	ZeroWidthNonJoiner = "\u200C" // Не-соединитель нулевой ширины
 	ZeroWidthJoiner    = "\u200D" // Соединитель нулевой ширины
 	DOTZIP             = ".zip"
-	zhanghai           = "content://me.zhanghai.android.files.file_provider/"
+	ZhangHai           = "content://me.zhanghai.android.files.file_provider/"
+	SEND               = "crocgui-send"
+	RECV               = "crocgui-recv"
 
 	// Чтоб на десктопе отладить копирование вместо переноса как будто это мобильная ОС.
 	asMobile = false
@@ -66,7 +70,10 @@ const (
 
 func main() {
 	wd, _ = os.Getwd()
-	temp = os.TempDir()
+	tempDir = os.TempDir()
+	swapDir = func() string {
+		return filepath.Join(tempDir, SEND)
+	}
 	ErrApplicationShutdown = errors.New("application shutdown")
 	done = make(chan struct{})
 	replacer = strings.NewReplacer(
@@ -208,13 +215,4 @@ func ls(path string) (files []string) {
 	}
 
 	return
-}
-
-func swapDir(index int) string {
-	isReceiver := index == 1 || swap
-
-	if isReceiver {
-		return filepath.Join(temp, "crocgui-recv")
-	}
-	return filepath.Join(temp, "crocgui-send")
 }
