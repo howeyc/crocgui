@@ -1,3 +1,4 @@
+// recv.go
 package main
 
 import (
@@ -279,7 +280,7 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) *containe
 		saveButton := widget.NewButtonWithIcon("", theme.DocumentSaveIcon(), func() {
 			if isMobile || asMobile {
 				// На Андроиде свернём каталог в  файл
-				if fi, _ := os.Stat(dst); fi != nil && fi.IsDir() {
+				if isLinkDir(dst) {
 					pathZip := dst + DOTZIP
 					if _, err := os.Stat(pathZip); err == nil {
 						log.Errorf("zip file %s exists", pathZip)
@@ -361,8 +362,10 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) *containe
 				if fpath == path {
 					continue
 				}
-				isDir, count, _ := fileChild(path)
-				if isDir && count < 1 {
+				if isLinkDir(path) {
+					name += "/"
+				}
+				if isDir, count, _ := fileChild(path); isDir && count < 1 {
 					log.Tracef("remove empty dir %s error: %v", path, os.RemoveAll(path))
 					continue
 				}
@@ -370,6 +373,7 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) *containe
 					d.Show()
 					p.Hide()
 					s.Show()
+					l.SetText(name)
 				})
 			}
 		}
@@ -437,10 +441,8 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) *containe
 
 			for src, fe := range fileentries {
 				child := filepath.Base(src)
-				if isMobile || asMobile {
-					if fi, _ := os.Stat(src); fi != nil && fi.IsDir() {
-						child += DOTZIP
-					}
+				if (isMobile || asMobile) && isLinkDir(src) {
+					child += DOTZIP
 				}
 
 				if lu != nil {
@@ -505,7 +507,7 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) *containe
 						}
 					})
 				}
-				if fi, _ := os.Stat(src); fi != nil && fi.IsDir() {
+				if isLinkDir(src) {
 					// На Андроиде свернём каталог в файл
 					pathZip := src + DOTZIP
 					if _, err := os.Stat(pathZip); err == nil {

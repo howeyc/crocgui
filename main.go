@@ -45,7 +45,7 @@ var (
 	swap                   bool
 	tempDir                string
 	recvReady              func() bool
-	swapDir                func() string
+	join                   func(...string) string
 )
 
 const (
@@ -71,8 +71,8 @@ const (
 func main() {
 	wd, _ = os.Getwd()
 	tempDir = os.TempDir()
-	swapDir = func() string {
-		return filepath.Join(tempDir, SEND)
+	join = func(elem ...string) string {
+		return filepath.Join(append([]string{tempDir, SEND}, elem...)...)
 	}
 	ErrApplicationShutdown = errors.New("application shutdown")
 	done = make(chan struct{})
