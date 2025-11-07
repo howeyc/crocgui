@@ -1,5 +1,6 @@
 //go:build android
 
+// dir_android.go
 package main
 
 /*
@@ -423,7 +424,6 @@ cleanup:
     return mimeTypeStr;
 }
 
-// countChildren возвращает количество дочерних элементов (исправленная версия)
 static jint countChildren(JNIEnv* env, jobject activity, const char* uriStr) {
     jint count = -1;
     jobject contentResolver = NULL;
@@ -438,6 +438,7 @@ static jint countChildren(JNIEnv* env, jobject activity, const char* uriStr) {
     jobject childUri = NULL;
     jboolean childUriNeedsCleanup = JNI_FALSE;
 
+    // Инициализация ContentResolver
     activityClass = (*env)->GetObjectClass(env, activity);
     if (activityClass == NULL) {
         LogD("countChildren: Failed to get activity class");
@@ -451,11 +452,15 @@ static jint countChildren(JNIEnv* env, jobject activity, const char* uriStr) {
     }
 
     contentResolver = (*env)->CallObjectMethod(env, activity, getContentResolver);
-    if (caseException(env, "getContentResolver") || contentResolver == NULL) {
-        LogD("countChildren: contentResolver is NULL or exception occurred");
+    if (caseException(env, "getContentResolver")) {
+        goto cleanup;
+    }
+    if (contentResolver == NULL) {
+        LogD("countChildren: contentResolver is NULL");
         goto cleanup;
     }
 
+    // Парсинг URI
     uriClass = (*env)->FindClass(env, "android/net/Uri");
     if (uriClass == NULL) {
         LogD("countChildren: Failed to find Uri class");
@@ -470,144 +475,145 @@ static jint countChildren(JNIEnv* env, jobject activity, const char* uriStr) {
 
     juriStr = (*env)->NewStringUTF(env, uriStr);
     uri = (*env)->CallStaticObjectMethod(env, uriClass, parseMethod, juriStr);
-    if (caseException(env, "parse URI") || uri == NULL) {
-        LogD("countChildren: Failed to parse URI");
+    if (caseException(env, "parse URI")) {
+        goto cleanup;
+    }
+    if (uri == NULL) {
+        LogD("countChildren: parse returned NULL");
         goto cleanup;
     }
 
+    // Поиск DocumentsContract класса
     documentsContractClass = (*env)->FindClass(env, "android/provider/DocumentsContract");
     if (documentsContractClass == NULL) {
         LogD("countChildren: Failed to find DocumentsContract class");
         goto cleanup;
     }
 
-    // Метод 1: buildChildDocumentsUriUsingTree (основной)
+    // Кэширование методов DocumentsContract
     jmethodID buildChildDocumentsUriUsingTreeMethod = (*env)->GetStaticMethodID(env, documentsContractClass,
         "buildChildDocumentsUriUsingTree", "(Landroid/net/Uri;Ljava/lang/String;)Landroid/net/Uri;");
+    jmethodID getTreeDocumentIdMethod = (*env)->GetStaticMethodID(env, documentsContractClass,
+        "getTreeDocumentId", "(Landroid/net/Uri;)Ljava/lang/String;");
+    jmethodID buildChildDocumentsUriMethod = (*env)->GetStaticMethodID(env, documentsContractClass,
+        "buildChildDocumentsUri", "(Landroid/net/Uri;Ljava/lang/String;)Landroid/net/Uri;");
+    jmethodID getDocumentIdMethod = (*env)->GetStaticMethodID(env, documentsContractClass,
+        "getDocumentId", "(Landroid/net/Uri;)Ljava/lang/String;");
 
-    if (buildChildDocumentsUriUsingTreeMethod != NULL) {
-        jmethodID getTreeDocumentIdMethod = (*env)->GetStaticMethodID(env, documentsContractClass, "getTreeDocumentId", "(Landroid/net/Uri;)Ljava/lang/String;");
-        if (getTreeDocumentIdMethod != NULL) {
-            jstring treeDocId = (jstring)(*env)->CallStaticObjectMethod(env, documentsContractClass, getTreeDocumentIdMethod, uri);
-            if (caseException(env, "getTreeDocumentId")) {
-                // Было исключение - переходим к следующему методу
-                LogD("countChildren: getTreeDocumentId failed with exception");
-            } else if (treeDocId != NULL) {
-                childUri = (*env)->CallStaticObjectMethod(env, documentsContractClass,
-                    buildChildDocumentsUriUsingTreeMethod, uri, treeDocId);
-                if (caseException(env, "buildChildDocumentsUriUsingTree")) {
-                    // Было исключение - очищаем и продолжаем
-                    if (childUri != NULL) {
-                        (*env)->DeleteLocalRef(env, childUri);
-                        childUri = NULL;
-                    }
-                } else if (childUri != NULL) {
-                    childUriNeedsCleanup = JNI_TRUE;
-                    LogD("countChildren: Successfully built child URI using tree method");
+    // Метод 1: buildChildDocumentsUriUsingTree (основной)
+    if (buildChildDocumentsUriUsingTreeMethod != NULL && getTreeDocumentIdMethod != NULL) {
+        jstring treeDocId = (jstring)(*env)->CallStaticObjectMethod(env, documentsContractClass, getTreeDocumentIdMethod, uri);
+        if (caseException(env, "getTreeDocumentId")) {
+            LogD("countChildren: getTreeDocumentId failed with exception");
+        } else if (treeDocId != NULL) {
+            childUri = (*env)->CallStaticObjectMethod(env, documentsContractClass,
+                buildChildDocumentsUriUsingTreeMethod, uri, treeDocId);
+            if (caseException(env, "buildChildDocumentsUriUsingTree")) {
+                LogD("countChildren: buildChildDocumentsUriUsingTree failed with exception");
+                if (childUri != NULL) {
+                    (*env)->DeleteLocalRef(env, childUri);
+                    childUri = NULL;
                 }
-                (*env)->DeleteLocalRef(env, treeDocId);
+            } else if (childUri != NULL) {
+                childUriNeedsCleanup = JNI_TRUE;
+                LogD("countChildren: Successfully built child URI using tree method");
             }
+            (*env)->DeleteLocalRef(env, treeDocId);
         }
     }
 
     // Метод 2: buildChildDocumentsUri (альтернативный)
-    if (childUri == NULL) {
-        jmethodID buildChildDocumentsUriMethod = (*env)->GetStaticMethodID(env, documentsContractClass,
-            "buildChildDocumentsUri", "(Landroid/net/Uri;Ljava/lang/String;)Landroid/net/Uri;");
-
-        if (buildChildDocumentsUriMethod != NULL) {
-            jmethodID getDocumentIdMethod = (*env)->GetStaticMethodID(env, documentsContractClass, "getDocumentId", "(Landroid/net/Uri;)Ljava/lang/String;");
-            if (getDocumentIdMethod != NULL) {
-                jstring docId = (jstring)(*env)->CallStaticObjectMethod(env, documentsContractClass, getDocumentIdMethod, uri);
-                if (caseException(env, "getDocumentId")) {
-                    // Было исключение - переходим к следующему методу
-                    LogD("countChildren: getDocumentId failed with exception");
-                } else if (docId != NULL) {
-                    childUri = (*env)->CallStaticObjectMethod(env, documentsContractClass,
-                        buildChildDocumentsUriMethod, uri, docId);
-                    if (caseException(env, "buildChildDocumentsUri")) {
-                        // Было исключение - очищаем и продолжаем
-                        if (childUri != NULL) {
-                            (*env)->DeleteLocalRef(env, childUri);
-                            childUri = NULL;
-                        }
-                    } else if (childUri != NULL) {
-                        childUriNeedsCleanup = JNI_TRUE;
-                        LogD("countChildren: Successfully built child URI using document method");
-                    }
-                    (*env)->DeleteLocalRef(env, docId);
+    if (childUri == NULL && buildChildDocumentsUriMethod != NULL && getDocumentIdMethod != NULL) {
+        jstring docId = (jstring)(*env)->CallStaticObjectMethod(env, documentsContractClass, getDocumentIdMethod, uri);
+        if (caseException(env, "getDocumentId")) {
+            LogD("countChildren: getDocumentId failed with exception");
+        } else if (docId != NULL) {
+            childUri = (*env)->CallStaticObjectMethod(env, documentsContractClass,
+                buildChildDocumentsUriMethod, uri, docId);
+            if (caseException(env, "buildChildDocumentsUri")) {
+                LogD("countChildren: buildChildDocumentsUri failed with exception");
+                if (childUri != NULL) {
+                    (*env)->DeleteLocalRef(env, childUri);
+                    childUri = NULL;
                 }
+            } else if (childUri != NULL) {
+                childUriNeedsCleanup = JNI_TRUE;
+                LogD("countChildren: Successfully built child URI using document method");
             }
+            (*env)->DeleteLocalRef(env, docId);
         }
     }
 
-    // Метод 3: Прямой query исходного URI (последняя попытка)
+    // Метод 3: Прямой query исходного URI (fallback)
     if (childUri == NULL) {
         LogD("countChildren: Using direct URI query as fallback");
-        childUri = (*env)->NewLocalRef(env, uri); // Безопасное создание новой ссылки
-        childUriNeedsCleanup = JNI_TRUE;
+        childUri = (*env)->NewLocalRef(env, uri);
+        if (childUri != NULL) {
+            childUriNeedsCleanup = JNI_TRUE;
+        }
     }
 
-    if (childUri != NULL) {
-        resolverClass = (*env)->GetObjectClass(env, contentResolver);
-        if (resolverClass == NULL) {
-            LogD("countChildren: Failed to get resolver class");
-            goto cleanup;
-        }
-
-        jmethodID queryMethod = (*env)->GetMethodID(env, resolverClass,
-            "query", "(Landroid/net/Uri;[Ljava/lang/String;Ljava/lang/String;[Ljava/lang/String;Ljava/lang/String;)Landroid/database/Cursor;");
-
-        if (queryMethod != NULL) {
-            cursor = (*env)->CallObjectMethod(env, contentResolver, queryMethod, childUri, NULL, NULL, NULL, NULL);
-            if (caseException(env, "query for children")) {
-                LogD("countChildren: Query failed with exception");
-                count = -8; // Код ошибки запроса
-            } else if (cursor != NULL) {
-                cursorClass = (*env)->GetObjectClass(env, cursor);
-                if (cursorClass != NULL) {
-                    jmethodID getCount = (*env)->GetMethodID(env, cursorClass, "getCount", "()I");
-
-                    if (getCount != NULL) {
-                        count = (*env)->CallIntMethod(env, cursor, getCount);
-                        if (caseException(env, "getCount")) {
-                            LogD("countChildren: getCount failed with exception");
-                            count = -9; // Код ошибки getCount
-                        } else {
-                            LogD("countChildren: Successfully got count: %d", count);
-                        }
-                    } else {
-                        LogD("countChildren: Failed to get getCount method");
-                        count = -3; // Код ошибки методов курсора
-                    }
-
-                    // Закрываем курсор
-                    jmethodID closeMethod = (*env)->GetMethodID(env, cursorClass, "close", "()V");
-                    if (closeMethod != NULL) {
-                        (*env)->CallVoidMethod(env, cursor, closeMethod);
-                        caseException(env, "close cursor");
-                    }
-                } else {
-                    LogD("countChildren: Failed to get cursor class");
-                    count = -4; // Код ошибки класса курсора
-                }
-            } else {
-                LogD("countChildren: Query returned NULL cursor");
-                count = -5; // Код ошибки курсора
-            }
-        } else {
-            LogD("countChildren: Failed to get query method");
-            count = -6; // Код ошибки метода запроса
-        }
-    } else {
+    if (childUri == NULL) {
         LogD("countChildren: Failed to build child URI");
-        count = -7; // Код ошибки построения URI
+        count = -7;
+        goto cleanup;
     }
+
+    // Выполнение запроса
+    resolverClass = (*env)->GetObjectClass(env, contentResolver);
+    if (resolverClass == NULL) {
+        LogD("countChildren: Failed to get resolver class");
+        count = -6;
+        goto cleanup;
+    }
+
+    jmethodID queryMethod = (*env)->GetMethodID(env, resolverClass,
+        "query", "(Landroid/net/Uri;[Ljava/lang/String;Ljava/lang/String;[Ljava/lang/String;Ljava/lang/String;)Landroid/database/Cursor;");
+    if (queryMethod == NULL) {
+        LogD("countChildren: Failed to get query method");
+        count = -6;
+        goto cleanup;
+    }
+
+    cursor = (*env)->CallObjectMethod(env, contentResolver, queryMethod, childUri, NULL, NULL, NULL, NULL);
+    if (caseException(env, "query for children")) {
+        LogD("countChildren: Query failed with exception");
+        count = -8;
+        goto cleanup;
+    }
+    if (cursor == NULL) {
+        LogD("countChildren: Query returned NULL cursor");
+        count = -5;
+        goto cleanup;
+    }
+
+    // Получение количества записей
+    cursorClass = (*env)->GetObjectClass(env, cursor);
+    if (cursorClass == NULL) {
+        LogD("countChildren: Failed to get cursor class");
+        count = -4;
+        goto cleanup;
+    }
+
+    jmethodID getCount = (*env)->GetMethodID(env, cursorClass, "getCount", "()I");
+    if (getCount == NULL) {
+        LogD("countChildren: Failed to get getCount method");
+        count = -3;
+        goto cleanup;
+    }
+
+    count = (*env)->CallIntMethod(env, cursor, getCount);
+    if (caseException(env, "getCount")) {
+        LogD("countChildren: getCount failed with exception");
+        count = -9;
+        goto cleanup;
+    }
+
+    LogD("countChildren: Successfully got count: %d", count);
 
 cleanup:
-    // Освобождаем ресурсы в правильном порядке
+    // Закрытие курсора (если не был закрыт ранее)
     if (cursor != NULL) {
-        // Дополнительная попытка закрыть курсор, если не закрыт ранее
         if (cursorClass != NULL) {
             jmethodID closeMethod = (*env)->GetMethodID(env, cursorClass, "close", "()V");
             if (closeMethod != NULL) {
@@ -618,11 +624,10 @@ cleanup:
         (*env)->DeleteLocalRef(env, cursor);
     }
 
-    // Аккуратно управляем childUri
+    // Освобождение остальных ресурсов
     if (childUri != NULL && childUriNeedsCleanup) {
         (*env)->DeleteLocalRef(env, childUri);
     }
-
     if (uri != NULL) (*env)->DeleteLocalRef(env, uri);
     if (juriStr != NULL) (*env)->DeleteLocalRef(env, juriStr);
     if (activityClass != NULL) (*env)->DeleteLocalRef(env, activityClass);
@@ -643,6 +648,7 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/driver"
+	"fyne.io/fyne/v2/storage"
 	log "github.com/schollz/logger"
 )
 
@@ -727,9 +733,31 @@ func mimeType(uri fyne.URI) (mimeTypeStr string) {
 
 	return mimeTypeStr
 }
-
-// countChild возвращает количество дочерних элементов в директории
 func countChild(uri fyne.URI) (count int, err error) {
+	if uri == nil {
+		return 0, fmt.Errorf("uri is nil")
+	}
+
+	// Проверяем, можно ли получить список содержимого для данного URI
+	listable, err := storage.CanList(uri)
+	if err != nil {
+		return 0, fmt.Errorf("cannot check if URI is listable: %w", err)
+	}
+	if !listable {
+		return 0, fmt.Errorf("URI is not a listable directory: %s", uri.String())
+	}
+
+	// Получаем список дочерних элементов
+	children, err := storage.List(uri)
+	if err != nil {
+		return 0, fmt.Errorf("failed to list directory contents: %w", err)
+	}
+
+	return len(children), nil
+}
+
+// countChild возвращает количество дочерних элементов в директории DocumentsContract
+func countChild0(uri fyne.URI) (count int, err error) {
 	if uri == nil {
 		return 0, fmt.Errorf("uri is nil")
 	}
@@ -745,29 +773,32 @@ func countChild(uri fyne.URI) (count int, err error) {
 		cCount := C.countChildren(env, activity, uriStr)
 		count = int(cCount)
 
-		// Обрабатываем коды ошибок
+		// Обработка кодов ошибок с детализацией
 		if count < 0 {
 			switch count {
 			case -1:
-				err = fmt.Errorf("general failure")
+				err = fmt.Errorf("general failure: failed to initialize or parse URI")
 			case -3:
-				err = fmt.Errorf("cursor methods not available")
+				err = fmt.Errorf("cursor operation failed: getCount method not available")
 			case -4:
-				err = fmt.Errorf("cursor class not available")
+				err = fmt.Errorf("cursor operation failed: cursor class not available")
 			case -5:
-				err = fmt.Errorf("query returned NULL cursor")
+				err = fmt.Errorf("query failed: returned NULL cursor - no permissions or invalid URI")
 			case -6:
-				err = fmt.Errorf("query method not available")
+				err = fmt.Errorf("query method not available: ContentResolver query method not found")
 			case -7:
-				err = fmt.Errorf("failed to build child URI")
+				err = fmt.Errorf("URI construction failed: cannot build child documents URI")
 			case -8:
-				err = fmt.Errorf("query failed with exception")
+				err = fmt.Errorf("query execution failed: exception during database query")
 			case -9:
-				err = fmt.Errorf("getCount failed with exception")
+				err = fmt.Errorf("count retrieval failed: exception during getCount operation")
 			default:
 				err = fmt.Errorf("unknown error code: %d", count)
 			}
 			count = 0
+		} else {
+			// Успешное выполнение
+			log.Tracef("countChildren: successfully counted %d children for URI: %s", count, uri.String())
 		}
 
 		return nil
@@ -775,9 +806,28 @@ func countChild(uri fyne.URI) (count int, err error) {
 
 	return count, err
 }
-
-// IsDirectory проверяет, является ли URI директорией (чистая Go реализация)
 func IsDirectory(uri fyne.URI) bool {
+	if uri == nil {
+		return false
+	}
+	switch mimeType(uri) {
+	case "vnd.android.document/directory":
+		return true
+	case "", "application/octet-stream":
+		size, sizeErr := getSize(uri)
+		if sizeErr == nil && size == 4096 &&
+			strings.HasPrefix(uri.String(), ZhangHai) {
+			return true
+		}
+		_, err := countChild(uri)
+		return err == nil
+	default:
+		return false
+	}
+}
+
+// IsDirectory проверяет, является ли URI директорией
+func IsDirectory0(uri fyne.URI) bool {
 	if uri == nil {
 		return false
 	}
