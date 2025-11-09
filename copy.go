@@ -1,3 +1,4 @@
+// copy.go
 package main
 
 import (
@@ -32,8 +33,7 @@ func copyFiles(srcURI fyne.URI, dstDir string, copyFileFn CopyFileFunc) error {
 		// Проверяем, посещали ли мы этот URI раньше (защита от циклов)
 		// Безопасно, так как мы в GUI потоке Fyne
 		if visited[currentStr] {
-			log.Tracef("Cycle detected, skipping: %s", currentStr)
-			return nil
+			return fmt.Errorf("Cycle detected, skipping: %s", currentStr)
 		}
 
 		var finalRelPath string
@@ -54,24 +54,23 @@ func copyFiles(srcURI fyne.URI, dstDir string, copyFileFn CopyFileFunc) error {
 		deep++
 		defer func() { deep-- }()
 
-		isDir, count, err := hasChild(current)
-		if err != nil {
-			return fmt.Errorf("failed to check directory %s error: %v", current, err)
-		}
-		if isDir {
+		if IsDirectory(current) {
 			// Добавляем в visited, так как начали обработку каталога.
 			visited[currentStr] = true
-			log.Tracef("walk: %s has %d child", current, count)
-			if (isAndroid && deep > 1) || count == 0 {
-				return nil
+			if isAndroid && deep > 1 {
+				return fmt.Errorf("isAndroid && deep > 1")
 			}
 
-			children, listErr := storage.List(current)
-			if listErr != nil {
-				return fmt.Errorf("failed to list directory %s (Read failed, List also failed): %v", current, listErr)
+			children, err := List(current)
+			if err != nil {
+				return fmt.Errorf("failed to list directory %s: %v", current, err)
 			}
 
-			log.Tracef("walk: List for %s returned %d items", current, len(children))
+			count := len(children)
+			if count == 0 {
+				return fmt.Errorf("count == 0")
+			}
+			log.Tracef("walk: List for %s returned %d items", current, count)
 
 			// Вычисляем relPath для дочерних элементов относительно dstDir
 			relPathForChildDir, errRel := filepath.Rel(dstDir, dstPath)
@@ -85,41 +84,46 @@ func copyFiles(srcURI fyne.URI, dstDir string, copyFileFn CopyFileFunc) error {
 					continue
 				}
 				if err := walk(child, relPathForChildDir); err != nil {
-					return err
+					log.Errorf("Failed to process child %s of %s: %v", child, current, err)
+					// return err
+					// Продолжаем обработку других детей
 				}
 			}
 			return nil
 		}
 
+		// Это файл
 		dir := filepath.Dir(dstPath)
 		if err := os.MkdirAll(dir, 0700); err != nil {
-			return err
+			return fmt.Errorf("MkdirAll %w", err)
 		}
 
-		r, err := storage.Reader(current)
+		r, err := Reader(current)
 		if err != nil {
-			return err
+			// log.Errorf("Failed to open reader for file %s: %v", current, err)
+			return fmt.Errorf("Failed to open reader for file %s: %w", current, err)
+		}
+		log.Tracef("walk: copyFileFn %s->%s", r.URI(), dstPath)
+		copyErr := copyFileFn(r, dstPath)
+		if copyErr != nil {
+			return fmt.Errorf("Failed to copy file %s to %s: %v", r.URI(), dstPath, copyErr)
 		}
 
-		log.Tracef("walk: copyFileFn %s->%s", r.URI(), dstPath)
-		return copyFileFn(r, dstPath)
+		// Копирование прошло успешно
+		return nil
 	}
 
 	// Проверяем srcURI сначала, чтобы определить, файл это или каталог, до запуска рекурсии.
-	isDir, _, err := hasChild(srcURI)
-	if err != nil {
-		return fmt.Errorf("failed to check directory %s: %v", srcURI, err)
-	}
-	if isDir {
+	if IsDirectory(srcURI) {
 		if err := os.MkdirAll(dstDir, 0700); err != nil {
 			return err
 		}
 		return walk(srcURI, "")
 	}
 
-	r, err := storage.Reader(srcURI)
+	r, err := Reader(srcURI)
 	if err != nil {
-		return err
+		return fmt.Errorf("Failed to open reader for file %s: %w", srcURI, err)
 	}
 
 	log.Tracef("copyFileFn %s->%s", r.URI(), dstDir)
@@ -147,12 +151,22 @@ func canList(u fyne.URI) bool {
 	return true
 }
 
-func canRead(u fyne.URI) bool {
-	if m := MimeType(u); m == "vnd.android.document/directory" {
-		log.Tracef("MimeType %s", m)
+func canRead(uri fyne.URI) bool {
+	if uri == nil {
 		return false
 	}
-	ok, err := storage.CanRead(u)
+	switch MimeType(uri) {
+	case MIME_TYPE_DIR:
+		return false
+	case MIME_TYPE_OCTET_STREAM:
+		if strings.HasPrefix(uri.String(), ZhangHai) {
+			size, sizeErr := getSize(uri)
+			if sizeErr == nil && size == 4096 {
+				return false // иначе storage.CanRead  вернёт syscall.EISDIR и крэшит
+			}
+		}
+	}
+	ok, err := storage.CanRead(uri)
 	if err != nil {
 		log.Errorf("CanRead error: %v", err)
 		return false
@@ -162,7 +176,7 @@ func canRead(u fyne.URI) bool {
 	}
 	log.Trace("CanRead")
 
-	r, err := storage.Reader(u)
+	r, err := storage.Reader(uri)
 	if err != nil {
 		log.Errorf("Reader error: %v", err)
 		return false

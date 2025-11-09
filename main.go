@@ -49,16 +49,19 @@ var (
 )
 
 const (
-	EMULATE            = time.Second * 0
-	CROC_SECRET        = "CROC_SECRET"
-	TOTP               = "TOTP-" + CROC_SECRET
-	ZeroWidthSpace     = "\u200B" // Пробел нулевой ширины
-	ZeroWidthNonJoiner = "\u200C" // Не-соединитель нулевой ширины
-	ZeroWidthJoiner    = "\u200D" // Соединитель нулевой ширины
-	DOTZIP             = ".zip"
-	ZhangHai           = "content://me.zhanghai.android.files.file_provider/"
-	SEND               = "crocgui-send"
-	RECV               = "crocgui-recv"
+	EMULATE                = time.Second * 0
+	CROC_SECRET            = "CROC_SECRET"
+	TOTP                   = "TOTP-" + CROC_SECRET
+	ZeroWidthSpace         = "\u200B" // Пробел нулевой ширины
+	ZeroWidthNonJoiner     = "\u200C" // Не-соединитель нулевой ширины
+	ZeroWidthJoiner        = "\u200D" // Соединитель нулевой ширины
+	DOTZIP                 = ".zip"
+	ZhangHai               = "content://me.zhanghai.android.files.file_provider/"
+	Ghisler                = "content://com.ghisler.files/"
+	SEND                   = "crocgui-send"
+	RECV                   = "crocgui-recv"
+	MIME_TYPE_DIR          = "vnd.android.document/directory"
+	MIME_TYPE_OCTET_STREAM = "application/octet-stream"
 
 	// Чтоб на десктопе отладить копирование вместо переноса как будто это мобильная ОС.
 	asMobile = false

@@ -259,8 +259,10 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 			}
 		}
 
-		fyne.Do(func() {
+		// fyne.Do(func() {
+		go func() {
 			log.Tracef("copyFiles error: %v", copyFiles(storage.NewFileURI(src), dst, func(source fyne.URIReadCloser, dstPath string) error {
+				fyne.Do(func() {})
 				u := source.URI()
 				feTmp := fe
 				if fi.IsDir() {
@@ -293,7 +295,8 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 				})
 				return nil
 			}))
-		})
+		}()
+		// })
 
 		return nil
 	}
@@ -442,26 +445,19 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 						log.Tracef("URI(%s)", u)
 						log.Tracef("apiLevel %d", apiLevel())
 
-						isDir, count, err := hasChild(u)
-						if err == nil {
-							log.Errorf("failed to check directory %s error: %v", u, err)
-							if isDir {
-								log.Tracef("URI(%s) is dir with %d child", u, count)
-								continue
-							}
-						}
-						if !canRead(u) {
+						if IsDirectory(u) {
 							continue
 						}
 						name := uriBase(u)
 						dst := join(name)
-						fe := addEntry(dst, nil)
-						if fe == nil {
+						source, err := Reader(u)
+						// source, err := storage.Reader(u)
+						if err != nil {
+							log.Errorf("Reader %v", err)
 							continue
 						}
-						source, err := storage.Reader(u)
-						if err != nil {
-							log.Errorf("%v", err)
+						fe := addEntry(dst, nil)
+						if fe == nil {
 							continue
 						}
 
@@ -599,43 +595,48 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 				return
 			}
 
-			err := Symlink(u.Path(), dst)
-			log.Tracef("Make symlink URI (%s) to internal cache %s error: %v", u, dst, err)
-			if err == nil {
-				// Десктоп
-				return
+			if !swap {
+				err := Symlink(u.Path(), dst)
+				log.Tracef("Make symlink URI (%s) to internal cache %s error: %v", u, dst, err)
+				if err == nil {
+					// Десктоп
+					return
+				}
 			}
 
-			fyne.Do(func() {
-				log.Tracef("copyFiles error: %v", copyFiles(u, dst, func(source fyne.URIReadCloser, dstPath string) error {
-					src := source.URI()
-					// Покажем временный прогрессбар
-					rel, _ := filepath.Rel(join(), dstPath)
-					feTmp := addEntry(dstPath, func(d *widget.Button, p *widget.ProgressBar, l *widget.Label) {
-						p.Hide()
-						l.SetText(rel)
-					})
-					if feTmp == nil {
-						return nil
-					}
-					copyFromURCProgress(source, dstPath, feTmp, func(err error) {
-						if err != nil {
-							log.Errorf("URI (%s), copied to internal cache %s error: %s", src, dstPath, err)
-							removeEntry(dstPath, feTmp, true)
-							return
-						}
-						log.Tracef("URI (%s), copied to internal cache %s", src, dstPath)
-
-						if _, err := os.Stat(dstPath); err != nil {
-							log.Errorf("Stat(%s) error: %v", dstPath, err)
-						}
-						// Скроем временный прогрессбар без удаления файла
-						removeEntry(dstPath, feTmp, false)
-					})
+			// fyne.Do(func() {
+			// go func() {
+			log.Tracef("copyFiles error: %v", copyFiles(u, dst, func(source fyne.URIReadCloser, dstPath string) error {
+				fyne.Do(func() {})
+				src := source.URI()
+				// Покажем временный прогрессбар
+				rel, _ := filepath.Rel(join(), dstPath)
+				feTmp := addEntry(dstPath, func(d *widget.Button, p *widget.ProgressBar, l *widget.Label) {
+					p.Hide()
+					l.SetText(rel)
+				})
+				if feTmp == nil {
 					return nil
-				}))
-				reload()
-			})
+				}
+				copyFromURCProgress(source, dstPath, feTmp, func(err error) {
+					if err != nil {
+						log.Errorf("URI (%s), copied to internal cache %s error: %s", src, dstPath, err)
+						removeEntry(dstPath, feTmp, true)
+						return
+					}
+					log.Tracef("URI (%s), copied to internal cache %s", src, dstPath)
+
+					if _, err := os.Stat(dstPath); err != nil {
+						log.Errorf("Stat(%s) error: %v", dstPath, err)
+					}
+					// Скроем временный прогрессбар без удаления файла
+					removeEntry(dstPath, feTmp, false)
+				})
+				return nil
+			}))
+			reload()
+			// })
+			// }()
 		}
 		ShowFolderOpen(folderOpen, w)
 	})
@@ -998,7 +999,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 }
 
 // Большой диалог для десктопа
-func ShowFileOpen(callback func(reader fyne.URIReadCloser, err error), parent fyne.Window) {
+func ShowFileOpen(callback func(fyne.URIReadCloser, error), parent fyne.Window) {
 	if isMobile {
 		notFinish = true
 		dialog.ShowFileOpen(callback, parent)

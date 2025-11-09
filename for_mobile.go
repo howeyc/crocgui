@@ -60,5 +60,5 @@ func detectMimeType(fileName string) string {
 		return mime
 	}
 
-	return "application/octet-stream"
+	return MIME_TYPE_OCTET_STREAM
 }

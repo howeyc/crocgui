@@ -30,6 +30,9 @@ func CanList(u fyne.URI) (bool, error) {
 }
 
 func IsDirectory(u fyne.URI) (ok bool) {
+	if u == nil {
+		return false
+	}
 	ok, _ = storage.CanList(u)
 	return
 }
@@ -95,4 +98,20 @@ func start() {
 	cmd.Env = os.Environ()
 	cmd.Dir = wd
 	cmd.Start()
+}
+
+func List(u fyne.URI) (c []fyne.URI, err error) {
+	if u == nil {
+		err = fmt.Errorf("uri is nul")
+		return
+	}
+	return storage.List(u)
+}
+
+func Reader(u fyne.URI) (r fyne.URIReadCloser, err error) {
+	if u == nil {
+		err = fmt.Errorf("uri is nul")
+		return
+	}
+	return storage.Reader(u)
 }
