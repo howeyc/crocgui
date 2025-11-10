@@ -48,10 +48,15 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 			log.Error(fmt.Sprint(r))
 		}
 	}()
+	var cosED, cosHS []fyne.CanvasObject
 	prog := widget.NewProgressBar()
-	prog.Hide()
+	cosHS = append(cosHS, prog)
+
 	topline := widget.NewLabel(lp("Pick a file to send"))
+
 	entry := widget.NewEntry()
+	cosED = append(cosED, entry)
+
 	randomCode := utils.GetRandomName()
 
 	entryText := os.Getenv(CROC_SECRET)
@@ -64,12 +69,15 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 		randomCode = utils.GetRandomName()
 		entry.SetText(randomCode)
 	})
+	cosED = append(cosED, randomCodeButton)
 
 	copyCodeButton := widget.NewButtonWithIcon("", theme.ContentCopyIcon(), func() {
 		a.Clipboard().SetContent(entry.Text)
 	})
 
 	totpCheck := widget.NewCheckWithData("", binding.BindPreferenceBool("totp-send", a.Preferences()))
+	cosED = append(cosED, totpCheck)
+
 	totpLabel := widget.NewLabel(TOTP)
 	var totpChan chan struct{}
 
@@ -574,6 +582,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 			})
 		}, w)
 	})
+	cosED = append(cosED, addFileButton)
 
 	addFolderButton := widget.NewButtonWithIcon("", theme.FolderOpenIcon(), func() {
 		folderOpen := func(u fyne.ListableURI, e error) {
@@ -640,6 +649,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 		}
 		ShowFolderOpen(folderOpen, w)
 	})
+	cosED = append(cosED, addFolderButton)
 
 	cancelChan := make(chan struct{})
 	var cancelButton, mainButton *widget.Button
@@ -657,6 +667,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 			entry.SetText("")
 		}
 	})
+	cosED = append(cosED, deleteAllButton)
 
 	var reDir *widget.Button
 
@@ -687,6 +698,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 			reload()
 		})
 	})
+	cosED = append(cosED, reDir)
 
 	mainButton = widget.NewButtonWithIcon(lp("Send"), theme.MailSendIcon(), func() {
 		ok := len(entry.Text) > 5
@@ -773,14 +785,10 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 		log.Trace("croc sender created")
 
 		var filename string
-		mainButton.Disable()
 		cancelChan = make(chan struct{})
 		cancelButton.Show()
-		entry.Disable()
+		allEnabled(false, cosED...)
 
-		addFileButton.Disable()
-		addFolderButton.Disable()
-		totpCheck.Disable()
 		if totpCheck.Checked {
 			totpProg.Hide()
 		}
@@ -793,15 +801,18 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 				ticker.Stop()
 				fyne.Do(func() {
 					// Восстанавливаю
-					mainButton.Enable()
-					prog.Hide()
+					// mainButton.Enable()
+					// prog.Hide()
 					prog.SetValue(0)
-					cancelButton.Hide()
-					entry.Enable()
-					addFileButton.Enable()
-					addFolderButton.Enable()
+					// cancelButton.Hide()
+					allShow(false, cosHS...)
+					// entry.Enable()
+					// addFileButton.Enable()
+					// addFolderButton.Enable()
 
-					totpCheck.Enable()
+					// totpCheck.Enable()
+					allEnabled(true, cosED...)
+
 					if totpCheck.Checked {
 						totpProg.Show()
 					} else if entry.Text == randomCode {
@@ -817,6 +828,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 			progW := NewProgressWrapper(prog)
 			var TotalSent, size, totalMax int64
 			toplineW := NewLabelWrapper(topline)
+			toplineW.SetText(lp("Have them not press the Download yet"))
 			fepw := NewProgressWrapper(nil)
 			once := true
 			for {
@@ -886,7 +898,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 							totalMax += fi.Size
 						}
 						fyne.Do(func() {
-							topline.SetText(lp("Download"))
+							toplineW.SetText(lp("Have them press the Download now"))
 							prog.Show()
 							for _, fe := range fileentries {
 								pb := fe.Objects[feBar].(*widget.ProgressBar)
@@ -957,11 +969,14 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 		log.Warnf("NumGoroutine %d", runtime.NumGoroutine())
 		a.Clipboard().SetContent(entry.Text)
 	})
+	cosED = append(cosED, mainButton)
 
 	cancelButton = widget.NewButtonWithIcon(lp("Cancel"), theme.CancelIcon(), func() {
 		close(cancelChan)
 	})
-	cancelButton.Hide()
+	// cancelButton.Hide()
+	cosHS = append(cosHS, cancelButton)
+	allShow(false, cosHS...)
 
 	top := container.NewVBox(
 		container.NewHBox(topline,
@@ -1463,4 +1478,38 @@ func isLinkDir(path string) (ok bool) {
 		}
 	}
 	return
+}
+
+func allEnabled(enabled bool, cos ...fyne.CanvasObject) {
+	for _, co := range cos {
+		switch w := co.(type) {
+		case *widget.Button:
+			if enabled {
+				w.Enable()
+			} else {
+				w.Disable()
+			}
+		case *widget.Entry:
+			if enabled {
+				w.Enable()
+			} else {
+				w.Disable()
+			}
+		case *widget.Check:
+			if enabled {
+				w.Enable()
+			} else {
+				w.Disable()
+			}
+		}
+	}
+}
+func allShow(show bool, cos ...fyne.CanvasObject) {
+	for _, co := range cos {
+		if show {
+			co.Show()
+		} else {
+			co.Hide()
+		}
+	}
 }

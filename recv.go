@@ -33,10 +33,13 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) *containe
 			log.Error(fmt.Sprint(r))
 		}
 	}()
+	var cosED, cosSH []fyne.CanvasObject
 	prog := widget.NewProgressBar()
-	prog.Hide()
-	topline := widget.NewLabel("")
+	cosSH = append(cosSH, prog)
+
+	topline := widget.NewLabel(lp("Wait for them to press the Download"))
 	entry := widget.NewEntry()
+	cosED = append(cosED, entry)
 
 	entryText := os.Getenv(CROC_SECRET)
 	if entryText != "" {
@@ -46,8 +49,11 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) *containe
 	pasteCodeButton := widget.NewButtonWithIcon("", theme.ContentCopyIcon(), func() {
 		entry.SetText(a.Clipboard().Content())
 	})
+	cosED = append(cosED, pasteCodeButton)
 
 	totpCheck := widget.NewCheckWithData("", binding.BindPreferenceBool("totp-recv", a.Preferences()))
+	cosED = append(cosED, totpCheck)
+
 	totpLabel := widget.NewLabel(TOTP)
 	var totpChan chan struct{}
 
@@ -622,13 +628,9 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) *containe
 		log.Trace("cd ", recvDir)
 
 		var filename string
-		mainButton.Disable()
-		prog.Show()
 		cancelChan = make(chan struct{})
-		cancelButton.Show()
-		entry.Disable()
-
-		totpCheck.Disable()
+		allShow(true, cosSH...)
+		allEnabled(false, cosED...)
 		if totpCheck.Checked {
 			totpProg.Hide()
 		}
@@ -643,13 +645,11 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) *containe
 				// Взял
 				ticker.Stop()
 				fyne.Do(func() {
-					mainButton.Enable()
-					prog.Hide()
+					topline.SetText(lp("Wait for them to press the Download"))
 					prog.SetValue(0)
-					cancelButton.Hide()
-					entry.Enable()
+					allShow(false, cosSH...)
 
-					totpCheck.Enable()
+					allEnabled(true, cosED...)
 					if totpCheck.Checked {
 						totpProg.Show()
 					}
@@ -785,15 +785,18 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) *containe
 		//  +2 go routines
 		log.Warnf("NumGoroutine %d", runtime.NumGoroutine())
 	})
+	cosED = append(cosED, mainButton)
 
 	cancelButton = widget.NewButtonWithIcon(lp("Cancel"), theme.CancelIcon(), func() {
 		close(cancelChan)
 	})
-	cancelButton.Hide()
+	cosSH = append(cosSH, cancelButton)
+	allShow(false, cosSH...)
 
 	saveAllButton := widget.NewButtonWithIcon("*", theme.FolderOpenIcon(), func() { //lp("Save All")
 		saveAllFiles()
 	})
+	cosED = append(cosED, saveAllButton)
 
 	deleteAllButton := widget.NewButtonWithIcon("*", theme.DeleteIcon(), func() { //lp("Delete All")
 		if len(fileentries) > 0 {
@@ -802,6 +805,7 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) *containe
 			entry.SetText("")
 		}
 	})
+	cosED = append(cosED, deleteAllButton)
 
 	top := container.NewVBox(
 		container.NewHBox(topline, layout.NewSpacer(), pasteCodeButton),

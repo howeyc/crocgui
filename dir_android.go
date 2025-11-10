@@ -2311,117 +2311,34 @@ func countChild(uri fyne.URI) (count int, err error) {
 	return count, err
 }
 
-// IsDirectory проверяет, является ли URI директорией
+// IsDirectory проверяет, является ли URI каталогом
 func IsDirectory(uri fyne.URI) bool {
-	log.Tracef("-------------IsDirectory %s", uri)
+	// log.Tracef("-------------IsDirectory %s", uri)
 	if uri == nil {
 		return false
 	}
 	switch MimeType(uri) {
 	case MIME_TYPE_DIR:
-		log.Trace("-------------MIME_TYPE_DIR true")
+		// log.Trace("-------------MIME_TYPE_DIR true")
 		return true
 	case MIME_TYPE_OCTET_STREAM:
 		if strings.HasPrefix(uri.String(), ZhangHai) {
 			size, sizeErr := getSize(uri)
 			if sizeErr == nil && size == 4096 {
-				log.Trace("-------------ZhangHai true")
+				// log.Trace("-------------ZhangHai true")
 				return true
 			}
 		}
 		fallthrough
 	case "":
-		// может отсутствуют права
-		c, err := countChild(uri)
-		log.Tracef("-------------countChild %d error: %v %v", c, err, err == nil)
+		// отсутствуют права
+		_, err := countChild(uri)
+		// log.Tracef("-------------countChild %d error: %v %v", c, err, err == nil)
 		return err == nil
 	default:
-		log.Trace("-------------false")
+		// log.Trace("-------------false")
 		return false
 	}
-}
-
-func IsDirectory0(uri fyne.URI) bool {
-	if uri == nil {
-		return false
-	}
-	// printFlags(uri)
-
-	// 3. Проверка размера
-	// size, sizeErr := getSize(uri)
-	// log.Tracef("IsDirectory: Size: %d, error: %v", size, sizeErr)
-	size, _ := getSize(uri)
-
-	// 1. Проверка по MIME-типу
-	mime := MimeType(uri)
-	if mime == MIME_TYPE_DIR {
-		log.Tracef("IsDirectory: Confirmed directory via MIME_TYPE: %s", mime)
-		return true
-	}
-	if mime != "" && mime != MIME_TYPE_OCTET_STREAM {
-		log.Tracef("IsDirectory: Confirmed file via MIME_TYPE: %s", mime)
-		return false
-	}
-	// log.Tracef("IsDirectory: MIME_TYPE: %s", mime)
-
-	// 4. Специальный случай: me.zhanghai.android.files
-	if size == 4096 && mime == MIME_TYPE_OCTET_STREAM && strings.HasPrefix(uri.String(), ZhangHai) {
-		return true
-	}
-
-	// 5. Проверка количества дочерних элементов
-	// log.Tracef("IsDirectory: Checking children count...")
-	count, countErr := countChild(uri)
-	if countErr == nil {
-		log.Tracef("IsDirectory: Confirmed directory via children count: %d", count)
-		return true
-	}
-	log.Errorf("IsDirectory: countChild error: %v", countErr)
-
-	// 6. Если все проверки неубедительны, предполагаем файл
-	log.Tracef("IsDirectory: All checks complete, assuming file.")
-	return false
-}
-
-// Если isDir == true, то childCount содержит количество дочерних элементов
-// Если isDir == false, то childCount = 0
-func hasChild(uri fyne.URI) (isDir bool, childCount int, err error) {
-	if uri == nil {
-		return false, 0, fmt.Errorf("uri is nil")
-	}
-
-	// Сначала проверяем быстрыми методами (MIME type)
-	mime := MimeType(uri)
-	if mime == MIME_TYPE_DIR {
-		// Это точно директория - считаем детей
-		isDir = true
-		childCount, err = countChild(uri)
-		return
-	}
-
-	if mime != "" && mime != MIME_TYPE_OCTET_STREAM {
-		return // Это файл
-	}
-
-	// Проверка специальных случаев
-	size, sizeErr := getSize(uri)
-	if sizeErr == nil && size == 4096 && mime == MIME_TYPE_OCTET_STREAM &&
-		strings.HasPrefix(uri.String(), ZhangHai) {
-		// Специальный случай - директория
-		isDir = true
-		childCount, err = countChild(uri)
-		return
-	}
-
-	// Последний вариант - проверка через countChild
-	childCount, err = countChild(uri)
-	isDir = err == nil
-	return
-}
-
-// hasFlag проверяет, установлен ли определенный флаг
-func hasFlag(flags int, flag int) bool {
-	return flags&flag != 0
 }
 
 // printFlags печатает подробную информацию о флагах документа
