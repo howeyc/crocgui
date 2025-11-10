@@ -37,7 +37,7 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) *containe
 	prog := widget.NewProgressBar()
 	cosSH = append(cosSH, prog)
 
-	topline := widget.NewLabel(lp("Wait for them to press the Download"))
+	topline := widget.NewLabel(lp("Wait for them before pressing Download"))
 	entry := widget.NewEntry()
 	cosED = append(cosED, entry)
 
@@ -645,7 +645,7 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) *containe
 				// Взял
 				ticker.Stop()
 				fyne.Do(func() {
-					topline.SetText(lp("Wait for them to press the Download"))
+					topline.SetText(lp("Wait for them before pressing Download"))
 					prog.SetValue(0)
 					allShow(false, cosSH...)
 

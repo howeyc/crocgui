@@ -22,6 +22,11 @@
             "translation": "デバッグログを有効化"
         },
         {
+            "id": "Wait for them before pressing Download",
+            "message": "Wait for them before pressing Download",
+            "translation": "「ダウンロード」を押す前に待ってください"
+        },
+        {
             "id": "Enter code to download",
             "message": "Enter code to download",
             "translation": "コードを入力してダウンロード"
@@ -87,6 +92,16 @@
             "translation": "送信"
         },
         {
+            "id": "Have them not press the Download yet",
+            "message": "Have them not press the Download yet",
+            "translation": "まだ「ダウンロード」を押さないでください"
+        },
+        {
+            "id": "Have them press the Download now",
+            "message": "Have them press the Download now",
+            "translation": "今「ダウンロード」を押してください"
+        },
+        {
             "id": "Sending file",
             "message": "Sending file",
             "translation": "ファイルを送信中"
@@ -105,6 +120,16 @@
             "id": "Show / Hide",
             "message": "Show / Hide",
             "translation": "表示 / 非表示"
+        },
+        {
+            "id": "Zip Folder",
+            "message": "Zip Folder",
+            "translation": "フォルダを圧縮"
+        },
+        {
+            "id": "UnZip File",
+            "message": "UnZip File",
+            "translation": "ファイルを解凍"
         },
         {
             "id": "Appearance",

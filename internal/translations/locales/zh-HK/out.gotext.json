@@ -22,6 +22,11 @@
             "translation": "啟用偵錯記錄"
         },
         {
+            "id": "Wait for them before pressing Download",
+            "message": "Wait for them before pressing Download",
+            "translation": "在按\"下載\"之前等待他們"
+        },
+        {
             "id": "Enter code to download",
             "message": "Enter code to download",
             "translation": "輸入下載代碼"
@@ -87,6 +92,16 @@
             "translation": "傳送"
         },
         {
+            "id": "Have them not press the Download yet",
+            "message": "Have them not press the Download yet",
+            "translation": "讓他們先不要按\"下載\""
+        },
+        {
+            "id": "Have them press the Download now",
+            "message": "Have them press the Download now",
+            "translation": "現在讓他們按\"下載\""
+        },
+        {
             "id": "Sending file",
             "message": "Sending file",
             "translation": "正在傳送檔案"
@@ -105,6 +120,16 @@
             "id": "Show / Hide",
             "message": "Show / Hide",
             "translation": "顯示/隱藏"
+        },
+        {
+            "id": "Zip Folder",
+            "message": "Zip Folder",
+            "translation": "壓縮資料夾"
+        },
+        {
+            "id": "UnZip File",
+            "message": "UnZip File",
+            "translation": "解壓縮檔案"
         },
         {
             "id": "Appearance",

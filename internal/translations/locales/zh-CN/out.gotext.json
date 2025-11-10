@@ -22,6 +22,11 @@
             "translation": "启用调试日志"
         },
         {
+            "id": "Wait for them before pressing Download",
+            "message": "Wait for them before pressing Download",
+            "translation": "在按\"下载\"之前等待他们"
+        },
+        {
             "id": "Enter code to download",
             "message": "Enter code to download",
             "translation": "输入下载代码"
@@ -87,6 +92,16 @@
             "translation": "发送"
         },
         {
+            "id": "Have them not press the Download yet",
+            "message": "Have them not press the Download yet",
+            "translation": "让他们先不要按\"下载\""
+        },
+        {
+            "id": "Have them press the Download now",
+            "message": "Have them press the Download now",
+            "translation": "现在让他们按\"下载\""
+        },
+        {
             "id": "Sending file",
             "message": "Sending file",
             "translation": "正在发送文件"
@@ -105,6 +120,16 @@
             "id": "Show / Hide",
             "message": "Show / Hide",
             "translation": "显示/隐藏"
+        },
+        {
+            "id": "Zip Folder",
+            "message": "Zip Folder",
+            "translation": "压缩文件夹"
+        },
+        {
+            "id": "UnZip File",
+            "message": "UnZip File",
+            "translation": "解压文件"
         },
         {
             "id": "Appearance",

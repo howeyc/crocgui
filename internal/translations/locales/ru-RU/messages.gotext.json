@@ -7,21 +7,6 @@
             "translation": "Лицензионная информация"
         },
         {
-            "id": "About",
-            "message": "About",
-            "translation": "О croc"
-        },
-        {
-            "id": "Enter code to download",
-            "message": "Enter code to download",
-            "translation": "Секрет должен быть больше 5 знаков"
-        },
-        {
-            "id": "Debug log:",
-            "message": "Debug log:",
-            "translation": "Журнал отладки:"
-        },
-        {
             "id": "Export full log",
             "message": "Export full log",
             "translation": "Сохранить журнал"
@@ -32,39 +17,24 @@
             "translation": "Сохранил всё в"
         },
         {
+            "id": "Enable Debug Log",
+            "message": "Enable Debug Log",
+            "translation": "Журналировать"
+        },
+        {
+            "id": "Wait for them before pressing Download",
+            "message": "Wait for them before pressing Download",
+            "translation": "Ждите прежде чем нажать Получить"
+        },
+        {
+            "id": "Enter code to download",
+            "message": "Enter code to download",
+            "translation": "Секрет должен быть больше 5 знаков"
+        },
+        {
             "id": "Download",
             "message": "Download",
             "translation": "Получить"
-        },
-        {
-            "id": "Save All",
-            "message": "Save All",
-            "translation": "Сохранить всё"
-        },
-        {
-            "id": "Receive Code",
-            "message": "Receive Code",
-            "translation": "Секрет"
-        },
-        {
-            "id": "Receiving file",
-            "message": "Receiving file",
-            "translation": "Получаю"
-        },
-        {
-            "id": "Received",
-            "message": "Received",
-            "translation": "Получил"
-        },
-        {
-            "id": "Receive cancelled.",
-            "message": "Receive cancelled.",
-            "translation": "Отмена получения."
-        },
-        {
-            "id": "Cancel",
-            "message": "Cancel",
-            "translation": "Отменить"
         },
         {
             "id": "Delete All",
@@ -75,6 +45,36 @@
             "id": "Are you sure you want to delete all received files?",
             "message": "Are you sure you want to delete all received files?",
             "translation": "Вы уверены что хотите удалить все полученные файлы?"
+        },
+        {
+            "id": "Receive cancelled.",
+            "message": "Receive cancelled.",
+            "translation": "Отмена получения."
+        },
+        {
+            "id": "Receiving file",
+            "message": "Receiving file",
+            "translation": "Получаю"
+        },
+        {
+            "id": "Send cancelled.",
+            "message": "Send cancelled.",
+            "translation": "Отмена посылки."
+        },
+        {
+            "id": "Received",
+            "message": "Received",
+            "translation": "Получил"
+        },
+        {
+            "id": "Cancel",
+            "message": "Cancel",
+            "translation": "Отменить"
+        },
+        {
+            "id": "Receive Code",
+            "message": "Receive Code",
+            "translation": "Секрет"
         },
         {
             "id": "Receive",
@@ -92,6 +92,16 @@
             "translation": "Дать"
         },
         {
+            "id": "Have them not press the Download yet",
+            "message": "Have them not press the Download yet",
+            "translation": "Пока пусть не нажимают Получить"
+        },
+        {
+            "id": "Have them press the Download now",
+            "message": "Have them press the Download now",
+            "translation": "Теперь пусть нажмут Получить"
+        },
+        {
             "id": "Sending file",
             "message": "Sending file",
             "translation": "Посылаю"
@@ -102,19 +112,9 @@
             "translation": "Послал"
         },
         {
-            "id": "Send cancelled.",
-            "message": "Send cancelled.",
-            "translation": "Отмена посылки."
-        },
-        {
             "id": "Send Code",
             "message": "Send Code",
             "translation": "Секрет"
-        },
-        {
-            "id": "Enable Debug Log",
-            "message": "Enable Debug Log",
-            "translation": "Журналировать"
         },
         {
             "id": "Show / Hide",
@@ -122,9 +122,14 @@
             "translation": "Показать / Скрыть"
         },
         {
-            "id": "Settings",
-            "message": "Settings",
-            "translation": " "
+            "id": "Zip Folder",
+            "message": "Zip Folder",
+            "translation": "Упаковывать каталог"
+        },
+        {
+            "id": "UnZip File",
+            "message": "UnZip File",
+            "translation": "Рапаковывать файл"
         },
         {
             "id": "Appearance",
@@ -220,11 +225,6 @@
             "id": "Upload Speed Throttle",
             "message": "Upload Speed Throttle",
             "translation": "Медлить"
-        },
-        {
-            "id": "Debug",
-            "message": "Debug",
-            "translation": "Отладка"
         }
     ]
 }

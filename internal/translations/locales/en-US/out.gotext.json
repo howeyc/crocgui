@@ -30,6 +30,13 @@
             "fuzzy": true
         },
         {
+            "id": "Wait for them before pressing Download",
+            "message": "Wait for them before pressing Download",
+            "translation": "Wait for them before pressing Download",
+            "translatorComment": "Copied from source.",
+            "fuzzy": true
+        },
+        {
             "id": "Enter code to download",
             "message": "Enter code to download",
             "translation": "Enter code to download",
@@ -121,6 +128,20 @@
             "fuzzy": true
         },
         {
+            "id": "Have them not press the Download yet",
+            "message": "Have them not press the Download yet",
+            "translation": "Have them not press the Download yet",
+            "translatorComment": "Copied from source.",
+            "fuzzy": true
+        },
+        {
+            "id": "Have them press the Download now",
+            "message": "Have them press the Download now",
+            "translation": "Have them press the Download now",
+            "translatorComment": "Copied from source.",
+            "fuzzy": true
+        },
+        {
             "id": "Sending file",
             "message": "Sending file",
             "translation": "Sending file",
@@ -145,6 +166,20 @@
             "id": "Show / Hide",
             "message": "Show / Hide",
             "translation": "Show / Hide",
+            "translatorComment": "Copied from source.",
+            "fuzzy": true
+        },
+        {
+            "id": "Zip Folder",
+            "message": "Zip Folder",
+            "translation": "Zip Folder",
+            "translatorComment": "Copied from source.",
+            "fuzzy": true
+        },
+        {
+            "id": "UnZip File",
+            "message": "UnZip File",
+            "translation": "UnZip File",
             "translatorComment": "Copied from source.",
             "fuzzy": true
         },

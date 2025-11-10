@@ -22,6 +22,11 @@
             "translation": "Журналировать"
         },
         {
+            "id": "Wait for them before pressing Download",
+            "message": "Wait for them before pressing Download",
+            "translation": "Ждите прежде чем нажать Получить"
+        },
+        {
             "id": "Enter code to download",
             "message": "Enter code to download",
             "translation": "Секрет должен быть больше 5 знаков"
@@ -87,6 +92,16 @@
             "translation": "Дать"
         },
         {
+            "id": "Have them not press the Download yet",
+            "message": "Have them not press the Download yet",
+            "translation": "Пока пусть не нажимают Получить"
+        },
+        {
+            "id": "Have them press the Download now",
+            "message": "Have them press the Download now",
+            "translation": "Теперь пусть нажмут Получить"
+        },
+        {
             "id": "Sending file",
             "message": "Sending file",
             "translation": "Посылаю"
@@ -105,6 +120,16 @@
             "id": "Show / Hide",
             "message": "Show / Hide",
             "translation": "Показать / Скрыть"
+        },
+        {
+            "id": "Zip Folder",
+            "message": "Zip Folder",
+            "translation": "Упаковывать каталог"
+        },
+        {
+            "id": "UnZip File",
+            "message": "UnZip File",
+            "translation": "Рапаковывать файл"
         },
         {
             "id": "Appearance",
