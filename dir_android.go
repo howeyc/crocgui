@@ -2237,28 +2237,6 @@ func MimeType(uri fyne.URI) (mimeTypeStr string) {
 
 	return mimeTypeStr
 }
-func countChild0(uri fyne.URI) (count int, err error) {
-	if uri == nil {
-		return 0, fmt.Errorf("uri is nil")
-	}
-
-	// Проверяем, можно ли получить список содержимого для данного URI
-	listable, err := storage.CanList(uri)
-	if err != nil {
-		return 0, fmt.Errorf("cannot check if URI is listable: %w", err)
-	}
-	if !listable {
-		return 0, fmt.Errorf("URI is not a listable directory: %s", uri.String())
-	}
-
-	// Получаем список дочерних элементов
-	children, err := storage.List(uri)
-	if err != nil {
-		return 0, fmt.Errorf("failed to list directory contents: %w", err)
-	}
-
-	return len(children), nil
-}
 
 // countChild возвращает количество дочерних элементов в директории DocumentsContract
 func countChild(uri fyne.URI) (count int, err error) {
@@ -2584,4 +2562,45 @@ func Reader(u fyne.URI) (r fyne.URIReadCloser, err error) {
 		return
 	}
 	return storage.Reader(u) // 84434413 ~3.38 сек
+}
+
+func canRead(uri fyne.URI) bool {
+	if uri == nil {
+		return false
+	}
+	switch MimeType(uri) {
+	case MIME_TYPE_DIR:
+		return false
+	case MIME_TYPE_OCTET_STREAM:
+		if strings.HasPrefix(uri.String(), ZhangHai) {
+			size, sizeErr := getSize(uri)
+			if sizeErr == nil && size == 4096 {
+				return false // иначе storage.CanRead  вернёт syscall.EISDIR и крэшит
+			}
+		}
+	}
+	ok, err := storage.CanRead(uri)
+	if err != nil {
+		log.Errorf("canRead: %w", err)
+		return false
+	}
+	if !ok {
+		return false
+	}
+	log.Trace("CanRead %s", uri)
+
+	r, err := storage.Reader(uri)
+	if err != nil {
+		log.Errorf("reader: %w", err)
+		return false
+	}
+	defer r.Close()
+
+	p := make([]byte, 1)
+	_, err = r.Read(p)
+	if err != nil {
+		log.Errorf("read: %w", err)
+		return false
+	}
+	return true
 }

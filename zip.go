@@ -16,8 +16,6 @@ import (
 	log "github.com/schollz/logger"
 )
 
-// ... (остальные функции остаются без изменений, включая getTotalSize и ValidFileName) ...
-
 // ZipDirectoryProgress zips the contents of source directory to destination zip file with overall progress updates in the GUI.
 // It calculates the total size first and then updates progress based on bytes written to the zip file.
 func ZipDirectoryProgress(destination, source string, c *fyne.Container, onComplete func(err error)) {

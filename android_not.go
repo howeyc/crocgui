@@ -3,10 +3,12 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/storage"
@@ -31,7 +33,15 @@ func CanList(u fyne.URI) (bool, error) {
 
 func IsDirectory(u fyne.URI) (ok bool) {
 	if u == nil {
-		return false
+		return
+	}
+	switch u.Scheme() {
+	case "file", "":
+		if fi, _ := os.Stat(u.Path()); fi == nil {
+			return
+		} else {
+			return fi.IsDir()
+		}
 	}
 	ok, _ = storage.CanList(u)
 	return
@@ -53,10 +63,26 @@ func hasChild(uri fyne.URI) (isDir bool, childCount int, err error) {
 	return storageChild(uri)
 }
 
-// getSize возвращает размер файла в байтах для не-Android платформ
+// getSize возвращает размер файла в байтах
 func getSize(uri fyne.URI) (size int64, err error) {
 	if uri == nil {
-		return 0, fmt.Errorf("uri is nil")
+		return 0, ErrNilURI
+	}
+	switch uri.Scheme() {
+	case "file", "":
+		if fi, err := os.Stat(uri.Path()); err != nil {
+			return 0, err
+		} else {
+			return fi.Size(), nil
+		}
+	}
+	return 0, fmt.Errorf("uri is not file")
+}
+
+// getSize возвращает размер файла в байтах для не-Android платформ
+func getSize0(uri fyne.URI) (size int64, err error) {
+	if uri == nil {
+		return 0, ErrNilURI
 	}
 
 	// Проверяем существование файла
@@ -100,18 +126,122 @@ func start() {
 	cmd.Start()
 }
 
+func Reader(u fyne.URI) (r fyne.URIReadCloser, err error) {
+	if u == nil {
+		return nil, ErrNilURI
+	}
+	switch u.Scheme() {
+	case "file", "":
+		return reader(u)
+	}
+
+	ok, err := storage.CanRead(u)
+	if err != nil {
+		return nil, err
+	}
+
+	if !ok {
+		return nil, fmt.Errorf("uri not readable")
+	}
+	return storage.Reader(u)
+}
+
+var (
+	ErrNilReader = errors.New("reader is nil")
+	ErrNilFile   = errors.New("file is nil")
+	ErrNilURI    = errors.New("uri is nil")
+)
+
+type fileReader struct {
+	uri  fyne.URI
+	file *os.File
+}
+
+func reader(uri fyne.URI) (fyne.URIReadCloser, error) {
+	if uri == nil {
+		return nil, ErrNilURI
+	}
+
+	path := uri.Path()
+	if path == "" {
+		return nil, os.ErrInvalid
+	}
+
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+
+	return &fileReader{
+		uri:  uri,
+		file: file,
+	}, nil
+}
+
+// Read читает данные из файла
+func (r *fileReader) Read(p []byte) (n int, err error) {
+	if r == nil {
+		return 0, ErrNilReader
+	}
+	if r.file == nil {
+		return 0, ErrNilFile
+	}
+	if len(p) == 0 {
+		return 0, nil
+	}
+
+	return r.file.Read(p)
+}
+
+// Close закрывает файл
+func (r *fileReader) Close() error {
+	if r == nil {
+		return ErrNilReader
+	}
+	if r.file == nil {
+		return nil // уже закрыт
+	}
+
+	err := r.file.Close()
+	r.file = nil // помечаем как закрытый
+	return err
+}
+
+// URI возвращает URI файла
+func (r *fileReader) URI() fyne.URI {
+	if r == nil {
+		return nil
+	}
+	return r.uri
+}
+
 func List(u fyne.URI) (c []fyne.URI, err error) {
 	if u == nil {
 		err = fmt.Errorf("uri is nul")
 		return
 	}
+	switch u.Scheme() {
+	case "file", "":
+		return list(u)
+
+	}
 	return storage.List(u)
 }
 
-func Reader(u fyne.URI) (r fyne.URIReadCloser, err error) {
-	if u == nil {
-		err = fmt.Errorf("uri is nul")
-		return
+func list(u fyne.URI) ([]fyne.URI, error) {
+	path := u.Path()
+
+	entries, err := os.ReadDir(path)
+	if err != nil {
+		return nil, err
 	}
-	return storage.Reader(u)
+
+	var uris []fyne.URI
+	for _, entry := range entries {
+		childPath := filepath.Join(path, entry.Name())
+		childURI := storage.NewFileURI(childPath)
+		uris = append(uris, childURI)
+	}
+
+	return uris, nil
 }

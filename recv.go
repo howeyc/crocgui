@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -28,6 +27,7 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) *containe
 	index := 1
 	var ti *container.TabItem
 	showPage := func() {}
+	reload := func() {}
 	defer func() {
 		if r := recover(); r != nil {
 			log.Error(fmt.Sprint(r))
@@ -143,26 +143,33 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) *containe
 	}
 
 	removeEntry := func(fpath string, fe *fyne.Container, del bool) {
-		fyne.Do(func() {
-			boxholder.Remove(fe)
-			boxholder.Refresh()
-		})
 		if del {
 			remove := os.Remove
-			file := "file"
+			de := "file"
 			fi, _ := os.Stat(fpath)
 			if fi != nil {
 				if fi.IsDir() {
 					remove = os.RemoveAll
-					file = "dir"
+					de = "dir"
 				}
-				log.Tracef("Removed received %s: %s error: %v", file, fpath, remove(fpath))
+
+				if err := remove(fpath); err != nil {
+					log.Errorf("remove %s %s: %v", de, fpath, err)
+					return
+				} else {
+					log.Tracef("remove %s %s", de, fpath)
+				}
 			}
 		}
-		delete(fileentries, fpath)
+		fyne.Do(func() {
+			boxholder.Remove(fe)
+			boxholder.Refresh()
+			delete(fileentries, fpath)
+		})
 	}
+	var addEntry func(dst string, f func(d *widget.Button, p *widget.ProgressBar, s *widget.Button, l *widget.Label)) (newentry *fyne.Container)
 
-	ShowFileLocation := func(src string, parent fyne.Window) {
+	ShowFileSave := func(src string, parent fyne.Window) {
 		fe, ok := fileentries[src]
 		if !ok {
 			return
@@ -196,36 +203,73 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) *containe
 					log.Errorf("creating writer from URI(%s): %v", u, err)
 					return
 				}
+			} else {
+				u = destination.URI()
 			}
+
+			dst := u.Path()
 			if !(isMobile || asMobile) {
-				if fi, err := os.Stat(src); err == nil && fi.IsDir() {
-					destination.Close()
-					os.Remove(destination.URI().Path())
-					err := Rename(src, destination.URI().Path())
-					if err == nil {
-						log.Tracef("File %s moved to %s", src, destination.URI().Path())
-						removeEntry(src, fe, true)
-					} else {
-						log.Warnf("File %s not moved to %s error: %v", src, destination.URI().Path(), err)
-					}
+				destination.Close()
+				os.Remove(dst) // диалог создаёт файл даже для каталога
+				fi, err := os.Stat(src)
+				if err != nil {
+					log.Errorf("stat %s: %w", src, err)
 					return
 				}
-				err := Rename(src, destination.URI().Path())
+				err = Rename(src, dst)
 				if err == nil {
-					log.Tracef("File %s moved to %s", src, destination.URI().Path())
-					removeEntry(src, fe, true)
+					log.Tracef("move %s %s", src, dst)
+					removeEntry(src, fe, false)
 					return
-				} else {
-					log.Warnf("File %s not moved to %s error: %v", src, destination.URI().Path(), err)
 				}
+				log.Warnf("move %s %s: %v", src, dst, err)
+				// fileSave
+				copyFiles(storage.NewFileURI(src), dst, func(u fyne.URI, dstPath string) error {
+					fyne.Do(func() {})
+					feCopy := fe
+					src := u.Path()
+					if fi.IsDir() {
+						// Создаю временный прогрессбар
+						rel, err := filepath.Rel(join(), src)
+						if err != nil {
+							rel = src
+						}
+						feCopy = addEntry(src, func(d *widget.Button, p *widget.ProgressBar, s *widget.Button, l *widget.Label) {
+							l.SetText(rel)
+						})
+					}
+					CopyFileProgress(src, dstPath, feCopy, func(err error) {
+						if err != nil {
+							log.Errorf("copy %s %s: %w", src, dstPath, err)
+							removeEntry(src, feCopy, false)
+							return
+						}
+
+						if _, err := os.Stat(dstPath); err != nil {
+							// не сохранилось
+							log.Errorf("stat %s: %w", dstPath, err)
+						} else {
+							// сохранилось, удаляем
+							log.Tracef("copy %s %s", src, dstPath)
+							removeEntry(src, feCopy, true)
+							if des, _ := os.ReadDir(filepath.Dir(src)); len(des) == 0 {
+								// удаляю родителя
+								reload()
+							}
+						}
+					})
+					return nil
+				})
+				return
+
 			}
 
 			copyToUWCProgress(destination, src, fe, func(err error) {
 				cl()
 				if err != nil {
-					log.Errorf("Error saving %s to %s error:%v", src, destination.URI().Path(), err)
+					log.Errorf("copy %s %s: %v", src, dst, err)
 				} else {
-					log.Tracef("File %s saved to %s", src, destination.URI().Path())
+					log.Tracef("copy %s %s", src, dst)
 					removeEntry(src, fe, true)
 				}
 			})
@@ -255,7 +299,6 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) *containe
 	}
 
 	// Добавим строчку в boxholder и fileentries
-	var addEntry func(dst string, f func(d *widget.Button, p *widget.ProgressBar, s *widget.Button, l *widget.Label)) (newentry *fyne.Container)
 	addEntry = func(dst string, f func(d *widget.Button, p *widget.ProgressBar, s *widget.Button, l *widget.Label)) (newentry *fyne.Container) {
 		if fe := fileentries[dst]; fe != nil {
 			log.Tracef("exists %s", dst)
@@ -320,7 +363,7 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) *containe
 									removeEntry(dst, feDir, true)
 								}
 								fyne.Do(func() {
-									ShowFileLocation(pathZip, w)
+									ShowFileSave(pathZip, w)
 								})
 							})
 						}
@@ -328,7 +371,7 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) *containe
 					return
 				}
 			}
-			ShowFileLocation(dst, w)
+			ShowFileSave(dst, w)
 		})
 
 		deleteButton := widget.NewButtonWithIcon("", theme.CancelIcon(), func() {
@@ -361,7 +404,7 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) *containe
 	fpath := a.Preferences().String("DeleteFile")
 	os.MkdirAll(recvDir, 0700)
 
-	reload := func() {
+	reload = func() {
 		for _, name := range ls(recvDir) {
 			if name != "" {
 				path := filepath.Join(recvDir, name)
@@ -372,7 +415,7 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) *containe
 					name += "/"
 				}
 				if isDir, count, _ := fileChild(path); isDir && count < 1 {
-					log.Tracef("remove empty dir %s error: %v", path, os.RemoveAll(path))
+					log.Tracef("remove empty dir %s: %v", path, os.Remove(path))
 					continue
 				}
 				addEntry(path, func(d *widget.Button, p *widget.ProgressBar, s *widget.Button, l *widget.Label) {
@@ -462,7 +505,10 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) *containe
 					u, cl, err = ChildDownload(child)
 					if p, err := storage.Parent(u); err == nil {
 						lastSaveDir = p.Path()
-						lu, _ = storage.ListerForURI(p)
+						lu, err = storage.ListerForURI(p)
+						if err != nil {
+							lastSaveDir = lu.Path()
+						}
 					}
 				}
 				if err != nil {
@@ -473,7 +519,7 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) *containe
 				if !(isMobile || asMobile) {
 					err := Rename(src, u.Path())
 					if err == nil {
-						log.Tracef("File %s moved to %s", src, u.Path())
+						log.Tracef("move %s %s", src, u.Path())
 						removeEntry(src, fe, true)
 						fyne.Do(func() {
 							if len(fileentries) == 0 {
@@ -482,7 +528,7 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) *containe
 						})
 						continue
 					} else {
-						log.Warnf("File %s not moved to %s error: %v", src, u.Path(), err)
+						log.Warnf("move %s %s: %v", src, u.Path(), err)
 					}
 				}
 
@@ -836,38 +882,6 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) *containe
 
 }
 
-func copyToUWCProgress(destination fyne.URIWriteCloser, src string, c *fyne.Container, onComplete func(err error)) {
-	if destination == nil {
-		onComplete(fmt.Errorf("destination is nil (dialog closed)"))
-		return
-	}
-
-	source, err := os.Open(src)
-	if err != nil {
-		destination.Close()
-		onComplete(fmt.Errorf("failed to open source file: %v", err))
-		return
-	}
-
-	fi, err := os.Stat(src)
-	if err != nil {
-		destination.Close()
-		source.Close()
-		onComplete(err)
-		return
-	}
-
-	pw, restore := NewProgressWriter(destination, fi.Size(), c)
-
-	go func() {
-		_, err := io.Copy(pw, source)
-		source.Close()
-		destination.Close()
-		restore()
-		onComplete(err)
-	}()
-}
-
 // Большой диалог для десктопа
 func ShowFolderOpen(callback func(fyne.ListableURI, error), parent fyne.Window) {
 	if isMobile {
@@ -878,178 +892,4 @@ func ShowFolderOpen(callback func(fyne.ListableURI, error), parent fyne.Window) 
 	fd := dialog.NewFolderOpen(callback, parent)
 	fd.Resize(parent.Canvas().Size())
 	fd.Show()
-}
-
-func Rename(src, dst string) error {
-	// Check if source path exists
-	srcStat, err := os.Stat(src)
-	if err != nil {
-		return err
-	}
-
-	// Check that dst is not a subdirectory of src
-	srcAbs, err := filepath.Abs(src)
-	if err != nil {
-		return err
-	}
-	dstAbs, err := filepath.Abs(dst)
-	if err != nil {
-		return err
-	}
-
-	if strings.HasPrefix(dstAbs, srcAbs+string(filepath.Separator)) {
-		return errors.New("destination cannot be inside source directory")
-	}
-
-	// Try standard rename first
-	if err := os.Rename(src, dst); err == nil {
-		return nil
-	}
-
-	// If standard rename failed, use copy approach
-	if srcStat.IsDir() {
-		return renameDir(src, dst)
-	}
-
-	return renameFile(src, dst)
-}
-
-func renameDir(src, dst string) error {
-	// Check if destination already exists
-	if _, err := os.Stat(dst); err == nil {
-		return os.ErrExist
-	}
-
-	// Create destination directory
-	if err := os.MkdirAll(dst, 0700); err != nil {
-		return err
-	}
-
-	// Copy directory contents
-	if err := copyDirectory(src, dst); err != nil {
-		os.RemoveAll(dst) // cleanup on error
-		return err
-	}
-
-	// Remove source directory
-	if err := os.RemoveAll(src); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func renameFile(src, dst string) error {
-	// Open source file
-	srcFile, err := os.Open(src)
-	if err != nil {
-		return err
-	}
-	defer srcFile.Close()
-
-	// Get source file info for permissions
-	srcInfo, err := srcFile.Stat()
-	if err != nil {
-		return err
-	}
-
-	// Create destination file
-	dstFile, err := os.Create(dst)
-	if err != nil {
-		return err
-	}
-
-	// Copy file content
-	if _, err := io.Copy(dstFile, srcFile); err != nil {
-		dstFile.Close()
-		os.Remove(dst) // cleanup on error
-		return err
-	}
-
-	// Close destination file before chmod
-	if err := dstFile.Close(); err != nil {
-		os.Remove(dst) // cleanup on error
-		return err
-	}
-
-	// Copy file permissions
-	if err := os.Chmod(dst, srcInfo.Mode()); err != nil {
-		os.Remove(dst) // cleanup on error
-		return err
-	}
-
-	// Remove source file
-	return os.Remove(src)
-}
-
-func copyDirectory(src, dst string) error {
-	// Создаем целевую директорию с оригинальными правами
-	srcInfo, err := os.Stat(src)
-	if err != nil {
-		return err
-	}
-	if err := os.MkdirAll(dst, srcInfo.Mode()); err != nil {
-		return err
-	}
-
-	return filepath.WalkDir(src, func(path string, dirEntry fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-
-		relPath, err := filepath.Rel(src, path)
-		if err != nil {
-			return err
-		}
-
-		// Пропускаем корневую директорию - она уже создана
-		if relPath == "." {
-			return nil
-		}
-
-		dstPath := filepath.Join(dst, relPath)
-
-		if dirEntry.IsDir() {
-			info, err := dirEntry.Info()
-			if err != nil {
-				return err
-			}
-			// Используем Mkdir вместо MkdirAll, так как родительские директории уже созданы
-			// благодаря обходу в глубину и созданию корневой директории
-			return os.Mkdir(dstPath, info.Mode())
-		}
-
-		return copyFileWithMode(path, dstPath, dirEntry)
-	})
-}
-func copyFileWithMode(src, dst string, dirEntry fs.DirEntry) error {
-	info, err := dirEntry.Info()
-	if err != nil {
-		return err
-	}
-	return copyFile(src, dst, info.Mode())
-}
-
-func copyFile(src, dst string, mode os.FileMode) error {
-	srcFile, err := os.Open(src)
-	if err != nil {
-		return err
-	}
-	defer srcFile.Close()
-
-	dstFile, err := os.Create(dst)
-	if err != nil {
-		return err
-	}
-
-	if _, err := io.Copy(dstFile, srcFile); err != nil {
-		dstFile.Close()
-		return err
-	}
-
-	if err := dstFile.Close(); err != nil {
-		return err
-	}
-
-	return os.Chmod(dst, mode)
 }

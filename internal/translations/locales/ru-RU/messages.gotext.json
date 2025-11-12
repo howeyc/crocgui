@@ -124,12 +124,12 @@
         {
             "id": "Zip Folder",
             "message": "Zip Folder",
-            "translation": "Упаковывать каталог"
+            "translation": "Zip каталоги"
         },
         {
             "id": "UnZip File",
             "message": "UnZip File",
-            "translation": "Рапаковывать файл"
+            "translation": "UnZip файлы"
         },
         {
             "id": "Appearance",

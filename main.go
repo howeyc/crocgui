@@ -198,7 +198,7 @@ func refreshWindow(a fyne.App, w fyne.Window) {
 	}
 }
 
-func ls(path string) (files []string) {
+func ls0(path string) (files []string) {
 	if path == "" {
 		return
 	}
@@ -217,5 +217,20 @@ func ls(path string) (files []string) {
 		files = append(files, fileInfo.Name())
 	}
 
+	return
+}
+func ls(path string) (files []string) {
+	if path == "" {
+		return
+	}
+
+	des, err := os.ReadDir(path)
+	if err != nil {
+		return
+	}
+
+	for _, de := range des {
+		files = append(files, de.Name())
+	}
 	return
 }

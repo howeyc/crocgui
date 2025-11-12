@@ -168,23 +168,27 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 
 	// fyne.Do
 	removeEntry := func(fpath string, fe *fyne.Container, del bool) {
-		fyne.Do(func() {
-			boxholder.Remove(fe)
-			boxholder.Refresh()
-		})
 		if del {
 			remove := os.Remove
-			file := "file"
+			de := "file"
 			fi, _ := os.Stat(fpath)
 			if fi != nil {
 				if fi.IsDir() {
 					remove = os.RemoveAll
-					file = "dir"
+					de = "dir"
 				}
-				log.Tracef("Removed cached %s: %s error: %v", file, fpath, remove(fpath))
+
+				if err := remove(fpath); err != nil {
+					log.Tracef("remove %s %s: %v", de, fpath, err)
+					return
+				}
 			}
 		}
-		delete(fileentries, fpath)
+		fyne.Do(func() {
+			boxholder.Remove(fe)
+			boxholder.Refresh()
+			delete(fileentries, fpath)
+		})
 	}
 
 	// nil if exists
@@ -231,7 +235,6 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 	}
 
 	// Пишу ссылку а если не удачно то кэширую
-	//  fyne.Do
 	addPath := func(src string) error {
 		fi, err := os.Stat(src)
 		if err != nil {
@@ -249,62 +252,63 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 		})
 
 		if fe == nil {
-			log.Tracef("URI (%s), already in fileentries %s", src, base)
+			log.Tracef("entries %s has %s", base, src)
 			return nil
 		}
 
 		if _, err := os.Stat(dst); err == nil {
 			// Также и когда src==dst
-			log.Tracef("URI (%s), already in internal cache %s", src, dst)
+			log.Tracef("cache %s has %s", dst, src)
 			return nil
 		}
 
-		if !swap {
-			err = Symlink(src, dst)
-			log.Tracef("Make symlink URI (%s) to internal cache %s error: %v", src, dst, err)
-			if err == nil {
-				return nil
-			}
+		err = Symlink(src, dst)
+		log.Tracef("symlink %s %s: %v", src, dst, err)
+		if err == nil {
+			return nil
 		}
 
-		// fyne.Do(func() {
 		go func() {
-			log.Tracef("copyFiles error: %v", copyFiles(storage.NewFileURI(src), dst, func(source fyne.URIReadCloser, dstPath string) error {
+			// addPath
+			log.Tracef("copyFiles: %v", copyFiles(storage.NewFileURI(src), dst, func(u fyne.URI, dstPath string) error {
 				fyne.Do(func() {})
-				u := source.URI()
-				feTmp := fe
+				feCopy := fe
+				src := u.Path()
 				if fi.IsDir() {
-					// Покажем временный прогрессбар
-					rel, _ := filepath.Rel(join(), dstPath)
-					feTmp = addEntry(dstPath, func(d *widget.Button, p *widget.ProgressBar, l *widget.Label) {
-						p.Hide()
+					// Создаю временный прогрессбар
+					rel, err := filepath.Rel(join(), dstPath)
+					if err != nil {
+						rel = dstPath
+					}
+					feCopy = addEntry(dstPath, func(d *widget.Button, p *widget.ProgressBar, l *widget.Label) {
 						l.SetText(rel)
 					})
-					if feTmp == nil {
+					if feCopy == nil {
 						return nil
 					}
-
 				}
-				CopyFileProgress(u.Path(), dstPath, feTmp, func(err error) {
+				CopyFileProgress(src, dstPath, feCopy, func(err error) {
 					if err != nil {
-						log.Errorf("URI (%s), copied to internal cache %s error: %s", u, dstPath, err)
-						removeEntry(dstPath, fe, true)
+						log.Errorf("copy %s %s: %w", src, dstPath, err)
+						removeEntry(dstPath, feCopy, true)
 						return
 					}
-					log.Tracef("URI (%s), copied to internal cache %s", u, dstPath)
 
 					if _, err := os.Stat(dstPath); err != nil {
-						log.Errorf("Stat(%s) error: %v", dstPath, err)
+						// не закэшировал
+						log.Errorf("stat %s: %w", dstPath, err)
+					} else {
+						// закэшировал
+						log.Tracef("copy %s %s", src, dstPath)
 					}
-					if fi.IsDir() {
-						// Скроем временный прогрессбар без удаления файла
-						removeEntry(dstPath, feTmp, false)
+					if feCopy != fe {
+						// Удалю временный прогрессбар без удаления файла
+						removeEntry(dstPath, feCopy, false)
 					}
 				})
 				return nil
 			}))
 		}()
-		// })
 
 		return nil
 	}
@@ -351,7 +355,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 					fpath = target
 				} else {
 					if isDir, count, _ := fileChild(fpath); isDir && count < 1 {
-						log.Tracef("remove empty dir %s error: %v", fpath, os.RemoveAll(fpath))
+						log.Tracef("remove empty dir %s: %v", fpath, os.Remove(fpath))
 						continue
 					}
 				}
@@ -540,7 +544,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 			}
 			if e != nil {
 				source.Close()
-				log.Errorf("Open dialog error: %s", e)
+				log.Errorf("file dialog: %v", e)
 				return
 			}
 			u := source.URI()
@@ -553,10 +557,11 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 			src := u.String()
 
 			err := Symlink(u.Path(), dst)
-			log.Tracef("Make symlink URI (%s) to internal cache %s error: %v", src, dst, err)
+			log.Tracef("symlink %s %s: %v", u.Path(), dst, err)
 			if err == nil {
 				return
 			}
+
 			raf := func() {}
 			if apiLevel() < 29 && strings.HasPrefix(src, ZhangHai) {
 				raf = func() {
@@ -566,19 +571,21 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 				}
 			}
 			copyFromURCProgress(source, "", fe, func(err error) {
+				defer raf()
 				if err != nil {
-					log.Errorf("URI (%s), copied to internal cache %s error: %s", src, dst, err)
+					log.Errorf("copy %s %s: %v", src, dst, err)
 					removeEntry(dst, fe, true)
-					raf()
+					// raf()
 					return
 				}
-				log.Tracef("URI (%s), copied to internal cache %s", src, dst)
 
-				if _, sterr := os.Stat(dst); sterr != nil {
-					log.Errorf("Stat error: %s - %s", dst, sterr.Error())
-					removeEntry(dst, fe, true)
+				if _, err := os.Stat(dst); err != nil {
+					log.Errorf("stat %s:  %v", dst, err)
+					removeEntry(dst, fe, false)
+				} else {
+					log.Tracef("copy %s %s", src, dst)
 				}
-				raf()
+				// raf()
 			})
 		}, w)
 	})
@@ -604,48 +611,48 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 				return
 			}
 
-			if !swap {
-				err := Symlink(u.Path(), dst)
-				log.Tracef("Make symlink URI (%s) to internal cache %s error: %v", u, dst, err)
-				if err == nil {
-					// Десктоп
-					return
-				}
+			err := Symlink(u.Path(), dst)
+			log.Tracef("symlink %s %s: %v", u.Path(), dst, err)
+			if err == nil {
+				// Десктоп
+				return
 			}
 
-			// fyne.Do(func() {
-			// go func() {
-			log.Tracef("copyFiles error: %v", copyFiles(u, dst, func(source fyne.URIReadCloser, dstPath string) error {
+			log.Tracef("copyFiles error: %v", copyFiles(u, dst, func(src fyne.URI, dstPath string) error {
 				fyne.Do(func() {})
-				src := source.URI()
 				// Покажем временный прогрессбар
-				rel, _ := filepath.Rel(join(), dstPath)
-				feTmp := addEntry(dstPath, func(d *widget.Button, p *widget.ProgressBar, l *widget.Label) {
-					p.Hide()
+				rel, err := filepath.Rel(join(), dstPath)
+				if err != nil {
+					rel = dstPath
+				}
+				feCopy := addEntry(dstPath, func(d *widget.Button, p *widget.ProgressBar, l *widget.Label) {
 					l.SetText(rel)
 				})
-				if feTmp == nil {
+				if feCopy == nil {
 					return nil
 				}
-				copyFromURCProgress(source, dstPath, feTmp, func(err error) {
+				source, err := Reader(src)
+				if err != nil {
+					return fmt.Errorf("reader %s: %w", src, err)
+				}
+				copyFromURCProgress(source, dstPath, feCopy, func(err error) {
 					if err != nil {
-						log.Errorf("URI (%s), copied to internal cache %s error: %s", src, dstPath, err)
-						removeEntry(dstPath, feTmp, true)
+						log.Errorf("copy %s %s: %v", src, dstPath, err)
+						removeEntry(dstPath, feCopy, true)
 						return
 					}
-					log.Tracef("URI (%s), copied to internal cache %s", src, dstPath)
 
 					if _, err := os.Stat(dstPath); err != nil {
-						log.Errorf("Stat(%s) error: %v", dstPath, err)
+						log.Errorf("stat %s: %v", dstPath, err)
+					} else {
+						log.Tracef("copy %s %s", src, dstPath)
 					}
 					// Скроем временный прогрессбар без удаления файла
-					removeEntry(dstPath, feTmp, false)
+					removeEntry(dstPath, feCopy, false)
 				})
 				return nil
 			}))
 			reload()
-			// })
-			// }()
 		}
 		ShowFolderOpen(folderOpen, w)
 	})
@@ -891,8 +898,8 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 								if fr, ok := fileentries[path]; ok {
 									fyne.Do(func() {
 										boxholder.Remove(fr)
+										delete(fileentries, path)
 									})
-									delete(fileentries, path)
 								}
 							}
 							totalMax += fi.Size
@@ -1025,23 +1032,6 @@ func ShowFileOpen(callback func(fyne.URIReadCloser, error), parent fyne.Window) 
 	fd.Show()
 }
 
-func CopyFile(src, dst string) error {
-	source, err := os.Open(src)
-	if err != nil {
-		return err
-	}
-	defer source.Close()
-
-	destination, err := os.Create(dst)
-	if err != nil {
-		return err
-	}
-	defer destination.Close()
-
-	_, err = io.Copy(destination, source)
-	return err
-}
-
 // For mobile os.Exit.
 // For desktop Restart.
 func restart(w fyne.Window) {
@@ -1158,230 +1148,9 @@ func totp(secret string) string {
 	return fmt.Sprintf("%06d", otp)
 }
 
-type ProgressWriter struct {
-	Writer       io.Writer
-	Total        int64
-	Written      int64
-	OnProgress   func(float64)
-	lastCall     time.Time
-	lastProgress float64
-	cancel       <-chan struct{}
-}
-
-var ErrWriteCanceled = errors.New("write canceled")
-
-const minInterval = 200 * time.Millisecond
-
-func (pw *ProgressWriter) Write(p []byte) (n int, err error) {
-	select {
-	case <-pw.cancel:
-		return 0, ErrWriteCanceled
-	case <-done:
-		return 0, ErrApplicationShutdown
-	default:
-	}
-
-	n, err = pw.Writer.Write(p)
-
-	if err != nil || pw.OnProgress == nil || pw.Total <= 0 {
-		return
-	}
-
-	pw.Written += int64(n)
-	progress := float64(pw.Written) / float64(pw.Total)
-	if pw.lastProgress < progress {
-		if progress > 1.0 {
-			progress = 1.0
-		}
-		pw.lastProgress = progress
-	} else {
-		return
-	}
-
-	now := time.Now()
-	if now.Sub(pw.lastCall) >= minInterval {
-		pw.OnProgress(progress)
-		pw.lastCall = now
-	}
-	return
-}
-
-func NewProgressWriter(destination io.Writer, total int64, c *fyne.Container) (pw *ProgressWriter, restore func()) {
-	db := c.Objects[feDel].(*widget.Button)
-	pb := c.Objects[feBar].(*widget.ProgressBar)
-	sbShow := func() {}
-	if len(c.Objects) > 3 {
-		// Для вкладки Беру
-		sb := c.Objects[feSave]
-		fyne.Do(func() { sb.Hide() })
-		sbShow = func() { fyne.Do(sb.Show) }
-	}
-
-	oldOnTapped := db.OnTapped
-
-	cancelChan := make(chan struct{})
-
-	pw = &ProgressWriter{
-		Writer: destination,
-		Total:  total,
-		cancel: cancelChan,
-		OnProgress: func(p float64) {
-			fyne.Do(func() { pb.SetValue(p) })
-		},
-	}
-
-	db.OnTapped = func() {
-		select {
-		case <-cancelChan:
-		default:
-			close(cancelChan)
-		}
-	}
-
-	fyne.Do(func() {
-		pb.SetValue(0)
-		pb.Max = 1.0
-		pb.Show()
-	})
-
-	restore = func() {
-		db.OnTapped = oldOnTapped
-		fyne.Do(func() {
-			pb.Hide()
-			sbShow()
-		})
-	}
-
-	return pw, restore
-}
-
-func CopyFileProgress(src, dst string, c *fyne.Container, onComplete func(err error)) {
-	source, err := os.Open(src)
-	if err != nil {
-		onComplete(err)
-		return
-	}
-
-	fi, err := os.Stat(src)
-	if err != nil {
-		source.Close()
-		onComplete(err)
-		return
-	}
-
-	destination, err := os.Create(dst)
-	if err != nil {
-		source.Close()
-		onComplete(err)
-		return
-	}
-
-	pw, restore := NewProgressWriter(destination, fi.Size(), c)
-
-	go func() {
-		_, err := io.Copy(pw, source)
-		source.Close()
-		destination.Close()
-		restore()
-		onComplete(err)
-	}()
-}
-
 func hashToFilename(data string) string {
 	hash := crc32.ChecksumIEEE([]byte(data))
 	return fmt.Sprintf("%x", hash)
-}
-
-type ProgressWrapper struct {
-	*widget.ProgressBar
-	lastValue float64
-	lastCall  time.Time
-}
-
-func NewProgressWrapper(bar *widget.ProgressBar) *ProgressWrapper {
-	if bar != nil {
-		fyne.Do(func() {
-			bar.SetValue(0)
-		})
-	}
-	return &ProgressWrapper{
-		ProgressBar: bar,
-		lastValue:   -1,
-	}
-}
-
-func (pw *ProgressWrapper) Show() {
-	if pw.ProgressBar != nil {
-		fyne.Do(pw.ProgressBar.Show)
-	}
-}
-
-func (pw *ProgressWrapper) Hide() {
-	if pw.ProgressBar != nil {
-		fyne.Do(pw.ProgressBar.Hide)
-	}
-}
-
-func (pw *ProgressWrapper) Set100() {
-	if pw.ProgressBar != nil {
-		pw.SetValue(int64(pw.ProgressBar.Max))
-	}
-}
-
-func (pw *ProgressWrapper) SetValue(value int64) {
-	if pw.ProgressBar == nil {
-		return
-	}
-	newValue := float64(value)
-
-	if newValue > pw.lastValue || pw.lastValue == -1 {
-		now := time.Now()
-		if now.Sub(pw.lastCall) >= minInterval || pw.lastValue == -1 {
-			pw.lastValue = newValue
-			pw.lastCall = now
-			fyne.Do(func() {
-				pw.ProgressBar.SetValue(newValue)
-			})
-		}
-	}
-}
-
-func (pw *ProgressWrapper) SetMax(max int64) {
-	if pw.ProgressBar == nil {
-		return
-	}
-	newMax := float64(max)
-
-	if newMax != pw.ProgressBar.Max {
-		fyne.Do(func() {
-			pw.ProgressBar.Max = newMax
-		})
-
-		if newMax < pw.lastValue || pw.lastValue == -1 {
-			pw.lastValue = -1
-		}
-	}
-}
-
-type LabelWrapper struct {
-	*widget.Label
-	lastText string
-}
-
-func NewLabelWrapper(label *widget.Label) *LabelWrapper {
-	return &LabelWrapper{
-		Label:    label,
-		lastText: "",
-	}
-}
-
-func (lw *LabelWrapper) SetText(text string) {
-	if text != lw.lastText {
-		lw.lastText = text
-		fyne.Do(func() {
-			lw.Label.SetText(text)
-		})
-	}
 }
 
 func hashed(c *croc.Client) bool {
@@ -1394,90 +1163,6 @@ func hashed(c *croc.Client) bool {
 		}
 	}
 	return true
-}
-
-// Symlink создает симлинк или псевдосимлинк в зависимости от CanCreateSymlinks.
-func Symlink(oldname string, newname string) error {
-	if isMobile || asMobile {
-		return fmt.Errorf("isMobile")
-	}
-	// Создаем директорию для новой ссылки если нужно
-	dir := filepath.Dir(newname)
-	if err := os.MkdirAll(dir, 0700); err != nil {
-		return err
-	}
-
-	if CanCreateSymlinks() {
-		// Пробуем создать настоящий симлинк
-		return os.Symlink(oldname, newname)
-	}
-
-	// Создаем файл-псевдосимлинк с содержимым "→oldname"
-	content := PSL + oldname
-	return os.WriteFile(newname, []byte(content), 0644)
-}
-
-// Readlink читает симлинк или псевдосимлинк.
-// Если это не симлинк - возвращает ошибку
-func Readlink(name string) (string, error) {
-	if isMobile {
-		return "", fmt.Errorf("isMobile")
-	}
-	// Пробуем прочитать как настоящий симлинк
-	fileInfo, err := os.Lstat(name)
-	if err != nil {
-		return "", err
-	}
-
-	if fileInfo.Mode()&os.ModeSymlink != 0 {
-		return os.Readlink(name)
-	}
-
-	// Пробуем прочитать как псевдосимлинк
-	contentBytes, err := os.ReadFile(name)
-	if err != nil {
-		return "", err
-	}
-
-	content := strings.TrimSpace(string(contentBytes))
-	if !strings.HasPrefix(content, PSL) || len(content) <= len(PSL) {
-		return "", os.ErrInvalid
-	}
-
-	target := strings.TrimSpace(content[len(PSL):])
-	if target == "" {
-		return "", os.ErrInvalid
-	}
-
-	// Проверяем существование цели для псевдосимлинков
-	if _, err := os.Stat(target); err != nil {
-		// Пробуем относительный путь
-		if !filepath.IsAbs(target) {
-			absTarget := filepath.Join(filepath.Dir(name), target)
-			if _, err := os.Stat(absTarget); err == nil {
-				return target, nil
-			}
-		}
-		return "", os.ErrNotExist
-	}
-
-	return target, nil
-}
-
-// CopyFunc функция для копирования файла
-type CopyFunc func(srcURI, dstPath string) error
-
-func isLinkDir(path string) (ok bool) {
-	if fi, _ := os.Stat(path); fi != nil && fi.IsDir() {
-		return true
-	}
-	if target, err := Readlink(path); err == nil {
-		log.Tracef("%s is symlink to %s", path, target)
-		if fi, _ := os.Stat(target); fi != nil && fi.IsDir() {
-			return true
-		}
-	}
-	return
 }
 
 func allEnabled(enabled bool, cos ...fyne.CanvasObject) {
@@ -1504,6 +1189,7 @@ func allEnabled(enabled bool, cos ...fyne.CanvasObject) {
 		}
 	}
 }
+
 func allShow(show bool, cos ...fyne.CanvasObject) {
 	for _, co := range cos {
 		if show {
