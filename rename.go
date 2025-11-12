@@ -12,7 +12,8 @@ import (
 
 func Rename(src, dst string) error {
 	// Check if source path exists
-	srcStat, err := os.Stat(src)
+	// srcStat, err := os.Stat(src)
+	_, err := os.Stat(src)
 	if err != nil {
 		return err
 	}
@@ -39,11 +40,11 @@ func Rename(src, dst string) error {
 	}
 
 	// If standard rename failed, use copy approach
-	if srcStat.IsDir() {
-		return renameDir(src, dst)
-	}
+	// if srcStat.IsDir() {
+	// 	return renameDir(src, dst)
+	// }
 
-	return renameFile(src, dst)
+	// return renameFile(src, dst)
 }
 
 func renameDir(src, dst string) error {

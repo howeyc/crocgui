@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"hash/crc32"
 	"io"
+	"maps"
 	"math"
 	"os"
 	"path/filepath"
@@ -33,7 +34,9 @@ import (
 
 const (
 	MaterialFiles = "https://github.com/zhanghai/MaterialFiles"
-	INSTALL       = "URL " + MaterialFiles + " is already in the clipboard.\nInstall the app to avoid this message."
+	MiXplorer     = "https://mixplorer.com/beta/"
+	filePicker    = MiXplorer
+	INSTALL       = "URL " + filePicker + " is already in the clipboard.\nInstall the app to avoid this message."
 	feDel         = 0
 	feBar         = 1
 	feSave        = 2
@@ -238,7 +241,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 	addPath := func(src string) error {
 		fi, err := os.Stat(src)
 		if err != nil {
-			return fmt.Errorf("URI (%s) error: %v", src, err)
+			return fmt.Errorf("stat %s: %v", src, err)
 		}
 
 		base := filepath.Base(src)
@@ -362,15 +365,30 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 				addPath(fpath)
 			}
 		}
-		keysToRemove := []string{}
-		for path, _ := range fileentries {
-			if _, err := os.Stat(path); err != nil {
-				keysToRemove = append(keysToRemove, path)
-			}
-		}
+		// keysToRemove := []string{}
+		// for path, _ := range fileentries {
+		// 	if _, err := os.Stat(path); err != nil {
+		// 		keysToRemove = append(keysToRemove, path)
+		// 	}
+		// }
 
-		for _, path := range keysToRemove {
-			if fe, exists := fileentries[path]; exists {
+		// for _, path := range keysToRemove {
+		// 	if fe, exists := fileentries[path]; exists {
+		// 		removeEntry(path, fe, false)
+		// 	}
+		// }
+		// delEntrys := make(map[string]*fyne.Container, len(fileentries))
+		// for path, fe := range fileentries {
+		// 	if _, err := os.Stat(path); err != nil {
+		// 		delEntrys[path] = fe
+		// 	}
+		// }
+
+		// for path, fe := range delEntrys {
+		// 	removeEntry(path, fe, false)
+		// }
+		for path, fe := range maps.Clone(fileentries) {
+			if _, err := os.Stat(path); err != nil {
 				removeEntry(path, fe, false)
 			}
 		}
@@ -416,7 +434,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 							log.Trace("doneProcessIntent Sending")
 							return
 						}
-						log.Tracef(`Received text: "%s"`, text)
+						log.Tracef(`text "%s"`, text)
 						src := join("text" + hashToFilename(text))
 						if fe := addEntry(src, nil); fe == nil {
 							continue
@@ -424,7 +442,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 
 						source, err := os.Create(src)
 						if err != nil {
-							log.Errorf("Failed to create file: %s", err)
+							log.Errorf("create: %v", err)
 							continue
 						}
 
@@ -432,7 +450,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 						if err != nil {
 							source.Close()
 							os.Remove(src)
-							log.Errorf("Failed to write file: %s", err)
+							log.Errorf("write: %v", err)
 							continue
 						}
 
@@ -451,10 +469,10 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 						}
 						u, err := storage.ParseURI(uriString)
 						if err != nil {
-							log.Errorf("ParseURI(%s) error: %v", u, err)
+							log.Errorf("parse %s: %v", u, err)
 							continue
 						}
-						log.Tracef("URI(%s)", u)
+						log.Tracef("uri %s", u)
 						log.Tracef("apiLevel %d", apiLevel())
 
 						if IsDirectory(u) {
@@ -465,7 +483,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 						source, err := Reader(u)
 						// source, err := storage.Reader(u)
 						if err != nil {
-							log.Errorf("Reader %v", err)
+							log.Errorf("reader: %v", err)
 							continue
 						}
 						fe := addEntry(dst, nil)
@@ -476,15 +494,16 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 						showPage() //uriFromIntent
 						copyFromURCProgress(source, "", fe, func(err error) {
 							if err != nil {
-								log.Errorf("URI (%s), copied to internal cache %s error: %s", u, dst, err)
+								log.Errorf("copy %s %s: %s", u, dst, err)
 								removeEntry(dst, fe, true)
 								return
 							}
-							log.Tracef("URI (%s), copied to internal cache %s", u, dst)
 
-							if fi, err := os.Stat(dst); fi == nil {
-								log.Errorf("Stat(%s) error: %v", dst, err)
+							if _, err := os.Stat(dst); err != nil {
+								log.Errorf("stat %s: %v", dst, err)
 								removeEntry(dst, fe, true)
+							} else {
+								log.Errorf("copy %s %s", u, dst)
 							}
 						})
 					}
@@ -497,7 +516,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 			for _, src := range os.Args[1:] {
 				src, err := filepath.Abs(src)
 				if err != nil {
-					log.Warnf("filepath.Abs(%s) error: %v", src, err)
+					log.Warnf("abs %s: %v", src, err)
 					continue
 				}
 				if err := addPath(src); err != nil {
@@ -525,10 +544,10 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 
 	addFileButton := widget.NewButtonWithIcon("", theme.FileIcon(), func() {
 		if supported, err := IsFilePickerSupported(); err != nil {
-			log.Errorf("Error checking file picker support: %v", err)
+			log.Errorf("file picker support: %v", err)
 		} else if !supported {
-			log.Trace("File picker not supported. ", INSTALL)
-			a.Clipboard().SetContent(MaterialFiles)
+			log.Tracef("File picker not supported. %s", INSTALL)
+			a.Clipboard().SetContent(filePicker)
 			dialog.ShowInformation(
 				lp("Pick a file to send"),
 				INSTALL,
@@ -594,11 +613,11 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 	addFolderButton := widget.NewButtonWithIcon("", theme.FolderOpenIcon(), func() {
 		folderOpen := func(u fyne.ListableURI, e error) {
 			if u == nil {
-				log.Trace("User canceled folder selection")
+				log.Trace("folder selection canceled")
 				return
 			}
 			if e != nil {
-				log.Errorf("Open dialog error: %s", e)
+				log.Errorf("folder selection: %s", e)
 				return
 			}
 			name := uriBase(u)
@@ -740,7 +759,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 		zipfolder := a.Preferences().Bool("zip-unzip")
 		cderr := os.Chdir(tempDir)
 		if cderr != nil {
-			log.Error("Unable to change to dir:", tempDir, cderr)
+			log.Errorf("change to %s: %v", tempDir, cderr)
 		}
 		log.Trace("cd ", tempDir)
 		filesInfo, emptyfolders, totalNumberFolders, serr := croc.GetFilesInfo(filepaths, zipfolder, false, []string{})
@@ -785,7 +804,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 			ZipFolder:        zipfolder,
 		})
 		if err != nil {
-			log.Errorf("croc error: %s", err.Error())
+			log.Errorf("croc: %v", err)
 			return
 		}
 		log.SetLevel(debugString(a))
@@ -950,7 +969,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 			if EMULATE == 0 {
 				serr = sender.Send(filesInfo, emptyfolders, totalNumberFolders)
 			} else {
-				log.Warnf("Send %v %v %v", filesInfo, emptyfolders, totalNumberFolders)
+				log.Warnf("send %v %v %d", filesInfo, emptyfolders, totalNumberFolders)
 				time.Sleep(EMULATE)
 				defer func() {
 					sender = nil
@@ -962,7 +981,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 					if errors.Is(serr, io.EOF) {
 						serr = fmt.Errorf("%s", lp("Receive cancelled."))
 					}
-					s := fmt.Sprintf("Send failed: %s", serr)
+					s := fmt.Sprintf("send: %v", serr)
 					log.Error(s)
 					topline.SetText(s)
 				} else {
@@ -1123,7 +1142,7 @@ func Stop(client interface{}) {
 			time.Sleep(time.Millisecond * 333)
 		}
 	} else {
-		log.Errorf("Stop: %v", err)
+		log.Errorf("stop: %v", err)
 	}
 }
 

@@ -266,7 +266,7 @@ func logTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 		if !supported {
 			fileSave(nil, fmt.Errorf("file picker not supported"))
 			log.Trace("File picker not supported. ", INSTALL)
-			a.Clipboard().SetContent(MaterialFiles)
+			a.Clipboard().SetContent(filePicker)
 			dialog.ShowInformation(
 				lp("Saved all files to")+" Download",
 				INSTALL,
