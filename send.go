@@ -292,14 +292,14 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 				}
 				CopyFileProgress(src, dstPath, feCopy, func(err error) {
 					if err != nil {
-						log.Errorf("copy %s %s: %w", src, dstPath, err)
+						log.Errorf("copy %s %s: %v", src, dstPath, err)
 						removeEntry(dstPath, feCopy, true)
 						return
 					}
 
 					if _, err := os.Stat(dstPath); err != nil {
 						// не закэшировал
-						log.Errorf("stat %s: %w", dstPath, err)
+						log.Errorf("stat %s: %v", dstPath, err)
 					} else {
 						// закэшировал
 						log.Tracef("copy %s %s", src, dstPath)
@@ -652,7 +652,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 				}
 				source, err := Reader(src)
 				if err != nil {
-					return fmt.Errorf("reader %s: %w", src, err)
+					return fmt.Errorf("reader %s: %v", src, err)
 				}
 				copyFromURCProgress(source, dstPath, feCopy, func(err error) {
 					if err != nil {
@@ -1048,6 +1048,7 @@ func ShowFileOpen(callback func(fyne.URIReadCloser, error), parent fyne.Window) 
 	}
 	fd := dialog.NewFileOpen(callback, parent)
 	fd.Resize(parent.Canvas().Size())
+	fd.SetLocation(lastLU)
 	fd.Show()
 }
 

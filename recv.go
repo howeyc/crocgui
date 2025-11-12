@@ -24,6 +24,8 @@ import (
 	log "github.com/schollz/logger"
 )
 
+var lastLU fyne.ListableURI
+
 func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) *container.TabItem {
 	index := 1
 	var ti *container.TabItem
@@ -195,13 +197,13 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) *containe
 			if destination == nil {
 				u, cl, err = ChildDownload(child)
 				if err != nil {
-					log.Errorf("append child %s to Downloads: %v", child, err)
+					log.Errorf("Downloads/%s: %v", child, err)
 					return
 				}
 				destination, err = storage.Writer(u)
 				if err != nil {
 					cl()
-					log.Errorf("creating writer from URI(%s): %v", u, err)
+					log.Errorf("writer %s: %v", u, err)
 					return
 				}
 			} else {
@@ -211,10 +213,12 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) *containe
 			dst := u.Path()
 			if !(isMobile || asMobile) {
 				destination.Close()
-				os.Remove(dst) // файлпикер создаёт файл даже для каталога
+				// файлпикер создаёт файл даже для каталога
+				// os.Remove(dst)
+				storage.Delete(u)
 				fi, err := os.Stat(src)
 				if err != nil {
-					log.Errorf("stat %s: %w", src, err)
+					log.Errorf("stat %s: %v", src, err)
 					return
 				}
 				err = Rename(src, dst)
@@ -241,14 +245,14 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) *containe
 					}
 					CopyFileProgress(src, dstPath, feCopy, func(err error) {
 						if err != nil {
-							log.Errorf("copy %s %s: %w", src, dstPath, err)
+							log.Errorf("copy %s %s: %v", src, dstPath, err)
 							removeEntry(src, feCopy, false)
 							return
 						}
 
 						if _, err := os.Stat(dstPath); err != nil {
 							// не сохранилось
-							log.Errorf("stat %s: %w", dstPath, err)
+							log.Errorf("stat %s: %v", dstPath, err)
 						} else {
 							// сохранилось, удаляем
 							log.Tracef("copy %s %s", src, dstPath)
@@ -295,6 +299,7 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) *containe
 		savedialog := dialog.NewFileSave(fileSave, parent)
 		savedialog.SetFileName(child)
 		savedialog.Resize(parent.Canvas().Size())
+		savedialog.SetLocation(lastLU)
 		notFinish = true
 		savedialog.Show()
 	}
@@ -473,7 +478,7 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) *containe
 	}
 	// reload()
 
-	var lastSaveDir string
+	// var lastSaveDir string
 
 	cancelChan := make(chan struct{})
 
@@ -511,7 +516,8 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) *containe
 				}
 
 				if lu != nil {
-					lastSaveDir = lu.Path()
+					lastLU = lu
+					// lastSaveDir = lu.Path()
 					u, cl, err = Child(lu, child)
 					if err != nil {
 						log.Errorf("Error append to URI(%s) child %s error: %v", lu, child, err)
@@ -520,10 +526,11 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) *containe
 				} else {
 					u, cl, err = ChildDownload(child)
 					if p, err := storage.Parent(u); err == nil {
-						lastSaveDir = p.Path()
+						// lastSaveDir = p.Path()
 						lu, err = storage.ListerForURI(p)
 						if err != nil {
-							lastSaveDir = lu.Path()
+							lastLU = lu
+							// lastSaveDir = lu.Path()
 						}
 					}
 				}
@@ -536,7 +543,7 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) *containe
 				if !(isMobile || asMobile) {
 					fi, err := os.Stat(src)
 					if err != nil {
-						log.Errorf("stat %s: %w", src, err)
+						log.Errorf("stat %s: %v", src, err)
 						continue
 					}
 					err = Rename(src, u.Path())
@@ -545,7 +552,7 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) *containe
 						removeEntry(src, fe, true)
 						fyne.Do(func() {
 							if len(fileentries) == 0 {
-								topline.SetText(fmt.Sprintf("%s %s", lp("Saved all files to"), lastSaveDir))
+								topline.SetText(fmt.Sprintf("%s %s", lp("Saved all files to"), lastLU))
 							}
 						})
 						continue
@@ -567,14 +574,14 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) *containe
 						}
 						CopyFileProgress(src, dstPath, feCopy, func(err error) {
 							if err != nil {
-								log.Errorf("copy %s %s: %w", src, dstPath, err)
+								log.Errorf("copy %s %s: %v", src, dstPath, err)
 								removeEntry(src, feCopy, false)
 								return
 							}
 
 							if _, err := os.Stat(dstPath); err != nil {
 								// не сохранилось
-								log.Errorf("stat %s: %w", dstPath, err)
+								log.Errorf("stat %s: %v", dstPath, err)
 							} else {
 								// сохранилось, удаляем
 								log.Tracef("copy %s %s", src, dstPath)
@@ -612,7 +619,7 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) *containe
 
 						if len(fileentries) == 0 {
 							fyne.Do(func() {
-								topline.SetText(fmt.Sprintf("%s %s", lp("Saved all files to"), lastSaveDir))
+								topline.SetText(fmt.Sprintf("%s %s", lp("Saved all files to"), lastLU))
 							})
 						}
 					})
@@ -650,18 +657,63 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) *containe
 
 		supported, err := IsFolderPickerSupported()
 		if err != nil {
-			log.Errorf("folder picker support: %v", err)
+			log.Errorf("folder picker: %v", err)
 			supported = false
 		}
 		if !supported {
-			filesSave(nil, fmt.Errorf("folder picker not supported"))
-			log.Trace("folder picker not supported. ", INSTALL)
-			a.Clipboard().SetContent(filePicker)
-			dialog.ShowInformation(
-				lp("Saved all files to")+" Download",
-				INSTALL,
-				w,
-			)
+			// Нет фолдерпикера
+			supported, err := IsSaveDialogSupported()
+			if err != nil {
+				log.Errorf("file picker: %v", err)
+				supported = false
+			}
+			if !supported {
+				// Нет файлпикера
+				filesSave(nil, fmt.Errorf("folder picker not supported"))
+				log.Trace("File picker not supported. ", INSTALL)
+				a.Clipboard().SetContent(filePicker)
+				dialog.ShowInformation(
+					lp("Saved all files to")+" Download",
+					INSTALL,
+					w,
+				)
+				return
+			}
+			// Использую файлпикер вместо фолдерпикера
+			savedialog := dialog.NewFileSave(func(writer fyne.URIWriteCloser, err error) {
+				if err != nil {
+					log.Errorf("NewFileSave: %v", err)
+					return
+				}
+				if writer == nil {
+					log.Errorf("file picker canceled")
+					return
+				}
+				u := writer.URI()
+				log.Tracef("uri %s", u)
+				pu, err := storage.Parent(u)
+				writer.Close()
+				storage.Delete(u)
+				if err != nil {
+					log.Errorf("parent: %s", err)
+					return
+				}
+				log.Tracef("parent %s", pu)
+				lu, err := storage.ListerForURI(pu)
+				if err != nil {
+					log.Errorf("lister: %s", err)
+					return
+				}
+				log.Tracef("ListerForURI %s", lu)
+				lastLU = lu
+				filesSave(lu, nil)
+			}, w)
+			savedialog.Resize(w.Canvas().Size())
+			savedialog.SetLocation(lastLU)
+			savedialog.SetConfirmText("Select Folder. File name will be ignored ")
+			savedialog.SetFileName("_")
+			notFinish = true
+			savedialog.Show()
 			return
 		}
 		ShowFolderOpen(filesSave, w)
@@ -949,5 +1001,6 @@ func ShowFolderOpen(callback func(fyne.ListableURI, error), parent fyne.Window) 
 	}
 	fd := dialog.NewFolderOpen(callback, parent)
 	fd.Resize(parent.Canvas().Size())
+	fd.SetLocation(lastLU)
 	fd.Show()
 }

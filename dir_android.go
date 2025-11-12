@@ -2581,7 +2581,7 @@ func canRead(uri fyne.URI) bool {
 	}
 	ok, err := storage.CanRead(uri)
 	if err != nil {
-		log.Errorf("canRead: %w", err)
+		log.Errorf("canRead: %v", err)
 		return false
 	}
 	if !ok {
@@ -2591,7 +2591,7 @@ func canRead(uri fyne.URI) bool {
 
 	r, err := storage.Reader(uri)
 	if err != nil {
-		log.Errorf("reader: %w", err)
+		log.Errorf("reader: %v", err)
 		return false
 	}
 	defer r.Close()
@@ -2599,7 +2599,7 @@ func canRead(uri fyne.URI) bool {
 	p := make([]byte, 1)
 	_, err = r.Read(p)
 	if err != nil {
-		log.Errorf("read: %w", err)
+		log.Errorf("read: %v", err)
 		return false
 	}
 	return true
