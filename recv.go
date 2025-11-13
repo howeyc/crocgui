@@ -485,167 +485,169 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) *containe
 		}
 	}
 
+	filesSave := func(lu fyne.ListableURI, err error) {
+		var (
+			u  fyne.URI
+			cl = func() {}
+		)
+
+		if err != nil {
+			log.Errorf("folder selection: %v", err)
+		} else if lu == nil {
+			log.Trace("folder selection canceled")
+			return
+		}
+
+		for src, fe := range maps.Clone(fileentries) {
+			child := filepath.Base(src)
+			if (isMobile || asMobile) && isLinkDir(src) {
+				child += DOTZIP
+			}
+
+			if lu != nil {
+				lastLU = lu
+				// lastSaveDir = lu.Path()
+				u, cl, err = Child(lu, child)
+				if err != nil {
+					log.Errorf("%s/%s: %v", lu, child, err)
+					u, cl, err = ChildDownload(child)
+				}
+			} else {
+				u, cl, err = ChildDownload(child)
+				if p, err := storage.Parent(u); err == nil {
+					lu, err = storage.ListerForURI(p)
+					if err != nil {
+						lastLU = lu
+					}
+				}
+			}
+			if err != nil {
+				log.Errorf("Downloads/%s: %v", child, err)
+				continue
+			}
+
+			dst := u.Path()
+			if !(isMobile || asMobile) {
+				fi, err := os.Stat(src)
+				if err != nil {
+					log.Errorf("stat %s: %v", src, err)
+					continue
+				}
+				err = Rename(src, dst)
+				if err == nil {
+					log.Tracef("move %s %s", src, dst)
+					removeEntry(src, fe, true)
+					fyne.Do(func() {
+						if len(fileentries) == 0 {
+							topline.SetText(fmt.Sprintf("%s %s", lp("Saved all files to"), filepath.Dir(dst)))
+						}
+					})
+					continue
+				}
+				log.Warnf("move %s %s: %v", src, dst, err)
+				copyFiles(storage.NewFileURI(src), dst, func(u fyne.URI, dstPath string) error {
+					fyne.Do(func() {})
+					feCopy := fe
+					src := u.Path()
+					if fi.IsDir() {
+						// Создаю временный прогрессбар
+						rel, err := filepath.Rel(join(), src)
+						if err != nil {
+							rel = src
+						}
+						feCopy = addEntry(src, func(d *widget.Button, p *widget.ProgressBar, s *widget.Button, l *widget.Label) {
+							l.SetText(rel)
+						})
+					}
+					CopyFileProgress(src, dstPath, feCopy, func(err error) {
+						if err != nil {
+							log.Errorf("copy %s %s: %v", src, dstPath, err)
+							removeEntry(src, feCopy, false)
+							return
+						}
+
+						if _, err := os.Stat(dstPath); err != nil {
+							// не сохранилось
+							log.Errorf("stat %s: %v", dstPath, err)
+						} else {
+							// сохранилось, удаляем
+							log.Tracef("copy %s %s", src, dstPath)
+							removeEntry(src, feCopy, true)
+							if des, _ := os.ReadDir(filepath.Dir(src)); len(des) == 0 {
+								// удаляю родителя
+								reload()
+							}
+						}
+					})
+					return nil
+				})
+				continue
+			}
+
+			destination, err := storage.Writer(u)
+			if err != nil {
+				cl()
+				log.Errorf("writer %s: %v", u, err)
+				continue
+			}
+
+			copyFrom := func(src string) {
+				copyToUWCProgress(destination, src, fe, func(err error) {
+					cl()
+					if err != nil {
+						log.Errorf("copy %s %s: %v", src, destination.URI(), err)
+						fyne.Do(func() {
+							topline.SetText(fmt.Sprintf("Error saving %s: %v", child, err))
+						})
+						return
+					}
+					log.Tracef("copy %s %s", src, destination.URI())
+					removeEntry(src, fe, true)
+
+					if len(fileentries) == 0 {
+						name := uriBase(destination.URI())
+						parent := strings.TrimSuffix(destination.URI().String(), name)
+						fyne.Do(func() {
+							topline.SetText(fmt.Sprintf("%s %s", lp("Saved all files to"), parent))
+						})
+					}
+				})
+			}
+			if isLinkDir(src) {
+				// На Андроиде свернём каталог в файл
+				pathZip := src + DOTZIP
+				if _, err := os.Stat(pathZip); err == nil {
+					log.Errorf("exists %s", pathZip)
+					continue
+				}
+				ZipDirectoryProgress(pathZip, src, fe, func(err error) {
+					if err != nil {
+						log.Errorf("zip %s %s: %v", src, pathZip, err)
+						removeEntry(pathZip, fe, true)
+						return
+					}
+
+					if _, err := os.Stat(pathZip); err != nil {
+						log.Errorf("stat %s: %v", pathZip, err)
+						return
+					}
+					log.Tracef("zip %s %s", src, pathZip)
+
+					if feDir, ok := fileentries[src]; ok {
+						removeEntry(src, feDir, true)
+					}
+					copyFrom(pathZip)
+				})
+				continue
+			}
+			copyFrom(src)
+		}
+	}
+
 	ShowFilesSave := func() {
 		if len(fileentries) == 0 {
 			log.Error("no files to save")
 			return
-		}
-
-		filesSave := func(lu fyne.ListableURI, err error) {
-			var (
-				u  fyne.URI
-				cl = func() {}
-			)
-
-			if err != nil {
-				log.Errorf("folder selection: %v", err)
-			} else if lu == nil {
-				log.Trace("folder selection canceled")
-				return
-			}
-
-			for src, fe := range maps.Clone(fileentries) {
-				child := filepath.Base(src)
-				if (isMobile || asMobile) && isLinkDir(src) {
-					child += DOTZIP
-				}
-
-				if lu != nil {
-					lastLU = lu
-					// lastSaveDir = lu.Path()
-					u, cl, err = Child(lu, child)
-					if err != nil {
-						log.Errorf("%s/%s: %v", lu, child, err)
-						u, cl, err = ChildDownload(child)
-					}
-				} else {
-					u, cl, err = ChildDownload(child)
-					if p, err := storage.Parent(u); err == nil {
-						lu, err = storage.ListerForURI(p)
-						if err != nil {
-							lastLU = lu
-						}
-					}
-				}
-				if err != nil {
-					log.Errorf("Downloads/%s: %v", child, err)
-					continue
-				}
-
-				dst := u.Path()
-				if !(isMobile || asMobile) {
-					fi, err := os.Stat(src)
-					if err != nil {
-						log.Errorf("stat %s: %v", src, err)
-						continue
-					}
-					err = Rename(src, u.Path())
-					if err == nil {
-						log.Tracef("move %s %s", src, dst)
-						removeEntry(src, fe, true)
-						fyne.Do(func() {
-							if len(fileentries) == 0 {
-								topline.SetText(fmt.Sprintf("%s %s", lp("Saved all files to"), lastLU))
-							}
-						})
-						continue
-					}
-					log.Warnf("move %s %s: %v", src, dst, err)
-					copyFiles(storage.NewFileURI(src), dst, func(u fyne.URI, dstPath string) error {
-						fyne.Do(func() {})
-						feCopy := fe
-						src := u.Path()
-						if fi.IsDir() {
-							// Создаю временный прогрессбар
-							rel, err := filepath.Rel(join(), src)
-							if err != nil {
-								rel = src
-							}
-							feCopy = addEntry(src, func(d *widget.Button, p *widget.ProgressBar, s *widget.Button, l *widget.Label) {
-								l.SetText(rel)
-							})
-						}
-						CopyFileProgress(src, dstPath, feCopy, func(err error) {
-							if err != nil {
-								log.Errorf("copy %s %s: %v", src, dstPath, err)
-								removeEntry(src, feCopy, false)
-								return
-							}
-
-							if _, err := os.Stat(dstPath); err != nil {
-								// не сохранилось
-								log.Errorf("stat %s: %v", dstPath, err)
-							} else {
-								// сохранилось, удаляем
-								log.Tracef("copy %s %s", src, dstPath)
-								removeEntry(src, feCopy, true)
-								if des, _ := os.ReadDir(filepath.Dir(src)); len(des) == 0 {
-									// удаляю родителя
-									reload()
-								}
-							}
-						})
-						return nil
-					})
-					continue
-				}
-
-				destination, err := storage.Writer(u)
-				if err != nil {
-					cl()
-					log.Errorf("writer %s: %v", u, err)
-					continue
-				}
-
-				copyFrom := func(src string) {
-					copyToUWCProgress(destination, src, fe, func(err error) {
-						cl()
-						if err != nil {
-							log.Errorf("copy %s %s: %v", src, destination.URI(), err)
-							fyne.Do(func() {
-								topline.SetText(fmt.Sprintf("Error saving %s: %v", child, err))
-							})
-							return
-						}
-						log.Tracef("copy %s %s", src, destination.URI())
-						removeEntry(src, fe, true)
-
-						if len(fileentries) == 0 {
-							fyne.Do(func() {
-								topline.SetText(fmt.Sprintf("%s %s", lp("Saved all files to"), lastLU))
-							})
-						}
-					})
-				}
-				if isLinkDir(src) {
-					// На Андроиде свернём каталог в файл
-					pathZip := src + DOTZIP
-					if _, err := os.Stat(pathZip); err == nil {
-						log.Errorf("exists %s", pathZip)
-						continue
-					}
-					ZipDirectoryProgress(pathZip, src, fe, func(err error) {
-						if err != nil {
-							log.Errorf("zip %s %s: %v", src, pathZip, err)
-							removeEntry(pathZip, fe, true)
-							return
-						}
-
-						if _, err := os.Stat(pathZip); err != nil {
-							log.Errorf("stat %s: %v", pathZip, err)
-							return
-						}
-						log.Tracef("zip %s %s", src, pathZip)
-
-						if feDir, ok := fileentries[src]; ok {
-							removeEntry(src, feDir, true)
-						}
-						copyFrom(pathZip)
-					})
-					continue
-				}
-				copyFrom(src)
-			}
 		}
 
 		supported, err := IsFolderPickerSupported()
@@ -655,51 +657,12 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) *containe
 		}
 		if !supported {
 			// Нет фолдерпикера
-			supported, err := IsSaveDialogSupported()
-			if err != nil {
-				log.Errorf("file picker: %v", err)
-				supported = false
-			}
-			if !supported {
-				// Нет файлпикера
-				filesSave(nil, fmt.Errorf("folder picker not supported"))
-				log.Trace("File picker not supported. ", INSTALL)
-				a.Clipboard().SetContent(filePicker)
-				dialog.ShowInformation(
-					lp("Saved all files to")+" Download",
-					INSTALL,
-					w,
-				)
-				return
-			}
-			// Использую файлпикер вместо фолдерпикера
-			savedialog := dialog.NewFileSave(func(writer fyne.URIWriteCloser, err error) {
-				if err != nil {
-					log.Errorf("file picker: %v", err)
-					return
-				}
-				if writer == nil {
-					log.Errorf("file picker canceled")
-					return
-				}
-				u := writer.URI()
-				writer.Close()
-				log.Tracef("remove %s: %v", u, storage.Delete(u))
-				lu, err := Parent(u)
-				if err != nil {
-					log.Errorf("parent: %v", err)
-					filesSave(nil, fmt.Errorf("folder picker not supported"))
-					return
-				}
-				lastLU = lu
-				filesSave(lu, nil)
-			}, w)
-			savedialog.Resize(w.Canvas().Size())
-			savedialog.SetLocation(lastLU)
-			savedialog.SetConfirmText("Select Folder. File name will be ignored ")
-			savedialog.SetFileName("_")
-			notFinish = true
-			savedialog.Show()
+			filesSave(nil, fmt.Errorf("folder picker not supported"))
+			dialog.ShowInformation(
+				lp("Saved all files to")+" Download",
+				"",
+				w,
+			)
 			return
 		}
 		ShowFolderOpen(filesSave, w)
@@ -935,7 +898,7 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) *containe
 	cosSH = append(cosSH, cancelButton)
 	allShow(false, cosSH...)
 
-	saveAllButton := widget.NewButtonWithIcon("*", theme.FolderOpenIcon(), func() { //lp("Save All")
+	saveAllButton := widget.NewButtonWithIcon("*", theme.DocumentSaveIcon(), func() { //lp("Save All") theme.FolderOpenIcon()
 		ShowFilesSave()
 	})
 	cosED = append(cosED, saveAllButton)
@@ -949,6 +912,13 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) *containe
 	})
 	cosED = append(cosED, deleteAllButton)
 
+	downloadButton := widget.NewButtonWithIcon("*", theme.FolderIcon(), func() {
+		if len(fileentries) > 0 {
+			filesSave(nil, fmt.Errorf("download"))
+		}
+	})
+	cosED = append(cosED, downloadButton)
+
 	top := container.NewVBox(
 		container.NewHBox(topline, layout.NewSpacer(), pasteCodeButton),
 		widget.NewForm(&widget.FormItem{Text: lp("Receive Code"), Widget: entry}),
@@ -958,6 +928,7 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) *containe
 			totpProg,
 			layout.NewSpacer(),
 			saveAllButton,
+			downloadButton,
 			deleteAllButton,
 		),
 		mainButton,

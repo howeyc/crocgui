@@ -36,17 +36,3 @@ func ChildDownload(component string) (child fyne.URI, cleanup func(), err error)
 	child, err = storage.Child(lu, component)
 	return
 }
-
-func Parent(child fyne.URI) (parent fyne.ListableURI, err error) {
-	pu, err := storage.Parent(child)
-	if err != nil {
-		return nil, fmt.Errorf("get parent URI: %v", err)
-	}
-
-	parent, err = storage.ListerForURI(pu)
-	if err != nil {
-		return nil, fmt.Errorf("make listable: %v", err)
-	}
-
-	return parent, nil
-}

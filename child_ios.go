@@ -155,62 +155,6 @@ char* CreateFileInTreeIOS(const char* bookmarkData, const char* fileName, const 
         return strdup([newFileURL.absoluteString UTF8String]);
     }
 }
-
-// Функция для получения родительской директории через NSFileManager
-char* GetParentDirectoryIOS(const char* child_url) {
-    @autoreleasepool {
-        NSString *nsChildUrl = [NSString stringWithUTF8String:child_url];
-        NSURL *childURL = [NSURL URLWithString:nsChildUrl];
-
-        if (!childURL) {
-            return strdup("error: invalid child URL");
-        }
-
-        // Для security-scoped URLs проверяем доступ, но НЕ останавливаем его
-        BOOL hadSecurityAccess = NO;
-        if ([childURL startAccessingSecurityScopedResource]) {
-            hadSecurityAccess = YES;
-            // НЕ вызываем stopAccessingSecurityScopedResource здесь!
-            // Это ответственность вызывающей стороны
-        }
-
-        // Получаем родительский URL
-        NSURL *parentURL = [childURL URLByDeletingLastPathComponent];
-        if (!parentURL) {
-            return strdup("error: failed to get parent directory");
-        }
-
-        // Проверяем, что родительская директория существует и доступна
-        NSFileManager *fileManager = [NSFileManager defaultManager];
-        BOOL isDirectory = NO;
-        BOOL exists = [fileManager fileExistsAtPath:parentURL.path isDirectory:&isDirectory];
-
-        if (!exists) {
-            return strdup("error: parent directory does not exist");
-        }
-
-        if (!isDirectory) {
-            return strdup("error: parent path is not a directory");
-        }
-
-        // Для security-scoped URLs создаем bookmark для родителя
-        if (hadSecurityAccess) {
-            NSError *error = nil;
-            NSData *bookmarkData = [parentURL bookmarkDataWithOptions:NSURLBookmarkCreationWithSecurityScope
-                                       includingResourceValuesForKeys:nil
-                                                        relativeToURL:nil
-                                                                error:&error];
-
-            if (bookmarkData) {
-                NSString *bookmarkString = [bookmarkData base64EncodedStringWithOptions:0];
-                return strdup([bookmarkString UTF8String]);
-            }
-        }
-
-        // Возвращаем обычный URL если security scope не требуется или не удалось
-        return strdup([parentURL.absoluteString UTF8String]);
-    }
-}
 */
 import "C"
 import (
@@ -417,51 +361,4 @@ func Child(parent fyne.URI, component string) (child fyne.URI, cleanup func(), e
 
 func CanCreateSymlinks() bool {
 	return false
-}
-
-func Parent(child fyne.URI) (parent fyne.ListableURI, err error) {
-	// Сначала пробуем стандартный способ Fyne
-	if parentUri, parentErr := storage.Parent(child); parentErr == nil {
-		if listable, listerErr := storage.ListerForURI(parentUri); listerErr == nil {
-			return listable, nil
-		}
-		// Если не получилось сделать listable, продолжаем к iOS-специфичному способу
-	}
-
-	// iOS-специфичная реализация через FileManager
-	driver.RunNative(func(ctx interface{}) error {
-		cChildUri := C.CString(child.String())
-		defer C.free(unsafe.Pointer(cChildUri))
-
-		// Получаем родительский URL через NSFileManager
-		cParentUri := C.GetParentDirectoryIOS(cChildUri)
-		if cParentUri == nil {
-			err = errors.New("getParentDirectoryIOS returned null")
-			return nil
-		}
-
-		defer C.free(unsafe.Pointer(cParentUri))
-		parentUriStr := C.GoString(cParentUri)
-
-		if strings.HasPrefix(parentUriStr, "error:") {
-			err = errors.New(parentUriStr)
-			return nil
-		}
-
-		parentUri, parseErr := storage.ParseURI(parentUriStr)
-		if parseErr != nil {
-			err = fmt.Errorf("parse parent URI: %v", parseErr)
-			return nil
-		}
-
-		// Конвертируем в ListableURI
-		parent, err = storage.ListerForURI(parentUri)
-		if err != nil {
-			err = fmt.Errorf("make listable: %v", err)
-		}
-
-		return nil
-	})
-
-	return
 }

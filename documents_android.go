@@ -238,7 +238,6 @@ func IsSaveDialogSupported() (bool, error) {
 
 // IsFolderPickerSupported проверяет поддержку диалога выбора папки
 func IsFolderPickerSupported() (bool, error) {
-	return false, nil
 	supported, err := IsIntentSupported("android.intent.action.OPEN_DOCUMENT_TREE", "")
 	if err != nil {
 		log.Error("Folder picker support check failed: ", err.Error())
