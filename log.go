@@ -227,9 +227,9 @@ func logTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 				cl = func() {}
 			)
 			if err != nil {
-				log.Errorf("NewFileSave %v", err)
+				log.Errorf("folder selection: %v", err)
 			} else if destination == nil {
-				log.Trace("User canceled folder selection")
+				log.Trace("folder selection canceled")
 				return
 			}
 
@@ -243,7 +243,7 @@ func logTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 
 				destination, err = storage.Writer(u)
 				if err != nil {
-					log.Errorf("creating writer from URI(%s): %v", u, err)
+					log.Errorf("writer %s: %v", u, err)
 					return
 				}
 			} else {
@@ -252,15 +252,15 @@ func logTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 			defer destination.Close()
 
 			if _, err := logOutput.buf.WriteTo(destination); err != nil {
-				log.Errorf("Failed to write log to URI(%s) error: %v", u.String(), err)
+				log.Errorf("log saved %s: %v", u, err)
 				return
 			}
-			log.Tracef("Log successfully saved to URI(%s)", u)
+			log.Tracef("log saved %s", u)
 		}
 
 		supported, err := IsSaveDialogSupported()
 		if err != nil {
-			log.Errorf("Error checking file picker support: %v", err)
+			log.Errorf("file picker: %v", err)
 			supported = false
 		}
 		if !supported {

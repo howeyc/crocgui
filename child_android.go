@@ -1,5 +1,6 @@
 //go:build android
 
+// child_android.go
 package main
 
 /*
@@ -194,6 +195,207 @@ char* CreateFileViaDocumentsContract(JNIEnv* env, jobject activity,
 
     return result;
 }
+
+// Вспомогательная функция для проверки и очистки исключений
+static jboolean caseException(JNIEnv* env) {
+    if ((*env)->ExceptionCheck(env)) {
+        (*env)->ExceptionDescribe(env);
+        (*env)->ExceptionClear(env);
+        return JNI_TRUE; // Было исключение
+    }
+    return JNI_FALSE; // Не было исключения
+}
+
+char* GetParentDocumentUri(JNIEnv* env, jobject activity, const char* child_uri) {
+    char* result = NULL;
+    jobject child_uri_obj = NULL;
+    jobject parent_uri_obj = NULL;
+    jstring parent_uri_jstr = NULL;
+    jobject content_resolver = NULL;
+
+    jclass activity_class = NULL;
+    jclass uri_class = NULL;
+    jclass documents_contract_class = NULL;
+
+    // 1. Получаем ContentResolver
+    activity_class = (*env)->GetObjectClass(env, activity);
+    if (caseException(env)) {
+        result = strdup("error: exception in GetObjectClass");
+        goto cleanup;
+    }
+    if (activity_class == NULL) {
+        result = strdup("error: activity_class == NULL");
+        goto cleanup;
+    }
+
+    jmethodID get_content_resolver_method = (*env)->GetMethodID(env, activity_class, "getContentResolver", "()Landroid/content/ContentResolver;");
+    if (caseException(env)) {
+        result = strdup("error: exception in GetMethodID getContentResolver");
+        goto cleanup;
+    }
+    if (get_content_resolver_method == NULL) {
+        result = strdup("error: get_content_resolver_method == NULL");
+        goto cleanup;
+    }
+
+    content_resolver = (*env)->CallObjectMethod(env, activity, get_content_resolver_method);
+    if (caseException(env)) {
+        result = strdup("error: exception in CallObjectMethod getContentResolver");
+        goto cleanup;
+    }
+    if (content_resolver == NULL) {
+        result = strdup("error: content_resolver == NULL");
+        goto cleanup;
+    }
+
+    // 2. Парсим URI
+    uri_class = (*env)->FindClass(env, "android/net/Uri");
+    if (caseException(env)) {
+        result = strdup("error: exception in FindClass Uri");
+        goto cleanup;
+    }
+    if (uri_class == NULL) {
+        result = strdup("error: uri_class == NULL");
+        goto cleanup;
+    }
+
+    jmethodID parse_method = (*env)->GetStaticMethodID(env, uri_class, "parse", "(Ljava/lang/String;)Landroid/net/Uri;");
+    if (caseException(env)) {
+        result = strdup("error: exception in GetStaticMethodID parse");
+        goto cleanup;
+    }
+    if (parse_method == NULL) {
+        result = strdup("error: parse_method == NULL");
+        goto cleanup;
+    }
+
+    jstring child_uri_jstr = (*env)->NewStringUTF(env, child_uri);
+    if (caseException(env)) {
+        result = strdup("error: exception in NewStringUTF child_uri");
+        goto cleanup;
+    }
+
+    child_uri_obj = (*env)->CallStaticObjectMethod(env, uri_class, parse_method, child_uri_jstr);
+    (*env)->DeleteLocalRef(env, child_uri_jstr);
+    if (caseException(env)) {
+        result = strdup("error: exception in CallStaticObjectMethod parse");
+        goto cleanup;
+    }
+    if (child_uri_obj == NULL) {
+        result = strdup("error: child_uri_obj == NULL");
+        goto cleanup;
+    }
+
+    // 3. Получаем DocumentsContract
+    documents_contract_class = (*env)->FindClass(env, "android/provider/DocumentsContract");
+    if (caseException(env)) {
+        result = strdup("error: exception in FindClass DocumentsContract");
+        goto cleanup;
+    }
+    if (documents_contract_class == NULL) {
+        result = strdup("error: documents_contract_class == NULL");
+        goto cleanup;
+    }
+
+    jmethodID get_parent_document_uri_method = NULL;
+
+    // 4. Сначала пробуем новую сигнатуру (API >= 24): getParentDocumentUri(Uri)
+    get_parent_document_uri_method = (*env)->GetStaticMethodID(
+        env,
+        documents_contract_class,
+        "getParentDocumentUri",
+        "(Landroid/net/Uri;)Landroid/net/Uri;"
+    );
+
+    // Если при загрузке метода было исключение - очищаем и пробуем дальше
+    if (caseException(env)) {
+        // Очистили исключение, продолжаем пробовать старую сигнатуру
+        get_parent_document_uri_method = NULL;
+    }
+
+    if (get_parent_document_uri_method != NULL) {
+        // API >= 24: вызываем с одним аргументом
+        parent_uri_obj = (*env)->CallStaticObjectMethod(env, documents_contract_class, get_parent_document_uri_method, child_uri_obj);
+        if (caseException(env)) {
+            // Если вызов с новой сигнатурой вызвал исключение, пробуем старую
+            parent_uri_obj = NULL;
+        }
+    }
+
+    // 5. Если новая сигнатура не сработала, пробуем старую (API 21-23)
+    if (parent_uri_obj == NULL) {
+        get_parent_document_uri_method = (*env)->GetStaticMethodID(
+            env,
+            documents_contract_class,
+            "getParentDocumentUri",
+            "(Landroid/content/ContentResolver;Landroid/net/Uri;)Landroid/net/Uri;"
+        );
+
+        // Если при загрузке старого метода было исключение - очищаем
+        if (caseException(env)) {
+            get_parent_document_uri_method = NULL;
+        }
+
+        if (get_parent_document_uri_method != NULL) {
+            parent_uri_obj = (*env)->CallStaticObjectMethod(env, documents_contract_class, get_parent_document_uri_method, content_resolver, child_uri_obj);
+            if (caseException(env)) {
+                result = strdup("error: exception in CallStaticObjectMethod getParentDocumentUri (old)");
+                goto cleanup;
+            }
+        } else {
+            result = strdup("error: getParentDocumentUri method not available on this API level");
+            goto cleanup;
+        }
+    }
+
+    // Проверяем результат после обработки исключений
+    if (parent_uri_obj == NULL) {
+        result = strdup("error: getParentDocumentUri returned null - may be root directory");
+        goto cleanup;
+    }
+
+    // 6. Конвертируем результат в строку
+    jmethodID to_string_method = (*env)->GetMethodID(env, uri_class, "toString", "()Ljava/lang/String;");
+    if (caseException(env)) {
+        result = strdup("error: exception in GetMethodID toString");
+        goto cleanup;
+    }
+    if (to_string_method == NULL) {
+        result = strdup("error: to_string_method == NULL");
+        goto cleanup;
+    }
+
+    parent_uri_jstr = (jstring)(*env)->CallObjectMethod(env, parent_uri_obj, to_string_method);
+    if (caseException(env)) {
+        result = strdup("error: exception in CallObjectMethod toString");
+        goto cleanup;
+    }
+    if (parent_uri_jstr == NULL) {
+        result = strdup("error: parent_uri_jstr == NULL");
+        goto cleanup;
+    }
+
+    const char *uri_str = (*env)->GetStringUTFChars(env, parent_uri_jstr, NULL);
+    if (uri_str == NULL) {
+        result = strdup("error: failed to get URI string");
+        goto cleanup;
+    }
+
+    result = strdup(uri_str);
+    (*env)->ReleaseStringUTFChars(env, parent_uri_jstr, uri_str);
+
+cleanup:
+    // Освобождение JNI ресурсов
+    if (parent_uri_jstr) (*env)->DeleteLocalRef(env, parent_uri_jstr);
+    if (parent_uri_obj) (*env)->DeleteLocalRef(env, parent_uri_obj);
+    if (documents_contract_class) (*env)->DeleteLocalRef(env, documents_contract_class);
+    if (child_uri_obj) (*env)->DeleteLocalRef(env, child_uri_obj);
+    if (uri_class) (*env)->DeleteLocalRef(env, uri_class);
+    if (content_resolver) (*env)->DeleteLocalRef(env, content_resolver);
+    if (activity_class) (*env)->DeleteLocalRef(env, activity_class);
+
+    return result;
+}
 */
 import "C"
 
@@ -278,6 +480,57 @@ func Child(parent fyne.URI, component string) (child fyne.URI, cleanup func(), e
 		err = fmt.Errorf("parse URI failed: %v", err)
 		return
 	}
+
+	return
+}
+
+func Parent(child fyne.URI) (parent fyne.ListableURI, err error) {
+	// Сначала пробуем стандартный способ Fyne
+	if parentUri, parentErr := storage.Parent(child); parentErr == nil {
+		if listable, listerErr := storage.ListerForURI(parentUri); listerErr == nil {
+			return listable, nil
+		}
+		// Если не получилось сделать listable, продолжаем к Android-специфичному способу
+	}
+
+	// Android-специфичная реализация через DocumentsContract
+	driver.RunNative(func(ctx interface{}) error {
+		ac := ctx.(*driver.AndroidContext)
+		env := (*C.JNIEnv)(unsafe.Pointer(ac.Env))
+		activity := C.jobject(unsafe.Pointer(ac.Ctx))
+
+		cChildUri := C.CString(child.String())
+		defer C.free(unsafe.Pointer(cChildUri))
+
+		// Получаем родительский URI через JNI
+		cParentUri := C.GetParentDocumentUri(env, activity, cChildUri)
+		if cParentUri == nil {
+			err = errors.New("getParentDocumentUri returned null")
+			return nil
+		}
+
+		defer C.free(unsafe.Pointer(cParentUri))
+		parentUriStr := C.GoString(cParentUri)
+
+		if strings.HasPrefix(parentUriStr, "error:") {
+			err = errors.New(parentUriStr)
+			return nil
+		}
+
+		parentUri, parseErr := storage.ParseURI(parentUriStr)
+		if parseErr != nil {
+			err = fmt.Errorf("parse parent URI: %v", parseErr)
+			return nil
+		}
+
+		// Конвертируем в ListableURI
+		parent, err = storage.ListerForURI(parentUri)
+		if err != nil {
+			err = fmt.Errorf("make listable: %v", err)
+		}
+
+		return nil
+	})
 
 	return
 }

@@ -46,6 +46,8 @@ var (
 	tempDir                string
 	recvReady              func() bool
 	join                   func(...string) string
+	lastLU                 fyne.ListableURI
+	slash                  = string(filepath.Separator)
 )
 
 const (

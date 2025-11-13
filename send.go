@@ -203,7 +203,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 		}
 		base := filepath.Base(dst)
 		if fi, _ := os.Stat(dst); fi != nil && fi.IsDir() {
-			base += "/"
+			base += slash
 		}
 		labelFile := widget.NewLabel(base)
 		deleteButton := widget.NewButtonWithIcon("", theme.CancelIcon(), func() {
@@ -250,7 +250,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 		fe := addEntry(dst, func(d *widget.Button, p *widget.ProgressBar, l *widget.Label) {
 			p.Hide()
 			if fi.IsDir() {
-				l.SetText(base + "/")
+				l.SetText(base + slash)
 			}
 		})
 
@@ -624,7 +624,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 			dst := join(name)
 			fe := addEntry(dst, func(d *widget.Button, p *widget.ProgressBar, l *widget.Label) {
 				p.Hide()
-				l.SetText(name + "/")
+				l.SetText(name + slash)
 			})
 			if fe == nil {
 				return
