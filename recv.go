@@ -24,9 +24,14 @@ import (
 	log "github.com/schollz/logger"
 )
 
-func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) *container.TabItem {
-	index := 1
-	var ti *container.TabItem
+func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *container.TabItem) {
+	var (
+		cosED, cosSH []fyne.CanvasObject
+		// totpChan                 chan struct{}
+		addEntry                 func(dst string, f func(d *widget.Button, p *widget.ProgressBar, s *widget.Button, l *widget.Label)) (newentry *fyne.Container)
+		cancelButton, mainButton *widget.Button
+	)
+
 	showPage := func() {}
 	reload := func() {}
 	defer func() {
@@ -34,20 +39,20 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) *containe
 			log.Error(fmt.Sprint(r))
 		}
 	}()
-	var cosED, cosSH []fyne.CanvasObject
+
 	prog := widget.NewProgressBar()
 	cosSH = append(cosSH, prog)
 
 	topline := widget.NewLabel(lp("Wait for them before pressing Download"))
-	entry := widget.NewEntry()
+	entry := widget.NewEntryWithData(binding.BindPreferenceString("secret", a.Preferences()))
 	cosED = append(cosED, entry)
 
 	entryText := os.Getenv(CROC_SECRET)
 	if entryText != "" {
 		entry.SetText(entryText)
 	}
-	entry.SetPlaceHolder(lp("Enter code to download"))
-	pasteCodeButton := widget.NewButtonWithIcon("", theme.ContentCopyIcon(), func() {
+
+	pasteCodeButton := widget.NewButtonWithIcon("", theme.ContentPasteIcon(), func() {
 		entry.SetText(a.Clipboard().Content())
 	})
 	cosED = append(cosED, pasteCodeButton)
@@ -56,72 +61,7 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) *containe
 	cosED = append(cosED, totpCheck)
 
 	totpLabel := widget.NewLabel(TOTP)
-	var totpChan chan struct{}
-
-	totpStop := func() {
-		if totpChan != nil {
-			close(totpChan)
-			totpChan = nil
-		}
-	}
-	totpProg := widget.NewProgressBar()
-	totpProg.Hide()
-
-	update := func() {
-		fyne.Do(func() {
-			if !totpCheck.Checked || totpCheck.Disabled() {
-				return
-			}
-
-			totpLabel.SetText(totp(entry.Text))
-			now := time.Now()
-			remaining := 30 - now.Second()%30
-			totpProg.SetValue(float64(remaining) / 30)
-		})
-	}
-
-	totpCheck.OnChanged = func(b bool) {
-		fyne.Do(func() {
-			totpStop()
-			if b {
-				if strings.HasPrefix(entry.Text, TOTP) {
-					entry.SetText(entryText)
-				}
-				totpProg.Show()
-				update()
-
-				totpChan = make(chan struct{})
-				go func() {
-					ticker := time.NewTicker(time.Second)
-					defer ticker.Stop()
-					for {
-						select {
-						case <-done:
-							return
-						case <-ticker.C:
-							update() // Уже обернуто в fyne.Do
-						case <-totpChan:
-							return
-						}
-					}
-				}()
-			} else {
-				totpLabel.SetText(TOTP)
-				totpProg.Hide()
-				entryText = entry.Text
-				entry.SetText(TOTP + totp(entry.Text))
-			}
-			a.Preferences().SetBool("totp-recv", b)
-		})
-	}
-	if totpCheck.Checked {
-		totpCheck.OnChanged(true)
-	}
-
-	entry.OnChanged = func(secret string) {
-		os.Setenv(CROC_SECRET, secret)
-		update() // Уже обернуто в fyne.Do
-	}
+	totpProg := setupTOTP(a, entry, totpCheck, totpLabel, &entryText)
 
 	recvDir := filepath.Join(tempDir, RECV)
 
@@ -162,13 +102,12 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) *containe
 				}
 			}
 		}
+		delete(fileentries, fpath)
 		fyne.Do(func() {
 			boxholder.Remove(fe)
 			boxholder.Refresh()
-			delete(fileentries, fpath)
 		})
 	}
-	var addEntry func(dst string, f func(d *widget.Button, p *widget.ProgressBar, s *widget.Button, l *widget.Label)) (newentry *fyne.Container)
 
 	ShowFileSave := func(src string, parent fyne.Window) {
 		fe, ok := fileentries[src]
@@ -378,7 +317,7 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) *containe
 			ShowFileSave(dst, w)
 		})
 
-		deleteButton := widget.NewButtonWithIcon("", theme.CancelIcon(), func() {
+		deleteButton := widget.NewButtonWithIcon("", theme.ContentRemoveIcon(), func() {
 			if fe, ok := fileentries[dst]; ok {
 				removeEntry(dst, fe, true)
 			}
@@ -430,35 +369,13 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) *containe
 				})
 			}
 		}
-		// feKeys := []string{}
-		// for path, _ := range fileentries {
-		// 	if _, err := os.Stat(path); err != nil {
-		// 		feKeys = append(feKeys, path)
-		// 	}
-		// }
-
-		// for _, path := range feKeys {
-		// 	if fe, exists := fileentries[path]; exists {
-		// 		removeEntry(path, fe, false)
-		// 	}
-		// }
-		// delEntrys := make(map[string]*fyne.Container, len(fileentries))
-		// for path, fe := range fileentries {
-		// 	if _, err := os.Stat(path); err != nil {
-		// 		delEntrys[path] = fe
-		// 	}
-		// }
-
-		// for path, fe := range delEntrys {
-		// 	removeEntry(path, fe, false)
-		// }
 		for path, fe := range maps.Clone(fileentries) {
 			if _, err := os.Stat(path); err != nil {
 				removeEntry(path, fe, false)
 			}
 		}
 	}
-	OnSelectedReload[index] = reload
+	OnSelectedReload[1] = reload
 
 	for _, name := range ls(recvDir) {
 		path := filepath.Join(recvDir, name)
@@ -476,8 +393,6 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) *containe
 	}
 
 	cancelChan := make(chan struct{})
-
-	var cancelButton, mainButton *widget.Button
 
 	removeEntrys := func() {
 		for fpath, fe := range fileentries {
@@ -669,11 +584,7 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) *containe
 	}
 
 	mainButton = widget.NewButtonWithIcon(lp("Download"), theme.DownloadIcon(), func() {
-		ok := len(entry.Text) > 5
-		if totpCheck.Checked {
-			ok = len(entry.Text) > 0
-		}
-		if !ok {
+		if entry.Validate() != nil {
 			log.Error("no receive code entered\n")
 			dialog.ShowInformation(
 				lp("Download"),
@@ -682,17 +593,17 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) *containe
 			)
 			return
 		}
-		if len(fileentries) > 0 {
-			dialog.ShowConfirm(
-				lp("Delete All"),
-				lp("Are you sure you want to delete all received files?"), func(b bool) {
-					if b {
-						removeEntrys()
-					}
-				},
-				w)
-			return
-		}
+		// if len(fileentries) > 0 {
+		// 	dialog.ShowConfirm(
+		// 		lp("Delete All"),
+		// 		lp("Are you sure you want to delete all received files?"), func(b bool) {
+		// 			if b {
+		// 				removeEntrys()
+		// 			}
+		// 		},
+		// 		w)
+		// 	return
+		// }
 
 		secret := entry.Text
 		if totpCheck.Checked {
@@ -898,38 +809,54 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) *containe
 	cosSH = append(cosSH, cancelButton)
 	allShow(false, cosSH...)
 
-	saveAllButton := widget.NewButtonWithIcon("*", theme.DocumentSaveIcon(), func() { //lp("Save All") theme.FolderOpenIcon()
+	saveAllButton := widget.NewButtonWithIcon("", theme.DocumentSaveIcon(), func() { //lp("Save All") theme.FolderOpenIcon()
 		ShowFilesSave()
 	})
 	cosED = append(cosED, saveAllButton)
 
-	deleteAllButton := widget.NewButtonWithIcon("*", theme.DeleteIcon(), func() { //lp("Delete All")
-		if len(fileentries) > 0 {
-			removeEntrys()
-		} else {
-			entry.SetText("")
-		}
+	deleteAllButton := widget.NewButtonWithIcon("", theme.ContentRemoveIcon(), func() { //lp("Delete All")
+		fyne.Do(func() {
+			if len(fileentries) > 0 {
+				removeEntrys()
+			} else {
+				entry.SetText(entryText)
+			}
+		})
 	})
 	cosED = append(cosED, deleteAllButton)
 
-	downloadButton := widget.NewButtonWithIcon("*", theme.FolderIcon(), func() {
+	downloadButton := widget.NewButtonWithIcon("", theme.FolderIcon(), func() {
 		if len(fileentries) > 0 {
-			filesSave(nil, fmt.Errorf("download"))
+			fyne.Do(func() {
+				filesSave(nil, fmt.Errorf("download"))
+				topline.SetText(lp("Saved all files to") + " Download")
+			})
 		}
 	})
 	cosED = append(cosED, downloadButton)
 
+	clearButton := widget.NewButtonWithIcon("", theme.ContentClearIcon(), func() {
+		fyne.Do(func() {
+			entry.SetText(entryText)
+		})
+	})
+	cosED = append(cosED, clearButton)
+
 	top := container.NewVBox(
-		container.NewHBox(topline, layout.NewSpacer(), pasteCodeButton),
+		container.NewHBox(topline,
+			layout.NewSpacer(),
+			pasteCodeButton,
+			clearButton,
+		),
 		widget.NewForm(&widget.FormItem{Text: lp("Receive Code"), Widget: entry}),
 		container.NewHBox(
 			totpCheck,
 			totpLabel,
 			totpProg,
 			layout.NewSpacer(),
+			deleteAllButton,
 			saveAllButton,
 			downloadButton,
-			deleteAllButton,
 		),
 		mainButton,
 		prog,

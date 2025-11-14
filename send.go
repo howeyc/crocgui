@@ -44,32 +44,32 @@ const (
 )
 
 func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *container.TabItem) {
-	index := 0
+	var (
+		cosED, cosSH             []fyne.CanvasObject
+		addEntry                 func(dst string, f func(d *widget.Button, p *widget.ProgressBar, l *widget.Label)) (newentry *fyne.Container)
+		cancelButton, mainButton *widget.Button
+	)
 	showPage := func() {}
 	defer func() {
 		if r := recover(); r != nil {
 			log.Error(fmt.Sprint(r))
 		}
 	}()
-	var cosED, cosHS []fyne.CanvasObject
 	prog := widget.NewProgressBar()
-	cosHS = append(cosHS, prog)
+	cosSH = append(cosSH, prog)
 
 	topline := widget.NewLabel(lp("Pick a file to send"))
 
-	entry := widget.NewEntry()
+	entry := widget.NewEntryWithData(binding.BindPreferenceString("secret", a.Preferences()))
 	cosED = append(cosED, entry)
 
-	randomCode := utils.GetRandomName()
-
 	entryText := os.Getenv(CROC_SECRET)
-	if entryText == "" {
-		entryText = randomCode
+	if entryText != "" {
+		entry.SetText(entryText)
 	}
-	entry.SetText(entryText)
 
 	randomCodeButton := widget.NewButtonWithIcon("", theme.ViewRefreshIcon(), func() {
-		randomCode = utils.GetRandomName()
+		randomCode := utils.GetRandomName()
 		entry.SetText(randomCode)
 	})
 	cosED = append(cosED, randomCodeButton)
@@ -82,74 +82,8 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 	cosED = append(cosED, totpCheck)
 
 	totpLabel := widget.NewLabel(TOTP)
-	var totpChan chan struct{}
 
-	totpStop := func() {
-		if totpChan != nil {
-			close(totpChan)
-			totpChan = nil
-		}
-	}
-
-	totpProg := widget.NewProgressBar()
-	totpProg.Hide()
-
-	update := func() {
-		fyne.Do(func() {
-			if !totpCheck.Checked || totpCheck.Disabled() {
-				return
-			}
-
-			now := time.Now()
-			remaining := 30 - now.Second()%30
-			totpLabel.SetText(totp(entry.Text))
-			totpProg.SetValue(float64(remaining) / 30)
-		})
-	}
-
-	totpCheck.OnChanged = func(b bool) {
-		fyne.Do(func() {
-			totpStop()
-			if b {
-				if strings.HasPrefix(entry.Text, TOTP) {
-					entry.SetText(entryText)
-				}
-				totpProg.Show()
-				update()
-
-				totpChan = make(chan struct{})
-				go func() {
-					ticker := time.NewTicker(time.Second)
-					defer ticker.Stop()
-					for {
-						select {
-						case <-done:
-							return
-						case <-ticker.C:
-							update()
-						case <-totpChan:
-							return
-						}
-					}
-				}()
-			} else {
-				totpLabel.SetText(TOTP)
-				totpProg.Hide()
-				entryText = entry.Text
-				entry.SetText(TOTP + totp(entry.Text))
-			}
-			a.Preferences().SetBool("totp-send", b)
-		})
-	}
-
-	if totpCheck.Checked {
-		totpCheck.OnChanged(true)
-	}
-
-	entry.OnChanged = func(secret string) {
-		os.Setenv(CROC_SECRET, secret)
-		update()
-	}
+	totpProg := setupTOTP(a, entry, totpCheck, totpLabel, &entryText)
 
 	boxholder := container.NewVBox()
 	scroller := container.NewVScroll(boxholder)
@@ -187,16 +121,16 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 				}
 			}
 		}
+		delete(fileentries, fpath)
 		fyne.Do(func() {
 			boxholder.Remove(fe)
 			boxholder.Refresh()
-			delete(fileentries, fpath)
 		})
 	}
 
 	// nil if exists
 	// fyne.Do
-	addEntry := func(dst string, f func(d *widget.Button, p *widget.ProgressBar, l *widget.Label)) (newentry *fyne.Container) {
+	addEntry = func(dst string, f func(d *widget.Button, p *widget.ProgressBar, l *widget.Label)) (newentry *fyne.Container) {
 		if _, has := fileentries[dst]; has {
 			log.Tracef("exists %s", dst)
 			return nil
@@ -206,7 +140,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 			base += slash
 		}
 		labelFile := widget.NewLabel(base)
-		deleteButton := widget.NewButtonWithIcon("", theme.CancelIcon(), func() {
+		deleteButton := widget.NewButtonWithIcon("", theme.ContentRemoveIcon(), func() {
 			if entry.Disabled() {
 				log.Trace("Sending")
 			} else {
@@ -255,7 +189,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 		})
 
 		if fe == nil {
-			log.Tracef("entries %s has %s", base, src)
+			log.Tracef("entry %s has %s", base, src)
 			return nil
 		}
 
@@ -365,35 +299,13 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 				addPath(fpath)
 			}
 		}
-		// keysToRemove := []string{}
-		// for path, _ := range fileentries {
-		// 	if _, err := os.Stat(path); err != nil {
-		// 		keysToRemove = append(keysToRemove, path)
-		// 	}
-		// }
-
-		// for _, path := range keysToRemove {
-		// 	if fe, exists := fileentries[path]; exists {
-		// 		removeEntry(path, fe, false)
-		// 	}
-		// }
-		// delEntrys := make(map[string]*fyne.Container, len(fileentries))
-		// for path, fe := range fileentries {
-		// 	if _, err := os.Stat(path); err != nil {
-		// 		delEntrys[path] = fe
-		// 	}
-		// }
-
-		// for path, fe := range delEntrys {
-		// 	removeEntry(path, fe, false)
-		// }
 		for path, fe := range maps.Clone(fileentries) {
 			if _, err := os.Stat(path); err != nil {
 				removeEntry(path, fe, false)
 			}
 		}
 	}
-	OnSelectedReload[index] = reload
+	OnSelectedReload[0] = reload
 
 	reload()
 
@@ -533,6 +445,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 				log.Trace("Sending")
 				return
 			}
+			reload()
 			for _, uri := range uris {
 				if err := addPath(uri.Path()); err != nil {
 					log.Error(err.Error())
@@ -542,7 +455,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 		})
 	}
 
-	addFileButton := widget.NewButtonWithIcon("", theme.FileIcon(), func() {
+	addFileButton := widget.NewButtonWithIcon("", theme.ContentAddIcon(), func() {
 		if supported, err := IsFilePickerSupported(); err != nil {
 			log.Errorf("file picker support: %v", err)
 		} else if !supported {
@@ -678,7 +591,6 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 	cosED = append(cosED, addFolderButton)
 
 	cancelChan := make(chan struct{})
-	var cancelButton, mainButton *widget.Button
 
 	removeEntrys := func(del bool) {
 		for fpath, fe := range fileentries {
@@ -686,11 +598,11 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 		}
 	}
 
-	deleteAllButton := widget.NewButtonWithIcon("*", theme.DeleteIcon(), func() {
+	deleteAllButton := widget.NewButtonWithIcon("", theme.ContentRemoveIcon(), func() {
 		if len(fileentries) > 0 {
 			removeEntrys(true)
 		} else {
-			entry.SetText("")
+			entry.SetText(entryText)
 		}
 	})
 	cosED = append(cosED, deleteAllButton)
@@ -727,11 +639,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 	cosED = append(cosED, reDir)
 
 	mainButton = widget.NewButtonWithIcon(lp("Send"), theme.MailSendIcon(), func() {
-		ok := len(entry.Text) > 5
-		if totpCheck.Checked {
-			ok = len(entry.Text) > 0
-		}
-		if !ok {
+		if entry.Validate() != nil {
 			log.Error("no receive code entered")
 			dialog.ShowInformation(
 				lp("Send"),
@@ -831,7 +739,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 					// prog.Hide()
 					prog.SetValue(0)
 					// cancelButton.Hide()
-					allShow(false, cosHS...)
+					allShow(false, cosSH...)
 					// entry.Enable()
 					// addFileButton.Enable()
 					// addFolderButton.Enable()
@@ -841,9 +749,6 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 
 					if totpCheck.Checked {
 						totpProg.Show()
-					} else if entry.Text == randomCode {
-						randomCode = utils.GetRandomName()
-						entry.SetText(randomCode)
 					}
 					reload()
 				})
@@ -1001,14 +906,14 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 		close(cancelChan)
 	})
 	// cancelButton.Hide()
-	cosHS = append(cosHS, cancelButton)
-	allShow(false, cosHS...)
+	cosSH = append(cosSH, cancelButton)
+	allShow(false, cosSH...)
 
 	top := container.NewVBox(
 		container.NewHBox(topline,
 			layout.NewSpacer(),
-			addFolderButton,
 			addFileButton,
+			addFolderButton,
 			randomCodeButton),
 		widget.NewForm(&widget.FormItem{Text: lp("Send Code"), Widget: entry}),
 		container.NewHBox(
@@ -1218,4 +1123,81 @@ func allShow(show bool, cos ...fyne.CanvasObject) {
 			co.Hide()
 		}
 	}
+}
+
+func setupTOTP(a fyne.App, entry *widget.Entry, totpCheck *widget.Check, totpLabel *widget.Label, entryText *string) *widget.ProgressBar {
+	var totpChan chan struct{}
+	entry.Validator = func(s string) error {
+		if totpCheck.Checked || len(entry.Text) > 5 {
+			return nil
+		}
+		return fmt.Errorf(lp("Secret must be longer than 5 characters"))
+	}
+	totpProg := widget.NewProgressBar()
+	totpProg.Hide()
+
+	update := func() {
+		fyne.Do(func() {
+			if !totpCheck.Checked || totpCheck.Disabled() {
+				return
+			}
+
+			now := time.Now()
+			remaining := 30 - now.Second()%30
+			totpLabel.SetText(totp(entry.Text))
+			totpProg.SetValue(float64(remaining) / 30)
+		})
+	}
+
+	totpCheck.OnChanged = func(b bool) {
+		fyne.Do(func() {
+			entry.SetValidationError(entry.Validate())
+			// Останавливаем предыдущую горутину
+			if totpChan != nil {
+				close(totpChan)
+				totpChan = nil
+			}
+
+			if b {
+				if strings.HasPrefix(entry.Text, TOTP) {
+					entry.SetText(*entryText)
+				}
+				totpProg.Show()
+				update()
+
+				totpChan = make(chan struct{})
+				go func() {
+					ticker := time.NewTicker(time.Second)
+					defer ticker.Stop()
+					for {
+						select {
+						case <-done: // используем глобальный канал
+							return
+						case <-ticker.C:
+							update()
+						case <-totpChan:
+							return
+						}
+					}
+				}()
+			} else {
+				totpLabel.SetText(TOTP)
+				totpProg.Hide()
+				*entryText = entry.Text
+				entry.SetText(TOTP + totp(entry.Text))
+			}
+			a.Preferences().SetBool("totp-send", b)
+		})
+	}
+
+	if totpCheck.Checked {
+		totpCheck.OnChanged(true)
+	}
+
+	entry.OnChanged = func(secret string) {
+		os.Setenv(CROC_SECRET, secret)
+		update()
+	}
+
+	return totpProg
 }
