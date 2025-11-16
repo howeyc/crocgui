@@ -27,24 +27,14 @@
             "translation": "İndir'e basmadan önce onları bekleyin"
         },
         {
-            "id": "Enter code to download",
-            "message": "Enter code to download",
-            "translation": "İndirmek için kodu girin"
-        },
-        {
             "id": "Download",
             "message": "Download",
             "translation": "İndir"
         },
         {
-            "id": "Delete All",
-            "message": "Delete All",
-            "translation": "Tümünü Sil"
-        },
-        {
-            "id": "Are you sure you want to delete all received files?",
-            "message": "Are you sure you want to delete all received files?",
-            "translation": "Tüm alınan dosyaları silmek istediğinizden emin misiniz?"
+            "id": "Secret must be longer than 5 characters",
+            "message": "Secret must be longer than 5 characters",
+            "translation": "Gizli anahtar 5 karakterden uzun olmalıdır"
         },
         {
             "id": "Receive cancelled.",
@@ -122,14 +112,14 @@
             "translation": "Göster / Gizle"
         },
         {
-            "id": "Zip Folder",
-            "message": "Zip Folder",
-            "translation": "Klasörü Sıkıştır"
+            "id": "Zip folders",
+            "message": "Zip folders",
+            "translation": "Zip Klasörleri"
         },
         {
-            "id": "UnZip File",
-            "message": "UnZip File",
-            "translation": "Dosyayı Aç"
+            "id": "UnZip files",
+            "message": "UnZip files",
+            "translation": "UnZip Dosyaları"
         },
         {
             "id": "Appearance",

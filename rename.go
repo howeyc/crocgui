@@ -3,6 +3,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"io/fs"
 	"os"
@@ -11,10 +12,10 @@ import (
 )
 
 func Rename(src, dst string) error {
-	// Check if source path exists
-	// srcStat, err := os.Stat(src)
-	_, err := os.Stat(src)
-	if err != nil {
+	if noRename {
+		return fmt.Errorf("no rename")
+	}
+	if _, err := os.Stat(src); err != nil {
 		return err
 	}
 

@@ -27,24 +27,14 @@
             "translation": "在按\"下载\"之前等待他们"
         },
         {
-            "id": "Enter code to download",
-            "message": "Enter code to download",
-            "translation": "输入下载代码"
-        },
-        {
             "id": "Download",
             "message": "Download",
             "translation": "下载"
         },
         {
-            "id": "Delete All",
-            "message": "Delete All",
-            "translation": "全部删除"
-        },
-        {
-            "id": "Are you sure you want to delete all received files?",
-            "message": "Are you sure you want to delete all received files?",
-            "translation": "确定要删除所有接收的文件吗？"
+            "id": "Secret must be longer than 5 characters",
+            "message": "Secret must be longer than 5 characters",
+            "translation": "密码必须长于5个字符"
         },
         {
             "id": "Receive cancelled.",
@@ -122,14 +112,14 @@
             "translation": "显示/隐藏"
         },
         {
-            "id": "Zip Folder",
-            "message": "Zip Folder",
-            "translation": "压缩文件夹"
+            "id": "Zip folders",
+            "message": "Zip folders",
+            "translation": "Zip 文件夹"
         },
         {
-            "id": "UnZip File",
-            "message": "UnZip File",
-            "translation": "解压文件"
+            "id": "UnZip files",
+            "message": "UnZip files",
+            "translation": "UnZip 文件"
         },
         {
             "id": "Appearance",

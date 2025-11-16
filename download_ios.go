@@ -1,5 +1,6 @@
 //go:build ios
 
+// download_ios.go
 package main
 
 /*
@@ -42,6 +43,88 @@ char* CreateBookmarkFromURLDownload() {
         return strdup([bookmarkString UTF8String]);
     }
 }
+
+// Создает файл в указанной папке
+char* CreateFileInDownloads(char* bookmarkDataStr, char* fileName, char* mimeType) {
+    @autoreleasepool {
+        // 1. Восстанавливаем bookmark
+        NSString *bookmarkString = [NSString stringWithUTF8String:bookmarkDataStr];
+        NSData *bookmarkData = [[NSData alloc] initWithBase64EncodedString:bookmarkString options:0];
+
+        if (!bookmarkData) {
+            return strdup("error: invalid bookmark data");
+        }
+
+        BOOL isStale = NO;
+        NSError *error = nil;
+        NSURL *downloadsURL = [NSURL URLByResolvingBookmarkData:bookmarkData
+                                                        options:NSURLBookmarkResolutionWithSecurityScope
+                                                  relativeToURL:nil
+                                            bookmarkDataIsStale:&isStale
+                                                          error:&error];
+
+        if (error) {
+            NSString *errorMsg = [NSString stringWithFormat:@"error: failed to resolve bookmark: %@", error.localizedDescription];
+            return strdup([errorMsg UTF8String]);
+        }
+
+        if (isStale) {
+            return strdup("error: bookmark is stale");
+        }
+
+        if (!downloadsURL) {
+            return strdup("error: resolved URL is nil");
+        }
+
+        // 2. Начинаем security-scoped доступ
+        if (![downloadsURL startAccessingSecurityScopedResource]) {
+            return strdup("error: cannot start security-scoped access");
+        }
+
+        // 3. Создаем полный путь к файлу
+        NSString *fileNameStr = [NSString stringWithUTF8String:fileName];
+        NSURL *fileURL = [downloadsURL URLByAppendingPathComponent:fileNameStr];
+
+        // 4. Создаем директории если нужно
+        NSURL *directoryURL = [fileURL URLByDeletingLastPathComponent];
+        if (![directoryURL isEqual:downloadsURL]) {
+            // Создаем вложенные директории
+            NSFileManager *fileManager = [NSFileManager defaultManager];
+            [fileManager createDirectoryAtURL:directoryURL
+                  withIntermediateDirectories:YES
+                                   attributes:nil
+                                        error:nil];
+        }
+
+        // 5. Создаем файл
+        NSFileManager *fileManager = [NSFileManager defaultManager];
+        if (![fileManager createFileAtPath:[fileURL path] contents:nil attributes:nil]) {
+            [downloadsURL stopAccessingSecurityScopedResource];
+            return strdup("error: failed to create file");
+        }
+
+        // 6. Создаем security-scoped bookmark для нового файла
+        NSData *fileBookmarkData = [fileURL bookmarkDataWithOptions:NSURLBookmarkCreationWithSecurityScope
+                                     includingResourceValuesForKeys:nil
+                                                      relativeToURL:nil
+                                                              error:&error];
+
+        [downloadsURL stopAccessingSecurityScopedResource];
+
+        if (error) {
+            NSString *errorMsg = [NSString stringWithFormat:@"error: failed to create file bookmark: %@", error.localizedDescription];
+            return strdup([errorMsg UTF8String]);
+        }
+
+        if (!fileBookmarkData) {
+            return strdup("error: file bookmark data is nil");
+        }
+
+        // 7. Конвертируем в base64 строку
+        NSString *fileBookmarkString = [fileBookmarkData base64EncodedStringWithOptions:0];
+        return strdup([fileBookmarkString UTF8String]);
+    }
+}
 */
 import "C"
 import (
@@ -53,6 +136,7 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/driver"
 	"fyne.io/fyne/v2/storage"
+	log "github.com/schollz/logger"
 )
 
 // CreateBookmarkFromURLDownload создает security-scoped bookmark для папки Downloads
@@ -84,62 +168,69 @@ func CreateBookmarkFromURLDownload() (string, error) {
 	return result, nil
 }
 
+// CreateFileInDownloads создает файл в папке Downloads
+func CreateFileInDownloads(fileName, mimeType string) (string, error) {
+	log.Trace("Creating file in iOS Downloads: ", fileName)
+
+	var result string
+	var err error
+
+	// Получаем bookmark для папки Downloads
+	bookmarkData, err := CreateBookmarkFromURLDownload()
+	if err != nil {
+		return "", fmt.Errorf("failed to get Downloads bookmark: %v", err)
+	}
+
+	driver.RunNative(func(ctx interface{}) error {
+		cBookmarkData := C.CString(bookmarkData)
+		defer C.free(unsafe.Pointer(cBookmarkData))
+
+		cFileName := C.CString(fileName)
+		defer C.free(unsafe.Pointer(cFileName))
+
+		cMimeType := C.CString(mimeType)
+		defer C.free(unsafe.Pointer(cMimeType))
+
+		cResult := C.CreateFileInDownloads(cBookmarkData, cFileName, cMimeType)
+		if cResult == nil {
+			err = errors.New("unknown error in native function")
+			return nil
+		}
+
+		defer C.free(unsafe.Pointer(cResult))
+		resultStr := C.GoString(cResult)
+
+		if strings.HasPrefix(resultStr, "error:") {
+			err = errors.New(strings.TrimPrefix(resultStr, "error: "))
+		} else {
+			result = resultStr
+		}
+		return nil
+	})
+
+	if err != nil {
+		log.Error("Failed to create file: ", err.Error())
+		return "", fmt.Errorf("failed to create file: %w", err)
+	}
+	if result == "" {
+		return "", errors.New("empty result from file creation")
+	}
+
+	return result, nil
+}
+
+// ChildDownload создает файл и возвращает его для последующего наполнения данными
 func ChildDownload(component string) (child fyne.URI, cleanup func(), err error) {
 	cleanup = func() {}
 
-	// 1. Получаем bookmark для папки Downloads
-	bookmarkData, err := CreateBookmarkFromURLDownload()
+	// Создаем файл в папке Downloads
+	newFileBookmark, err := CreateFileInDownloads(component, "")
 	if err != nil {
-		err = fmt.Errorf("CreateBookmarkFromURLDownload failed: %v", err)
+		err = fmt.Errorf("CreateFileInDownloads failed: %v", err)
 		return
 	}
 
-	// 2. Разрешаем bookmark для получения parent URI
-	parentURL, isStale, err := ResolveBookmarkToURL(bookmarkData)
-	if err != nil {
-		err = fmt.Errorf("resolve parent bookmark failed: %v", err)
-		return
-	}
-	defer StopAccessingSecurityScopedResource(parentURL)
-
-	if isStale {
-		err = fmt.Errorf("parent bookmark is stale")
-		return
-	}
-
-	// 3. Конвертируем в fyne.URI для проверок
-	parentURI, err := storage.ParseURI(parentURL)
-	if err != nil {
-		err = fmt.Errorf("parse parent URI failed: %v", err)
-		return
-	}
-
-	// 4. Проверяем, что parent является директорией
-	canList, err := storage.CanList(parentURI)
-	if err != nil {
-		err = fmt.Errorf("cannot check if listable: %v", err)
-		return
-	}
-	if !canList {
-		err = fmt.Errorf("parent is not a directory: %s", parentURI.String())
-		return
-	}
-
-	// 5. Создаем файл в папке Downloads
-	newFileURL, err := CreateFileInTree(bookmarkData, component, "")
-	if err != nil {
-		err = fmt.Errorf("CreateFileInTree failed: %v", err)
-		return
-	}
-
-	// 6. Создаем security-scoped bookmark для нового файла
-	newFileBookmark, err := CreateBookmarkFromURL(newFileURL)
-	if err != nil {
-		err = fmt.Errorf("create bookmark for new file failed: %v", err)
-		return
-	}
-
-	// 7. Разрешаем bookmark нового файла
+	// Разрешаем bookmark нового файла
 	resolvedURL, isStale, err := ResolveBookmarkToURL(newFileBookmark)
 	if err != nil {
 		err = fmt.Errorf("resolveBookmarkToURL failed: %v", err)
@@ -152,7 +243,7 @@ func ChildDownload(component string) (child fyne.URI, cleanup func(), err error)
 		return
 	}
 
-	// 8. Конвертируем в fyne.URI
+	// Конвертируем в fyne.URI
 	child, err = storage.ParseURI(resolvedURL)
 	if err != nil {
 		StopAccessingSecurityScopedResource(resolvedURL)

@@ -5,6 +5,8 @@ package main
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/storage"
@@ -27,12 +29,28 @@ func ChildDownload(component string) (child fyne.URI, cleanup func(), err error)
 	}
 
 	u := storage.NewFileURI(downloads)
+
+	dirPath := filepath.Dir(component)
+
+	// Проверяем, есть ли реальные поддиректории
+	hasSubdirs := dirPath != "." && dirPath != string(filepath.Separator)
+
+	// Создаем полный путь к файлу
+	if hasSubdirs {
+		dirToCreate := filepath.Join(downloads, dirPath)
+		err = os.MkdirAll(dirToCreate, 0755)
+		if err != nil {
+			err = fmt.Errorf("failed to create directory %s: %v", dirToCreate, err)
+			return
+		}
+		u = storage.NewFileURI(dirToCreate)
+	}
 	lu, err := storage.ListerForURI(u)
 	if err != nil {
 		err = fmt.Errorf("create lister for %s: %v", u, err)
 		return
 	}
 
-	child, err = storage.Child(lu, component)
+	child, err = storage.Child(lu, filepath.Base(component))
 	return
 }

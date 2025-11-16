@@ -27,24 +27,14 @@
             "translation": "「ダウンロード」を押す前に待ってください"
         },
         {
-            "id": "Enter code to download",
-            "message": "Enter code to download",
-            "translation": "コードを入力してダウンロード"
-        },
-        {
             "id": "Download",
             "message": "Download",
             "translation": "ダウンロード"
         },
         {
-            "id": "Delete All",
-            "message": "Delete All",
-            "translation": "すべて削除"
-        },
-        {
-            "id": "Are you sure you want to delete all received files?",
-            "message": "Are you sure you want to delete all received files?",
-            "translation": "すべての受信したファイルを削除してもよろしいですか？"
+            "id": "Secret must be longer than 5 characters",
+            "message": "Secret must be longer than 5 characters",
+            "translation": "シークレットは5文字以上である必要があります"
         },
         {
             "id": "Receive cancelled.",
@@ -122,14 +112,14 @@
             "translation": "表示 / 非表示"
         },
         {
-            "id": "Zip Folder",
-            "message": "Zip Folder",
-            "translation": "フォルダを圧縮"
+            "id": "Zip folders",
+            "message": "Zip folders",
+            "translation": "Zipフォルダ"
         },
         {
-            "id": "UnZip File",
-            "message": "UnZip File",
-            "translation": "ファイルを解凍"
+            "id": "UnZip files",
+            "message": "UnZip files",
+            "translation": "UnZipファイル"
         },
         {
             "id": "Appearance",

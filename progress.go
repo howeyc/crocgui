@@ -116,6 +116,12 @@ func NewProgressWriter(destination io.Writer, total int64, c *fyne.Container) (p
 }
 
 func CopyFileProgress(src, dst string, c *fyne.Container, onComplete func(err error)) {
+	fi, err := os.Stat(src)
+	if err != nil {
+		onComplete(err)
+		return
+	}
+
 	source, err := os.Open(src)
 	if err != nil {
 		onComplete(err)
@@ -124,16 +130,7 @@ func CopyFileProgress(src, dst string, c *fyne.Container, onComplete func(err er
 	close := func() {
 		if err := source.Close(); err != nil {
 			log.Errorf("close %s: %v", source.Name(), err)
-			return
 		}
-		// log.Tracef("close %s", source.Name())
-	}
-
-	fi, err := os.Stat(src)
-	if err != nil {
-		close()
-		onComplete(err)
-		return
 	}
 
 	destination, err := os.Create(dst)
@@ -142,16 +139,25 @@ func CopyFileProgress(src, dst string, c *fyne.Container, onComplete func(err er
 		onComplete(err)
 		return
 	}
+	clode := func() {
+		if err := destination.Close(); err != nil {
+			log.Errorf("close %s: %v", destination.Name(), err)
+		}
+	}
 
 	pw, restore := NewProgressWriter(destination, fi.Size(), c)
 
 	go func() {
 		_, err := io.Copy(pw, source)
 		close()
-		if err := destination.Close(); err != nil {
-			log.Errorf("close %s: %v", destination.Name(), err)
-			// } else {
-			// 	log.Tracef("close %s", destination.Name())
+		clode()
+		if err == nil {
+			if t, err := fileModTime(source.Name()); err == nil {
+				log.Tracef("source ModTime %s %v:%v", source.Name(), t, err)
+				os.Chtimes(destination.Name(), time.Time{}, t)
+				t, err = fileModTime(destination.Name())
+				log.Tracef("destination ModTime %s %v:%v", destination.Name(), t, err)
+			}
 		}
 		restore()
 		onComplete(err)
@@ -249,18 +255,28 @@ func copyToUWCProgress(destination fyne.URIWriteCloser, src string, c *fyne.Cont
 		onComplete(fmt.Errorf("destination is nil (dialog closed)"))
 		return
 	}
+	clode := func() {
+		if err := destination.Close(); err != nil {
+			log.Errorf("close %s: %v", destination.URI(), err)
+		}
+	}
 
 	source, err := os.Open(src)
 	if err != nil {
-		destination.Close()
+		clode()
 		onComplete(fmt.Errorf("failed to open source file: %v", err))
 		return
+	}
+	close := func() {
+		if err := source.Close(); err != nil {
+			log.Errorf("close %s: %v", source.Name(), err)
+		}
 	}
 
 	fi, err := os.Stat(src)
 	if err != nil {
-		destination.Close()
-		source.Close()
+		clode()
+		close()
 		onComplete(err)
 		return
 	}
@@ -269,9 +285,26 @@ func copyToUWCProgress(destination fyne.URIWriteCloser, src string, c *fyne.Cont
 
 	go func() {
 		_, err := io.Copy(pw, source)
-		source.Close()
-		destination.Close()
+		clode()
+		close()
+		// if err == nil {
+		// 	if t, err := fileModTime(source.Name()); err == nil {
+		// 		log.Tracef("source ModTime %s %v:%v", source.Name(), t, err)
+		// 		setModTime(destination.URI(), t)
+		// 		t, err = ModTime(destination.URI())
+		// 		log.Tracef("destination ModTime %s %v:%v", destination.URI(), t, err)
+		// 	}
+		// }
 		restore()
 		onComplete(err)
 	}()
+}
+
+// fileModTime стандартная реализация для обычных файлов
+func fileModTime(filePath string) (time.Time, error) {
+	fi, err := os.Stat(filePath)
+	if err != nil {
+		return time.Now(), err
+	}
+	return fi.ModTime(), nil
 }

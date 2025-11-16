@@ -48,6 +48,7 @@ var (
 	join                   func(...string) string
 	lastLU                 fyne.ListableURI
 	slash                  = string(filepath.Separator)
+	ErrNilURI              = errors.New("uri is nil")
 )
 
 const (
@@ -65,12 +66,14 @@ const (
 	MIME_TYPE_DIR          = "vnd.android.document/directory"
 	MIME_TYPE_OCTET_STREAM = "application/octet-stream"
 
-	// Чтоб на десктопе отладить копирование вместо переноса как будто это мобильная ОС.
+	// Чтоб на десктопе отладить копирование в кэш посылки вместо переноса как будто это мобильная ОС.
 	asMobile = false
 	// Чтоб на десктопе или Андроиде 9- отладить план Б при отсутствии com.android.DocumentsUI на мобильной ОС сохранять протокол и полученные файлы в Загрузки.
 	noDialogDebug = false
 	// Чтоб не перезапускать приложение при завершении передачи
 	noRestart = false
+	// Чтоб на десктопе отладить копирование вместо переноса из кэша приёма
+	noRename = false
 )
 
 func main() {
@@ -200,27 +203,6 @@ func refreshWindow(a fyne.App, w fyne.Window) {
 	}
 }
 
-func ls0(path string) (files []string) {
-	if path == "" {
-		return
-	}
-	dir, err := os.Open(path)
-	if err != nil {
-		return
-	}
-	defer dir.Close()
-
-	fileInfos, err := dir.Readdir(-1)
-	if err != nil {
-		return
-	}
-
-	for _, fileInfo := range fileInfos {
-		files = append(files, fileInfo.Name())
-	}
-
-	return
-}
 func ls(path string) (files []string) {
 	if path == "" {
 		return

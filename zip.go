@@ -1,3 +1,4 @@
+// zip.go
 package main
 
 import (
@@ -8,8 +9,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
-	// "sync/atomic" // Убираем импорт, так как он больше не нужен
 	"unicode"
 
 	"fyne.io/fyne/v2"
@@ -29,7 +30,7 @@ func ZipDirectoryProgress(destination, source string, c *fyne.Container, onCompl
 func zipDirectoryWithOverallProgress(destination string, source string, c *fyne.Container) (err error) {
 	// 1. Check if destination already exists
 	if _, statErr := os.Stat(destination); statErr == nil {
-		err = fmt.Errorf("%s file already exists!", destination)
+		err = fmt.Errorf("%s file already exists", destination)
 		log.Error(err)
 		return err
 	}
@@ -93,8 +94,29 @@ func zipDirectoryWithOverallProgress(destination string, source string, c *fyne.
 			}
 			zipPath := filepath.ToSlash(relPath)
 
-			// Create a new entry in the zip archive
-			zipEntryWriter, err := zipWriter.Create(zipPath)
+			// Create a new entry in the zip archive with file header that preserves file times
+			header, err := zip.FileInfoHeader(info)
+			if err != nil {
+				log.Errorf("Error creating zip header for %s: %v", path, err)
+				srcFile.Close()
+				return err
+			}
+
+			// Set the name in the archive
+			header.Name = zipPath
+
+			// Set the compression method (you can change to Deflate for compression)
+			header.Method = zip.Store
+
+			// Preserve the original file modification time
+			header.Modified = info.ModTime()
+
+			// For better compatibility, also set the extended timestamp fields
+			// This ensures the modification time is preserved across different zip tools
+			// header.SetModTime(info.ModTime())
+
+			// Create the file in the zip archive with the custom header
+			zipEntryWriter, err := zipWriter.CreateHeader(header)
 			if err != nil {
 				log.Errorf("Error creating zip entry %s: %v", zipPath, err)
 				srcFile.Close()
@@ -110,6 +132,8 @@ func zipDirectoryWithOverallProgress(destination string, source string, c *fyne.
 				log.Errorf("Error copying file %s to zip: %v", path, copyErr)
 				return copyErr
 			}
+
+			log.Tracef("Added file to archive: %s (mod time: %v)", zipPath, info.ModTime())
 		}
 		return nil
 	})
@@ -258,6 +282,27 @@ func unzipDirectoryWithCustomCopy(destination string, source string, c *fyne.Con
 		// Close both files after copying the current file is complete
 		dstFile.Close()
 		fileInArchive.Close()
+
+		// Preserve the original file modification time from the zip entry
+		if !f.Modified.IsZero() {
+			// Use the modification time from the zip file header
+			modTime := f.Modified
+			if err := os.Chtimes(sanitizedPath, modTime, modTime); err != nil {
+				log.Warnf("Failed to set modification time for %s: %v", sanitizedPath, err)
+				// Continue even if setting time fails
+			} else {
+				log.Tracef("Set modification time for %s: %v", sanitizedPath, modTime)
+			}
+		} else if !f.FileInfo().ModTime().IsZero() {
+			// Fallback to the file info modification time
+			modTime := f.FileInfo().ModTime()
+			if err := os.Chtimes(sanitizedPath, modTime, modTime); err != nil {
+				log.Warnf("Failed to set modification time for %s: %v", sanitizedPath, err)
+				// Continue even if setting time fails
+			} else {
+				log.Tracef("Set modification time for %s: %v", sanitizedPath, modTime)
+			}
+		}
 	}
 
 	// 4. Restore GUI (hides the progress bar)
@@ -312,4 +357,27 @@ func ValidFileName(fname string) (err error) {
 		return
 	}
 	return
+}
+
+// GetZipFileTimes возвращает информацию о времени модификации файлов в архиве
+func GetZipFileTimes(zipPath string) (map[string]time.Time, error) {
+	fileTimes := make(map[string]time.Time)
+
+	archive, err := zip.OpenReader(zipPath)
+	if err != nil {
+		return nil, err
+	}
+	defer archive.Close()
+
+	for _, f := range archive.File {
+		if !f.FileInfo().IsDir() {
+			modTime := f.Modified
+			if modTime.IsZero() {
+				modTime = f.FileInfo().ModTime()
+			}
+			fileTimes[f.Name] = modTime
+		}
+	}
+
+	return fileTimes, nil
 }

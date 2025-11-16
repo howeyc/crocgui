@@ -37,13 +37,6 @@
             "fuzzy": true
         },
         {
-            "id": "Enter code to download",
-            "message": "Enter code to download",
-            "translation": "Enter code to download",
-            "translatorComment": "Copied from source.",
-            "fuzzy": true
-        },
-        {
             "id": "Download",
             "message": "Download",
             "translation": "Download",
@@ -51,16 +44,9 @@
             "fuzzy": true
         },
         {
-            "id": "Delete All",
-            "message": "Delete All",
-            "translation": "Delete All",
-            "translatorComment": "Copied from source.",
-            "fuzzy": true
-        },
-        {
-            "id": "Are you sure you want to delete all received files?",
-            "message": "Are you sure you want to delete all received files?",
-            "translation": "Are you sure you want to delete all received files?",
+            "id": "Secret must be longer than 5 characters",
+            "message": "Secret must be longer than 5 characters",
+            "translation": "Secret must be longer than 5 characters",
             "translatorComment": "Copied from source.",
             "fuzzy": true
         },
@@ -170,16 +156,16 @@
             "fuzzy": true
         },
         {
-            "id": "Zip Folder",
-            "message": "Zip Folder",
-            "translation": "Zip Folder",
+            "id": "Zip folders",
+            "message": "Zip folders",
+            "translation": "Zip folders",
             "translatorComment": "Copied from source.",
             "fuzzy": true
         },
         {
-            "id": "UnZip File",
-            "message": "UnZip File",
-            "translation": "UnZip File",
+            "id": "UnZip files",
+            "message": "UnZip files",
+            "translation": "UnZip files",
             "translatorComment": "Copied from source.",
             "fuzzy": true
         },

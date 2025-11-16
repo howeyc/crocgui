@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"syscall"
 
 	"fyne.io/fyne/v2"
@@ -18,21 +19,18 @@ import (
 type CopyFile func(srcURI fyne.URI, dstPath string) error
 
 func copyFiles(srcURI fyne.URI, dstDir string, copyFile CopyFile) error {
-
 	// Для отслеживания циклов
-	visited := make(map[string]bool)
+	var visited sync.Map
 	deep := 0
 
 	var walk func(current fyne.URI, currentRelPath string) error
 
 	// Определяем walk внутри copyFiles, чтобы она имела доступ к visited, dstDir, и copyFile
 	walk = func(current fyne.URI, currentRelPath string) error {
-
 		currentStr := current.String()
 
-		// Проверяем, посещали ли мы этот URI раньше (защита от циклов)
-		// Безопасно, так как мы в GUI потоке Fyne
-		if visited[currentStr] {
+		// Проверяем - Load безопасен для конкурентного доступа
+		if _, loaded := visited.Load(currentStr); loaded {
 			return fmt.Errorf("walk visited %s", currentStr)
 		}
 
@@ -55,8 +53,9 @@ func copyFiles(srcURI fyne.URI, dstDir string, copyFile CopyFile) error {
 		defer func() { deep-- }()
 
 		if IsDirectory(current) {
-			// Добавляем в visited, так как начали обработку каталога.
-			visited[currentStr] = true
+			// Сохраняем - Store безопасен для конкурентного доступа
+			visited.Store(currentStr, true)
+
 			if isAndroid && deep > 1 {
 				return fmt.Errorf("walk deep %d", deep)
 			}
@@ -104,7 +103,6 @@ func copyFiles(srcURI fyne.URI, dstDir string, copyFile CopyFile) error {
 			log.Tracef("walk copyFile %s %s", current, dstPath)
 		}
 
-		// Копирование прошло успешно
 		return nil
 	}
 

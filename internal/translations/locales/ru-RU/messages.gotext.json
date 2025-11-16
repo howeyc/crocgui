@@ -27,24 +27,14 @@
             "translation": "Ждите прежде чем нажать Получить"
         },
         {
-            "id": "Enter code to download",
-            "message": "Enter code to download",
-            "translation": "Секрет должен быть больше 5 знаков"
-        },
-        {
             "id": "Download",
             "message": "Download",
             "translation": "Получить"
         },
         {
-            "id": "Delete All",
-            "message": "Delete All",
-            "translation": "Удалить всё"
-        },
-        {
-            "id": "Are you sure you want to delete all received files?",
-            "message": "Are you sure you want to delete all received files?",
-            "translation": "Вы уверены что хотите удалить все полученные файлы?"
+            "id": "Secret must be longer than 5 characters",
+            "message": "Secret must be longer than 5 characters",
+            "translation": "Секрет должен быть длиннее 5 символов"
         },
         {
             "id": "Receive cancelled.",
@@ -122,14 +112,14 @@
             "translation": "Показать / Скрыть"
         },
         {
-            "id": "Zip Folder",
-            "message": "Zip Folder",
+            "id": "Zip folders",
+            "message": "Zip folders",
             "translation": "Zip каталоги"
         },
         {
-            "id": "UnZip File",
-            "message": "UnZip File",
-            "translation": "UnZip файлы"
+            "id": "UnZip files",
+            "message": "UnZip files",
+            "translation": "UnZip Файлы"
         },
         {
             "id": "Appearance",

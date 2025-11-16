@@ -7,15 +7,10 @@ toolchain go1.24.6
 require (
 	fyne.io/fyne/v2 v2.6.1
 	github.com/adrg/xdg v0.5.3
-	github.com/buildkite/shellwords v1.0.0
 	github.com/schollz/croc/v10 v10.2.5
 	github.com/schollz/logger v1.2.0
-	github.com/schollz/pake/v3 v3.1.0
-	github.com/schollz/progressbar/v3 v3.18.0
 	github.com/ulikunitz/xz v0.5.12
-	golang.org/x/sys v0.36.0
 	golang.org/x/text v0.29.0
-	golang.org/x/time v0.13.0
 )
 
 require (
@@ -51,7 +46,9 @@ require (
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/rymdport/portal v0.4.1 // indirect
 	github.com/sabhiram/go-gitignore v0.0.0-20210923224102-525f6e181f06 // indirect
+	github.com/schollz/pake/v3 v3.1.0 // indirect
 	github.com/schollz/peerdiscovery v1.7.6 // indirect
+	github.com/schollz/progressbar/v3 v3.18.0 // indirect
 	github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e // indirect
 	github.com/srwiley/oksvg v0.0.0-20221011165216-be6e8873101c // indirect
 	github.com/srwiley/rasterx v0.0.0-20220730225603-2ab79fcdd4ef // indirect
@@ -62,6 +59,8 @@ require (
 	golang.org/x/crypto v0.42.0 // indirect
 	golang.org/x/image v0.24.0 // indirect
 	golang.org/x/net v0.44.0 // indirect
+	golang.org/x/sys v0.36.0 // indirect
 	golang.org/x/term v0.35.0 // indirect
+	golang.org/x/time v0.13.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

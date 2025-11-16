@@ -8,13 +8,13 @@ import (
 	"fmt"
 	"hash/crc32"
 	"io"
-	"maps"
 	"math"
 	"os"
 	"path/filepath"
 	"reflect"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 
 	log "github.com/schollz/logger"
@@ -87,23 +87,29 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 
 	boxholder := container.NewVBox()
 	scroller := container.NewVScroll(boxholder)
-	fileentries := make(map[string]*fyne.Container)
+	var fileentries sync.Map
+
 	ready := func() (ok bool) {
-		for _, fe := range fileentries {
+		ok = true
+		fileentries.Range(func(key, value interface{}) bool {
+			fe := value.(*fyne.Container)
 			if fe == nil {
-				return
+				ok = false
+				return false
 			}
 			if len(fe.Objects) <= feBar {
-				return
+				ok = false
+				return false
 			}
 			if fe.Objects[feBar].Visible() {
-				return
+				ok = false
+				return false
 			}
-		}
-		return true
+			return true
+		})
+		return ok
 	}
 
-	// fyne.Do
 	removeEntry := func(fpath string, fe *fyne.Container, del bool) {
 		if del {
 			remove := os.Remove
@@ -121,7 +127,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 				}
 			}
 		}
-		delete(fileentries, fpath)
+		fileentries.Delete(fpath)
 		fyne.Do(func() {
 			boxholder.Remove(fe)
 			boxholder.Refresh()
@@ -129,9 +135,8 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 	}
 
 	// nil if exists
-	// fyne.Do
 	addEntry = func(dst string, f func(d *widget.Button, p *widget.ProgressBar, l *widget.Label)) (newentry *fyne.Container) {
-		if _, has := fileentries[dst]; has {
+		if _, loaded := fileentries.Load(dst); loaded {
 			log.Tracef("exists %s", dst)
 			return nil
 		}
@@ -144,8 +149,8 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 			if entry.Disabled() {
 				log.Trace("Sending")
 			} else {
-				if fe, ok := fileentries[dst]; ok {
-					removeEntry(dst, fe, true)
+				if fe, ok := load(&fileentries, dst); ok {
+					removeEntry(dst, fe, true) // ← исправлена опечатка (было fe.)
 				} else {
 					os.Remove(dst)
 				}
@@ -158,7 +163,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 			labelFile,
 		)
 
-		fileentries[dst] = newentry
+		fileentries.Store(dst, newentry)
 		fyne.Do(func() {
 			if f == nil {
 				progFile.Hide()
@@ -194,7 +199,6 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 		}
 
 		if _, err := os.Stat(dst); err == nil {
-			// Также и когда src==dst
 			log.Tracef("cache %s has %s", dst, src)
 			return nil
 		}
@@ -255,6 +259,12 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 			onComplete(fmt.Errorf("user cancel dialog"))
 			return
 		}
+		close := func() {
+			if err := source.Close(); err != nil {
+				log.Errorf("close %s: %v", source.URI(), err)
+			}
+		}
+
 		if dst == "" {
 			u := source.URI()
 			name := uriBase(u)
@@ -262,9 +272,14 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 		}
 		destination, err := os.Create(dst)
 		if err != nil {
-			source.Close()
+			close()
 			onComplete(fmt.Errorf("unable to create file %s error: %s", dst, err.Error()))
 			return
+		}
+		clode := func() {
+			if err := destination.Close(); err != nil {
+				log.Errorf("close %s: %v", destination.Name(), err)
+			}
 		}
 
 		total, err := getSize(source.URI())
@@ -275,8 +290,16 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 
 		go func() {
 			_, err := io.Copy(pw, source)
-			source.Close()
-			destination.Close()
+			close()
+			clode()
+			if err == nil {
+				if t, err := ModTime(source.URI()); err == nil {
+					log.Tracef("source ModTime %s %v:%v", source.URI(), t, err)
+					os.Chtimes(destination.Name(), time.Time{}, t)
+					t, err = fileModTime(destination.Name())
+					log.Tracef("destination ModTime %s %v:%v", destination.Name(), t, err)
+				}
+			}
 			restore()
 			onComplete(err)
 		}()
@@ -299,11 +322,13 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 				addPath(fpath)
 			}
 		}
-		for path, fe := range maps.Clone(fileentries) {
+
+		forEachFileEntry(&fileentries, func(path string, fe *fyne.Container) {
 			if _, err := os.Stat(path); err != nil {
 				removeEntry(path, fe, false)
 			}
-		}
+		})
+
 	}
 	OnSelectedReload[0] = reload
 
@@ -393,7 +418,6 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 						name := uriBase(u)
 						dst := join(name)
 						source, err := Reader(u)
-						// source, err := storage.Reader(u)
 						if err != nil {
 							log.Errorf("reader: %v", err)
 							continue
@@ -507,7 +531,6 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 				if err != nil {
 					log.Errorf("copy %s %s: %v", src, dst, err)
 					removeEntry(dst, fe, true)
-					// raf()
 					return
 				}
 
@@ -517,7 +540,6 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 				} else {
 					log.Tracef("copy %s %s", src, dst)
 				}
-				// raf()
 			})
 		}, w)
 	})
@@ -593,16 +615,16 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 	cancelChan := make(chan struct{})
 
 	removeEntrys := func(del bool) {
-		for fpath, fe := range fileentries {
+		forEachFileEntry(&fileentries, func(fpath string, fe *fyne.Container) {
 			removeEntry(fpath, fe, del)
-		}
+		})
 	}
 
 	deleteAllButton := widget.NewButtonWithIcon("", theme.ContentRemoveIcon(), func() {
-		if len(fileentries) > 0 {
-			removeEntrys(true)
-		} else {
+		if mapEmpty(&fileentries) {
 			entry.SetText(entryText)
+		} else {
+			removeEntrys(true)
 		}
 	})
 	cosED = append(cosED, deleteAllButton)
@@ -643,7 +665,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 			log.Error("no receive code entered")
 			dialog.ShowInformation(
 				lp("Send"),
-				lp("Enter code to download"),
+				lp("Secret must be longer than 5 characters"),
 				w,
 			)
 			return
@@ -658,12 +680,14 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 			return
 		}
 		filepaths := []string{}
-		for fpath, _ := range fileentries {
+		fileentries.Range(func(key, value interface{}) bool {
+			fpath := key.(string)
 			if target, err := Readlink(fpath); err == nil {
 				fpath = target
 			}
 			filepaths = append(filepaths, fpath)
-		}
+			return true
+		})
 		zipfolder := a.Preferences().Bool("zip-unzip")
 		cderr := os.Chdir(tempDir)
 		if cderr != nil {
@@ -689,9 +713,11 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 			totpLabel.SetText(secret)
 			secret = TOTP + secret
 		}
-		for _, fe := range fileentries {
+		fileentries.Range(func(key, value interface{}) bool {
+			fe := value.(*fyne.Container)
 			fe.Objects[feDel].Hide()
-		}
+			return true
+		})
 		sender, err := croc.New(croc.Options{
 			IsSender:         true,
 			SharedSecret:     secret,
@@ -734,17 +760,8 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 			defer func() {
 				ticker.Stop()
 				fyne.Do(func() {
-					// Восстанавливаю
-					// mainButton.Enable()
-					// prog.Hide()
 					prog.SetValue(0)
-					// cancelButton.Hide()
 					allShow(false, cosSH...)
-					// entry.Enable()
-					// addFileButton.Enable()
-					// addFolderButton.Enable()
-
-					// totpCheck.Enable()
 					allEnabled(true, cosED...)
 
 					if totpCheck.Checked {
@@ -799,7 +816,8 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 								path = filepath.Join(fi.FolderSource, fi.Name)
 							}
 
-							if fe := fileentries[path]; fe != nil {
+							// if fe, ok := fileentries.Load(path); ok {
+							if fe, ok := load(&fileentries, path); ok {
 								if pb := fe.Objects[feBar].(*widget.ProgressBar); pb != nil {
 									pb.Max = float64(fi.Size)
 								}
@@ -819,10 +837,11 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 									path = join(strings.TrimSuffix(fi.Name, DOTZIP))
 								}
 
-								if fr, ok := fileentries[path]; ok {
+								// if fr, ok := fileentries.Load(path); ok {
+								if fr, ok := load(&fileentries, path); ok {
 									fyne.Do(func() {
 										boxholder.Remove(fr)
-										delete(fileentries, path)
+										fileentries.Delete(path)
 									})
 								}
 							}
@@ -831,11 +850,13 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 						fyne.Do(func() {
 							toplineW.SetText(lp("Have them press the Download now"))
 							prog.Show()
-							for _, fe := range fileentries {
+							fileentries.Range(func(key, value interface{}) bool {
+								fe := value.(*fyne.Container)
 								pb := fe.Objects[feBar].(*widget.ProgressBar)
 								pb.SetValue(0)
 								pb.Show()
-							}
+								return true
+							})
 						})
 						progW.SetMax(totalMax)
 						log.Tracef("totalMax %d", totalMax)
@@ -851,13 +872,14 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 							size = fi.Size
 							path := join(fi.Name)
 							if oldPath != path {
-								if fe := fileentries[oldPath]; fe != nil {
+								// if fe, ok := fileentries.Load(oldPath); ok {
+								if fe, ok := load(&fileentries, oldPath); ok {
 									removeEntry(oldPath, fe, true)
 								}
 								oldPath = path
 							}
 							log.Trace(path)
-							if fe, ok := fileentries[path]; ok {
+							if fe, ok := load(&fileentries, path); ok {
 								fepw = NewProgressWrapper(fe.Objects[feBar].(*widget.ProgressBar))
 							} else {
 								fepw = NewProgressWrapper(nil)
@@ -895,7 +917,6 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 			})
 			close(doneChan)
 		}()
-
 		// +12 go routines
 		log.Warnf("NumGoroutine %d", runtime.NumGoroutine())
 		a.Clipboard().SetContent(entry.Text)
@@ -905,7 +926,6 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 	cancelButton = widget.NewButtonWithIcon(lp("Cancel"), theme.CancelIcon(), func() {
 		close(cancelChan)
 	})
-	// cancelButton.Hide()
 	cosSH = append(cosSH, cancelButton)
 	allShow(false, cosSH...)
 
@@ -932,7 +952,6 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 
 	ti = container.NewTabItemWithIcon(lp("Send"), theme.MailSendIcon(),
 		container.NewBorder(top, nil, nil, nil, scroller))
-	// fyne.Do
 	showPage = func() {
 		if parent.Selected() != ti {
 			fyne.Do(func() {
@@ -1131,7 +1150,7 @@ func setupTOTP(a fyne.App, entry *widget.Entry, totpCheck *widget.Check, totpLab
 		if totpCheck.Checked || len(entry.Text) > 5 {
 			return nil
 		}
-		return fmt.Errorf(lp("Secret must be longer than 5 characters"))
+		return errors.New(lp("Secret must be longer than 5 characters"))
 	}
 	totpProg := widget.NewProgressBar()
 	totpProg.Hide()
@@ -1171,7 +1190,7 @@ func setupTOTP(a fyne.App, entry *widget.Entry, totpCheck *widget.Check, totpLab
 					defer ticker.Stop()
 					for {
 						select {
-						case <-done: // используем глобальный канал
+						case <-done:
 							return
 						case <-ticker.C:
 							update()
@@ -1200,4 +1219,34 @@ func setupTOTP(a fyne.App, entry *widget.Entry, totpCheck *widget.Check, totpLab
 	}
 
 	return totpProg
+}
+
+func mapEmpty(m *sync.Map) (empty bool) {
+	empty = true
+	m.Range(func(_, _ interface{}) bool {
+		empty = false
+		return false
+	})
+	return
+}
+
+func forEachFileEntry(fileentries *sync.Map, fn func(path string, fe *fyne.Container)) {
+	tempMap := make(map[string]*fyne.Container)
+	fileentries.Range(func(key, value interface{}) bool {
+		tempMap[key.(string)] = value.(*fyne.Container)
+		return true
+	})
+
+	for path, fe := range tempMap {
+		fn(path, fe)
+	}
+}
+
+func load(fileentries *sync.Map, path string) (*fyne.Container, bool) {
+	if fe, ok := fileentries.Load(path); ok {
+		if container, ok := fe.(*fyne.Container); ok {
+			return container, true
+		}
+	}
+	return nil, false
 }

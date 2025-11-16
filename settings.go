@@ -95,9 +95,9 @@ func settingsTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 		refreshWindow(a, w)
 	})
 
-	s := lp("Zip Folder")
+	s := lp("Zip folders")
 	if !(isMobile || asMobile) {
-		s += " / " + lp("UnZip File")
+		s += " / " + lp("UnZip files")
 	}
 
 	return container.NewTabItemWithIcon(ZeroWidthNonJoiner, theme.SettingsIcon(), container.NewVScroll(container.NewVBox( //lp("Settings")

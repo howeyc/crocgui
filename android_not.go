@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/storage"
@@ -108,7 +109,7 @@ func getSize0(uri fyne.URI) (size int64, err error) {
 	}
 
 	// Альтернативный метод: открываем и читаем файл для определения размера
-	readCloser, err := storage.OpenFileFromURI(uri)
+	readCloser, err := storage.Reader(uri)
 	if err != nil {
 		return 0, fmt.Errorf("failed to open file: %w", err)
 	}
@@ -152,7 +153,6 @@ func Reader(u fyne.URI) (r fyne.URIReadCloser, err error) {
 var (
 	ErrNilReader = errors.New("reader is nil")
 	ErrNilFile   = errors.New("file is nil")
-	ErrNilURI    = errors.New("uri is nil")
 )
 
 type fileReader struct {
@@ -247,4 +247,18 @@ func list(u fyne.URI) ([]fyne.URI, error) {
 	}
 
 	return uris, nil
+}
+
+func ModTime(uri fyne.URI) (time.Time, error) {
+	if uri == nil {
+		return time.Time{}, ErrNilURI
+	}
+	return fileModTime(uri.Path())
+}
+
+func setModTime(uri fyne.URI, mtime time.Time) error {
+	if uri == nil {
+		return ErrNilURI
+	}
+	return os.Chtimes(uri.Path(), time.Time{}, mtime)
 }

@@ -250,7 +250,8 @@ static jint readDocumentStream(JNIEnv* env, jlong streamPtr, jbyteArray goBuffer
         return 0;
     } else if (bytesRead > 0) {
         // LogD("readDocumentStream: Read successful, copying %d bytes to Go buffer", bytesRead);
-        // Копируем данные в Go буфер
+
+        // ВАЖНО: Копируем данные из state->buffer в goBuffer
         (*env)->SetByteArrayRegion(env, goBuffer, 0, bytesRead, state->buffer);
 
         // Проверяем исключение после копирования
@@ -402,58 +403,43 @@ func reader(uri fyne.URI) (fyne.URIReadCloser, error) {
 func (b *BufferedDocumentReader) fillBuffer() error {
 	var bytesRead C.jint
 
-	// log.Tracef("fillBuffer: Starting fill, buffer size: %d", len(b.buffer))
-
 	err := driver.RunNative(func(ctx interface{}) error {
 		ac := ctx.(*driver.AndroidContext)
 		env := (*C.JNIEnv)(unsafe.Pointer(ac.Env))
 
-		// Создаем временный Java массив для получения данных
+		// Создаем Java массив, который будет передан в нативную функцию
 		jBuffer := C.NewByteArray(env, C.jint(len(b.buffer)))
 		if C.IsNull(env, C.jobject(unsafe.Pointer(jBuffer))) != 0 {
-			// log.Trace("fillBuffer: Failed to create Java byte array")
 			return errors.New("failed to create Java byte array")
 		}
 		defer C.DeleteLocalRef(env, C.jobject(unsafe.Pointer(jBuffer)))
 
-		// log.Trace("fillBuffer: Calling native readDocumentStream")
 		bytesRead = C.readDocumentStream(env, b.stream, jBuffer, C.jint(len(b.buffer)))
-		// log.Tracef("fillBuffer: Native read returned: %d", bytesRead)
 
-		// Правильно обрабатываем возвращаемые значения
 		if bytesRead < 0 {
-			// -1 означает ошибку
-			// log.Tracef("fillBuffer: Error reading from document stream, code: %d", bytesRead)
 			return errors.New("error reading from document stream")
 		} else if bytesRead == 0 {
-			// 0 означает EOF или нет данных (нормально)
-			// log.Trace("fillBuffer: EOF reached or no data available")
-			// Не возвращаем ошибку, просто bufLen останется 0
+			b.bufLen = 0
+			b.bufPos = 0
+			return nil
 		} else if bytesRead > 0 {
-			// Положительное значение - успешное чтение
-			// log.Tracef("fillBuffer: Copying %d bytes to internal buffer", bytesRead)
-			C.SetByteArrayRegion(env, jBuffer, 0, bytesRead, (*C.jbyte)(unsafe.Pointer(&b.buffer[0])))
+			// Копируем данные из jBuffer в b.buffer
+			tempBuffer := make([]byte, bytesRead)
+			C.SetByteArrayRegion(env, jBuffer, 0, bytesRead, (*C.jbyte)(unsafe.Pointer(&tempBuffer[0])))
 
-			// Проверяем успешность копирования
 			if C.CheckException(env, C.CString("SetByteArrayRegion")) != 0 {
-				// log.Trace("fillBuffer: Exception while copying data")
 				return errors.New("error copying data from Java to Go")
 			}
+
+			copy(b.buffer, tempBuffer)
+			b.bufLen = int(bytesRead)
+			b.bufPos = 0
 		}
 
 		return nil
 	})
 
-	if err != nil {
-		log.Tracef("fillBuffer: Error: %v", err)
-		return err
-	}
-
-	b.bufLen = int(bytesRead)
-	b.bufPos = 0
-	// log.Tracef("fillBuffer: Completed, bufLen: %d, bufPos: %d", b.bufLen, b.bufPos)
-
-	return nil
+	return err
 }
 
 // Read читает данные из документа
