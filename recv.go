@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -112,6 +113,9 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 		fyne.Do(func() {
 			boxholder.Remove(fe)
 			boxholder.Refresh()
+			if ftw != nil {
+				ftw.Close()
+			}
 		})
 	}
 
@@ -167,6 +171,10 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 				if err == nil {
 					log.Tracef("move %s %s", src, dst)
 					removeEntry(src, fe, false)
+					fyne.Do(func() {
+						log.Tracef("fileTreeShow %s", u)
+						fileTreeShow(u, a)
+					})
 					return
 				}
 				log.Warnf("move %s %s: %v", src, dst, err)
@@ -205,9 +213,15 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 									_, err := os.Stat(root)
 									exists := err == nil
 									if !exists || os.Remove(root) == nil {
+										// Финал
 										if feRoot, ok := load(&fileentries, root); ok {
 											removeEntry(root, feRoot, false)
 										}
+										fyne.Do(func() {
+											u := storage.NewFileURI(filepath.Dir(dstPath))
+											log.Tracef("fileTreeShow %s", u)
+											fileTreeShow(u, a)
+										})
 									}
 								}
 							}
@@ -342,6 +356,9 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 			}
 			boxholder.Add(newentry)
 			boxholder.Refresh()
+			if ftw != nil {
+				ftw.Close()
+			}
 		})
 		return
 	}
@@ -350,29 +367,38 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 	os.MkdirAll(recvDir, 0700)
 
 	reload = func() {
+		ignore := []string{"", crocRemovalFile}
 		for _, name := range ls(recvDir) {
-			if name != "" {
-				path := filepath.Join(recvDir, name)
-				if fpath == path {
-					continue
-				}
-				if isLinkDir(path) {
-					name += slash
-				}
-				if isDir, count, _ := fileChild(path); isDir && count < 1 {
-					log.Tracef("remove empty dir %s: %v", path, os.Remove(path))
-					continue
-				}
-				addEntry(path, func(d *widget.Button, p *widget.ProgressBar, s *widget.Button, l *widget.Label) {
-					d.Show()
-					p.Hide()
-					s.Show()
-					l.SetText(name)
-				})
+			ext := filepath.Ext(name)
+			if strings.ToLower(ext) == DOTZIP {
+				dir := strings.TrimSuffix(name, ext)
+				ignore = append(ignore, dir)
 			}
 		}
+		for _, name := range ls(recvDir) {
+			if slices.Contains(ignore, name) {
+				continue
+			}
+			path := filepath.Join(recvDir, name)
+			if fpath == path {
+				continue
+			}
+			if isLinkDir(path) {
+				name += slash
+			}
+			if isDir, count, _ := fileChild(path); isDir && count < 1 {
+				log.Tracef("remove empty dir %s: %v", path, os.Remove(path))
+				continue
+			}
+			addEntry(path, func(d *widget.Button, p *widget.ProgressBar, s *widget.Button, l *widget.Label) {
+				d.Show()
+				p.Hide()
+				s.Show()
+				l.SetText(name)
+			})
+		}
 		forEachFileEntry(&fileentries, func(path string, fe *fyne.Container) {
-			if _, err := os.Stat(path); err != nil {
+			if _, err := os.Stat(path); err != nil || slices.Contains(ignore, filepath.Base(path)) {
 				removeEntry(path, fe, false)
 			}
 		})
@@ -455,7 +481,10 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 					removeEntry(src, fe, true)
 					fyne.Do(func() {
 						if mapEmpty(&fileentries) {
-							topline.SetText(fmt.Sprintf("%s %s", lp("Saved all files to"), filepath.Dir(dst)))
+							// dir := filepath.Dir(dst)
+							topline.SetText(fmt.Sprintf("%s %s", lp("Saved all files to"), lu.Path()))
+							log.Tracef("fileTreeShow %s", u)
+							fileTreeShow(u, a)
 						}
 					})
 					return
@@ -492,15 +521,18 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 							removeEntry(src, feCopy, true)
 							if feCopy != fe {
 								if os.Remove(filepath.Dir(src)) == nil {
-									log.Tracef("%s---------------------------------------------------------------------------------------------", src)
 									_, err := os.Stat(root)
 									exists := err == nil
 									if !exists || os.Remove(root) == nil {
 										if feRoot, ok := load(&fileentries, root); ok {
 											removeEntry(root, feRoot, false)
 										}
-										log.Tracef("%s******************************************************************************************,root")
 									}
+									fyne.Do(func() {
+										u := storage.NewFileURI(filepath.Dir(dstPath))
+										log.Tracef("fileTreeShow %s", u)
+										fileTreeShow(u, a)
+									})
 								}
 							}
 						}
@@ -531,10 +563,13 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 					removeEntry(src, fe, true)
 
 					if mapEmpty(&fileentries) {
+						// Финиш
 						name := uriBase(destination.URI())
 						parent := strings.TrimSuffix(destination.URI().String(), name)
 						fyne.Do(func() {
 							topline.SetText(fmt.Sprintf("%s %s", lp("Saved all files to"), parent))
+							log.Tracef("fileTreeShow %s", lu)
+							fileTreeShow(lu, a)
 						})
 					}
 				})
@@ -717,6 +752,11 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 									s.Hide()
 									if fi.FolderRemote != "." {
 										l.SetText(fi.FolderRemote + slash + fi.Name)
+										// Убираем dir/
+										path := join(fi.FolderRemote)
+										if fr, ok := load(&fileentries, path); ok {
+											removeEntry(path, fr, false)
+										}
 									}
 								})
 								totalMax += fi.Size
@@ -831,18 +871,31 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 	})
 	cosED = append(cosED, clearButton)
 
+	treeButton := widget.NewButtonWithIcon("", theme.VisibilityIcon(), func() {
+		ft := fileTreeShow(storage.NewFileURI(recvDir), a)
+		if ft != nil {
+			ft.OnSelected = func(uid widget.TreeNodeID) {
+				log.Tracef("selected %v", uid)
+			}
+		}
+
+	})
+	cosED = append(cosED, treeButton)
+
 	top := container.NewVBox(
-		container.NewHBox(topline,
-			layout.NewSpacer(),
-			pasteCodeButton,
-			clearButton,
+		topline,
+		container.NewBorder(
+			nil, nil,
+			container.NewHBox(pasteCodeButton, clearButton),
+			nil,
+			entry,
 		),
-		widget.NewForm(&widget.FormItem{Text: lp("Receive Code"), Widget: entry}),
 		container.NewHBox(
 			totpCheck,
 			totpLabel,
 			totpProg,
 			layout.NewSpacer(),
+			treeButton,
 			deleteAllButton,
 			saveAllButton,
 			downloadButton,

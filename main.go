@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/schollz/croc/v10/src/utils"
 	log "github.com/schollz/logger"
 	"golang.org/x/text/language"
 	"golang.org/x/text/message"
@@ -49,6 +50,9 @@ var (
 	lastLU                 fyne.ListableURI
 	slash                  = string(filepath.Separator)
 	ErrNilURI              = errors.New("uri is nil")
+	crocRemovalFile        = "croc-marked-files.txt"
+	ftw                    fyne.Window
+	size                   = fyne.NewSize(370, 740)
 )
 
 const (
@@ -125,8 +129,7 @@ func main() {
 
 	w.SetCloseIntercept(func() {
 		log.Trace("CloseIntercept")
-		close(done)
-		w.Close()
+		cleanup(w)
 	})
 
 	// Defaults
@@ -166,8 +169,7 @@ func main() {
 	a.Settings().SetTheme(appTheme)
 
 	refreshWindow(a, w)
-	// w.Resize(fyne.NewSize(800, 600))
-	w.Resize(fyne.NewSize(180, 720))
+	w.Resize(size)
 
 	w.ShowAndRun()
 }
@@ -217,4 +219,12 @@ func ls(path string) (files []string) {
 		files = append(files, de.Name())
 	}
 	return
+}
+
+func cleanup(w fyne.Window) {
+	close(done)
+	if err := os.Chdir(join()); err == nil {
+		log.Tracef("RemoveMarkedFiles: %v", utils.RemoveMarkedFiles())
+	}
+	w.Close()
 }

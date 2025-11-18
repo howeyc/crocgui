@@ -71,7 +71,7 @@ func aboutTabItem(a fyne.App, _ fyne.Window) *container.TabItem {
 		acLicense := widget.NewAccordion(ais...)
 
 		w.SetContent(container.NewScroll(acLicense))
-		w.Resize(fyne.NewSize(450, 800))
+		w.Resize(size)
 		w.Show()
 	})
 	return container.NewTabItemWithIcon(ZeroWidthJoiner, theme.InfoIcon(), //lp("About")

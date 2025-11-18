@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -27,6 +28,7 @@ import (
 	"fyne.io/fyne/v2/storage"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
+	xw "fyne.io/x/fyne/widget"
 	"github.com/schollz/croc/v10/src/comm"
 	"github.com/schollz/croc/v10/src/croc"
 	"github.com/schollz/croc/v10/src/utils"
@@ -131,6 +133,9 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 		fyne.Do(func() {
 			boxholder.Remove(fe)
 			boxholder.Refresh()
+			if ftw != nil {
+				ftw.Close()
+			}
 		})
 	}
 
@@ -145,12 +150,13 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 			base += slash
 		}
 		labelFile := widget.NewLabel(base)
+
 		deleteButton := widget.NewButtonWithIcon("", theme.ContentRemoveIcon(), func() {
 			if entry.Disabled() {
 				log.Trace("Sending")
 			} else {
 				if fe, ok := load(&fileentries, dst); ok {
-					removeEntry(dst, fe, true) // ← исправлена опечатка (было fe.)
+					removeEntry(dst, fe, true)
 				} else {
 					os.Remove(dst)
 				}
@@ -172,6 +178,9 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 			}
 			boxholder.Add(newentry)
 			boxholder.Refresh()
+			if ftw != nil {
+				ftw.Close()
+			}
 		})
 		return
 	}
@@ -308,23 +317,32 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 	os.MkdirAll(join(), 0700)
 
 	reload := func() {
+		ignore := []string{"", crocRemovalFile}
 		for _, name := range ls(join()) {
-			if name != "" {
-				fpath := join(name)
-				if target, err := Readlink(fpath); err == nil {
-					fpath = target
-				} else {
-					if isDir, count, _ := fileChild(fpath); isDir && count < 1 {
-						log.Tracef("remove empty dir %s: %v", fpath, os.Remove(fpath))
-						continue
-					}
-				}
-				addPath(fpath)
+			ext := filepath.Ext(name)
+			if strings.ToLower(ext) == DOTZIP {
+				dir := strings.TrimSuffix(name, ext)
+				ignore = append(ignore, dir)
 			}
+		}
+		for _, name := range ls(join()) {
+			if slices.Contains(ignore, name) {
+				continue
+			}
+			fpath := join(name)
+			if target, err := Readlink(fpath); err == nil {
+				fpath = target
+			} else {
+				if isDir, count, _ := fileChild(fpath); isDir && count < 1 {
+					log.Tracef("remove empty dir %s: %v", fpath, os.Remove(fpath))
+					continue
+				}
+			}
+			addPath(fpath)
 		}
 
 		forEachFileEntry(&fileentries, func(path string, fe *fyne.Container) {
-			if _, err := os.Stat(path); err != nil {
+			if _, err := os.Stat(path); err != nil || slices.Contains(ignore, filepath.Base(path)) {
 				removeEntry(path, fe, false)
 			}
 		})
@@ -615,6 +633,16 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 	cancelChan := make(chan struct{})
 
 	removeEntrys := func(del bool) {
+		if !del {
+			fileentries.Clear()
+			fyne.Do(func() {
+				boxholder.RemoveAll()
+				if ftw != nil {
+					ftw.Close()
+				}
+			})
+			return
+		}
 		forEachFileEntry(&fileentries, func(fpath string, fe *fyne.Container) {
 			removeEntry(fpath, fe, del)
 		})
@@ -689,11 +717,8 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 			return true
 		})
 		zipfolder := a.Preferences().Bool("zip-unzip")
-		cderr := os.Chdir(tempDir)
-		if cderr != nil {
-			log.Errorf("change to %s: %v", tempDir, cderr)
-		}
-		log.Trace("cd ", tempDir)
+		cderr := os.Chdir(join())
+		log.Tracef("change to %s: %v", join(), cderr)
 		filesInfo, emptyfolders, totalNumberFolders, serr := croc.GetFilesInfo(filepaths, zipfolder, false, []string{})
 
 		// Посылаем если есть файлы
@@ -836,13 +861,8 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 								if fi.TempFile {
 									path = join(strings.TrimSuffix(fi.Name, DOTZIP))
 								}
-
-								// if fr, ok := fileentries.Load(path); ok {
 								if fr, ok := load(&fileentries, path); ok {
-									fyne.Do(func() {
-										boxholder.Remove(fr)
-										fileentries.Delete(path)
-									})
+									removeEntry(path, fr, false)
 								}
 							}
 							totalMax += fi.Size
@@ -929,19 +949,34 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 	cosSH = append(cosSH, cancelButton)
 	allShow(false, cosSH...)
 
+	treeButton := widget.NewButtonWithIcon("", theme.VisibilityIcon(), func() {
+		ft := fileTreeShow(storage.NewFileURI(join()), a)
+		if ft != nil {
+			ft.OnSelected = func(uid widget.TreeNodeID) {
+				log.Tracef("selected %v", uid)
+			}
+		}
+	})
+	cosED = append(cosED, treeButton)
+
 	top := container.NewVBox(
 		container.NewHBox(topline,
 			layout.NewSpacer(),
 			addFileButton,
 			addFolderButton,
-			randomCodeButton),
-		widget.NewForm(&widget.FormItem{Text: lp("Send Code"), Widget: entry}),
+		),
+		container.NewBorder(
+			nil, nil,
+			container.NewHBox(randomCodeButton, copyCodeButton),
+			nil,
+			entry,
+		),
 		container.NewHBox(
-			copyCodeButton,
 			totpCheck,
 			totpLabel,
 			totpProg,
 			layout.NewSpacer(),
+			treeButton,
 			deleteAllButton,
 			reDir,
 		),
@@ -989,7 +1024,7 @@ func restart(w fyne.Window) {
 	// 	return
 	// }
 	start()
-	w.Close()
+	cleanup(w)
 	os.Exit(0)
 }
 
@@ -1249,4 +1284,31 @@ func load(fileentries *sync.Map, path string) (*fyne.Container, bool) {
 		}
 	}
 	return nil, false
+}
+
+func fileTreeShow(uri fyne.URI, a fyne.App) (ft *xw.FileTree) {
+
+	if uri == nil {
+		log.Errorf("uri is nul")
+		return
+	}
+
+	ft = xw.NewFileTree(uri)
+	if ft == nil {
+		log.Errorf("file tree is nul")
+		return
+	}
+
+	if ftw != nil {
+		ftw.Close()
+	}
+
+	ftw = a.NewWindow(uri.Path())
+	ft.OpenAllBranches()
+
+	ftw.SetContent(ft)
+
+	ftw.Resize(size)
+	ftw.Show()
+	return
 }
