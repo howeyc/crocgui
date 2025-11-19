@@ -17,8 +17,8 @@ import (
 	log "github.com/schollz/logger"
 )
 
-// ZipDirectoryProgress zips the contents of source directory to destination zip file with overall progress updates in the GUI.
-// It calculates the total size first and then updates progress based on bytes written to the zip file.
+// ZipDirectoryProgress создает zip-архив из исходной директории с обновлением прогресса в GUI.
+// Сначала вычисляет общий размер, затем обновляет прогресс на основе записанных байт.
 func ZipDirectoryProgress(destination, source string, c *fyne.Container, onComplete func(err error)) {
 	go func() {
 		err := zipDirectoryWithOverallProgress(destination, source, c)
@@ -26,23 +26,23 @@ func ZipDirectoryProgress(destination, source string, c *fyne.Container, onCompl
 	}()
 }
 
-// zipDirectoryWithOverallProgress performs the zipping with overall progress tracking.
+// zipDirectoryWithOverallProgress выполняет архивацию с отслеживанием общего прогресса.
 func zipDirectoryWithOverallProgress(destination string, source string, c *fyne.Container) (err error) {
-	// 1. Check if destination already exists
+	// 1. Проверяем, существует ли файл назначения
 	if _, statErr := os.Stat(destination); statErr == nil {
 		err = fmt.Errorf("%s file already exists", destination)
 		log.Error(err)
 		return err
 	}
 
-	// 2. Calculate total source size
+	// 2. Вычисляем общий размер исходных данных
 	totalSize, err := getTotalSize(source)
 	if err != nil {
 		log.Errorf("Error calculating total size: %v", err)
 		return err
 	}
 
-	// 3. Create destination file
+	// 3. Создаем файл назначения
 	file, err := os.Create(destination)
 	if err != nil {
 		log.Error(err)
@@ -55,10 +55,10 @@ func zipDirectoryWithOverallProgress(destination string, source string, c *fyne.
 		}
 	}()
 
-	// 4. Create ProgressWriter for the entire archive file, using the total size
+	// 4. Создаем ProgressWriter для всего архива, используя общий размер
 	pw, restore := NewProgressWriter(file, totalSize, c)
 
-	zipWriter := zip.NewWriter(pw) // zipWriter now writes through the ProgressWriter
+	zipWriter := zip.NewWriter(pw) // zipWriter теперь пишет через ProgressWriter
 	zipWriter.RegisterCompressor(zip.Deflate, func(out io.Writer) (io.WriteCloser, error) {
 		return flate.NewWriter(out, flate.NoCompression)
 	})
@@ -69,64 +69,156 @@ func zipDirectoryWithOverallProgress(destination string, source string, c *fyne.
 		}
 	}()
 
-	// 5. Walk the source directory
+	// Получаем базовое имя для структуры zip (имя исходной директории)
+	baseName := filepath.Base(source)
+
+	// Отслеживаем уже добавленные директории для сохранения их времен модификации
+	addedDirs := make(map[string]bool)
+
+	// Первый проход: добавляем корневую директорию с ее временем модификации
+	rootInfo, err := os.Stat(source)
+	if err == nil && rootInfo.IsDir() {
+		header, err := zip.FileInfoHeader(rootInfo)
+		if err != nil {
+			log.Error(err)
+		} else {
+			header.Name = baseName + "/" // Косая черта в конце указывает на директорию
+			header.Method = zip.Store
+			header.Modified = rootInfo.ModTime()
+
+			_, err = zipWriter.CreateHeader(header)
+			if err != nil {
+				log.Error(err)
+			} else {
+				addedDirs[header.Name] = true
+				log.Tracef("Adding %s", header.Name)
+			}
+		}
+	}
+
+	// 5. Обходим исходную директорию
 	err = filepath.Walk(source, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			log.Errorf("Error walking path %s: %v", path, err)
-			return nil // Continue walking if possible
+			return nil // Продолжаем обход если возможно
+		}
+
+		// Пропускаем корневую директорию (мы уже добавили ее)
+		if path == source {
+			return nil
+		}
+
+		// Определяем относительный путь для архива
+		relPath, err := filepath.Rel(source, path)
+		if err != nil {
+			log.Errorf("Error getting relative path for %s: %v", path, err)
+			return nil
+		}
+
+		// Создаем zip путь с базовой структурой имени
+		zipPath := filepath.ToSlash(filepath.Join(baseName, relPath))
+
+		if info.IsDir() {
+			// Добавляем запись директории в zip с оригинальным временем модификации
+			header, err := zip.FileInfoHeader(info)
+			if err != nil {
+				log.Errorf("Error creating zip header for %s: %v", path, err)
+				return nil
+			}
+
+			// Устанавливаем имя в архиве с косой чертой в конце для директории
+			header.Name = zipPath + "/"
+			header.Method = zip.Store
+			header.Modified = info.ModTime()
+
+			// Создаем директорию в zip архиве
+			_, err = zipWriter.CreateHeader(header)
+			if err != nil {
+				log.Errorf("Error creating zip directory entry %s: %v", zipPath, err)
+				return nil
+			}
+
+			addedDirs[zipPath] = true
+			log.Tracef("Adding %s", zipPath+"/")
+			log.Tracef("Added directory to archive: %s (mod time: %v)", zipPath, info.ModTime())
+			return nil
 		}
 
 		if info.Mode().IsRegular() {
-			// Open the source file
+			// Обеспечиваем существование родительских директорий в zip с правильными временами
+			parentDir := filepath.Dir(zipPath)
+			parentsToAdd := []string{}
+
+			// Собираем все отсутствующие родительские директории
+			for parentDir != "" && parentDir != baseName {
+				if !addedDirs[parentDir] {
+					parentsToAdd = append([]string{parentDir}, parentsToAdd...)
+				}
+				parentDir = filepath.Dir(parentDir)
+				if parentDir == baseName {
+					break
+				}
+			}
+
+			// Добавляем родительские директории в правильном порядке (от корня к листьям)
+			for _, parentDir := range parentsToAdd {
+				// Получаем фактическую информацию о директории для сохранения ее времени модификации
+				dirPath := filepath.Join(source, strings.TrimPrefix(parentDir, baseName+"/"))
+				dirInfo, err := os.Stat(dirPath)
+				if err == nil {
+					header := &zip.FileHeader{
+						Name: parentDir + "/", // Косая черта для директории
+					}
+					header.SetMode(0755)
+					header.Modified = dirInfo.ModTime()
+
+					_, err := zipWriter.CreateHeader(header)
+					if err != nil {
+						log.Errorf("Error creating parent directory %s: %v", parentDir, err)
+						return nil
+					}
+					addedDirs[parentDir] = true
+
+					log.Tracef("Adding %s", parentDir+"/")
+				}
+			}
+
+			// Открываем исходный файл
 			srcFile, err := os.Open(path)
 			if err != nil {
 				log.Errorf("Error opening file %s: %v", path, err)
-				return err
+				return nil
 			}
 			defer srcFile.Close()
 
-			// Determine the relative path for the archive
-			relPath, err := filepath.Rel(source, path)
-			if err != nil {
-				log.Errorf("Error getting relative path for %s: %v", path, err)
-				srcFile.Close()
-				return err
-			}
-			zipPath := filepath.ToSlash(relPath)
-
-			// Create a new entry in the zip archive with file header that preserves file times
+			// Создаем новую запись в zip архиве с заголовком файла, сохраняющим времена
 			header, err := zip.FileInfoHeader(info)
 			if err != nil {
 				log.Errorf("Error creating zip header for %s: %v", path, err)
 				srcFile.Close()
-				return err
+				return nil
 			}
 
-			// Set the name in the archive
+			// Устанавливаем имя в архиве С префиксом базового имени
 			header.Name = zipPath
 
-			// Set the compression method (you can change to Deflate for compression)
-			header.Method = zip.Store
+			// Устанавливаем метод сжатия
+			header.Method = zip.Deflate
 
-			// Preserve the original file modification time
+			// Сохраняем оригинальное время модификации файла
 			header.Modified = info.ModTime()
 
-			// For better compatibility, also set the extended timestamp fields
-			// This ensures the modification time is preserved across different zip tools
-			// header.SetModTime(info.ModTime())
-
-			// Create the file in the zip archive with the custom header
+			// Создаем файл в zip архиве с пользовательским заголовком
 			zipEntryWriter, err := zipWriter.CreateHeader(header)
 			if err != nil {
 				log.Errorf("Error creating zip entry %s: %v", zipPath, err)
 				srcFile.Close()
-				return err
+				return nil
 			}
 
-			// Copy the content of the source file into the archive entry
-			// io.Copy will write through zipEntryWriter, which eventually uses the ProgressWriter (pw)
+			// Копируем содержимое исходного файла в запись архива
 			_, copyErr := io.Copy(zipEntryWriter, srcFile)
-			srcFile.Close() // Explicitly close after copying
+			srcFile.Close()
 
 			if copyErr != nil {
 				log.Errorf("Error copying file %s to zip: %v", path, copyErr)
@@ -143,16 +235,14 @@ func zipDirectoryWithOverallProgress(destination string, source string, c *fyne.
 		return err
 	}
 
-	// 6. Restore GUI (hides the progress bar)
+	// 6. Восстанавливаем GUI (скрываем прогресс-бар)
 	restore()
-	fmt.Fprintf(os.Stderr, "\n")
+	log.Tracef("Zip creation completed")
 	return nil
 }
 
-// UnzipDirectoryProgress unzips the source zip file to destination directory with overall progress updates in the GUI.
-// It calculates the total uncompressed size first and then updates progress based on bytes written to the destination files.
-// This version uses a custom copy loop to update progress smoothly without atomic counters,
-// by calling ProgressWriter.OnProgress (which uses fyne.Do) from the background goroutine.
+// UnzipDirectoryProgress распаковывает исходный zip-файл в директорию назначения с обновлением прогресса в GUI.
+// Сначала вычисляет общий распакованный размер, затем обновляет прогресс на основе записанных байт.
 func UnzipDirectoryProgress(destination, source string, c *fyne.Container, onComplete func(err error)) {
 	go func() {
 		err := unzipDirectoryWithCustomCopy(destination, source, c)
@@ -160,7 +250,7 @@ func UnzipDirectoryProgress(destination, source string, c *fyne.Container, onCom
 	}()
 }
 
-// unzipDirectoryWithCustomCopy performs the unzipping with overall progress tracking using a custom copy loop.
+// unzipDirectoryWithCustomCopy выполняет распаковку с отслеживанием общего прогресса с использованием пользовательского цикла копирования.
 func unzipDirectoryWithCustomCopy(destination string, source string, c *fyne.Container) error {
 	archive, err := zip.OpenReader(source)
 	if err != nil {
@@ -169,7 +259,39 @@ func unzipDirectoryWithCustomCopy(destination string, source string, c *fyne.Con
 	}
 	defer archive.Close()
 
-	// 1. Calculate total uncompressed size of files in the archive
+	// Сохраняем времена модификации для всех файлов и директорий
+	modTimes := make(map[string]time.Time)
+
+	// Первый проход: создаем структуру директорий и сохраняем времена модификации
+	for _, f := range archive.File {
+		filePath := filepath.Join(destination, f.Name)
+		sanitizedPath := filepath.Clean(filePath)
+
+		// Предотвращаем уязвимость обхода пути
+		if strings.Contains(sanitizedPath, "..") {
+			err := fmt.Errorf("invalid file path %s", sanitizedPath)
+			log.Error(err)
+			return err
+		}
+
+		// Сохраняем время модификации для этой записи
+		modifiedTime := f.Modified
+		if modifiedTime.IsZero() {
+			modifiedTime = f.FileHeader.Modified
+		}
+		if !modifiedTime.IsZero() {
+			modTimes[sanitizedPath] = modifiedTime
+		}
+
+		if f.FileInfo().IsDir() {
+			if err := os.MkdirAll(sanitizedPath, os.ModePerm); err != nil {
+				log.Errorf("Error creating directory %s: %v", sanitizedPath, err)
+				return err
+			}
+		}
+	}
+
+	// 1. Вычисляем общий распакованный размер файлов в архиве
 	var totalUncompressedSize int64
 	for _, f := range archive.File {
 		if !f.FileInfo().IsDir() {
@@ -178,73 +300,64 @@ func unzipDirectoryWithCustomCopy(destination string, source string, c *fyne.Con
 	}
 
 	if totalUncompressedSize == 0 {
-		// No files to extract
+		// Нет файлов для извлечения
 		_, restore := NewProgressWriter(io.Discard, 1, c)
 		fyne.Do(func() {})
 		restore()
-		fmt.Fprintf(os.Stderr, "\n")
+		log.Tracef("No files to extract")
 		return nil
 	}
 
-	// 2. Create ProgressWriter for overall progress, using io.Discard as dummy Writer
-	// and update progress manually during file copy loops
+	// 2. Создаем ProgressWriter для общего прогресса
 	pw, restore := NewProgressWriter(io.Discard, totalUncompressedSize, c)
-	var currentWritten int64 // Local variable, updates happen via ProgressWriter.OnProgress which uses fyne.Do
+	var currentWritten int64
 
-	// 3. Iterate through files in the archive
+	// 3. Итерируемся по файлам в архиве и извлекаем их
 	for _, f := range archive.File {
 		filePath := filepath.Join(destination, f.Name)
-		fmt.Fprintf(os.Stderr, "\r\033[2K")
-		fmt.Fprintf(os.Stderr, "\rUnzipping file %s", filePath)
+		log.Tracef("Unzipping file %s", filePath)
 
-		// Issue #593: Prevent path traversal vulnerability
 		sanitizedPath := filepath.Clean(filePath)
 		if strings.Contains(sanitizedPath, "..") {
 			err := fmt.Errorf("invalid file path %s", sanitizedPath)
 			log.Error(err)
-			restore() // Restore GUI before returning error
+			restore()
 			return err
 		}
 
 		if f.FileInfo().IsDir() {
-			if err := os.MkdirAll(sanitizedPath, os.ModePerm); err != nil {
-				log.Errorf("Error creating directory %s: %v", sanitizedPath, err)
-				restore() // Restore GUI before returning error
-				return err
-			}
-			continue
+			continue // Директории уже созданы в первом проходе
 		}
 
-		// Ensure parent directory exists
+		// Обеспечиваем существование родительской директории
 		if err := os.MkdirAll(filepath.Dir(sanitizedPath), os.ModePerm); err != nil {
 			log.Errorf("Error creating parent directory for %s: %v", sanitizedPath, err)
-			restore() // Restore GUI before returning error
+			restore()
 			return err
 		}
 
-		// Open file in archive
+		// Открываем файл в архиве
 		fileInArchive, err := f.Open()
 		if err != nil {
 			log.Errorf("Error opening file in archive %s: %v", f.Name, err)
-			restore() // Restore GUI before returning error
+			restore()
 			return err
 		}
 
-		// Create (or overwrite) destination file
+		// Создаем файл назначения
 		dstFile, err := os.OpenFile(sanitizedPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, f.Mode())
 		if err != nil {
 			log.Errorf("Error creating destination file %s: %v", sanitizedPath, err)
 			fileInArchive.Close()
-			restore() // Restore GUI before returning error
+			restore()
 			return err
 		}
 
-		// --- Custom copy loop for smooth progress updates ---
-		buf := make([]byte, 32*1024) // Buffer for read/write
+		// Пользовательский цикл копирования для плавного обновления прогресса
+		buf := make([]byte, 32*1024)
 		for {
 			n, readErr := fileInArchive.Read(buf)
 			if n > 0 {
-				// Write the chunk to the destination file
 				if _, writeErr := dstFile.Write(buf[:n]); writeErr != nil {
 					dstFile.Close()
 					fileInArchive.Close()
@@ -252,24 +365,16 @@ func unzipDirectoryWithCustomCopy(destination string, source string, c *fyne.Con
 					return writeErr
 				}
 
-				// Update the local progress counter for the total archive
-				// (currentWritten is updated directly in the single goroutine)
 				currentWritten += int64(n)
-
-				// Calculate overall progress
 				progressFraction := float64(currentWritten) / float64(totalUncompressedSize)
 				if progressFraction > 1.0 {
 					progressFraction = 1.0
 				}
 
-				// Update progress in the GUI via ProgressWriter.OnProgress (which calls fyne.Do)
-				// This call happens in the *background* goroutine, but OnProgress uses fyne.Do internally.
 				pw.OnProgress(progressFraction)
-				// Note: ProgressWriter.Written is not updated here as we are not calling pw.Write
-				// and use OnProgress directly.
 			}
 			if readErr == io.EOF {
-				break // End of file
+				break
 			}
 			if readErr != nil {
 				dstFile.Close()
@@ -279,45 +384,34 @@ func unzipDirectoryWithCustomCopy(destination string, source string, c *fyne.Con
 			}
 		}
 
-		// Close both files after copying the current file is complete
+		// Закрываем оба файла после копирования
 		dstFile.Close()
 		fileInArchive.Close()
+	}
 
-		// Preserve the original file modification time from the zip entry
-		if !f.Modified.IsZero() {
-			// Use the modification time from the zip file header
-			modTime := f.Modified
-			if err := os.Chtimes(sanitizedPath, modTime, modTime); err != nil {
-				log.Warnf("Failed to set modification time for %s: %v", sanitizedPath, err)
-				// Continue even if setting time fails
-			} else {
-				log.Tracef("Set modification time for %s: %v", sanitizedPath, modTime)
-			}
-		} else if !f.FileInfo().ModTime().IsZero() {
-			// Fallback to the file info modification time
-			modTime := f.FileInfo().ModTime()
-			if err := os.Chtimes(sanitizedPath, modTime, modTime); err != nil {
-				log.Warnf("Failed to set modification time for %s: %v", sanitizedPath, err)
-				// Continue even if setting time fails
-			} else {
-				log.Tracef("Set modification time for %s: %v", sanitizedPath, modTime)
-			}
+	// Второй проход: восстанавливаем времена модификации для ВСЕХ файлов и директорий
+	log.Tracef("Restoring modification times...")
+	for path, modTime := range modTimes {
+		if err := os.Chtimes(path, modTime, modTime); err != nil {
+			log.Warnf("Failed to set modification time for %s: %v", path, err)
+		} else {
+			log.Tracef("Restored modification time for %s: %v", path, modTime)
 		}
 	}
 
-	// 4. Restore GUI (hides the progress bar)
+	// 4. Восстанавливаем GUI (скрываем прогресс-бар)
 	restore()
-	fmt.Fprintf(os.Stderr, "\n")
+	log.Tracef("Extraction completed")
 	return nil
 }
 
-// getTotalSize walks the source directory and sums the sizes of all regular files.
+// getTotalSize обходит исходную директорию и суммирует размеры всех обычных файлов.
 func getTotalSize(source string) (int64, error) {
 	var total int64
 	err := filepath.Walk(source, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			log.Errorf("Error walking path %s: %v", path, err)
-			return nil // Skip problematic files/dirs for size calculation
+			return nil // Пропускаем проблемные файлы/директории для вычисления размера
 		}
 		if info.Mode().IsRegular() {
 			total += info.Size()
@@ -327,10 +421,8 @@ func getTotalSize(source string) (int64, error) {
 	return total, err
 }
 
-// ValidFileName checks if a filename is valid
-// by making sure it has no invisible characters
+// ValidFileName проверяет, является ли имя файла допустимым
 func ValidFileName(fname string) (err error) {
-	// make sure it doesn't contain unicode or invisible characters
 	for _, r := range fname {
 		if !unicode.IsGraphic(r) {
 			err = fmt.Errorf("non-graphical unicode: %x U+%d in '%x'", string(r), r, fname)
@@ -341,13 +433,11 @@ func ValidFileName(fname string) (err error) {
 			return
 		}
 	}
-	// make sure basename does not include path separators
 	_, basename := filepath.Split(fname)
 	if strings.Contains(basename, string(os.PathSeparator)) {
 		err = fmt.Errorf("basename cannot contain path separators: '%s'", basename)
 		return
 	}
-	// make sure the filename is not an absolute path
 	if filepath.IsAbs(fname) {
 		err = fmt.Errorf("filename cannot be an absolute path: '%s'", fname)
 		return
@@ -370,13 +460,11 @@ func GetZipFileTimes(zipPath string) (map[string]time.Time, error) {
 	defer archive.Close()
 
 	for _, f := range archive.File {
-		if !f.FileInfo().IsDir() {
-			modTime := f.Modified
-			if modTime.IsZero() {
-				modTime = f.FileInfo().ModTime()
-			}
-			fileTimes[f.Name] = modTime
+		modTime := f.Modified
+		if modTime.IsZero() {
+			modTime = f.FileInfo().ModTime()
 		}
+		fileTimes[f.Name] = modTime
 	}
 
 	return fileTimes, nil

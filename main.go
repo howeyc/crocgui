@@ -70,7 +70,7 @@ const (
 	MIME_TYPE_DIR          = "vnd.android.document/directory"
 	MIME_TYPE_OCTET_STREAM = "application/octet-stream"
 
-	// Чтоб на десктопе отладить копирование в кэш посылки вместо переноса как будто это мобильная ОС.
+	// Чтоб на десктопе отладить как будто это мобильная ОС.
 	asMobile = false
 	// Чтоб на десктопе или Андроиде 9- отладить план Б при отсутствии com.android.DocumentsUI на мобильной ОС сохранять протокол и полученные файлы в Загрузки.
 	noDialogDebug = false

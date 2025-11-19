@@ -698,6 +698,17 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 					}
 					showPage()
 					reload()
+					// if receiver != nil {
+					// 	for _, cfi := range receiver.FilesToTransfer {
+					// 		path := filepath.Join(recvDir, cfi.FolderRemote, cfi.Name)
+					// 		if _, err := os.Stat(path); err == nil {
+					// 			os.Chtimes(path, cfi.ModTime, cfi.ModTime)
+					// 			log.Tracef("chtimes %s %v: %v", path, cfi.ModTime, err)
+					// 		} else {
+					// 			log.Errorf("stat %s: %v", path, err)
+					// 		}
+					// 	}
+					// }
 				})
 			}()
 
