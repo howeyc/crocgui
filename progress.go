@@ -152,11 +152,9 @@ func CopyFileProgress(src, dst string, c *fyne.Container, onComplete func(err er
 		close()
 		clode()
 		if err == nil {
-			if t, err := fileModTime(source.Name()); err == nil {
-				log.Tracef("source ModTime %s %v:%v", source.Name(), t, err)
-				os.Chtimes(destination.Name(), time.Time{}, t)
-				t, err = fileModTime(destination.Name())
-				log.Tracef("destination ModTime %s %v:%v", destination.Name(), t, err)
+			if t, err := fileModTime(source.Name()); err == nil && !t.IsZero() {
+				log.Tracef("Chtimes %s %v: %v", destination.Name(), t,
+					os.Chtimes(destination.Name(), time.Time{}, t))
 			}
 		}
 		restore()

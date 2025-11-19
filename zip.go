@@ -392,7 +392,7 @@ func unzipDirectoryWithCustomCopy(destination string, source string, c *fyne.Con
 	// Второй проход: восстанавливаем времена модификации для ВСЕХ файлов и директорий
 	log.Tracef("Restoring modification times...")
 	for path, modTime := range modTimes {
-		if err := os.Chtimes(path, modTime, modTime); err != nil {
+		if err := os.Chtimes(path, time.Time{}, modTime); err != nil {
 			log.Warnf("Failed to set modification time for %s: %v", path, err)
 		} else {
 			log.Tracef("Restored modification time for %s: %v", path, modTime)

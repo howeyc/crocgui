@@ -470,6 +470,7 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 
 			dst := u.Path()
 			if !(isMobile || asMobile) {
+				// Десктоп
 				fi, err := os.Stat(src)
 				if err != nil {
 					log.Errorf("stat %s: %v", src, err)
@@ -568,12 +569,11 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 						parent := strings.TrimSuffix(destination.URI().String(), name)
 						fyne.Do(func() {
 							topline.SetText(fmt.Sprintf("%s %s", lp("Saved all files to"), parent))
-							log.Tracef("fileTreeShow %s", lu)
-							fileTreeShow(lu, a)
 						})
 					}
 				})
 			}
+
 			if isLinkDir(src) {
 				// На Андроиде свернём каталог в файл
 				pathZip := src + DOTZIP

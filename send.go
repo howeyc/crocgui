@@ -302,11 +302,9 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 			close()
 			clode()
 			if err == nil {
-				if t, err := ModTime(source.URI()); err == nil {
-					log.Tracef("source ModTime %s %v:%v", source.URI(), t, err)
-					os.Chtimes(destination.Name(), time.Time{}, t)
-					t, err = fileModTime(destination.Name())
-					log.Tracef("destination ModTime %s %v:%v", destination.Name(), t, err)
+				if t, err := ModTime(source.URI()); err == nil && !t.IsZero() {
+					log.Tracef("Chtimes %s %v: %v", destination.Name(), t,
+						os.Chtimes(destination.Name(), time.Time{}, t))
 				}
 			}
 			restore()

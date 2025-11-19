@@ -3143,14 +3143,14 @@ func setModTime(uri fyne.URI, mtime time.Time) (bool, error) {
 	return success, nil
 }
 
-func SetModTime(uri fyne.URI, atime time.Time, mtime time.Time) error {
+func SetModTime(uri fyne.URI, mtime time.Time) error {
 	if uri == nil {
 		return fmt.Errorf("uri is nil")
 	}
 
 	// Для обычных файлов используем стандартный подход
 	if uri.Scheme() != "content" {
-		return os.Chtimes(uri.Path(), atime, mtime)
+		return os.Chtimes(uri.Path(), time.Time{}, mtime)
 	}
 
 	// Для content URI пытаемся установить время модификации
@@ -3161,9 +3161,9 @@ func SetModTime(uri fyne.URI, atime time.Time, mtime time.Time) error {
 
 	if !success {
 		// Это не ошибка - многие провайдеры просто не поддерживают эту операцию
-		log.Tracef("Setting modification time not supported for URI: %s", uri.String())
+		log.Tracef("Setting modification time not supported for URI: %s", uri)
 	} else {
-		log.Tracef("Successfully set modification time for URI: %s", uri.String())
+		log.Tracef("Successfully set modification time for URI: %s", uri)
 	}
 
 	return nil
