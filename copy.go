@@ -8,12 +8,41 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"syscall"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/storage"
 	log "github.com/schollz/logger"
 )
+
+func Rename(src, dst string) error {
+	if noRename {
+		return fmt.Errorf("no rename")
+	}
+	if _, err := os.Stat(src); err != nil {
+		return err
+	}
+
+	// Check that dst is not a subdirectory of src
+	srcAbs, err := filepath.Abs(src)
+	if err != nil {
+		return err
+	}
+	dstAbs, err := filepath.Abs(dst)
+	if err != nil {
+		return err
+	}
+
+	if strings.HasPrefix(dstAbs, srcAbs+string(filepath.Separator)) {
+		return errors.New("destination cannot be inside source directory")
+	}
+
+	// Try standard rename first
+	if err := os.Rename(src, dst); err == nil {
+		return nil
+	} else {
+		return err
+	}
+}
 
 // Тип функции для копирования файла
 type CopyFile func(srcURI fyne.URI, dstPath string) error
@@ -83,7 +112,7 @@ func copyFiles(srcURI fyne.URI, dstDir string, copyFile CopyFile) error {
 					continue
 				}
 				if err := walk(child, relPathForChildDir); err != nil {
-					log.Errorf("walk %s walk %s: %w", current, child, err)
+					log.Errorf("walk %s walk %s: %v", current, child, err)
 					// return err
 					// Продолжаем обработку других детей
 				}
@@ -138,32 +167,6 @@ func copyFiles(srcURI fyne.URI, dstDir string, copyFile CopyFile) error {
 // 	log.Tracef("List %d", len(items))
 // 	return true
 // }
-
-func eIsDir(err error) bool {
-	if err == nil {
-		return false
-	}
-
-	// Проверка Unix ошибки
-	if errors.Is(err, syscall.EISDIR) {
-		return true
-	}
-
-	// Проверка Windows ошибки через Errno
-	var errno syscall.Errno
-	if errors.As(err, &errno) && errno == 1 { // ERROR_INCORRECT_FUNCTION
-		return true
-	}
-
-	errStr := strings.ToLower(err.Error())
-	if strings.Contains(errStr, "eisdir") ||
-		strings.Contains(errStr, "is a directory") ||
-		strings.Contains(errStr, "incorrect function") {
-		return true
-	}
-
-	return false
-}
 
 func storageChild(uri fyne.URI) (isDir bool, childCount int, err error) {
 	if uri == nil {

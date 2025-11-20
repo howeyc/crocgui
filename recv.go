@@ -26,6 +26,7 @@ import (
 )
 
 func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *container.TabItem) {
+	// t := NewTab(a, w, parent, "Wait for them before pressing Download")
 	var (
 		cosED, cosSH             []fyne.CanvasObject
 		addEntry                 func(dst string, f func(d *widget.Button, p *widget.ProgressBar, s *widget.Button, l *widget.Label)) (newentry *fyne.Container)
@@ -52,10 +53,13 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 		entry.SetText(entryText)
 	}
 
-	pasteCodeButton := widget.NewButtonWithIcon("", theme.ContentPasteIcon(), func() {
+	cbButton := widget.NewButtonWithIcon("", theme.ContentPasteIcon(), func() {
 		entry.SetText(a.Clipboard().Content())
 	})
-	cosED = append(cosED, pasteCodeButton)
+	// t.cbButton = widget.NewButtonWithIcon("", theme.ContentPasteIcon(), func() {
+	// 	t.entry.SetText(a.Clipboard().Content())
+	// })
+	cosED = append(cosED, cbButton)
 
 	totpCheck := widget.NewCheckWithData("", binding.BindPreferenceBool("totp-recv", a.Preferences()))
 	cosED = append(cosED, totpCheck)
@@ -69,6 +73,7 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 	scroller := container.NewVScroll(boxholder)
 	var fileentries sync.Map
 
+	// recvReady=t.Ready
 	recvReady = func() (ok bool) {
 		ok = true
 		fileentries.Range(func(key, value interface{}) bool {
@@ -107,6 +112,13 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 				} else {
 					log.Tracef("remove %s %s", de, fpath)
 				}
+			}
+		}
+		if fe == nil {
+			ok := false
+			fe, ok = load(&fileentries, fpath)
+			if !ok {
+				return
 			}
 		}
 		fileentries.Delete(fpath)
@@ -158,90 +170,90 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 			}
 
 			dst := u.Path()
-			if !(isMobile || asMobile) {
-				destination.Close()
-				// файлпикер создаёт файл даже для каталога
-				storage.Delete(u)
-				fi, err := os.Stat(src)
-				if err != nil {
-					log.Errorf("stat %s: %v", src, err)
-					return
-				}
-				err = Rename(src, dst)
-				if err == nil {
-					log.Tracef("move %s %s", src, dst)
-					removeEntry(src, fe, false)
-					fyne.Do(func() {
-						log.Tracef("fileTreeShow %s", u)
-						fileTreeShow(u, a)
-					})
-					return
-				}
-				log.Warnf("move %s %s: %v", src, dst, err)
-				// fileSave
-				root := src
-				copyFiles(storage.NewFileURI(src), dst, func(u fyne.URI, dstPath string) error {
-					fyne.Do(func() {})
-					feCopy := fe
-					src := u.Path()
-					if fi.IsDir() {
-						// Создаю временный прогрессбар
-						rel, err := filepath.Rel(join(), src)
-						if err != nil {
-							rel = src
-						}
-						feCopy = addEntry(src, func(d *widget.Button, p *widget.ProgressBar, s *widget.Button, l *widget.Label) {
-							l.SetText(rel)
-						})
+			if isMobile || asMobile {
+				copyToUWCProgress(destination, src, fe, func(err error) {
+					cl()
+					if err != nil {
+						log.Errorf("copy %s %s: %v", src, dst, err)
+					} else {
+						log.Tracef("copy %s %s", src, dst)
+						removeEntry(src, fe, true)
 					}
-					CopyFileProgress(src, dstPath, feCopy, func(err error) {
-						if err != nil {
-							log.Errorf("copy %s %s: %v", src, dstPath, err)
-							removeEntry(src, feCopy, false)
-							return
-						}
-
-						if _, err := os.Stat(dstPath); err != nil {
-							// не сохранилось
-							log.Errorf("stat %s: %v", dstPath, err)
-						} else {
-							// сохранилось, удаляем
-							log.Tracef("copy %s %s", src, dstPath)
-							removeEntry(src, feCopy, true)
-							if feCopy != fe {
-								if os.Remove(filepath.Dir(src)) == nil {
-									_, err := os.Stat(root)
-									exists := err == nil
-									if !exists || os.Remove(root) == nil {
-										// Финал
-										if feRoot, ok := load(&fileentries, root); ok {
-											removeEntry(root, feRoot, false)
-										}
-										fyne.Do(func() {
-											u := storage.NewFileURI(filepath.Dir(dstPath))
-											log.Tracef("fileTreeShow %s", u)
-											fileTreeShow(u, a)
-										})
-									}
-								}
-							}
-						}
-					})
-					return nil
 				})
 				return
 			}
-
-			copyToUWCProgress(destination, src, fe, func(err error) {
-				cl()
-				if err != nil {
-					log.Errorf("copy %s %s: %v", src, dst, err)
-				} else {
-					log.Tracef("copy %s %s", src, dst)
-					removeEntry(src, fe, true)
+			// Десктоп
+			destination.Close()
+			// файлпикер создаёт файл
+			storage.Delete(u)
+			fi, err := os.Stat(src)
+			if err != nil {
+				log.Errorf("stat %s: %v", src, err)
+				return
+			}
+			err = Rename(src, dst)
+			if err == nil {
+				log.Tracef("move %s %s", src, dst)
+				removeEntry(src, fe, false)
+				fyne.Do(func() {
+					log.Tracef("fileTreeShow %s", u)
+					fileTreeShow(u, a)
+				})
+				return
+			}
+			log.Warnf("move %s %s: %v", src, dst, err)
+			// fileSave
+			root := src
+			copyFiles(storage.NewFileURI(src), dst, func(u fyne.URI, dstPath string) error {
+				fyne.Do(func() {})
+				feCopy := fe
+				src := u.Path()
+				if fi.IsDir() {
+					// Создаю временный прогрессбар
+					rel, err := filepath.Rel(join(), src)
+					if err != nil {
+						rel = src
+					}
+					feCopy = addEntry(src, func(d *widget.Button, p *widget.ProgressBar, s *widget.Button, l *widget.Label) {
+						l.SetText(rel)
+					})
 				}
+				CopyFileProgress(src, dstPath, feCopy, func(err error) {
+					if err != nil {
+						log.Errorf("copy %s %s: %v", src, dstPath, err)
+						removeEntry(src, feCopy, false)
+						return
+					}
+
+					if _, err := os.Stat(dstPath); err != nil {
+						// не сохранилось
+						log.Errorf("stat %s: %v", dstPath, err)
+					} else {
+						// сохранилось, удаляем
+						log.Tracef("copy %s %s", src, dstPath)
+						removeEntry(src, feCopy, true)
+						if feCopy != fe {
+							if os.Remove(filepath.Dir(src)) == nil {
+								_, err := os.Stat(root)
+								exists := err == nil
+								if !exists || os.Remove(root) == nil {
+									// Финал
+									if feRoot, ok := load(&fileentries, root); ok {
+										removeEntry(root, feRoot, false)
+									}
+									fyne.Do(func() {
+										u := storage.NewFileURI(filepath.Dir(dstPath))
+										log.Tracef("fileTreeShow %s", u)
+										fileTreeShow(u, a)
+									})
+								}
+							}
+						}
+					}
+				})
+				return nil
 			})
-		}
+		} //fileSave
 
 		supported, err := IsSaveDialogSupported()
 		if err != nil {
@@ -698,17 +710,6 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 					}
 					showPage()
 					reload()
-					// if receiver != nil {
-					// 	for _, cfi := range receiver.FilesToTransfer {
-					// 		path := filepath.Join(recvDir, cfi.FolderRemote, cfi.Name)
-					// 		if _, err := os.Stat(path); err == nil {
-					// 			os.Chtimes(path, cfi.ModTime, cfi.ModTime)
-					// 			log.Tracef("chtimes %s %v: %v", path, cfi.ModTime, err)
-					// 		} else {
-					// 			log.Errorf("stat %s: %v", path, err)
-					// 		}
-					// 	}
-					// }
 				})
 			}()
 
@@ -875,21 +876,27 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 	})
 	cosED = append(cosED, downloadButton)
 
-	clearButton := widget.NewButtonWithIcon("", theme.ContentClearIcon(), func() {
+	secretButton := widget.NewButtonWithIcon("", theme.ContentClearIcon(), func() {
 		fyne.Do(func() {
 			entry.SetText(entryText)
 		})
 	})
-	cosED = append(cosED, clearButton)
+	// t.secretButton := widget.NewButtonWithIcon("", theme.ContentClearIcon(), func() {
+	// 	fyne.Do(func() {
+	// 		t.entry.SetText(entryText)
+	// 	})
+	// })
+	cosED = append(cosED, secretButton)
 
 	treeButton := widget.NewButtonWithIcon("", theme.VisibilityIcon(), func() {
 		ft := fileTreeShow(storage.NewFileURI(recvDir), a)
 		if ft != nil {
 			ft.OnSelected = func(uid widget.TreeNodeID) {
-				log.Tracef("selected %v", uid)
+				selected(uid, func(err error) {
+					log.Tracef("selected %v: %v", uid, err)
+				})
 			}
 		}
-
 	})
 	cosED = append(cosED, treeButton)
 
@@ -897,7 +904,7 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 		topline,
 		container.NewBorder(
 			nil, nil,
-			container.NewHBox(pasteCodeButton, clearButton),
+			container.NewHBox(cbButton, secretButton),
 			nil,
 			entry,
 		),

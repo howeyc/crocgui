@@ -21,10 +21,10 @@ func uriBase(uri fyne.URI) string {
 	return uri.Name()
 }
 
-func IsFilePickerSupported() (bool, error) { return !noDialogDebug, nil }
-func IsSaveDialogSupported() (bool, error) { return !noDialogDebug, nil }
+func IsFilePickerSupported() (bool, error) { return !noDialogs, nil }
+func IsSaveDialogSupported() (bool, error) { return !noDialogs, nil }
 
-func IsFolderPickerSupported() (bool, error) { return !noDialogDebug, nil }
+func IsFolderPickerSupported() (bool, error) { return !noDialogs, nil }
 
 // func IsFolderPickerSupported() (bool, error) { return false, nil }
 

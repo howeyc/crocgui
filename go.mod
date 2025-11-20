@@ -4,24 +4,21 @@ go 1.24.3
 
 toolchain go1.24.6
 
-replace github.com/schollz/croc/v10 => ../croc
-
-// replace github.com/schollz/croc/v10 v10.2.7 => https://github.com/abakum/croc/v10 v0.0.0-20251117222732-a19269d25e2c
-// replace github.com/schollz/croc/v10 v10.2.7 => https://github.com/abakum/croc/v10 v10.2.7
+// replace github.com/schollz/croc/v10 => ../croc
 
 require (
 	fyne.io/fyne/v2 v2.6.1
+	fyne.io/x/fyne v0.0.0-20250910205345-ecc79984d005
 	github.com/adrg/xdg v0.5.3
-	github.com/schollz/croc/v10 v10.2.7
+	github.com/schollz/croc/v10 v10.3.1-0.20251120031407-82cdeb19a87f
 	github.com/schollz/logger v1.2.0
 	github.com/ulikunitz/xz v0.5.12
-	golang.org/x/text v0.30.0
+	golang.org/x/text v0.31.0
 )
 
 require (
 	filippo.io/edwards25519 v1.1.0 // indirect
 	fyne.io/systray v1.11.0 // indirect
-	fyne.io/x/fyne v0.0.0-20250910205345-ecc79984d005 // indirect
 	github.com/BurntSushi/toml v1.4.0 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
@@ -42,7 +39,6 @@ require (
 	github.com/jeandeaual/go-locale v0.0.0-20241217141322-fcc2cadd6f08 // indirect
 	github.com/jsummers/gobmp v0.0.0-20230614200233-a9de23ed2e25 // indirect
 	github.com/kalafut/imohash v1.1.1 // indirect
-	github.com/kr/text v0.2.0 // indirect
 	github.com/magisterquis/connectproxy v0.0.0-20200725203833-3582e84f0c9b // indirect
 	github.com/minio/highwayhash v1.0.3 // indirect
 	github.com/mitchellh/colorstring v0.0.0-20190213212951-d06e56a500db // indirect
@@ -62,11 +58,11 @@ require (
 	github.com/tscholl2/siec v0.0.0-20240310163802-c2c6f6198406 // indirect
 	github.com/twmb/murmur3 v1.1.8 // indirect
 	github.com/yuin/goldmark v1.7.8 // indirect
-	golang.org/x/crypto v0.43.0 // indirect
+	golang.org/x/crypto v0.45.0 // indirect
 	golang.org/x/image v0.24.0 // indirect
-	golang.org/x/net v0.46.0 // indirect
-	golang.org/x/sys v0.37.0 // indirect
-	golang.org/x/term v0.36.0 // indirect
+	golang.org/x/net v0.47.0 // indirect
+	golang.org/x/sys v0.38.0 // indirect
+	golang.org/x/term v0.37.0 // indirect
 	golang.org/x/time v0.14.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

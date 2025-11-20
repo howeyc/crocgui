@@ -53,6 +53,26 @@ var (
 	crocRemovalFile        = "croc-marked-files.txt"
 	ftw                    fyne.Window
 	size                   = fyne.NewSize(370, 740)
+
+	// Чтоб на десктопе отладить как будто это мобильная ОС
+	// cmd/c "set CROC_AS_MOBILE=1&crocgui.exe"
+	// CROC_AS_MOBILE=1 crocgui
+	asMobile = os.Getenv("CROC_AS_MOBILE") != ""
+
+	// Чтоб отладить план Б при отсутствии com.android.DocumentsUI - сохранять протокол и полученные файлы в Download
+	// cmd/c "set CROC_NO_DIALOGS=1&crocgui.exe"
+	// CROC_NO_DIALOGS=1 crocgui
+	noDialogs = os.Getenv("CROC_NO_DIALOGS") != ""
+
+	// Чтоб не перезапускать приложение при завершении передачи - почитать протокол передачи
+	// cmd/c "set CROC_NO_RESTART=1&crocgui.exe"
+	// CROC_NO_RESTART=1 crocgui
+	noRestart = os.Getenv("CROC_NO_RESTART") != ""
+
+	// Чтоб на десктопе отладить копирование вместо переноса из кэша приёма
+	// cmd/c "set CROC_NO_RENAME=1&crocgui.exe"
+	// CROC_NO_RENAME=1 crocgui
+	noRename = os.Getenv("CROC_NO_RENAME") != ""
 )
 
 const (
@@ -69,15 +89,6 @@ const (
 	RECV                   = "crocgui-recv"
 	MIME_TYPE_DIR          = "vnd.android.document/directory"
 	MIME_TYPE_OCTET_STREAM = "application/octet-stream"
-
-	// Чтоб на десктопе отладить как будто это мобильная ОС.
-	asMobile = false
-	// Чтоб на десктопе или Андроиде 9- отладить план Б при отсутствии com.android.DocumentsUI на мобильной ОС сохранять протокол и полученные файлы в Загрузки.
-	noDialogDebug = false
-	// Чтоб не перезапускать приложение при завершении передачи
-	noRestart = false
-	// Чтоб на десктопе отладить копирование вместо переноса из кэша приёма
-	noRename = false
 )
 
 func main() {

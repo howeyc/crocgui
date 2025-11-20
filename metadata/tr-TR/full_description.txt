@@ -3,7 +3,7 @@ croc, herhangi iki bilgisayarın dosyaları basit ve güvenli bir şekilde aktar
 <b>Özellik</b>
 - izin verir <b>herhangi iki bilgisayar</b> veri aktarmak için bu (Relay kullanarak)
 - <b>uçtan uca şifreleme</b> sağlar (PAKE kullanarak)
-- kolay <b>platformlar arası</b> aktarımlara olanak tanır (Windows, Linux, MacOS)
+- kolay <b>platformlar arası</b> aktarımlara olanak tanır (Windows, Linux, macOS)
 - <b>birden çok dosya</b> aktarımına izin verir
 - yerel sunucu veya bağlantı noktası iletme <b>gerekli değil</b>
 - <b>ipv6-ilk</b> ipv4 geri dönüş ile
@@ -13,7 +13,7 @@ https://github.com/schollz/croc
 
 <b>Bu arayüz şunları yapmanıza olanak tanır</b>
 - alandan veya CROC_SECRET ortam değişkeninden alınan gizli anahtarla tek kullanımlık şifreler kullanın
-- Windows, Linux ve MacOS için, dosya veya dizin seçim iletişim kutularına ek olarak sürükle-bırak veya komut satırını kullanın
+- Windows, Linux ve macOS için, dosya veya dizin seçim iletişim kutularına ek olarak sürükle-bırak veya komut satırını kullanın
 - Android için, dosya veya dizin seçim iletişim kutularına ek olarak dosya yöneticilerinden "Paylaş" menüsünü veya bir veya birden fazla dosya için "Bununla Aç" seçeneğini kullanın
 - Android için, iç içe dizinler olmadan dosya gönderin ve iç içe dizinleri bile alıp bunları .zip dosyalarına kaydedin
 - konsoldaki kadar hızlı olmasa da protokolü renkli olarak görüntüleyin

@@ -46,6 +46,7 @@ const (
 )
 
 func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *container.TabItem) {
+	// t := NewTab(a, w, parent, "Pick a file to send")
 	var (
 		cosED, cosSH             []fyne.CanvasObject
 		addEntry                 func(dst string, f func(d *widget.Button, p *widget.ProgressBar, l *widget.Label)) (newentry *fyne.Container)
@@ -70,15 +71,21 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 		entry.SetText(entryText)
 	}
 
-	randomCodeButton := widget.NewButtonWithIcon("", theme.ViewRefreshIcon(), func() {
-		randomCode := utils.GetRandomName()
-		entry.SetText(randomCode)
+	secretButton := widget.NewButtonWithIcon("", theme.ViewRefreshIcon(), func() {
+		entry.SetText(utils.GetRandomName())
 	})
-	cosED = append(cosED, randomCodeButton)
+	// t.secretButton = widget.NewButtonWithIcon("", theme.ViewRefreshIcon(), func() {
+	// 	t.entry.SetText(utils.GetRandomName())
+	// })
 
-	copyCodeButton := widget.NewButtonWithIcon("", theme.ContentCopyIcon(), func() {
+	cosED = append(cosED, secretButton)
+
+	cbButton := widget.NewButtonWithIcon("", theme.ContentCopyIcon(), func() {
 		a.Clipboard().SetContent(entry.Text)
 	})
+	// t.cbButton := widget.NewButtonWithIcon("", theme.ContentCopyIcon(), func() {
+	// 	a.Clipboard().SetContent(t.entry.Text)
+	// })
 
 	totpCheck := widget.NewCheckWithData("", binding.BindPreferenceBool("totp-send", a.Preferences()))
 	cosED = append(cosED, totpCheck)
@@ -127,6 +134,13 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 					log.Tracef("remove %s %s: %v", de, fpath, err)
 					return
 				}
+			}
+		}
+		if fe == nil {
+			ok := false
+			fe, ok = load(&fileentries, fpath)
+			if !ok {
+				return
 			}
 		}
 		fileentries.Delete(fpath)
@@ -657,7 +671,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 
 	var reDir *widget.Button
 
-	reDir = widget.NewButtonWithIcon("", theme.NavigateBackIcon(), func() {
+	reDir = widget.NewButtonWithIcon("", theme.UploadIcon(), func() {
 		if !ready() {
 			log.Error("not all files ready for send")
 			return
@@ -670,12 +684,12 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 		fyne.Do(func() {
 			swap = !swap
 			if swap {
-				reDir.SetIcon(theme.NavigateNextIcon())
+				reDir.SetIcon(theme.MailForwardIcon())
 				join = func(elem ...string) string {
 					return filepath.Join(append([]string{tempDir, RECV}, elem...)...)
 				}
 			} else {
-				reDir.SetIcon(theme.NavigateBackIcon())
+				reDir.SetIcon(theme.UploadIcon())
 				join = func(elem ...string) string {
 					return filepath.Join(append([]string{tempDir, SEND}, elem...)...)
 				}
@@ -951,7 +965,9 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 		ft := fileTreeShow(storage.NewFileURI(join()), a)
 		if ft != nil {
 			ft.OnSelected = func(uid widget.TreeNodeID) {
-				log.Tracef("selected %v", uid)
+				selected(uid, func(err error) {
+					log.Tracef("selected %v: %v", uid, err)
+				})
 			}
 		}
 	})
@@ -965,7 +981,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 		),
 		container.NewBorder(
 			nil, nil,
-			container.NewHBox(randomCodeButton, copyCodeButton),
+			container.NewHBox(secretButton, cbButton),
 			nil,
 			entry,
 		),
@@ -1309,4 +1325,26 @@ func fileTreeShow(uri fyne.URI, a fyne.App) (ft *xw.FileTree) {
 	ftw.Resize(size)
 	ftw.Show()
 	return
+}
+
+// .zip распаковать
+// dir упаковать
+func selected(uid widget.TreeNodeID, cb func(err error)) {
+	if cb == nil {
+		cb = func(err error) {}
+	}
+
+	u, err := storage.ParseURI(uid)
+	if err != nil {
+		cb(err)
+		return
+	}
+	root := ftw.Title()
+	switch ext := strings.ToLower(u.Extension()); ext {
+	case DOTZIP:
+		log.Tracef("unZip %v %s", u.Path(), root)
+		cb(nil)
+		return
+	}
+	cb(fmt.Errorf("default"))
 }
