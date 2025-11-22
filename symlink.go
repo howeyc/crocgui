@@ -3,6 +3,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -82,14 +83,50 @@ func Readlink(name string) (string, error) {
 }
 
 func isLinkDir(path string) (ok bool) {
-	if fi, _ := os.Stat(path); fi != nil && fi.IsDir() {
+	if fi, err := os.Stat(path); err == nil && fi.IsDir() {
 		return true
 	}
 	if target, err := Readlink(path); err == nil {
 		log.Tracef("is symlink %s to %s", path, target)
-		if fi, _ := os.Stat(target); fi != nil && fi.IsDir() {
+		if fi, err := os.Stat(target); err == nil && fi.IsDir() {
 			return true
 		}
 	}
 	return
+}
+
+func hasFolder(path string) bool {
+	entries, err := os.ReadDir(path)
+	if err != nil {
+		return false
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			return true
+		}
+
+		file := filepath.Join(path, entry.Name())
+		if target, err := Readlink(file); err == nil {
+			fi, err := os.Stat(target)
+			if err == nil && fi.IsDir() {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func isEmptyFolder(folderPath string) (bool, error) {
+	f, err := os.Open(folderPath)
+	if err != nil {
+		return false, err
+	}
+	defer f.Close()
+
+	_, err = f.Readdirnames(1)
+	if err == io.EOF {
+		return true, nil
+	}
+	return false, nil
 }

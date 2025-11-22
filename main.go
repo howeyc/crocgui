@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/schollz/croc/v10/src/utils"
@@ -35,6 +36,7 @@ var (
 	isAndroid              bool
 	ErrApplicationShutdown error
 	done                   chan struct{}
+	cdLock                 atomic.Int32
 	uriFromIntent          = make(chan string, 100)
 	textFromIntent         = make(chan string, 100)
 	replacer               *strings.Replacer
@@ -45,7 +47,7 @@ var (
 	OnSelectedReload       = make(map[int]func(), 2)
 	swap                   bool
 	tempDir                string
-	recvReady              func() bool
+	ready                  func() bool
 	join                   func(...string) string
 	lastLU                 fyne.ListableURI
 	slash                  = string(filepath.Separator)
@@ -73,6 +75,11 @@ var (
 	// cmd/c "set CROC_NO_RENAME=1&crocgui.exe"
 	// CROC_NO_RENAME=1 crocgui
 	noRename = os.Getenv("CROC_NO_RENAME") != ""
+
+	// Чтоб отладить cdLocked
+	// cmd/c "set CROC_CD_LOCK=1&crocgui.exe"
+	// CROC_NO_RENAME=1 crocgui
+	longCdLock = os.Getenv("CROC_CD_LOCK") != ""
 )
 
 const (
