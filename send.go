@@ -63,6 +63,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 		addEntry func(dst string, f func(d *widget.Button, p *widget.ProgressBar,
 			//
 			l *widget.Label)) (newentry *fyne.Container)
+		reDir *widget.Button
 	)
 	var cancelButton *widget.Button
 	cancelChan := make(chan struct{}, 1)
@@ -484,7 +485,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 				cdLock.Store(0)
 			}
 			if len(filesInfo) < 1 || err != nil {
-				NewToast(w, err.Error()).Show()
+				fyne.Do(NewToast(w, err.Error()).Show)
 				return
 			}
 
@@ -516,7 +517,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 			})
 			if err != nil {
 				log.Errorf("croc: %v", err)
-				NewToast(w, err.Error()).Show()
+				fyne.Do(NewToast(w, err.Error()).Show)
 				//
 				return
 			}
@@ -1008,34 +1009,32 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 	})
 	cosED = append(cosED, addFolderButton)
 
-	var reDir *widget.Button
-
 	reDir = widget.NewButtonWithIcon("", theme.UploadIcon(), func() {
 		if !seady() {
 			log.Error("not all files ready for send")
+			NewToast(w, "not all files ready for send").Show()
 			return
 		}
 		if !ready() {
 			log.Error("not all files ready for recv")
+			NewToast(w, "not all files ready for recv").Show()
 			return
 		}
 
-		fyne.Do(func() {
-			swap = !swap
-			if swap {
-				reDir.SetIcon(theme.MailForwardIcon())
-				join = func(elem ...string) string {
-					return filepath.Join(append([]string{tempDir, RECV}, elem...)...)
-				}
-			} else {
-				reDir.SetIcon(theme.UploadIcon())
-				join = func(elem ...string) string {
-					return filepath.Join(append([]string{tempDir, SEND}, elem...)...)
-				}
+		swap = !swap
+		if swap {
+			reDir.SetIcon(theme.MailForwardIcon())
+			join = func(elem ...string) string {
+				return filepath.Join(append([]string{tempDir, RECV}, elem...)...)
 			}
-			removeEntrys(false)
-			reload()
-		})
+		} else {
+			reDir.SetIcon(theme.UploadIcon())
+			join = func(elem ...string) string {
+				return filepath.Join(append([]string{tempDir, SEND}, elem...)...)
+			}
+		}
+		removeEntrys(false)
+		reload()
 	})
 	cosED = append(cosED, reDir)
 
@@ -1099,12 +1098,6 @@ func restart(w fyne.Window) {
 	if noRestart {
 		return
 	}
-	// if isMobile {
-	// 	sendNotification(a, "CrocGUI", "Application closed. Tap to start it.")
-	// 	w.Close()
-	// 	os.Exit(0)
-	// 	return
-	// }
 	start()
 	cleanup(w)
 	os.Exit(0)

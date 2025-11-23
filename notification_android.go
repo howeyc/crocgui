@@ -426,6 +426,6 @@ func showCrocNotification(title, content string) {
 	})
 }
 
-func sendNotification(a fyne.App, title, content string) {
+func sendNotification(_ fyne.App, title, content string) {
 	showCrocNotification(title, content)
 }

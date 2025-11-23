@@ -110,9 +110,19 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 	totpLabel := widget.NewLabel(TOTP)
 	totpProg := setupTOTP(a, entry, totpCheck, totpLabel, &entryText)
 
-	removeEntrys := func() {
+	removeEntrys := func(del bool) {
+		if !del {
+			fileentries.Clear()
+			fyne.Do(func() {
+				boxholder.RemoveAll()
+				if ftw != nil {
+					ftw.Close()
+				}
+			})
+			return
+		}
 		forEachFileEntry(&fileentries, func(fpath string, fe *fyne.Container) {
-			removeEntry(fpath, fe, true)
+			removeEntry(fpath, fe, del)
 		})
 	}
 
@@ -121,7 +131,7 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 			if mapEmpty(&fileentries) {
 				entry.SetText(entryText)
 			} else {
-				removeEntrys()
+				removeEntrys(true)
 			}
 		})
 	})
@@ -556,8 +566,9 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 					if totpCheck.Checked {
 						totpProg.Show()
 					}
-					showPage()
+					removeEntrys(false)
 					reload()
+					showPage()
 				})
 			}()
 
@@ -685,7 +696,7 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 					log.Error(s)
 					topline.SetText(s)
 					fpath = filepath.Join(join(), filename)
-					removeEntrys()
+					removeEntrys(true)
 				} else {
 					topline.SetText(fmt.Sprintf("%s: %s", lp("Received"), filename))
 				}

@@ -2,6 +2,7 @@
 package main
 
 import (
+	"sync/atomic"
 	"time"
 
 	"fyne.io/fyne/v2"
@@ -15,20 +16,18 @@ type Toast struct {
 	window        fyne.Window
 	message       string
 	icon          fyne.Resource
-	size          fyne.Size
 	timeout       time.Duration
 	padding       float32
 	withAnimation bool
 	popup         *widget.PopUp
-	as            *fyne.Animation
-	ah            *fyne.Animation
+	done          chan struct{}
+	isHiding      atomic.Int32
 }
 
-// Константы таймаутов
 const (
 	ToastShort        = 3 * time.Second
 	ToastLong         = 4 * time.Second
-	DefaultPadding    = 20
+	DefaultPadding    = 10.0
 	AnimationDuration = 300 * time.Millisecond
 )
 
@@ -40,196 +39,118 @@ func NewToast(win fyne.Window, message string) *Toast {
 		timeout:       ToastShort,
 		padding:       DefaultPadding,
 		withAnimation: true,
+		done:          make(chan struct{}),
 	}
 }
 
-func (t *Toast) SetIcon(icon fyne.Resource) *Toast {
-	t.icon = icon
-	return t
-}
+func (t *Toast) SetIcon(icon fyne.Resource) *Toast       { t.icon = icon; return t }
+func (t *Toast) SetText(message string) *Toast           { t.message = message; return t }
+func (t *Toast) SetTimeout(timeout time.Duration) *Toast { t.timeout = timeout; return t }
+func (t *Toast) SetPadding(padding float32) *Toast       { t.padding = padding; return t }
+func (t *Toast) SetAnimation(on bool) *Toast             { t.withAnimation = on; return t }
 
-func (t *Toast) SetText(message string) *Toast {
-	t.message = message
-	return t
-}
+func (t *Toast) Short() *Toast { t.timeout = ToastShort; return t }
+func (t *Toast) Long() *Toast  { t.timeout = ToastLong; return t }
 
-func (t *Toast) SetSize(width, height float32) *Toast {
-	t.size = fyne.NewSize(width, height)
-	return t
-}
-
-func (t *Toast) SetTimeout(timeout time.Duration) *Toast {
-	t.timeout = timeout
-	return t
-}
-
-func (t *Toast) SetPadding(padding float32) *Toast {
-	t.padding = padding
-	return t
-}
-
-func (t *Toast) SetAnimation(on bool) *Toast {
-	t.withAnimation = on
-	return t
-}
-
-// Удобные методы для стандартных таймаутов
-func (t *Toast) Short() *Toast {
-	t.timeout = ToastShort
-	return t
-}
-
-func (t *Toast) Long() *Toast {
-	t.timeout = ToastLong
-	return t
-}
-
-// calculateSize вычисляет размер тоста на основе содержимого
-func (t *Toast) calculateSize() fyne.Size {
-	minWidth := float32(120)
-	maxWidth := float32(300)
-	iconWidth := float32(0)
-	iconHeight := float32(0)
-
-	// Учитываем иконку
+func (t *Toast) buildContent() fyne.CanvasObject {
+	var content fyne.CanvasObject
+	text := canvas.NewText(t.message, theme.Color(theme.ColorNameForeground))
+	text.TextSize = 14
+	text.Alignment = fyne.TextAlignCenter
 	if t.icon != nil {
-		iconWidth = 24 + t.padding
-		iconHeight = 24
+		icon := widget.NewIcon(t.icon)
+		content = container.NewHBox(container.NewCenter(icon), container.NewCenter(text))
+	} else {
+		content = container.NewCenter(text)
 	}
-
-	// Оцениваем размер текста
-	textWidth := float32(len(t.message)) * 8
-	if textWidth < minWidth-iconWidth-t.padding*2 {
-		textWidth = minWidth - iconWidth - t.padding*2
-	}
-	if textWidth > maxWidth-iconWidth-t.padding*2 {
-		textWidth = maxWidth - iconWidth - t.padding*2
-	}
-
-	width := textWidth + iconWidth + t.padding*2
-	height := float32(40)
-
-	if iconHeight > height {
-		height = iconHeight + t.padding*2
-	}
-
-	return fyne.NewSize(width, height)
+	bg := canvas.NewRectangle(theme.Color(theme.ColorNameBackground))
+	popupContent := container.NewStack(bg, container.NewPadded(content))
+	return popupContent
 }
 
-// Hide - принудительно скрыть тост
+// Hide - принудительно скрывает тост.
 func (t *Toast) Hide() {
-	if t.as != nil {
-		t.as.Stop()
-	}
-	if t.ah != nil {
-		t.ah.Stop()
-	}
-	if t.popup != nil {
-		t.popup.Hide()
+	if t.isHiding.CompareAndSwap(0, 1) {
+		select {
+		case <-t.done:
+			return
+		default:
+			close(t.done)
+		}
 	}
 }
 
-// showWithAnimation - показывает тост с анимацией используя fyne.Animation
+// showWithAnimation запускается в потоке Fyne
 func (t *Toast) showWithAnimation(startPos, endPos fyne.Position) {
-	if t.popup == nil {
-		return
-	}
+	t.popup.Move(startPos)
+	t.popup.Show()
 
-	// Создаем анимацию позиции
-	t.as = fyne.NewAnimation(time.Duration(AnimationDuration), func(progress float32) {
+	anim := fyne.NewAnimation(AnimationDuration, func(progress float32) {
 		currentX := startPos.X + (endPos.X-startPos.X)*progress
 		currentY := startPos.Y + (endPos.Y-startPos.Y)*progress
 		t.popup.Move(fyne.NewPos(currentX, currentY))
 	})
-
-	t.as.Curve = fyne.AnimationLinear
-	t.popup.Move(startPos)
-	t.popup.Show()
-	t.as.Start()
+	anim.Curve = fyne.AnimationEaseOut
+	anim.Start()
 }
 
-// hideWithAnimation - скрывает тост с анимацией
+// hideWithAnimation выполняет анимацию скрытия
 func (t *Toast) hideWithAnimation(startPos fyne.Position) {
-	if t.popup == nil {
-		return
-	}
-
 	canvasSize := t.window.Canvas().Size()
 	endPos := fyne.NewPos(startPos.X, canvasSize.Height+50)
 
-	t.ah = fyne.NewAnimation(time.Duration(AnimationDuration), func(progress float32) {
+	anim := fyne.NewAnimation(AnimationDuration, func(progress float32) {
 		currentX := startPos.X + (endPos.X-startPos.X)*progress
 		currentY := startPos.Y + (endPos.Y-startPos.Y)*progress
 		t.popup.Move(fyne.NewPos(currentX, currentY))
 	})
+	anim.Curve = fyne.AnimationEaseIn
+	anim.Start()
 
-	t.as.Curve = fyne.AnimationLinear
-	t.ah.Start()
-
+	// Ждем завершения анимации или сигнала отмены
 	go func() {
 		select {
 		case <-done:
 			return
-		case <-time.After(AnimationDuration):
-			t.ah.Stop()
-			if t.popup != nil {
-				fyne.Do(t.popup.Hide)
-			}
+		case <-time.After(AnimationDuration + 50*time.Millisecond):
+			fyne.Do(t.popup.Hide)
+		case <-t.done:
+			fyne.Do(t.popup.Hide)
 		}
 	}()
 }
 
+// Show отображает тост на экране.
 func (t *Toast) Show() {
-	// Автоматически вычисляем размер если не задан явно
-	if t.size.Width == 0 && t.size.Height == 0 {
-		t.size = t.calculateSize()
+	if t.isHiding.Load() == 1 {
+		return
 	}
 
-	// Создаем содержимое тоста
-	var content fyne.CanvasObject
-
-	if t.icon != nil {
-		icon := widget.NewIcon(t.icon)
-		text := canvas.NewText(t.message, theme.Color(theme.ColorNameForeground))
-		text.TextSize = 14
-		text.Alignment = fyne.TextAlignCenter
-
-		content = container.NewHBox(
-			container.NewCenter(icon),
-			container.NewCenter(text),
-		)
-	} else {
-		text := canvas.NewText(t.message, theme.Color(theme.ColorNameForeground))
-		text.TextSize = 14
-		text.Alignment = fyne.TextAlignCenter
-		content = container.NewCenter(text)
-	}
-
-	// Создаем фон
-	bg := canvas.NewRectangle(theme.Color(theme.ColorNameBackground))
-	bg.Resize(t.size)
-
-	// Основной контейнер с отступами
-	popupContent := container.NewStack(
-		bg,
-		container.NewPadded(content),
-	)
-
+	popupContent := t.buildContent()
 	t.popup = widget.NewPopUp(popupContent, t.window.Canvas())
-	t.popup.Resize(t.size)
 
-	// Начальная и конечная позиции
+	// Fyne сама вычислит размер, мы только ограничиваем ширину
 	canvasSize := t.window.Canvas().Size()
-	startPos := fyne.NewPos(
-		(canvasSize.Width-t.size.Width)/2,
-		canvasSize.Height+50,
-	)
-	endPos := fyne.NewPos(
-		(canvasSize.Width-t.size.Width)/2,
-		canvasSize.Height-t.size.Height-50,
-	)
+	maxWidth := canvasSize.Width * 0.9
 
-	// Показываем тост с анимацией или без
+	// Получаем минимальный размер от Fyne
+	contentSize := t.popup.MinSize()
+
+	// Если ширина слишком большая - ограничиваем и пересчитываем высоту
+	if contentSize.Width > maxWidth {
+		contentSize.Width = maxWidth
+		// Даем popup'у ограниченную ширину и вычисляем необходимую высоту
+		t.popup.Resize(fyne.NewSize(maxWidth, 1000))  // Большая высота для измерения
+		contentSize.Height = t.popup.MinSize().Height // Получаем актуальную высоту
+	}
+
+	// Устанавливаем финальный размер
+	t.popup.Resize(contentSize)
+
+	// Позиционируем тост
+	startPos := fyne.NewPos((canvasSize.Width-contentSize.Width)/2, canvasSize.Height+50)
+	endPos := fyne.NewPos((canvasSize.Width-contentSize.Width)/2, canvasSize.Height-contentSize.Height-20)
+
 	if t.withAnimation {
 		t.showWithAnimation(startPos, endPos)
 	} else {
@@ -237,12 +158,19 @@ func (t *Toast) Show() {
 		t.popup.Show()
 	}
 
+	// Горутина для управления автоматическим скрытием
 	go func() {
+		visibleTime := t.timeout
+		if t.withAnimation {
+			visibleTime += AnimationDuration
+		}
+
 		select {
-		case <-done:
+		case <-t.done:
 			return
-		case <-time.After(t.timeout):
-			if t.popup != nil && t.popup.Visible() {
+
+		case <-time.After(visibleTime):
+			if t.isHiding.CompareAndSwap(0, 1) {
 				fyne.Do(func() {
 					if t.withAnimation {
 						t.hideWithAnimation(endPos)
