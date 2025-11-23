@@ -171,7 +171,7 @@ import (
 )
 
 func IsIntentSupported(action, mimeType string) (bool, error) {
-	if noDialogDebug {
+	if noDialogs {
 		return false, nil
 	}
 

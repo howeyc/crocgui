@@ -78,7 +78,7 @@ var (
 
 	// Чтоб отладить cdLocked
 	// cmd/c "set CROC_CD_LOCK=1&crocgui.exe"
-	// CROC_NO_RENAME=1 crocgui
+	// CROC_CD_LOCK=1 crocgui
 	longCdLock = os.Getenv("CROC_CD_LOCK") != ""
 )
 

@@ -28,21 +28,57 @@ import (
 func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *container.TabItem) {
 	var (
 		cosED, cosSH []fyne.CanvasObject
-		addEntry     func(dst string, f func(d *widget.Button, p *widget.ProgressBar,
+		removeEntry  func(fpath string, fe *fyne.Container, del bool)
+		showPage     func()
+		reload       func()
+
+		boxholder = container.NewVBox()
+		scroller  = container.NewVScroll(boxholder)
+
+		mainButton  *widget.Button
+		prog        = widget.NewProgressBar()
+		fileentries sync.Map
+	)
+	var (
+		addEntry func(dst string, f func(d *widget.Button, p *widget.ProgressBar,
 			s *widget.Button,
 			l *widget.Label)) (newentry *fyne.Container)
-		cancelButton, mainButton *widget.Button
+		dialogFileSave func(src string, parent fyne.Window)
+		join           = func(elem ...string) string {
+			return filepath.Join(append([]string{tempDir, RECV}, elem...)...)
+		}
+		ShowFilesSave func()
+		filesSave     func(lu fyne.ListableURI, err error)
 	)
+	var cancelButton *widget.Button
+	cancelChan := make(chan struct{}, 1)
+	hideCancel := func() {
+		fyne.Do(cancelButton.Hide)
+		select {
+		case <-cancelChan:
+		default:
+			close(cancelChan)
+		}
+	}
+	cancelButton = widget.NewButtonWithIcon(lp("Cancel"), theme.CancelIcon(), hideCancel)
+	showCancel := func() {
+		select {
+		case <-cancelChan:
+		default:
+			close(cancelChan)
+		}
+		cancelChan = make(chan struct{})
+		fyne.Do(cancelButton.Show)
+	}
+	cosSH = append(cosSH, prog, cancelButton)
+	allShow(false, cosSH...)
 
-	showPage := func() {}
-	reload := func() {}
 	defer func() {
 		if r := recover(); r != nil {
 			log.Error(fmt.Sprint(r))
 		}
 	}()
 
-	prog := widget.NewProgressBar()
 	cosSH = append(cosSH, prog)
 
 	topline := widget.NewLabel(lp("Wait for them before pressing Download"))
@@ -74,11 +110,22 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 	totpLabel := widget.NewLabel(TOTP)
 	totpProg := setupTOTP(a, entry, totpCheck, totpLabel, &entryText)
 
-	recvDir := filepath.Join(tempDir, RECV)
+	removeEntrys := func() {
+		forEachFileEntry(&fileentries, func(fpath string, fe *fyne.Container) {
+			removeEntry(fpath, fe, true)
+		})
+	}
 
-	boxholder := container.NewVBox()
-	scroller := container.NewVScroll(boxholder)
-	var fileentries sync.Map
+	deleteAllButton := widget.NewButtonWithIcon("", theme.ContentRemoveIcon(), func() {
+		fyne.Do(func() {
+			if mapEmpty(&fileentries) {
+				entry.SetText(entryText)
+			} else {
+				removeEntrys()
+			}
+		})
+	})
+	cosED = append(cosED, deleteAllButton)
 
 	ready = func() (ok bool) {
 		ok = true
@@ -101,7 +148,7 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 		return ok
 	}
 
-	removeEntry := func(fpath string, fe *fyne.Container, del bool) {
+	removeEntry = func(fpath string, fe *fyne.Container, del bool) {
 		if del {
 			remove := os.Remove
 			de := "file"
@@ -137,7 +184,6 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 		})
 	}
 
-	var ShowFileSave func(src string, parent fyne.Window)
 	// Добавим строчку в boxholder и fileentries
 	addEntry = func(dst string, f func(d *widget.Button, p *widget.ProgressBar,
 		s *widget.Button,
@@ -196,14 +242,14 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 								removeEntry(dst, feDir, true)
 							}
 							fyne.Do(func() {
-								ShowFileSave(pathZip, w)
+								dialogFileSave(pathZip, w)
 							})
 						})
 					}
 					return
 				}
 			}
-			ShowFileSave(dst, w)
+			dialogFileSave(dst, w)
 		}) //saveButton
 
 		deleteButton := widget.NewButtonWithIcon("", theme.ContentRemoveIcon(), func() {
@@ -241,7 +287,7 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 	} //addEntry
 
 	//
-	ShowFileSave = func(src string, parent fyne.Window) {
+	dialogFileSave = func(src string, parent fyne.Window) {
 		fe, ok := load(&fileentries, src)
 		if !ok {
 			return
@@ -391,22 +437,22 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 	} //ShowFileSave
 
 	fpath := a.Preferences().String("DeleteFile")
-	os.MkdirAll(recvDir, 0700)
+	os.MkdirAll(join(), 0700)
 
 	reload = func() {
 		ignore := []string{"", crocRemovalFile}
-		for _, name := range ls(recvDir) {
+		for _, name := range ls(join()) {
 			ext := filepath.Ext(name)
 			if strings.ToLower(ext) == DOTZIP {
 				dir := strings.TrimSuffix(name, ext)
 				ignore = append(ignore, dir)
 			}
 		}
-		for _, name := range ls(recvDir) {
+		for _, name := range ls(join()) {
 			if slices.Contains(ignore, name) {
 				continue
 			}
-			path := filepath.Join(recvDir, name)
+			path := join(name)
 			if fpath == path {
 				continue
 			}
@@ -425,6 +471,7 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 				l.SetText(name)
 			})
 		}
+
 		forEachFileEntry(&fileentries, func(path string, fe *fyne.Container) {
 			if _, err := os.Stat(path); err != nil || slices.Contains(ignore, filepath.Base(path)) {
 				removeEntry(path, fe, false)
@@ -432,9 +479,254 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 		})
 	}
 	OnSelectedReload[1] = reload
+	mainButton = widget.NewButtonWithIcon(lp("Download"), theme.DownloadIcon(), func() {
+		if entry.Validate() != nil {
+			log.Error("no receive code entered\n")
+			NewToast(w, lp("Secret must be longer than 5 characters")).Show()
+			return
+		}
+		if !cdLock.CompareAndSwap(0, 1) {
+			NewToast(w, lp("Cancel")+" "+lp("Send")).Show()
+			return
+		}
+		// cdLocked
+		if wd, _ := os.Getwd(); wd != join() {
+			err := os.Chdir(join())
+			log.Tracef("change to %s: %v", join(), err)
+			if err != nil {
+				log.Errorf("croc: %v", err)
+				NewToast(w, err.Error()).Show()
+				cdLock.Store(0)
+				return
+			}
+		}
+		secret := entry.Text
+		if totpCheck.Checked {
+			secret = totp(entry.Text)
+			totpLabel.SetText(secret)
+			secret = TOTP + secret
+		}
 
-	for _, name := range ls(recvDir) {
-		path := filepath.Join(recvDir, name)
+		client, err := croc.New(croc.Options{
+			SharedSecret:     secret,
+			Debug:            debugBool(a),
+			RelayAddress:     a.Preferences().String("relay-address"),
+			RelayPassword:    a.Preferences().String("relay-password"),
+			NoPrompt:         true,
+			OnlyLocal:        a.Preferences().Bool("force-local"),
+			Curve:            a.Preferences().String("pake-curve"),
+			Overwrite:        true,
+			MulticastAddress: a.Preferences().String("multicast-address"),
+		})
+		if err != nil {
+			log.Errorf("croc: %v", err)
+			NewToast(w, err.Error()).Show()
+			cdLock.Store(0)
+			return
+		}
+		log.SetLevel(debugString(a))
+		log.Trace("croc client created")
+
+		var filename string
+		showCancel()
+		allShow(true, cosSH...)
+		allEnabled(false, cosED...)
+
+		if totpCheck.Checked {
+			totpProg.Hide()
+		}
+
+		doneChan := make(chan struct{})
+		fpath := ""
+
+		// progress
+		go func() {
+			ticker := time.NewTicker(time.Millisecond * 100)
+			defer func() {
+				// Конец
+				ticker.Stop()
+				if longCdLock {
+					time.Sleep(time.Second * 30)
+				}
+				cdLock.Store(0)
+				fyne.Do(func() {
+					prog.SetValue(0)
+					allShow(false, cosSH...)
+					allEnabled(true, cosED...)
+					if totpCheck.Checked {
+						totpProg.Show()
+					}
+					showPage()
+					reload()
+				})
+			}()
+
+			old := 0
+			oldPath := ""
+			var TotalSent, size, totalMax int64
+			progW := NewProgressWrapper(prog)
+			toplineW := NewLabelWrapper(topline)
+
+			fepw := NewProgressWrapper(nil)
+			once := true
+			for {
+				select {
+				case <-done:
+					return
+				case <-doneChan:
+
+					return
+				case <-cancelChan:
+					s := fmt.Sprintf("%s %s", lp("Receive cancelled."), filename)
+					log.Error(s)
+					fyne.Do(func() {
+						topline.SetText(s)
+					})
+					a.Preferences().SetString("DeleteFile", filepath.Join(join(), filename))
+					Stop(client)
+					fyne.Do(func() {
+						restart(w)
+					})
+					return
+				case <-ticker.C:
+					if client == nil {
+						return
+					}
+					if client.Step2FileInfoTransferred {
+						if once {
+							// Начало приёма
+							once = false
+							toplineW.SetText(lp("Receiving file"))
+
+							for i, fi := range client.FilesToTransfer {
+								if isMobile || asMobile {
+									// Запретим разворачивать свёрнутый каталог
+									client.FilesToTransfer[i].TempFile = false
+								} else {
+									// Развернём свёрнутый каталог если включена опция zip-unzip
+									client.FilesToTransfer[i].TempFile = strings.HasSuffix(strings.ToLower(fi.Name), DOTZIP) &&
+										a.Preferences().Bool("zip-unzip")
+								}
+								dst := filepath.Join(join(), fi.Name)
+								// Временный прогрессбар
+								addEntry(dst, func(d *widget.Button, p *widget.ProgressBar, s *widget.Button, l *widget.Label) {
+									d.Hide()
+									p.SetValue(0)
+									p.Max = float64(fi.Size)
+									p.Show()
+									s.Hide()
+									if fi.FolderRemote != "." {
+										l.SetText(fi.FolderRemote + slash + fi.Name)
+										// Убираем dir/
+										path := join(fi.FolderRemote)
+										if fr, ok := load(&fileentries, path); ok {
+											removeEntry(path, fr, false)
+										}
+									}
+								}) //addEntry
+								totalMax += fi.Size
+							}
+							progW.SetMax(totalMax)
+							log.Tracef("totalMax %d", totalMax)
+						}
+						cnum := client.FilesToTransferCurrentNum
+						if old < cnum+1 {
+							old = cnum + 1
+							fi := client.FilesToTransfer[cnum]
+							filename = fi.Name
+							toplineW.SetText(fmt.Sprintf("%s: %s(%d/%d)", lp("Receiving file"), filename, cnum+1, len(client.FilesToTransfer)))
+							TotalSent += size
+							size = fi.Size
+							path := join(fi.Name)
+							if oldPath != path {
+								if fe, ok := load(&fileentries, oldPath); ok {
+									fyne.Do(func() {
+										fe.Objects[feDel].Show()
+										fe.Objects[feBar].Hide()
+										fe.Objects[feSave].Show()
+									})
+								}
+								oldPath = path
+							}
+							log.Trace(path)
+							if fe, ok := load(&fileentries, path); ok {
+								fepw = NewProgressWrapper(fe.Objects[feBar].(*widget.ProgressBar))
+							} else {
+								fepw = NewProgressWrapper(nil)
+							}
+						}
+						progW.SetValue(TotalSent + client.TotalSent)
+						fepw.SetValue(client.TotalSent)
+					}
+				}
+			}
+		}() // progress
+
+		// Receive
+		go func() {
+			var err error
+			if EMULATE == 0 {
+				err = client.Receive()
+			} else {
+				log.Warnf("Receive")
+				time.Sleep(EMULATE)
+				defer func() {
+					time.Sleep(time.Millisecond * 10)
+					client = nil
+				}()
+			}
+
+			fyne.Do(func() {
+				if err != nil {
+					if errors.Is(err, io.EOF) {
+						err = fmt.Errorf("%s", lp("Send cancelled."))
+					}
+					s := fmt.Sprintf("receive: %s", err)
+					log.Error(s)
+					topline.SetText(s)
+					fpath = filepath.Join(join(), filename)
+					removeEntrys()
+				} else {
+					topline.SetText(fmt.Sprintf("%s: %s", lp("Received"), filename))
+				}
+				a.Preferences().SetString("DeleteFile", fpath)
+			})
+			close(doneChan)
+		}() // Receive
+		//  +2 go routines
+		log.Warnf("NumGoroutine %d", runtime.NumGoroutine())
+	}) // mainButton
+	cosED = append(cosED, mainButton)
+
+	treeButton := widget.NewButtonWithIcon("", theme.VisibilityIcon(), func() {
+		ft := fileTreeShow(storage.NewFileURI(join()), a)
+		if ft != nil {
+			ft.OnSelected = func(uid widget.TreeNodeID) {
+				selected(uid, func(err error) {
+					log.Tracef("selected %v: %v", uid, err)
+				})
+			}
+		}
+	})
+	cosED = append(cosED, treeButton)
+
+	saveAllButton := widget.NewButtonWithIcon("", theme.DocumentSaveIcon(), func() {
+		ShowFilesSave()
+	})
+	cosED = append(cosED, saveAllButton)
+
+	downloadButton := widget.NewButtonWithIcon("", theme.FolderIcon(), func() {
+		if !mapEmpty(&fileentries) {
+			fyne.Do(func() {
+				filesSave(nil, fmt.Errorf("download"))
+				topline.SetText(lp("Saved all files to") + " Download")
+			})
+		}
+	})
+	cosED = append(cosED, downloadButton)
+
+	for _, name := range ls(join()) {
+		path := filepath.Join(join(), name)
 		if name == "" {
 			continue
 		}
@@ -448,15 +740,7 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 		}
 	}
 
-	cancelChan := make(chan struct{})
-
-	removeEntrys := func() {
-		forEachFileEntry(&fileentries, func(fpath string, fe *fyne.Container) {
-			removeEntry(fpath, fe, true)
-		})
-	}
-
-	filesSave := func(lu fyne.ListableURI, err error) {
+	filesSave = func(lu fyne.ListableURI, err error) {
 		var (
 			u  fyne.URI
 			cl = func() {}
@@ -520,7 +804,7 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 				}
 				log.Warnf("move %s %s: %v", src, dst, err)
 				root := src
-				log.Tracef("copyFiles error: %v",
+				log.Tracef("copyFiles: %v",
 					copyFiles(storage.NewFileURI(root), dst, func(u fyne.URI, dstPath string) error {
 						fyne.Do(func() {})
 						feCopy := fe
@@ -634,9 +918,10 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 		})
 	}
 
-	ShowFilesSave := func() {
+	ShowFilesSave = func() {
 		if mapEmpty(&fileentries) {
 			log.Error("no files to save")
+			NewToast(w, "no files to save").Show()
 			return
 		}
 
@@ -648,287 +933,11 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 		if !supported {
 			// Нет фолдерпикера
 			filesSave(nil, fmt.Errorf("folder picker not supported"))
-			dialog.ShowInformation(
-				lp("Saved all files to")+" Download",
-				"",
-				w,
-			)
+			NewToast(w, lp("Saved all files to")+" Download").Show()
 			return
 		}
 		ShowFolderOpen(filesSave, w)
 	}
-
-	mainButton = widget.NewButtonWithIcon(lp("Download"), theme.DownloadIcon(), func() {
-		if entry.Validate() != nil {
-			log.Error("no receive code entered\n")
-			dialog.ShowInformation(
-				lp("Download"),
-				lp("Secret must be longer than 5 characters"),
-				w,
-			)
-			return
-		}
-		if !cdLock.CompareAndSwap(0, 1) {
-			dialog.ShowInformation(
-				lp("Cancel"),
-				lp("Send"),
-				w,
-			)
-			return
-		}
-		// cdLocked
-		if wd, _ := os.Getwd(); wd != recvDir {
-			err := os.Chdir(recvDir)
-			log.Tracef("change to %s: %v", recvDir, err)
-			if err != nil {
-				log.Errorf("croc: %v", err)
-				dialog.ShowInformation(
-					lp("Download"),
-					err.Error(),
-					w,
-				)
-				cdLock.Store(0)
-				return
-			}
-		}
-
-		secret := entry.Text
-		if totpCheck.Checked {
-			secret = totp(entry.Text)
-			totpLabel.SetText(secret)
-			secret = TOTP + secret
-		}
-
-		client, err := croc.New(croc.Options{
-			SharedSecret:     secret,
-			Debug:            debugBool(a),
-			RelayAddress:     a.Preferences().String("relay-address"),
-			RelayPassword:    a.Preferences().String("relay-password"),
-			NoPrompt:         true,
-			OnlyLocal:        a.Preferences().Bool("force-local"),
-			Curve:            a.Preferences().String("pake-curve"),
-			Overwrite:        true,
-			MulticastAddress: a.Preferences().String("multicast-address"),
-			// ZipFolder:        true,
-		})
-		if err != nil {
-			log.Errorf("croc: %v", err)
-			dialog.ShowInformation(
-				lp("Download"),
-				err.Error(),
-				w,
-			)
-			cdLock.Store(0)
-			return
-		}
-		log.SetLevel(debugString(a))
-		log.Trace("croc client created")
-
-		var filename string
-		cancelChan = make(chan struct{})
-		allShow(true, cosSH...)
-		allEnabled(false, cosED...)
-		if totpCheck.Checked {
-			totpProg.Hide()
-		}
-
-		doneChan := make(chan struct{})
-		fpath := ""
-
-		// progress
-		go func() {
-			ticker := time.NewTicker(time.Millisecond * 100)
-			defer func() {
-				// Принял
-				ticker.Stop()
-				cdLock.Store(0)
-				fyne.Do(func() {
-					prog.SetValue(0)
-					allShow(false, cosSH...)
-					allEnabled(true, cosED...)
-					if totpCheck.Checked {
-						totpProg.Show()
-					}
-					showPage()
-					reload()
-				})
-			}()
-
-			old := 0
-			oldPath := ""
-			var TotalSent, size, totalMax int64
-			progW := NewProgressWrapper(prog)
-			toplineW := NewLabelWrapper(topline)
-			//
-			fepw := NewProgressWrapper(nil)
-
-			once := true
-			for {
-				select {
-				case <-done:
-					return
-				case <-doneChan:
-					return
-				case <-cancelChan:
-					s := fmt.Sprintf("%s %s", lp("Receive cancelled."), filename)
-					log.Error(s)
-					fyne.Do(func() {
-						topline.SetText(s)
-					})
-					a.Preferences().SetString("DeleteFile", filepath.Join(recvDir, filename))
-					Stop(client)
-					fyne.Do(func() {
-						restart(w)
-					})
-					return
-				case <-ticker.C:
-					if client == nil {
-						return
-					}
-					if client.Step2FileInfoTransferred {
-						if once {
-							once = false
-							for i, fi := range client.FilesToTransfer {
-								if isMobile || asMobile {
-									// Запретим разворачивать свёрнутый каталог
-									client.FilesToTransfer[i].TempFile = false
-								} else {
-									// Развернём свёрнутый каталог если включена опция zip-unzip
-									client.FilesToTransfer[i].TempFile = strings.HasSuffix(strings.ToLower(fi.Name), DOTZIP) &&
-										a.Preferences().Bool("zip-unzip")
-								}
-								dst := filepath.Join(recvDir, fi.Name)
-								addEntry(dst, func(d *widget.Button, p *widget.ProgressBar, s *widget.Button, l *widget.Label) {
-									d.Hide()
-									p.SetValue(0)
-									p.Max = float64(fi.Size)
-									p.Show()
-									s.Hide()
-									if fi.FolderRemote != "." {
-										l.SetText(fi.FolderRemote + slash + fi.Name)
-										// Убираем dir/
-										path := join(fi.FolderRemote)
-										if fr, ok := load(&fileentries, path); ok {
-											removeEntry(path, fr, false)
-										}
-									}
-								})
-								totalMax += fi.Size
-							}
-							progW.SetMax(totalMax)
-						}
-						cnum := client.FilesToTransferCurrentNum
-						if old < cnum+1 {
-							old = cnum + 1
-							fi := client.FilesToTransfer[cnum]
-							filename = fi.Name
-							toplineW.SetText(fmt.Sprintf("%s: %s(%d/%d)", lp("Receiving file"), filename, cnum+1, len(client.FilesToTransfer)))
-							TotalSent += size
-							size = fi.Size
-							path := filepath.Join(recvDir, fi.Name)
-							if oldPath != path {
-								if fe, ok := load(&fileentries, oldPath); ok {
-									fyne.Do(func() {
-										fe.Objects[feDel].Show()
-										fe.Objects[feBar].Hide()
-										fe.Objects[feSave].Show()
-									})
-								}
-								oldPath = path
-							}
-							log.Trace(path)
-							if fe, ok := load(&fileentries, path); ok {
-								fepw = NewProgressWrapper(fe.Objects[feBar].(*widget.ProgressBar))
-							} else {
-								fepw = NewProgressWrapper(nil)
-							}
-						}
-						progW.SetValue(TotalSent + client.TotalSent)
-						fepw.SetValue(client.TotalSent)
-					}
-				}
-			}
-		}()
-
-		// receiver.Receive
-		go func() {
-			var rerr error
-			if EMULATE == 0 {
-				rerr = client.Receive()
-			} else {
-				log.Warnf("Receive")
-				time.Sleep(EMULATE)
-				defer func() {
-					time.Sleep(time.Millisecond * 10)
-					client = nil
-				}()
-			}
-			fyne.Do(func() {
-				if rerr != nil {
-					if errors.Is(rerr, io.EOF) {
-						rerr = fmt.Errorf("%s", lp("Send cancelled."))
-					}
-					s := fmt.Sprintf("Receive failed: %s", rerr)
-					log.Error(s)
-					topline.SetText(s)
-					fpath = filepath.Join(recvDir, filename)
-					removeEntrys()
-				} else {
-					topline.SetText(fmt.Sprintf("%s: %s", lp("Received"), filename))
-				}
-				a.Preferences().SetString("DeleteFile", fpath)
-			})
-			close(doneChan)
-		}()
-
-		//  +2 go routines
-		log.Warnf("NumGoroutine %d", runtime.NumGoroutine())
-	}) // mainButton
-	cosED = append(cosED, mainButton)
-
-	cancelButton = widget.NewButtonWithIcon(lp("Cancel"), theme.CancelIcon(), func() {
-		close(cancelChan)
-	})
-	cosSH = append(cosSH, cancelButton)
-	allShow(false, cosSH...)
-
-	saveAllButton := widget.NewButtonWithIcon("", theme.DocumentSaveIcon(), func() {
-		ShowFilesSave()
-	})
-	cosED = append(cosED, saveAllButton)
-
-	deleteAllButton := widget.NewButtonWithIcon("", theme.ContentRemoveIcon(), func() {
-		fyne.Do(func() {
-			if mapEmpty(&fileentries) {
-				entry.SetText(entryText)
-			} else {
-				removeEntrys()
-			}
-		})
-	})
-	cosED = append(cosED, deleteAllButton)
-
-	downloadButton := widget.NewButtonWithIcon("", theme.FolderIcon(), func() {
-		if !mapEmpty(&fileentries) {
-			fyne.Do(func() {
-				filesSave(nil, fmt.Errorf("download"))
-				topline.SetText(lp("Saved all files to") + " Download")
-			})
-		}
-	})
-	cosED = append(cosED, downloadButton)
-
-	treeButton := widget.NewButtonWithIcon("", theme.VisibilityIcon(), func() {
-		ft := fileTreeShow(storage.NewFileURI(recvDir), a)
-		if ft != nil {
-			ft.OnSelected = func(uid widget.TreeNodeID) {
-				selected(uid, func(err error) {
-					log.Tracef("selected %v: %v", uid, err)
-				})
-			}
-		}
-	})
-	cosED = append(cosED, treeButton)
 
 	top := container.NewVBox(
 		topline,
@@ -962,7 +971,7 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 			})
 		}
 	}
-	return ti
+	return
 }
 
 // Большой диалог для десктопа
