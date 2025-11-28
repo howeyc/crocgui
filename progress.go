@@ -204,6 +204,9 @@ func (pw *ProgressWrapper) SetValue(value int64) {
 			pw.lastValue = newValue
 			pw.lastCall = now
 			fyne.Do(func() {
+				if !pw.ProgressBar.Visible() {
+					pw.ProgressBar.Show()
+				}
 				pw.ProgressBar.SetValue(newValue)
 			})
 		}

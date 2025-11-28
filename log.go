@@ -80,6 +80,7 @@ func (lw *logWriter) appendLogLine(line string) {
 func (lw *logWriter) refresh() {
 	lw.RichText.Segments = lw.segments
 	lw.RichText.Refresh()
+	// doMonitor.DoRequest(lw.RichText.Refresh)
 	lw.Scroll.ScrollToBottom()
 }
 

@@ -102,7 +102,7 @@ func main() {
 	wd, _ = os.Getwd()
 	tempDir = os.TempDir()
 	join = func(elem ...string) string {
-		return filepath.Join(append([]string{tempDir, SEND}, elem...)...)
+		return filepath.FromSlash(filepath.Join(append([]string{tempDir, SEND}, elem...)...))
 	}
 	ErrApplicationShutdown = errors.New("application shutdown")
 	done = make(chan struct{})
