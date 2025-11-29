@@ -115,12 +115,12 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 	})
 	cosED = append(cosED, secretButton)
 
-	totpCheck := widget.NewCheckWithData("", binding.BindPreferenceBool(
-		"totp-send", a.Preferences()))
+	totpCheck := widget.NewCheck("", nil)
 	cosED = append(cosED, totpCheck)
 
 	totpLabel := widget.NewLabel(TOTP)
-	totpProg := setupTOTP(a, entry, totpCheck, totpLabel, &entryText)
+	totpProg := setupTOTP(a, entry, totpCheck, totpLabel, &entryText,
+		"totp-send")
 
 	removeEntrys := func(del bool) {
 		if !del {
@@ -1402,7 +1402,9 @@ func allShow(show bool, cos ...fyne.CanvasObject) {
 	}
 }
 
-func setupTOTP(a fyne.App, entry *widget.Entry, totpCheck *widget.Check, totpLabel *widget.Label, entryText *string) *widget.ProgressBar {
+func setupTOTP(a fyne.App, entry *widget.Entry, totpCheck *widget.Check, totpLabel *widget.Label, entryText *string, bind string) *widget.ProgressBar {
+	totpCheck.Bind(binding.BindPreferenceBool(bind, a.Preferences()))
+
 	var totpChan chan struct{}
 	entry.Validator = func(s string) error {
 		if totpCheck.Checked || len(entry.Text) > 5 {
@@ -1427,6 +1429,7 @@ func setupTOTP(a fyne.App, entry *widget.Entry, totpCheck *widget.Check, totpLab
 	}
 
 	totpCheck.OnChanged = func(b bool) {
+		a.Preferences().SetBool(bind, b)
 		fyne.Do(func() {
 			entry.SetValidationError(entry.Validate())
 			// Останавливаем предыдущую горутину
@@ -1463,12 +1466,7 @@ func setupTOTP(a fyne.App, entry *widget.Entry, totpCheck *widget.Check, totpLab
 				*entryText = entry.Text
 				entry.SetText(TOTP + totp(entry.Text))
 			}
-			a.Preferences().SetBool("totp-send", b)
 		})
-	}
-
-	if totpCheck.Checked {
-		totpCheck.OnChanged(true)
 	}
 
 	entry.OnChanged = func(secret string) {

@@ -102,12 +102,13 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 	})
 	cosED = append(cosED, secretButton)
 
-	totpCheck := widget.NewCheckWithData("", binding.BindPreferenceBool(
-		"totp-recv", a.Preferences()))
+	totpCheck := widget.NewCheck("", nil)
+
 	cosED = append(cosED, totpCheck)
 
 	totpLabel := widget.NewLabel(TOTP)
-	totpProg := setupTOTP(a, entry, totpCheck, totpLabel, &entryText)
+	totpProg := setupTOTP(a, entry, totpCheck, totpLabel, &entryText,
+		"totp-recv")
 
 	removeEntrys := func(del bool) {
 		if !del {
