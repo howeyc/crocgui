@@ -149,10 +149,16 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 				ok = false
 				return false
 			}
-			if fe.Objects[feBar].Visible() {
-				ok = false
+			bar(fe, false, func(w *widget.ProgressBar) {
+				ok = w.Value == w.Max
+			})
+			if !ok {
 				return false
 			}
+			// if fe.Objects[feBar].Visible() {
+			// 	ok = false
+			// 	return false
+			// }
 			return true
 		})
 		return ok
@@ -244,8 +250,14 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 			return fe
 		}
 		base := filepath.Base(dst)
-		if fi, _ := os.Stat(dst); fi != nil && fi.IsDir() {
-			base += slash
+
+		var size int64
+		if fi, err := os.Stat(dst); err == nil {
+			if fi.IsDir() {
+				base += slash
+			} else {
+				size = fi.Size()
+			}
 		}
 		labelFile := widget.NewLabel(base)
 		icon := theme.ContentRemoveIcon()
@@ -291,6 +303,9 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 			removeEntry(dst, newentry, true)
 		})
 		progFile := widget.NewProgressBar()
+		progFile.TextFormatter = func() string {
+			return textFormatter(progFile)
+		}
 
 		newentry = container.NewHBox(
 			deleteButton,
@@ -301,9 +316,12 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 
 		fileentries.Store(dst, newentry)
 		fyne.Do(func() {
-			if f == nil {
-				progFile.Hide()
-			} else {
+			progFile.Value = float64(size)
+			if size > 0 {
+				progFile.Max = float64(size)
+			}
+			progFile.Value = progFile.Max
+			if f != nil {
 				f(deleteButton, progFile,
 					saveButton,
 					labelFile)
@@ -501,7 +519,7 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 				s *widget.Button,
 				l *widget.Label) {
 				d.Show()
-				p.Hide()
+				// p.Hide()
 				s.Show()
 				if isLinkDir(path) {
 					name += slash
@@ -654,7 +672,7 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 									d.Hide()
 									p.SetValue(0)
 									p.Max = float64(fi.Size)
-									p.Show()
+									// p.Show()
 									s.Hide()
 									l.SetText(trimDotSlash(fi))
 									// if fi.FolderRemote != "." {

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 	log "github.com/schollz/logger"
 )
@@ -78,6 +79,7 @@ func NewProgressWriter(destination io.Writer, total int64, c *fyne.Container) (p
 	}
 
 	oldOnTapped := db.OnTapped
+	oldIcon := db.Icon
 
 	cancelChan := make(chan struct{})
 
@@ -99,15 +101,27 @@ func NewProgressWriter(destination io.Writer, total int64, c *fyne.Container) (p
 	}
 
 	fyne.Do(func() {
+		db.Icon = theme.CancelIcon()
+		db.Refresh()
 		pb.SetValue(0)
 		pb.Max = 1.0
-		pb.Show()
+		// pb.Show()
 	})
 
 	restore = func() {
 		db.OnTapped = oldOnTapped
 		fyne.Do(func() {
-			pb.Hide()
+			db.Icon = oldIcon
+			db.Refresh()
+			// log.Tracef("pw %+v", pw)
+			if pw.Written > 0 {
+				pb.Max = float64(pw.Written)
+			} else {
+				pb.Max = float64(pw.Total)
+			}
+			pb.SetValue(float64(pw.Written))
+			// log.Tracef("pb %v %v", pb.Value, pb.Max)
+			// pb.Hide()
 			sbShow()
 		})
 	}
@@ -308,4 +322,36 @@ func fileModTime(filePath string) (time.Time, error) {
 		return time.Now(), err
 	}
 	return fi.ModTime(), nil
+}
+
+func textFormatter(w *widget.ProgressBar) string {
+	if w.Value == 0 || w.Max == 0 || w.Max == w.Min {
+		// Для каталогов и отсутствующих файлов
+		return "\t"
+	}
+	if w.Value < w.Max {
+		// Режим прогрессбара
+		ratio := (w.Value - w.Min) / (w.Max - w.Min)
+		return fmt.Sprintf("%03d%%\t", int(ratio*100))
+	}
+	// Режим показа размера файла
+	const KB = 1000.0
+
+	units := []string{"b", "k", "m", "g", "t"}
+	value := w.Max
+	unitIndex := 0
+
+	// Переходим к следующей единице когда value >= 1000
+	for value >= KB && unitIndex < len(units)-1 {
+		value /= KB
+		unitIndex++
+	}
+
+	if value >= KB {
+		// переполнение
+		return "###\t"
+	}
+
+	intPart := int(value)
+	return fmt.Sprintf("%03d%s\t", intPart, units[unitIndex])
 }

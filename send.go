@@ -161,10 +161,16 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 				ok = false
 				return false
 			}
-			if fe.Objects[feBar].Visible() {
-				ok = false
+			bar(fe, false, func(w *widget.ProgressBar) {
+				ok = w.Value == w.Max
+			})
+			if !ok {
 				return false
 			}
+			// if fe.Objects[feBar].Visible() {
+			// 	ok = false
+			// 	return false
+			// }
 			return true
 		})
 		return ok
@@ -254,8 +260,14 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 			return nil
 		}
 		base := filepath.Base(dst)
-		if fi, _ := os.Stat(dst); fi != nil && fi.IsDir() {
-			base += slash
+
+		var size int64
+		if fi, err := os.Stat(dst); err == nil {
+			if isLinkDir(dst) {
+				base += slash
+			} else {
+				size = fi.Size()
+			}
 		}
 		labelFile := widget.NewLabel(base)
 		icon := theme.ContentRemoveIcon()
@@ -271,6 +283,9 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 			removeEntry(dst, newentry, true)
 		})
 		progFile := widget.NewProgressBar()
+		progFile.TextFormatter = func() string {
+			return textFormatter(progFile)
+		}
 
 		newentry = container.NewHBox(
 			deleteButton,
@@ -281,9 +296,11 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 
 		fileentries.Store(dst, newentry)
 		fyne.Do(func() {
-			if f == nil {
-				progFile.Hide()
-			} else {
+			if size > 0 {
+				progFile.Max = float64(size)
+			}
+			progFile.Value = progFile.Max
+			if f != nil {
 				f(deleteButton, progFile,
 
 					labelFile)
@@ -426,6 +443,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 		}
 
 		total, err := getSize(source.URI())
+		log.Tracef("getSize %s %d: %v", source.URI(), total, err)
 		if err != nil {
 			total = 1 << 30
 		}
@@ -478,7 +496,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 
 				l *widget.Label) {
 				d.Show()
-				p.Hide()
+				// p.Hide()
 
 				if isLinkDir(path) {
 					name += slash
@@ -735,7 +753,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 										d.Hide()
 										p.SetValue(0)
 										p.Max = float64(fi.Size)
-										p.Show()
+										// p.Show()
 
 										if !fi.TempFile {
 											l.SetText(trimDotSlash(fi))
@@ -1086,7 +1104,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 			name := uriBase(u)
 			dst := join(name)
 			fe := addEntry(dst, func(d *widget.Button, p *widget.ProgressBar, l *widget.Label) {
-				p.Hide()
+				// p.Hide()
 				l.SetText(name + slash)
 			})
 			if fe == nil {
@@ -1601,7 +1619,7 @@ func isCached(parent, child string) bool {
 // feDel
 // feSave
 func button(fe *fyne.Container, do bool, i int, f func(*widget.Button)) {
-	if fe == nil {
+	if fe == nil || len(fe.Objects) <= i {
 		return
 	}
 
@@ -1615,7 +1633,7 @@ func button(fe *fyne.Container, do bool, i int, f func(*widget.Button)) {
 }
 
 func bar(fe *fyne.Container, do bool, f func(*widget.ProgressBar)) {
-	if fe == nil {
+	if fe == nil || len(fe.Objects) <= feBar {
 		return
 	}
 
@@ -1629,7 +1647,7 @@ func bar(fe *fyne.Container, do bool, f func(*widget.ProgressBar)) {
 }
 
 func label(fe *fyne.Container, do bool, f func(*widget.Label)) {
-	if fe == nil {
+	if fe == nil || len(fe.Objects) < 1 {
 		return
 	}
 	if w, ok := fe.Objects[len(fe.Objects)-1].(*widget.Label); ok {
