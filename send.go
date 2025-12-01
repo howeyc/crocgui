@@ -39,10 +39,13 @@ const (
 	MiXplorer     = "https://mixplorer.com/beta/"
 	filePicker    = MiXplorer
 	INSTALL       = "URL " + filePicker + " is already in the clipboard.\nInstall the app to avoid this message."
-	feDel         = 0
-	feBar         = 1
-	feSave        = 2
 	PSL           = "→"
+)
+
+const (
+	feDel = iota
+	feBar
+	feSave
 )
 
 func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *container.TabItem) {
@@ -155,23 +158,16 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 			fe := value.(*fyne.Container)
 			if fe == nil {
 				ok = false
-				return false
+				return ok
 			}
 			if len(fe.Objects) <= feBar {
 				ok = false
-				return false
+				return ok
 			}
 			bar(fe, false, func(w *widget.ProgressBar) {
 				ok = w.Value == w.Max
 			})
-			if !ok {
-				return false
-			}
-			// if fe.Objects[feBar].Visible() {
-			// 	ok = false
-			// 	return false
-			// }
-			return true
+			return ok
 		})
 		return ok
 	}
@@ -255,6 +251,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 
 		l *widget.Label)) (newentry *fyne.Container) {
 		dst = filepath.FromSlash(dst)
+		// log.Tracef("addEntry %s", dst)
 		if _, ok := load(&fileentries, dst); ok {
 			log.Tracef("exists %s", dst)
 			return nil
@@ -282,6 +279,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 		deleteButton := widget.NewButtonWithIcon("", icon, func() {
 			removeEntry(dst, newentry, true)
 		})
+
 		progFile := widget.NewProgressBar()
 		progFile.TextFormatter = func() string {
 			return textFormatter(progFile)
@@ -298,8 +296,10 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 		fyne.Do(func() {
 			if size > 0 {
 				progFile.Max = float64(size)
+			} else {
+				progFile.Max = 0.1
 			}
-			progFile.Value = progFile.Max
+			progFile.SetValue(progFile.Max)
 			if f != nil {
 				f(deleteButton, progFile,
 

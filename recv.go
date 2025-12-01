@@ -143,23 +143,16 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 			fe := value.(*fyne.Container)
 			if fe == nil {
 				ok = false
-				return false
+				return ok
 			}
 			if len(fe.Objects) <= feBar {
 				ok = false
-				return false
+				return ok
 			}
 			bar(fe, false, func(w *widget.ProgressBar) {
 				ok = w.Value == w.Max
 			})
-			if !ok {
-				return false
-			}
-			// if fe.Objects[feBar].Visible() {
-			// 	ok = false
-			// 	return false
-			// }
-			return true
+			return ok
 		})
 		return ok
 	}
@@ -229,6 +222,7 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 		s *widget.Button,
 		l *widget.Label)) (newentry *fyne.Container) {
 		dst = filepath.FromSlash(dst)
+		// log.Tracef("addEntry %s", dst)
 		if fe, ok := load(&fileentries, dst); ok {
 			log.Tracef("exists %s", dst)
 			deleteButton := fe.Objects[feDel]
@@ -238,7 +232,6 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 			fyne.Do(func() {
 				if f == nil {
 					deleteButton.Show()
-					progFile.Hide()
 					saveButton.Show()
 				} else {
 					f(deleteButton.(*widget.Button),
@@ -302,6 +295,7 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 		deleteButton := widget.NewButtonWithIcon("", icon, func() {
 			removeEntry(dst, newentry, true)
 		})
+
 		progFile := widget.NewProgressBar()
 		progFile.TextFormatter = func() string {
 			return textFormatter(progFile)
@@ -316,11 +310,13 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 
 		fileentries.Store(dst, newentry)
 		fyne.Do(func() {
-			progFile.Value = float64(size)
+			log.Tracef("size %d", size)
 			if size > 0 {
 				progFile.Max = float64(size)
+			} else {
+				progFile.Max = 0.1
 			}
-			progFile.Value = progFile.Max
+			progFile.SetValue(progFile.Max)
 			if f != nil {
 				f(deleteButton, progFile,
 					saveButton,
@@ -666,15 +662,12 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 									client.FilesToTransfer[i].TempFile = strings.HasSuffix(strings.ToLower(fi.Name), DOTZIP) &&
 										a.Preferences().Bool("zip-unzip")
 								}
-								dst := filepath.Join(join(), fi.Name)
-								// Временный прогрессбар
-								addEntry(dst, func(d *widget.Button, p *widget.ProgressBar, s *widget.Button, l *widget.Label) {
+								addEntry(join(trimDotSlash(fi)), func(d *widget.Button, p *widget.ProgressBar, s *widget.Button, l *widget.Label) {
 									d.Hide()
-									p.SetValue(0)
 									p.Max = float64(fi.Size)
-									// p.Show()
+									p.SetValue(0)
 									s.Hide()
-									l.SetText(trimDotSlash(fi))
+									// l.SetText(trimDotSlash(fi))
 									// if fi.FolderRemote != "." {
 									// 	l.SetText(trimDotSlash(fi))
 									// Убираем dir/
@@ -697,13 +690,14 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 							toplineW.SetText(fmt.Sprintf("%s: %s(%d/%d)", lp("Receiving file"), filename, cnum+1, len(client.FilesToTransfer)))
 							TotalSent += size
 							size = fi.Size
-							// path := join(fi.Name)
 							path := join(filename)
 							if oldPath != path {
 								if fe, ok := load(&fileentries, oldPath); ok {
 									fyne.Do(func() {
 										fe.Objects[feDel].Show()
-										fe.Objects[feBar].Hide()
+										bar(fe, false, func(w *widget.ProgressBar) {
+											w.SetValue(w.Max)
+										})
 										fe.Objects[feSave].Show()
 									})
 								}

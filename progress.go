@@ -49,10 +49,10 @@ func (pw *ProgressWriter) Write(p []byte) (n int, err error) {
 	}
 
 	pw.Written += int64(n)
-	progress := float64(pw.Written) / float64(pw.Total)
+	progress := float64(pw.Written)
 	if pw.lastProgress < progress {
-		if progress > 1.0 {
-			progress = 1.0
+		if total := float64(pw.Total); progress > total {
+			progress = total
 		}
 		pw.lastProgress = progress
 	} else {
@@ -103,9 +103,8 @@ func NewProgressWriter(destination io.Writer, total int64, c *fyne.Container) (p
 	fyne.Do(func() {
 		db.Icon = theme.CancelIcon()
 		db.Refresh()
+		pb.Max = float64(total)
 		pb.SetValue(0)
-		pb.Max = 1.0
-		// pb.Show()
 	})
 
 	restore = func() {
@@ -324,8 +323,9 @@ func fileModTime(filePath string) (time.Time, error) {
 	return fi.ModTime(), nil
 }
 
+// w.Max<1 для каталогов и отсутствующих файлов
 func textFormatter(w *widget.ProgressBar) string {
-	if w.Value == 0 || w.Max == 0 || w.Max == w.Min {
+	if w.Max < 1 || w.Max == w.Min {
 		// Для каталогов и отсутствующих файлов
 		return "\t"
 	}
@@ -342,16 +342,15 @@ func textFormatter(w *widget.ProgressBar) string {
 	unitIndex := 0
 
 	// Переходим к следующей единице когда value >= 1000
-	for value >= KB && unitIndex < len(units)-1 {
+	for value >= KB {
+		// if unitIndex >= len(units)-1 {
+		// 	//Int64.MaxValue~009t
+		// 	// переполнение
+		// 	return "###\t"
+		// }
 		value /= KB
 		unitIndex++
 	}
 
-	if value >= KB {
-		// переполнение
-		return "###\t"
-	}
-
-	intPart := int(value)
-	return fmt.Sprintf("%03d%s\t", intPart, units[unitIndex])
+	return fmt.Sprintf("%03d%s\t", int(value), units[unitIndex])
 }
