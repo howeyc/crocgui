@@ -86,9 +86,6 @@ const (
 	EMULATE                = time.Second * 0
 	CROC_SECRET            = "CROC_SECRET"
 	TOTP                   = "TOTP-" + CROC_SECRET
-	ZeroWidthSpace         = "\u200B" // Пробел нулевой ширины
-	ZeroWidthNonJoiner     = "\u200C" // Не-соединитель нулевой ширины
-	ZeroWidthJoiner        = "\u200D" // Соединитель нулевой ширины
 	DOTZIP                 = ".zip"
 	ZhangHai               = "content://me.zhanghai.android.files.file_provider/"
 	Ghisler                = "content://com.ghisler.files/"
@@ -96,6 +93,13 @@ const (
 	RECV                   = "crocgui-recv"
 	MIME_TYPE_DIR          = "vnd.android.document/directory"
 	MIME_TYPE_OCTET_STREAM = "application/octet-stream"
+	ID                     = "com.github.howeyc.crocgui"
+)
+
+const (
+	ZeroWidthSpace     = string(rune(0x200B) + iota) // Пробел нулевой ширины
+	ZeroWidthNonJoiner                               // Не-соединитель нулевой ширины
+	ZeroWidthJoiner                                  // Соединитель нулевой ширины
 )
 
 func main() {
@@ -115,7 +119,7 @@ func main() {
 	)
 	logOutput = newLogWriter()
 
-	a := app.NewWithID("com.github.howeyc.crocgui")
+	a := app.NewWithID(ID)
 
 	switch runtime.GOOS {
 	case "android":
