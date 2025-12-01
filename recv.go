@@ -310,13 +310,7 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 
 		fileentries.Store(dst, newentry)
 		fyne.Do(func() {
-			log.Tracef("size %d", size)
-			if size > 0 {
-				progFile.Max = float64(size)
-			} else {
-				progFile.Max = 0.1
-			}
-			progFile.SetValue(progFile.Max)
+			setSizes(progFile, size)
 			if f != nil {
 				f(deleteButton, progFile,
 					saveButton,
@@ -664,18 +658,9 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 								}
 								addEntry(join(trimDotSlash(fi)), func(d *widget.Button, p *widget.ProgressBar, s *widget.Button, l *widget.Label) {
 									d.Hide()
-									p.Max = float64(fi.Size)
-									p.SetValue(0)
+									setSizes(p, fi.Size, 0)
 									s.Hide()
-									// l.SetText(trimDotSlash(fi))
-									// if fi.FolderRemote != "." {
-									// 	l.SetText(trimDotSlash(fi))
-									// Убираем dir/
-									// path := join(fi.FolderRemote)
-									// if fr, ok := load(&fileentries, path); ok {
-									// 	removeEntry(path, fr, false)
-									// }
-									// }
+									l.SetText(trimDotSlash(fi))
 								}) //addEntry
 								totalMax += fi.Size
 							}

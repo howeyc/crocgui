@@ -103,8 +103,7 @@ func NewProgressWriter(destination io.Writer, total int64, c *fyne.Container) (p
 	fyne.Do(func() {
 		db.Icon = theme.CancelIcon()
 		db.Refresh()
-		pb.Max = float64(total)
-		pb.SetValue(0)
+		setSizes(pb, total, 0)
 	})
 
 	restore = func() {
@@ -112,20 +111,30 @@ func NewProgressWriter(destination io.Writer, total int64, c *fyne.Container) (p
 		fyne.Do(func() {
 			db.Icon = oldIcon
 			db.Refresh()
-			// log.Tracef("pw %+v", pw)
-			if pw.Written > 0 {
-				pb.Max = float64(pw.Written)
-			} else {
-				pb.Max = float64(pw.Total)
-			}
-			pb.SetValue(float64(pw.Written))
-			// log.Tracef("pb %v %v", pb.Value, pb.Max)
-			// pb.Hide()
+			setSizes(pb, pw.Written)
 			sbShow()
 		})
 	}
 
 	return pw, restore
+}
+
+// Max Value
+func setSizes(pb *widget.ProgressBar, sizes ...int64) {
+	if pb == nil {
+		return
+	}
+	max := sizes[0]
+	if max > 0 {
+		pb.Max = float64(max)
+	} else {
+		pb.Max = 0.1
+	}
+	if len(sizes) > 1 {
+		pb.SetValue(float64(sizes[1]))
+	} else {
+		pb.SetValue(pb.Max)
+	}
 }
 
 func CopyFileProgress(src, dst string, c *fyne.Container, onComplete func(err error)) {
@@ -196,12 +205,6 @@ func (pw *ProgressWrapper) Show() {
 func (pw *ProgressWrapper) Hide() {
 	if pw.ProgressBar != nil {
 		fyne.Do(pw.ProgressBar.Hide)
-	}
-}
-
-func (pw *ProgressWrapper) Set100() {
-	if pw.ProgressBar != nil {
-		pw.SetValue(int64(pw.ProgressBar.Max))
 	}
 }
 

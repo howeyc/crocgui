@@ -294,12 +294,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 
 		fileentries.Store(dst, newentry)
 		fyne.Do(func() {
-			if size > 0 {
-				progFile.Max = float64(size)
-			} else {
-				progFile.Max = 0.1
-			}
-			progFile.SetValue(progFile.Max)
+			setSizes(progFile, size)
 			if f != nil {
 				f(deleteButton, progFile,
 
@@ -741,19 +736,16 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 								path := filepath.Join(fi.FolderSource, fi.Name)
 
 								if fe, ok := load(&fileentries, path); ok {
-									button(fe, true, feDel, func(w *widget.Button) { w.Hide() })
-									bar(fe, true, func(w *widget.ProgressBar) {
-										w.SetValue(0)
-										w.Max = float64(fi.Size)
-										w.Show()
+									button(fe, true, feDel, func(d *widget.Button) {
+										d.Hide()
+									})
+									bar(fe, true, func(p *widget.ProgressBar) {
+										setSizes(p, fi.Size, 0)
 									})
 								} else {
-									// Временный прогрессбар
 									addEntry(path, func(d *widget.Button, p *widget.ProgressBar, l *widget.Label) {
 										d.Hide()
-										p.SetValue(0)
-										p.Max = float64(fi.Size)
-										// p.Show()
+										setSizes(p, fi.Size, 0)
 
 										if !fi.TempFile {
 											l.SetText(trimDotSlash(fi))
