@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"sync"
 	"time"
 
 	"fyne.io/fyne/v2"
@@ -16,9 +15,8 @@ import (
 )
 
 const (
-	minInterval  = 200 * time.Millisecond
-	KB           = 1000.0
-	MinRemaining = time.Second
+	minInterval = 200 * time.Millisecond
+	KB          = 1000.0
 )
 
 var ErrWriteCanceled = errors.New("write canceled")
@@ -38,27 +36,23 @@ type ProgressState struct {
 // LongProgressWrapper расширяет ProgressWrapper с отслеживанием времени
 type LongProgressWrapper struct {
 	*widget.ProgressBar
-	mu              sync.RWMutex
-	startTime       time.Time
-	lastUpdateTime  time.Time
-	lastValue       float64
-	speedHistory    []float64
-	maxHistorySize  int
-	lastCall        time.Time
-	remainingTime   time.Duration
-	minRemaining    time.Duration // минимальное оставшееся время
-	smoothingFactor float64       // коэффициент сглаживания для времени
+	startTime      time.Time
+	lastUpdateTime time.Time
+	lastValue      float64
+	speedHistory   []float64
+	maxHistorySize int
+	lastCall       time.Time
+	lastRemaining  time.Duration
 }
 
 // NewLongProgressWrapper создает новый прогресс-бар с отслеживанием статистики
 func NewLongProgressWrapper(p *widget.ProgressBar) (l *LongProgressWrapper) {
 	l = &LongProgressWrapper{
-		ProgressBar:     p,
-		lastValue:       -1,
-		speedHistory:    make([]float64, 0),
-		maxHistorySize:  10,
-		minRemaining:    MinRemaining, // начальное минимальное значение
-		smoothingFactor: 0.7,          // 70% старое значение + 30% новое
+		ProgressBar:    p,
+		lastValue:      -1,
+		speedHistory:   make([]float64, 0),
+		maxHistorySize: 10,
+		lastRemaining:  0,
 	}
 	if p == nil {
 		return
@@ -78,9 +72,6 @@ func (l *LongProgressWrapper) SetValue(value int64) {
 	if l.ProgressBar == nil {
 		return
 	}
-
-	l.mu.Lock()
-	defer l.mu.Unlock()
 
 	now := time.Now()
 	oldValue := l.lastValue
@@ -119,73 +110,8 @@ func (l *LongProgressWrapper) SetValue(value int64) {
 	}
 }
 
-// calculateRemainingTime вычисляет оставшееся время со сглаживанием
-func (l *LongProgressWrapper) calculateRemainingTime() time.Duration {
-	if l.lastValue <= 0 || l.ProgressBar.Max <= l.lastValue {
-		return 0
-	}
-
-	// Рассчитываем текущую скорость (скользящее среднее)
-	var currentSpeed float64
-	if len(l.speedHistory) > 0 {
-		var totalSpeed float64
-		for _, speed := range l.speedHistory {
-			totalSpeed += speed
-		}
-		currentSpeed = totalSpeed / float64(len(l.speedHistory))
-	} else if !l.startTime.IsZero() && time.Since(l.startTime).Seconds() > 0 {
-		currentSpeed = l.lastValue / time.Since(l.startTime).Seconds()
-	}
-
-	// Если скорость слишком мала или нулевая, возвращаем большое время
-	if currentSpeed <= 0 {
-		return 24 * time.Hour // Возвращаем большое значение
-	}
-
-	// Рассчитываем новое оставшееся время
-	remainingBytes := l.ProgressBar.Max - l.lastValue
-	newRemaining := time.Duration(remainingBytes/currentSpeed) * time.Second
-
-	// Гарантируем, что время не отрицательное
-	if newRemaining < 0 {
-		newRemaining = 0
-	}
-
-	// Применяем сглаживание (экспоненциальное скользящее среднее)
-	if l.remainingTime == 0 {
-		l.remainingTime = newRemaining
-	} else {
-		// EMA формула: EMA = α * new + (1-α) * old
-		alpha := 0.3 // коэффициент сглаживания (30% нового значения)
-		l.remainingTime = time.Duration(
-			alpha*float64(newRemaining) + (1-alpha)*float64(l.remainingTime),
-		)
-	}
-
-	// Гарантируем монотонное уменьшение
-	if l.remainingTime > l.minRemaining {
-		l.minRemaining = l.remainingTime
-	} else {
-		// Если новое время меньше минимального, уменьшаем минимальное,
-		// но не более чем на 10% за шаг
-		maxDecrease := l.minRemaining * 10 / 100
-		if l.minRemaining-l.remainingTime > maxDecrease {
-			l.remainingTime = l.minRemaining - maxDecrease
-		}
-		l.minRemaining = l.remainingTime
-	}
-
-	// Округляем до секунд
-	l.remainingTime = l.remainingTime.Round(time.Second)
-
-	return l.remainingTime
-}
-
 // State возвращает текущую статистику
 func (l *LongProgressWrapper) State() ProgressState {
-	l.mu.RLock()
-	defer l.mu.RUnlock()
-
 	state := ProgressState{
 		Value: int64(l.lastValue),
 		Max:   int64(l.ProgressBar.Max),
@@ -213,12 +139,13 @@ func (l *LongProgressWrapper) State() ProgressState {
 		state.SpeedKBps = state.SpeedBps / KB
 		state.SpeedMBps = state.SpeedKBps / KB
 
-		// Оставшееся время (используем сглаженное значение)
-		state.Remaining = l.calculateRemainingTime()
-
-		// Гарантируем, что оставшееся время не превышает разумных пределов
-		if state.Remaining > 24*time.Hour {
-			state.Remaining = 24 * time.Hour
+		// Оставшееся время
+		if state.SpeedBps > 0 && l.lastValue < l.ProgressBar.Max {
+			remainingBytes := l.ProgressBar.Max - l.lastValue
+			state.Remaining = time.Duration(remainingBytes/state.SpeedBps) * time.Second
+			if state.Remaining < 0 {
+				state.Remaining = 0
+			}
 		}
 	}
 
@@ -230,10 +157,6 @@ func (l *LongProgressWrapper) SetMax(max int64) {
 	if l.ProgressBar == nil {
 		return
 	}
-
-	l.mu.Lock()
-	defer l.mu.Unlock()
-
 	fyne.Do(l.ProgressBar.Show)
 	newMax := float64(max)
 
@@ -243,24 +166,17 @@ func (l *LongProgressWrapper) SetMax(max int64) {
 		if newMax < l.lastValue || l.lastValue == -1 {
 			l.lastValue = -1
 		}
-		// Сбрасываем расчет времени при изменении максимума
-		l.remainingTime = 0
-		l.minRemaining = MinRemaining
 	}
 }
 
 // Reset сбрасывает статистику
 func (l *LongProgressWrapper) Reset() {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-
 	l.startTime = time.Time{}
 	l.lastUpdateTime = time.Time{}
 	l.lastValue = -1
 	l.speedHistory = make([]float64, 0)
 	l.lastCall = time.Time{}
-	l.remainingTime = 0
-	l.minRemaining = MinRemaining
+	l.lastRemaining = 0
 
 	fyne.Do(func() {
 		l.ProgressBar.SetValue(0)
@@ -549,6 +465,14 @@ func copyToUWCProgress(destination fyne.URIWriteCloser, src string, c *fyne.Cont
 		_, err := io.Copy(pw, source)
 		clode()
 		close()
+		// if err == nil {
+		// 	if t, err := fileModTime(source.Name()); err == nil {
+		// 		log.Tracef("source ModTime %s %v:%v", source.Name(), t, err)
+		// 		setModTime(destination.URI(), t)
+		// 		t, err = ModTime(destination.URI())
+		// 		log.Tracef("destination ModTime %s %v:%v", destination.URI(), t, err)
+		// 	}
+		// }
 		restore()
 		onComplete(err)
 	}()
@@ -567,22 +491,27 @@ func fileModTime(filePath string) (time.Time, error) {
 func longFormatter(l *LongProgressWrapper) string {
 	w := l.ProgressBar
 	if w.Max < 1 || w.Max == w.Min {
-		// Защита
 		return ""
 	}
 
 	state := l.State()
-	units := []string{"B", "KB", "MB", "GB"}
+	units := []string{"B", "KB", "MB", "GB", "TB", "PB", "EB"}
 
 	// Оставшиеся байты
 	value := float64(w.Max - w.Value)
 	unitIndex := 0
-	for value >= KB && unitIndex < len(units)-1 {
+	for value >= KB {
 		value /= KB
 		unitIndex++
 	}
 
-	// Скорость
+	sizeStr := fmt.Sprintf("%03d%s", int(value), units[unitIndex])
+
+	// Если скорость близка к нулю или расчет нестабилен - только объем
+	if state.SpeedBps < 1 || len(l.speedHistory) < 2 {
+		return sizeStr
+	}
+	// Есть значимая скорость - добавляем время и скорость
 	speed := state.SpeedKBps
 	speedUnit := "KB/s"
 	if state.SpeedMBps >= 1 {
@@ -590,19 +519,31 @@ func longFormatter(l *LongProgressWrapper) string {
 		speedUnit = "MB/s"
 	}
 
-	// Форматируем оставшееся время с гарантией монотонности
+	// Монотонное время
 	remaining := state.Remaining
-
-	// Гарантируем, что время не прыгает назад
-	if remaining < MinRemaining {
-		remaining = MinRemaining
+	if remaining > l.lastRemaining && l.lastRemaining > 0 {
+		remaining = l.lastRemaining
+	}
+	if remaining < l.lastRemaining || l.lastRemaining == 0 {
+		l.lastRemaining = remaining
 	}
 
-	return fmt.Sprintf("%03d%s / %v %03d%s",
-		int(value), units[unitIndex],
-		remaining.Round(time.Second),
-		int(speed), speedUnit,
-	)
+	// Форматирование времени
+	var timeStr string
+	if remaining.Hours() >= 1 {
+		timeStr = fmt.Sprintf("%02dh", int(remaining.Hours()))
+	} else if remaining.Minutes() >= 1 {
+		timeStr = fmt.Sprintf("%02dm", int(remaining.Minutes()))
+	} else {
+		sec := int(remaining.Round(time.Second).Seconds())
+		if sec < 1 {
+			sec = 1
+		}
+		timeStr = fmt.Sprintf("%02ds", sec)
+	}
+
+	return fmt.Sprintf("%s / %s %03d%s",
+		sizeStr, timeStr, int(speed), speedUnit)
 }
 
 // w.Max<1 для каталогов и отсутствующих файлов
@@ -611,7 +552,7 @@ func shortFormatter(w *widget.ProgressBar) string {
 		// Для каталогов и отсутствующих файлов
 		return "\t"
 	}
-	units := []string{"b", "k", "m", "g", "t"}
+	units := []string{"b", "k", "m", "g", "t", "p", "e"}
 	value := w.Max
 	if w.Value < w.Max {
 		// Режим прогрессбара
@@ -620,7 +561,10 @@ func shortFormatter(w *widget.ProgressBar) string {
 	unitIndex := 0
 
 	// Переходим к следующей единице когда value >= 1000
-	for value >= KB && unitIndex < len(units)-1 {
+	for value >= KB &&
+		//Int64.MaxValue~009e
+		// unitIndex < len(units)-1 &&
+		true {
 		value /= KB
 		unitIndex++
 	}
