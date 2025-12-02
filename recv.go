@@ -79,8 +79,6 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 		}
 	}()
 
-	cosSH = append(cosSH, prog)
-
 	topline := widget.NewLabel(lp("Wait for them before pressing Download"))
 
 	entry := widget.NewEntryWithData(binding.BindPreferenceString("secret", a.Preferences()))
@@ -298,7 +296,7 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 
 		progFile := widget.NewProgressBar()
 		progFile.TextFormatter = func() string {
-			return textFormatter(progFile)
+			return shortFormatter(progFile)
 		}
 
 		newentry = container.NewHBox(
@@ -577,7 +575,6 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 
 		var filename string
 		showCancel()
-		allShow(true, cosSH...)
 		allEnabled(false, cosED...)
 
 		if totpCheck.Checked {
@@ -598,7 +595,6 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 				}
 				cdLock.Store(0)
 				fyne.Do(func() {
-					prog.SetValue(0)
 					allShow(false, cosSH...)
 					allEnabled(true, cosED...)
 					if totpCheck.Checked {
@@ -613,7 +609,7 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 			old := 0
 			oldPath := ""
 			var TotalSent, size, totalMax int64
-			progW := NewProgressWrapper(prog)
+			progW := NewLongProgressWrapper(prog)
 			toplineW := NewLabelWrapper(topline)
 
 			fepw := NewProgressWrapper(nil)

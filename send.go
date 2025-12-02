@@ -282,7 +282,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 
 		progFile := widget.NewProgressBar()
 		progFile.TextFormatter = func() string {
-			return textFormatter(progFile)
+			return shortFormatter(progFile)
 		}
 
 		newentry = container.NewHBox(
@@ -527,14 +527,19 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 			path := key.(string)
 			fe := value.(*fyne.Container)
 			label(fe, false, func(l *widget.Label) {
-				if strings.HasSuffix(l.Text, slash) || // каталоги
-					!strings.Contains(l.Text, slash) { // файлы в корне
-					if target, err := Readlink(path); err == nil {
-						path = target
-					}
-					filepaths = append(filepaths, path)
-				} else {
-					allowed = append(allowed, path)
+				processedPath := path
+				if target, err := Readlink(path); err == nil {
+					processedPath = target
+				}
+
+				// Логика для filepaths (каталоги и файлы в корне)
+				if strings.HasSuffix(l.Text, slash) || !strings.Contains(l.Text, slash) {
+					filepaths = append(filepaths, processedPath)
+				}
+
+				// Логика для allowed (все файлы, но не каталоги)
+				if !strings.HasSuffix(l.Text, slash) {
+					allowed = append(allowed, processedPath)
 				}
 			})
 
@@ -675,7 +680,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 					// Конец
 					ticker.Stop()
 					fyne.Do(func() {
-						prog.SetValue(0)
+						// prog.SetValue(0)
 						allShow(false, cosSH...)
 						allEnabled(true, cosED...)
 						if totpCheck.Checked {
@@ -689,7 +694,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 				old := 0
 				oldPath := ""
 				var TotalSent, size, totalMax int64
-				progW := NewProgressWrapper(prog)
+				progW := NewLongProgressWrapper(prog)
 				toplineW := NewLabelWrapper(topline)
 				toplineW.SetText(lp("Have them not press the Download yet"))
 				fepw := NewProgressWrapper(nil)
@@ -726,11 +731,6 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 						if once && hashed(client) {
 							// Начало передачи
 							once = false
-							fyne.Do(func() {
-								toplineW.SetText(lp("Have them press the Download now"))
-								NewToast(w, lp("Have them press the Download now")).Show()
-								prog.Show()
-							})
 							for _, fi := range client.FilesToTransfer {
 								log.Tracef("fi %+v", fi)
 								path := filepath.Join(fi.FolderSource, fi.Name)
@@ -755,8 +755,12 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 
 								totalMax += fi.Size
 							}
-							progW.SetMax(totalMax)
 							log.Tracef("totalMax %d", totalMax)
+							fyne.Do(func() {
+								toplineW.SetText(lp("Have them press the Download now"))
+								NewToast(w, lp("Have them press the Download now")).Show()
+								progW.SetMax(totalMax)
+							})
 						}
 						if client.Step2FileInfoTransferred {
 							cnum := client.FilesToTransferCurrentNum
