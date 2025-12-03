@@ -1250,7 +1250,7 @@ func ShowFileOpen(callback func(fyne.URIReadCloser, error), parent fyne.Window) 
 	}
 	fd := dialog.NewFileOpen(callback, parent)
 	fd.Resize(parent.Canvas().Size())
-	fd.SetLocation(lastLU)
+	// fd.SetLocation(lastLU)
 	fd.Show()
 }
 
@@ -1568,7 +1568,7 @@ func selected(uid widget.TreeNodeID, cb func(err error)) {
 		cb(nil)
 		return
 	}
-	cb(fmt.Errorf("default"))
+	cb(fmt.Errorf(DEFAULT))
 }
 
 func linkByTarget(target string, join func(elem ...string) string) (link string, err error) {

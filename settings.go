@@ -1,3 +1,4 @@
+// settings.go
 package main
 
 import (
@@ -44,7 +45,7 @@ func settingsTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 	themeSelect.SetSelected(currentTheme)
 
 	// Get list of embedded fonts
-	fontSelections := []string{"default"}
+	fontSelections := []string{DEFAULT}
 	fontEntries, _ := fsFonts.ReadDir("internal/fonts")
 	for _, fe := range fontEntries {
 		// FiraCode-Regular.ttf -> FiraCode
@@ -100,6 +101,12 @@ func settingsTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 		s += " / " + lp("UnZip files")
 	}
 
+	// Настройки посредников
+	relayAddressBinding := binding.BindPreferenceString("relay-address", a.Preferences())
+	relayPortsBinding := binding.BindPreferenceString("relay-ports", a.Preferences())
+	relayPasswordBinding := binding.BindPreferenceString("relay-password", a.Preferences())
+	relayControls := createRelaySelector(a, w, relayAddressBinding, relayPortsBinding, relayPasswordBinding)
+
 	return container.NewTabItemWithIcon(ZeroWidthNonJoiner, theme.SettingsIcon(), container.NewVScroll(container.NewVBox( //lp("Settings")
 		widget.NewLabelWithStyle(lp("Appearance"), fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
 		widget.NewForm(
@@ -111,15 +118,16 @@ func settingsTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 		widget.NewSeparator(),
 		widget.NewLabelWithStyle(lp("Relay"), fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
 		widget.NewForm(
-			widget.NewFormItem(lp("Address"), widget.NewEntryWithData(binding.BindPreferenceString("relay-address", a.Preferences()))),
-			widget.NewFormItem(lp("Ports"), widget.NewEntryWithData(binding.BindPreferenceString("relay-ports", a.Preferences()))),
-			widget.NewFormItem(lp("Password"), widget.NewEntryWithData(binding.BindPreferenceString("relay-password", a.Preferences()))),
+			widget.NewFormItem(lp("Name"), relayControls),
+			widget.NewFormItem(lp("Address"), widget.NewEntryWithData(relayAddressBinding)),
+			widget.NewFormItem(lp("Ports"), widget.NewEntryWithData(relayPortsBinding)),
+			widget.NewFormItem(lp("Password"), widget.NewEntryWithData(relayPasswordBinding)),
 		),
 		widget.NewSeparator(),
 		widget.NewLabelWithStyle(lp("Network Local"), fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
 		widget.NewForm(
-			widget.NewFormItem("", widget.NewCheckWithData(lp("Disable Local"), binding.BindPreferenceBool("disable-local", a.Preferences()))),
-			widget.NewFormItem("", widget.NewCheckWithData(lp("Force Local Only"), binding.BindPreferenceBool("force-local", a.Preferences()))),
+			widget.NewFormItem(lp("Disable Local"), widget.NewCheckWithData("", binding.BindPreferenceBool("disable-local", a.Preferences()))),
+			widget.NewFormItem(lp("Force Local Only"), widget.NewCheckWithData("", binding.BindPreferenceBool("force-local", a.Preferences()))),
 			widget.NewFormItem(lp("Multicast Address"), widget.NewEntryWithData(binding.BindPreferenceString("multicast-address", a.Preferences()))),
 		),
 		widget.NewSeparator(),
@@ -127,9 +135,9 @@ func settingsTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 		widget.NewForm(
 			widget.NewFormItem(lp("PAKE Curve"), curveSelect),
 			widget.NewFormItem(lp("Hash Algorithm"), hashSelect),
-			widget.NewFormItem("", widget.NewCheckWithData(lp("Disable Multiplexing"), binding.BindPreferenceBool("disable-multiplexing", a.Preferences()))),
-			widget.NewFormItem("", widget.NewCheckWithData(lp("Disable Compression"), binding.BindPreferenceBool("disable-compression", a.Preferences()))),
-			widget.NewFormItem("", widget.NewCheckWithData(s, binding.BindPreferenceBool("zip-unzip", a.Preferences()))),
+			widget.NewFormItem(lp("Disable Multiplexing"), widget.NewCheckWithData("", binding.BindPreferenceBool("disable-multiplexing", a.Preferences()))),
+			widget.NewFormItem(lp("Disable Compression"), widget.NewCheckWithData("", binding.BindPreferenceBool("disable-compression", a.Preferences()))),
+			widget.NewFormItem(s, widget.NewCheckWithData("", binding.BindPreferenceBool("zip-unzip", a.Preferences()))),
 			widget.NewFormItem(lp("Upload Speed Throttle"), widget.NewEntryWithData(binding.BindPreferenceString("upload-throttle", a.Preferences()))),
 		),
 	)))

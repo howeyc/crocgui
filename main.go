@@ -49,12 +49,12 @@ var (
 	tempDir                string
 	ready                  func() bool
 	join                   func(...string) string
-	lastLU                 fyne.ListableURI
-	slash                  = string(filepath.Separator)
-	ErrNilURI              = errors.New("uri is nil")
-	crocRemovalFile        = "croc-marked-files.txt"
-	ftw                    fyne.Window
-	size                   = fyne.NewSize(370, 740)
+	// lastLU                 fyne.ListableURI
+	slash           = string(filepath.Separator)
+	ErrNilURI       = errors.New("uri is nil")
+	crocRemovalFile = "croc-marked-files.txt"
+	ftw             fyne.Window
+	size            = fyne.NewSize(370, 740)
 
 	// Чтоб на десктопе отладить как будто это мобильная ОС
 	// cmd/c "set CROC_AS_MOBILE=1&crocgui.exe"
@@ -94,6 +94,8 @@ const (
 	MIME_TYPE_DIR          = "vnd.android.document/directory"
 	MIME_TYPE_OCTET_STREAM = "application/octet-stream"
 	ID                     = "com.github.howeyc.crocgui"
+	LastFolder             = "fyne:fileDialogLastFolder"
+	DEFAULT                = "default"
 )
 
 const (
@@ -164,7 +166,7 @@ func main() {
 	a.Preferences().SetBool("disable-multiplexing", a.Preferences().BoolWithFallback("disable-multiplexing", false))
 	a.Preferences().SetBool("disable-compression", a.Preferences().BoolWithFallback("disable-compression", false))
 	a.Preferences().SetString("theme", a.Preferences().StringWithFallback("theme", "system"))
-	a.Preferences().SetString("font", a.Preferences().StringWithFallback("font", "default"))
+	a.Preferences().SetString("font", a.Preferences().StringWithFallback("font", DEFAULT))
 	a.Preferences().SetString("debug-level", a.Preferences().StringWithFallback("debug-level", "error"))
 	a.Preferences().SetString("pake-curve", a.Preferences().StringWithFallback("pake-curve", "p256"))
 	a.Preferences().SetString("croc-hash", a.Preferences().StringWithFallback("croc-hash", "xxhash"))
@@ -173,11 +175,17 @@ func main() {
 
 	a.Preferences().SetBool("totp-send", a.Preferences().BoolWithFallback("totp-send", false))
 	a.Preferences().SetBool("totp-recv", a.Preferences().BoolWithFallback("totp-recv", false))
-	a.Preferences().SetBool("zip-unzip", a.Preferences().BoolWithFallback("zip-unzip", true))
+	a.Preferences().SetBool("zip-unzip", a.Preferences().BoolWithFallback("zip-unzip", false))
+	if a.Preferences().String(relaysKey) == "" {
+		if relays, err := getRelays(a); err == nil {
+			saveRelays(a, relays)
+		}
+		a.Preferences().SetString(relayKey, DEFAULT)
+	}
 
 	appTheme.color = theme.DefaultTheme()
 	appTheme.size = theme.DefaultTheme()
-	appTheme.fontName = "default"
+	appTheme.fontName = DEFAULT
 	appTheme.icon = theme.DefaultTheme()
 
 	langCode = a.Preferences().String("lang")
@@ -211,9 +219,11 @@ func refreshWindow(a fyne.App, w fyne.Window) {
 		aboutTabItem(a, w),
 	}
 
+	log.Tracef("SelectIndex %d", atSI)
 	at.SelectIndex(atSI)
 	at.OnSelected = func(tab *container.TabItem) {
 		atSI = at.SelectedIndex()
+		log.Tracef("OnSelected %d", atSI)
 		if f, ok := OnSelectedReload[atSI]; ok && f != nil {
 			f()
 		}

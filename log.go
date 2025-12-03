@@ -278,7 +278,7 @@ func logTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 		savedialog := dialog.NewFileSave(fileSave, w)
 		savedialog.SetFileName(child)
 		savedialog.Resize(w.Canvas().Size())
-		savedialog.SetLocation(lastLU)
+		// savedialog.SetLocation(lastLU)
 		notFinish = true
 		savedialog.Show()
 	})

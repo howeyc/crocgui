@@ -469,7 +469,7 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 		savedialog := dialog.NewFileSave(fileSave, parent)
 		savedialog.SetFileName(child)
 		savedialog.Resize(parent.Canvas().Size())
-		savedialog.SetLocation(lastLU)
+		// savedialog.SetLocation(lastLU)
 		notFinish = true
 		savedialog.Show()
 	} //ShowFileSave
@@ -796,7 +796,7 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 			}
 
 			if lu != nil {
-				lastLU = lu
+				// lastLU = lu
 				u, cl, err = Child(lu, child)
 				if err != nil {
 					log.Errorf("%s/%s: %v", lu, child, err)
@@ -807,7 +807,8 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 				if p, err := storage.Parent(u); err == nil {
 					lu, err = storage.ListerForURI(p)
 					if err != nil {
-						lastLU = lu
+						// lastLU = lu
+						a.Preferences().SetString(LastFolder, lu.String())
 					}
 				}
 			}
@@ -1021,6 +1022,6 @@ func ShowFolderOpen(callback func(fyne.ListableURI, error), parent fyne.Window) 
 	}
 	fd := dialog.NewFolderOpen(callback, parent)
 	fd.Resize(parent.Canvas().Size())
-	fd.SetLocation(lastLU)
+	// fd.SetLocation(lastLU)
 	fd.Show()
 }
