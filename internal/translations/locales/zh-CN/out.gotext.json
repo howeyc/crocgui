@@ -22,6 +22,11 @@
             "translation": "启用调试日志"
         },
         {
+            "id": "Cancel",
+            "message": "Cancel",
+            "translation": "取消"
+        },
+        {
             "id": "Wait for them before pressing Download",
             "message": "Wait for them before pressing Download",
             "translation": "在按\"下载\"之前等待他们"
@@ -35,6 +40,11 @@
             "id": "Secret must be longer than 5 characters",
             "message": "Secret must be longer than 5 characters",
             "translation": "密码必须长于5个字符"
+        },
+        {
+            "id": "Send",
+            "message": "Send",
+            "translation": "发送"
         },
         {
             "id": "Receive cancelled.",
@@ -57,29 +67,29 @@
             "translation": "已接收"
         },
         {
-            "id": "Cancel",
-            "message": "Cancel",
-            "translation": "取消"
-        },
-        {
-            "id": "Receive Code",
-            "message": "Receive Code",
-            "translation": "接收码"
-        },
-        {
             "id": "Receive",
             "message": "Receive",
             "translation": "接收"
         },
         {
+            "id": "Name already exists",
+            "message": "Name already exists",
+            "translation": "名称已存在"
+        },
+        {
+            "id": "Empty name",
+            "message": "Empty name",
+            "translation": "名称为空"
+        },
+        {
+            "id": "Last item of list",
+            "message": "Last item of list",
+            "translation": "列表最后一项"
+        },
+        {
             "id": "Pick a file to send",
             "message": "Pick a file to send",
             "translation": "选择要发送的文件"
-        },
-        {
-            "id": "Send",
-            "message": "Send",
-            "translation": "发送"
         },
         {
             "id": "Have them not press the Download yet",
@@ -100,11 +110,6 @@
             "id": "Sent file",
             "message": "Sent file",
             "translation": "已发送文件"
-        },
-        {
-            "id": "Send Code",
-            "message": "Send Code",
-            "translation": "发送码"
         },
         {
             "id": "Show / Hide",
@@ -150,6 +155,11 @@
             "id": "Relay",
             "message": "Relay",
             "translation": "中继"
+        },
+        {
+            "id": "Name",
+            "message": "Name",
+            "translation": "名称"
         },
         {
             "id": "Address",
@@ -215,6 +225,36 @@
             "id": "Upload Speed Throttle",
             "message": "Upload Speed Throttle",
             "translation": "上传速度限制"
+        },
+        {
+            "id": "{Value}",
+            "message": "{Value}",
+            "translation": "",
+            "placeholders": [
+                {
+                    "id": "Value",
+                    "string": "%[1]f",
+                    "type": "float64",
+                    "underlyingType": "float64",
+                    "argNum": 1,
+                    "expr": "value"
+                }
+            ]
+        },
+        {
+            "id": "\u0026d",
+            "message": "\u0026d",
+            "translation": "",
+            "placeholders": [
+                {
+                    "id": "Intvalue",
+                    "string": "%[1]v",
+                    "type": "int",
+                    "underlyingType": "int",
+                    "argNum": 1,
+                    "expr": "int(value)"
+                }
+            ]
         }
     ]
 }

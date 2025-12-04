@@ -30,6 +30,13 @@
             "fuzzy": true
         },
         {
+            "id": "Cancel",
+            "message": "Cancel",
+            "translation": "Cancel",
+            "translatorComment": "Copied from source.",
+            "fuzzy": true
+        },
+        {
             "id": "Wait for them before pressing Download",
             "message": "Wait for them before pressing Download",
             "translation": "Wait for them before pressing Download",
@@ -47,6 +54,13 @@
             "id": "Secret must be longer than 5 characters",
             "message": "Secret must be longer than 5 characters",
             "translation": "Secret must be longer than 5 characters",
+            "translatorComment": "Copied from source.",
+            "fuzzy": true
+        },
+        {
+            "id": "Send",
+            "message": "Send",
+            "translation": "Send",
             "translatorComment": "Copied from source.",
             "fuzzy": true
         },
@@ -79,20 +93,6 @@
             "fuzzy": true
         },
         {
-            "id": "Cancel",
-            "message": "Cancel",
-            "translation": "Cancel",
-            "translatorComment": "Copied from source.",
-            "fuzzy": true
-        },
-        {
-            "id": "Receive Code",
-            "message": "Receive Code",
-            "translation": "Receive Code",
-            "translatorComment": "Copied from source.",
-            "fuzzy": true
-        },
-        {
             "id": "Receive",
             "message": "Receive",
             "translation": "Receive",
@@ -100,16 +100,30 @@
             "fuzzy": true
         },
         {
-            "id": "Pick a file to send",
-            "message": "Pick a file to send",
-            "translation": "Pick a file to send",
+            "id": "Name already exists",
+            "message": "Name already exists",
+            "translation": "Name already exists",
             "translatorComment": "Copied from source.",
             "fuzzy": true
         },
         {
-            "id": "Send",
-            "message": "Send",
-            "translation": "Send",
+            "id": "Empty name",
+            "message": "Empty name",
+            "translation": "Empty name",
+            "translatorComment": "Copied from source.",
+            "fuzzy": true
+        },
+        {
+            "id": "Last item of list",
+            "message": "Last item of list",
+            "translation": "Last item of list",
+            "translatorComment": "Copied from source.",
+            "fuzzy": true
+        },
+        {
+            "id": "Pick a file to send",
+            "message": "Pick a file to send",
+            "translation": "Pick a file to send",
             "translatorComment": "Copied from source.",
             "fuzzy": true
         },
@@ -138,13 +152,6 @@
             "id": "Sent file",
             "message": "Sent file",
             "translation": "Sent file",
-            "translatorComment": "Copied from source.",
-            "fuzzy": true
-        },
-        {
-            "id": "Send Code",
-            "message": "Send Code",
-            "translation": "Send Code",
             "translatorComment": "Copied from source.",
             "fuzzy": true
         },
@@ -208,6 +215,13 @@
             "id": "Relay",
             "message": "Relay",
             "translation": "Relay",
+            "translatorComment": "Copied from source.",
+            "fuzzy": true
+        },
+        {
+            "id": "Name",
+            "message": "Name",
+            "translation": "Name",
             "translatorComment": "Copied from source.",
             "fuzzy": true
         },
@@ -300,6 +314,40 @@
             "message": "Upload Speed Throttle",
             "translation": "Upload Speed Throttle",
             "translatorComment": "Copied from source.",
+            "fuzzy": true
+        },
+        {
+            "id": "{Value}",
+            "message": "{Value}",
+            "translation": "{Value}",
+            "translatorComment": "Copied from source.",
+            "placeholders": [
+                {
+                    "id": "Value",
+                    "string": "%[1]f",
+                    "type": "float64",
+                    "underlyingType": "float64",
+                    "argNum": 1,
+                    "expr": "value"
+                }
+            ],
+            "fuzzy": true
+        },
+        {
+            "id": "\u0026d",
+            "message": "\u0026d",
+            "translation": "\u0026d",
+            "translatorComment": "Copied from source.",
+            "placeholders": [
+                {
+                    "id": "Intvalue",
+                    "string": "%[1]v",
+                    "type": "int",
+                    "underlyingType": "int",
+                    "argNum": 1,
+                    "expr": "int(value)"
+                }
+            ],
             "fuzzy": true
         }
     ]

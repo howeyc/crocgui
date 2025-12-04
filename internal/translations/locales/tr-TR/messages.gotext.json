@@ -22,6 +22,11 @@
             "translation": "Hata Ayıklama Günlüğünü Etkinleştir"
         },
         {
+            "id": "Cancel",
+            "message": "Cancel",
+            "translation": "İptal"
+        },
+        {
             "id": "Wait for them before pressing Download",
             "message": "Wait for them before pressing Download",
             "translation": "İndir'e basmadan önce onları bekleyin"
@@ -35,6 +40,11 @@
             "id": "Secret must be longer than 5 characters",
             "message": "Secret must be longer than 5 characters",
             "translation": "Gizli anahtar 5 karakterden uzun olmalıdır"
+        },
+        {
+            "id": "Send",
+            "message": "Send",
+            "translation": "Gönder"
         },
         {
             "id": "Receive cancelled.",
@@ -57,29 +67,29 @@
             "translation": "Alındı"
         },
         {
-            "id": "Cancel",
-            "message": "Cancel",
-            "translation": "İptal"
-        },
-        {
-            "id": "Receive Code",
-            "message": "Receive Code",
-            "translation": "Kod Al"
-        },
-        {
             "id": "Receive",
             "message": "Receive",
             "translation": "Al"
         },
         {
+            "id": "Name already exists",
+            "message": "Name already exists",
+            "translation": "İsim zaten mevcut"
+        },
+        {
+            "id": "Empty name",
+            "message": "Empty name",
+            "translation": "İsim boş"
+        },
+        {
+            "id": "Last item of list",
+            "message": "Last item of list",
+            "translation": "Listenin son öğesi"
+        },
+        {
             "id": "Pick a file to send",
             "message": "Pick a file to send",
             "translation": "Gönderilecek dosyayı seçin"
-        },
-        {
-            "id": "Send",
-            "message": "Send",
-            "translation": "Gönder"
         },
         {
             "id": "Have them not press the Download yet",
@@ -100,11 +110,6 @@
             "id": "Sent file",
             "message": "Sent file",
             "translation": "Dosya gönderildi"
-        },
-        {
-            "id": "Send Code",
-            "message": "Send Code",
-            "translation": "Kod Gönder"
         },
         {
             "id": "Show / Hide",
@@ -150,6 +155,11 @@
             "id": "Relay",
             "message": "Relay",
             "translation": "Röle"
+        },
+        {
+            "id": "Name",
+            "message": "Name",
+            "translation": "İsim"
         },
         {
             "id": "Address",
@@ -215,6 +225,36 @@
             "id": "Upload Speed Throttle",
             "message": "Upload Speed Throttle",
             "translation": "Yükleme Hızını Sınırla"
+        },
+        {
+            "id": "{Value}",
+            "message": "{Value}",
+            "translation": "",
+            "placeholders": [
+                {
+                    "id": "Value",
+                    "string": "%[1]f",
+                    "type": "float64",
+                    "underlyingType": "float64",
+                    "argNum": 1,
+                    "expr": "value"
+                }
+            ]
+        },
+        {
+            "id": "\u0026d",
+            "message": "\u0026d",
+            "translation": "",
+            "placeholders": [
+                {
+                    "id": "Intvalue",
+                    "string": "%[1]v",
+                    "type": "int",
+                    "underlyingType": "int",
+                    "argNum": 1,
+                    "expr": "int(value)"
+                }
+            ]
         }
     ]
 }

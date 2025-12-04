@@ -22,6 +22,11 @@
             "translation": "デバッグログを有効化"
         },
         {
+            "id": "Cancel",
+            "message": "Cancel",
+            "translation": "キャンセル"
+        },
+        {
             "id": "Wait for them before pressing Download",
             "message": "Wait for them before pressing Download",
             "translation": "「ダウンロード」を押す前に待ってください"
@@ -35,6 +40,11 @@
             "id": "Secret must be longer than 5 characters",
             "message": "Secret must be longer than 5 characters",
             "translation": "シークレットは5文字以上である必要があります"
+        },
+        {
+            "id": "Send",
+            "message": "Send",
+            "translation": "送信"
         },
         {
             "id": "Receive cancelled.",
@@ -57,29 +67,29 @@
             "translation": "受信しました"
         },
         {
-            "id": "Cancel",
-            "message": "Cancel",
-            "translation": "キャンセル"
-        },
-        {
-            "id": "Receive Code",
-            "message": "Receive Code",
-            "translation": "受信コード"
-        },
-        {
             "id": "Receive",
             "message": "Receive",
             "translation": "受信"
         },
         {
+            "id": "Name already exists",
+            "message": "Name already exists",
+            "translation": "名前がすでに存在します"
+        },
+        {
+            "id": "Empty name",
+            "message": "Empty name",
+            "translation": "名前が空です"
+        },
+        {
+            "id": "Last item of list",
+            "message": "Last item of list",
+            "translation": "リストの最後の項目"
+        },
+        {
             "id": "Pick a file to send",
             "message": "Pick a file to send",
             "translation": "ファイルを選択して送信"
-        },
-        {
-            "id": "Send",
-            "message": "Send",
-            "translation": "送信"
         },
         {
             "id": "Have them not press the Download yet",
@@ -100,11 +110,6 @@
             "id": "Sent file",
             "message": "Sent file",
             "translation": "ファイルを送信しました"
-        },
-        {
-            "id": "Send Code",
-            "message": "Send Code",
-            "translation": "送信コード"
         },
         {
             "id": "Show / Hide",
@@ -150,6 +155,11 @@
             "id": "Relay",
             "message": "Relay",
             "translation": "リレー"
+        },
+        {
+            "id": "Name",
+            "message": "Name",
+            "translation": "名前"
         },
         {
             "id": "Address",
@@ -215,6 +225,36 @@
             "id": "Upload Speed Throttle",
             "message": "Upload Speed Throttle",
             "translation": "アップロード速度の制限"
+        },
+        {
+            "id": "{Value}",
+            "message": "{Value}",
+            "translation": "",
+            "placeholders": [
+                {
+                    "id": "Value",
+                    "string": "%[1]f",
+                    "type": "float64",
+                    "underlyingType": "float64",
+                    "argNum": 1,
+                    "expr": "value"
+                }
+            ]
+        },
+        {
+            "id": "\u0026d",
+            "message": "\u0026d",
+            "translation": "",
+            "placeholders": [
+                {
+                    "id": "Intvalue",
+                    "string": "%[1]v",
+                    "type": "int",
+                    "underlyingType": "int",
+                    "argNum": 1,
+                    "expr": "int(value)"
+                }
+            ]
         }
     ]
 }

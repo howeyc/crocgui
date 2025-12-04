@@ -22,6 +22,11 @@
             "translation": "Журналировать"
         },
         {
+            "id": "Cancel",
+            "message": "Cancel",
+            "translation": "Отменить"
+        },
+        {
             "id": "Wait for them before pressing Download",
             "message": "Wait for them before pressing Download",
             "translation": "Ждите прежде чем нажать Получить"
@@ -35,6 +40,11 @@
             "id": "Secret must be longer than 5 characters",
             "message": "Secret must be longer than 5 characters",
             "translation": "Секрет должен быть длиннее 5 символов"
+        },
+        {
+            "id": "Send",
+            "message": "Send",
+            "translation": "Дать"
         },
         {
             "id": "Receive cancelled.",
@@ -57,29 +67,29 @@
             "translation": "Получил"
         },
         {
-            "id": "Cancel",
-            "message": "Cancel",
-            "translation": "Отменить"
-        },
-        {
-            "id": "Receive Code",
-            "message": "Receive Code",
-            "translation": "Секрет"
-        },
-        {
             "id": "Receive",
             "message": "Receive",
             "translation": "Взять"
         },
         {
+            "id": "Name already exists",
+            "message": "Name already exists",
+            "translation": "Имя уже существует"
+        },
+        {
+            "id": "Empty name",
+            "message": "Empty name",
+            "translation": "Пустое имя"
+        },
+        {
+            "id": "Last item of list",
+            "message": "Last item of list",
+            "translation": "Последний элемент списка"
+        },
+        {
             "id": "Pick a file to send",
             "message": "Pick a file to send",
             "translation": "Что послать"
-        },
-        {
-            "id": "Send",
-            "message": "Send",
-            "translation": "Дать"
         },
         {
             "id": "Have them not press the Download yet",
@@ -100,11 +110,6 @@
             "id": "Sent file",
             "message": "Sent file",
             "translation": "Послал"
-        },
-        {
-            "id": "Send Code",
-            "message": "Send Code",
-            "translation": "Секрет"
         },
         {
             "id": "Show / Hide",
@@ -150,6 +155,11 @@
             "id": "Relay",
             "message": "Relay",
             "translation": "Посредник"
+        },
+        {
+            "id": "Name",
+            "message": "Name",
+            "translation": "Имя"
         },
         {
             "id": "Address",
@@ -215,6 +225,36 @@
             "id": "Upload Speed Throttle",
             "message": "Upload Speed Throttle",
             "translation": "Медлить"
+        },
+        {
+            "id": "{Value}",
+            "message": "{Value}",
+            "translation": "",
+            "placeholders": [
+                {
+                    "id": "Value",
+                    "string": "%[1]f",
+                    "type": "float64",
+                    "underlyingType": "float64",
+                    "argNum": 1,
+                    "expr": "value"
+                }
+            ]
+        },
+        {
+            "id": "\u0026d",
+            "message": "\u0026d",
+            "translation": "",
+            "placeholders": [
+                {
+                    "id": "Intvalue",
+                    "string": "%[1]v",
+                    "type": "int",
+                    "underlyingType": "int",
+                    "argNum": 1,
+                    "expr": "int(value)"
+                }
+            ]
         }
     ]
 }
