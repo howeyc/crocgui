@@ -217,11 +217,9 @@ func refreshWindow(a fyne.App, w fyne.Window) {
 		aboutTabItem(a, w),
 	}
 
-	log.Tracef("SelectIndex %d", atSI)
 	at.SelectIndex(atSI)
 	at.OnSelected = func(tab *container.TabItem) {
 		atSI = at.SelectedIndex()
-		log.Tracef("OnSelected %d", atSI)
 		if f, ok := OnSelectedReload[atSI]; ok && f != nil {
 			f()
 		}

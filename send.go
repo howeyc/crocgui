@@ -957,7 +957,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 			processIntent()
 		})
 	} else {
-		if len(os.Args) > 0 {
+		if len(os.Args) > 1 {
 			go func() {
 				var wga sync.WaitGroup
 				for _, src := range os.Args[1:] {
