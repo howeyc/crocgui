@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strconv"
+	"strings"
 	"time"
 
 	"fyne.io/fyne/v2"
@@ -505,7 +507,8 @@ func longFormatter(l *LongProgressWrapper) string {
 		unitIndex++
 	}
 
-	sizeStr := fmt.Sprintf("%03d%s", int(value), units[unitIndex])
+	// sizeStr := fmt.Sprintf("%03d%s", int(value), units[unitIndex])
+	sizeStr := pad(3, int(value)) + units[unitIndex]
 
 	// Если скорость близка к нулю или расчет нестабилен - только объем
 	if state.SpeedBps < 1 || len(l.speedHistory) < 2 {
@@ -531,19 +534,23 @@ func longFormatter(l *LongProgressWrapper) string {
 	// Форматирование времени
 	var timeStr string
 	if remaining.Hours() >= 1 {
-		timeStr = fmt.Sprintf("%02dh", int(remaining.Hours()))
+		// timeStr = fmt.Sprintf("%02dh", int(remaining.Hours()))
+		timeStr = pad(2, int(remaining.Hours())) + "h"
 	} else if remaining.Minutes() >= 1 {
-		timeStr = fmt.Sprintf("%02dm", int(remaining.Minutes()))
+		// timeStr = fmt.Sprintf("%02dm", int(remaining.Minutes()))
+		timeStr = pad(2, int(remaining.Minutes())) + "m"
 	} else {
 		sec := int(remaining.Round(time.Second).Seconds())
 		if sec < 1 {
 			sec = 1
 		}
-		timeStr = fmt.Sprintf("%02ds", sec)
+		// timeStr = fmt.Sprintf("%02ds", sec)
+		timeStr = pad(2, sec) + "s"
 	}
 
-	return fmt.Sprintf("%s / %s %03d%s",
-		sizeStr, timeStr, int(speed), speedUnit)
+	// return fmt.Sprintf("%s / %s %03d%s",
+	// 	sizeStr, timeStr, int(speed), speedUnit)
+	return sizeStr + " / " + timeStr + " " + pad(3, int(speed)) + speedUnit
 }
 
 // w.Max<1 для каталогов и отсутствующих файлов
@@ -569,5 +576,21 @@ func shortFormatter(w *widget.ProgressBar) string {
 		unitIndex++
 	}
 
-	return fmt.Sprintf("%03d%s\t", int(value), units[unitIndex])
+	// return fmt.Sprintf("%03d%s\t", int(value), units[unitIndex])
+	return pad(3, int(value)) + units[unitIndex] + "\t"
+}
+
+func pad(n, i int) string {
+	// Конвертируем число в строку
+	s := strconv.Itoa(i)
+
+	// Если строка короче требуемой длины, добавляем нули
+	if len(s) < n {
+		// Используем strings.Repeat для создания строки из нулей
+		zeros := strings.Repeat("0", n-len(s))
+		return zeros + s
+	}
+
+	// Если строка уже нужной длины или длиннее, возвращаем как есть
+	return s
 }

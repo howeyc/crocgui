@@ -177,10 +177,8 @@ func main() {
 	a.Preferences().SetBool("totp-recv", a.Preferences().BoolWithFallback("totp-recv", false))
 	a.Preferences().SetBool("zip-unzip", a.Preferences().BoolWithFallback("zip-unzip", false))
 	if a.Preferences().String(relaysKey) == "" {
-		if relays, err := getRelays(a); err == nil {
-			saveRelays(a, relays)
-		}
-		a.Preferences().SetString(relayKey, DEFAULT)
+		saveRelays(a, getRelays(a))
+		setRelayName(a, DEFAULT)
 	}
 
 	appTheme.color = theme.DefaultTheme()
