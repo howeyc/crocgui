@@ -4,257 +4,272 @@
         {
             "id": "License Info",
             "message": "License Info",
-            "translation": "許可證資訊"
+            "translation": "許可證資訊",
+            "position": "crocgui/about.go:68:38"
         },
         {
             "id": "Export full log",
             "message": "Export full log",
-            "translation": "匯出完整記錄"
+            "translation": "匯出完整記錄",
+            "position": "crocgui/log.go:219:45"
         },
         {
             "id": "Saved all files to",
             "message": "Saved all files to",
-            "translation": "所有檔案已儲存至"
+            "translation": "所有檔案已儲存至",
+            "position": "crocgui/log.go:272:7"
         },
         {
             "id": "Enable Debug Log",
             "message": "Enable Debug Log",
-            "translation": "啟用偵錯記錄"
+            "translation": "啟用偵錯記錄",
+            "position": "crocgui/log.go:288:34"
         },
         {
             "id": "Cancel",
             "message": "Cancel",
-            "translation": "取消"
+            "translation": "取消",
+            "position": "crocgui/recv.go:63:44"
         },
         {
             "id": "Wait for them before pressing Download",
             "message": "Wait for them before pressing Download",
-            "translation": "在按\"下載\"之前等待他們"
+            "translation": "在按\"下載\"之前等待他們",
+            "position": "crocgui/recv.go:82:31"
         },
         {
             "id": "Download",
             "message": "Download",
-            "translation": "下載"
+            "translation": "下載",
+            "position": "crocgui/recv.go:527:42"
         },
         {
             "id": "Secret must be longer than 5 characters",
             "message": "Secret must be longer than 5 characters",
-            "translation": "密碼必須長於5個字符"
+            "translation": "密碼必須長於5個字符",
+            "position": "crocgui/recv.go:530:18"
         },
         {
             "id": "Send",
             "message": "Send",
-            "translation": "傳送"
+            "translation": "傳送",
+            "position": "crocgui/recv.go:535:35"
         },
         {
             "id": "Receive cancelled.",
             "message": "Receive cancelled.",
-            "translation": "接收已取消。"
+            "translation": "接收已取消。",
+            "position": "crocgui/recv.go:625:34"
         },
         {
             "id": "Receiving file",
             "message": "Receiving file",
-            "translation": "正在接收檔案"
+            "translation": "正在接收檔案",
+            "position": "crocgui/recv.go:644:27"
         },
         {
             "id": "Send cancelled.",
             "message": "Send cancelled.",
-            "translation": "傳送已取消。"
+            "translation": "傳送已取消。",
+            "position": "crocgui/recv.go:718:32"
         },
         {
             "id": "Received",
             "message": "Received",
-            "translation": "已接收"
+            "translation": "已接收",
+            "position": "crocgui/recv.go:726:46"
         },
         {
             "id": "Receive",
             "message": "Receive",
-            "translation": "接收"
+            "translation": "接收",
+            "position": "crocgui/recv.go:1003:38"
         },
         {
             "id": "Name already exists",
             "message": "Name already exists",
-            "translation": "名稱已存在"
+            "translation": "名稱已存在",
+            "position": "crocgui/relays.go:155:11"
         },
         {
             "id": "Empty name",
             "message": "Empty name",
-            "translation": "名稱為空"
+            "translation": "名稱為空",
+            "position": "crocgui/relays.go:166:18"
         },
         {
             "id": "Last item of list",
             "message": "Last item of list",
-            "translation": "列表最後一項"
+            "translation": "列表最後一項",
+            "position": "crocgui/relays.go:225:18"
         },
         {
             "id": "Pick a file to send",
             "message": "Pick a file to send",
-            "translation": "選擇要傳送的檔案"
+            "translation": "選擇要傳送的檔案",
+            "position": "crocgui/send.go:100:31"
         },
         {
             "id": "Have them not press the Download yet",
             "message": "Have them not press the Download yet",
-            "translation": "讓他們先不要按\"下載\""
+            "translation": "讓他們先不要按\"下載\"",
+            "position": "crocgui/send.go:699:24"
         },
         {
             "id": "Have them press the Download now",
             "message": "Have them press the Download now",
-            "translation": "現在讓他們按\"下載\""
+            "translation": "現在讓他們按\"下載\"",
+            "position": "crocgui/send.go:760:28"
         },
         {
             "id": "Sending file",
             "message": "Sending file",
-            "translation": "正在傳送檔案"
+            "translation": "正在傳送檔案",
+            "position": "crocgui/send.go:771:57"
         },
         {
             "id": "Sent file",
             "message": "Sent file",
-            "translation": "已傳送檔案"
+            "translation": "已傳送檔案",
+            "position": "crocgui/send.go:821:47"
         },
         {
             "id": "Show / Hide",
             "message": "Show / Hide",
-            "translation": "顯示/隱藏"
+            "translation": "顯示/隱藏",
+            "position": "crocgui/settings.go:93:35"
         },
         {
             "id": "Zip folders",
             "message": "Zip folders",
-            "translation": "Zip 檔案夾"
+            "translation": "Zip 檔案夾",
+            "position": "crocgui/settings.go:99:9"
         },
         {
             "id": "UnZip files",
             "message": "UnZip files",
-            "translation": "UnZip 檔案"
+            "translation": "UnZip 檔案",
+            "position": "crocgui/settings.go:101:18"
         },
         {
             "id": "Appearance",
             "message": "Appearance",
-            "translation": "外觀"
+            "translation": "外觀",
+            "position": "crocgui/settings.go:111:30"
         },
         {
             "id": "Language",
             "message": "Language",
-            "translation": "語言"
+            "translation": "語言",
+            "position": "crocgui/settings.go:113:25"
         },
         {
             "id": "Theme",
             "message": "Theme",
-            "translation": "主題"
+            "translation": "主題",
+            "position": "crocgui/settings.go:114:25"
         },
         {
             "id": "Font",
             "message": "Font",
-            "translation": "字型"
+            "translation": "字型",
+            "position": "crocgui/settings.go:115:25"
         },
         {
             "id": "Logo",
             "message": "Logo",
-            "translation": "標誌"
+            "translation": "標誌",
+            "position": "crocgui/settings.go:116:25"
         },
         {
             "id": "Relay",
             "message": "Relay",
-            "translation": "轉發"
+            "translation": "轉發",
+            "position": "crocgui/settings.go:119:30"
         },
         {
             "id": "Name",
             "message": "Name",
-            "translation": "名稱"
+            "translation": "名稱",
+            "position": "crocgui/settings.go:121:25"
         },
         {
             "id": "Address",
             "message": "Address",
-            "translation": "地址"
+            "translation": "地址",
+            "position": "crocgui/settings.go:122:25"
         },
         {
             "id": "Ports",
             "message": "Ports",
-            "translation": "埠"
+            "translation": "埠",
+            "position": "crocgui/settings.go:123:25"
         },
         {
             "id": "Password",
             "message": "Password",
-            "translation": "密碼"
+            "translation": "密碼",
+            "position": "crocgui/settings.go:124:25"
         },
         {
             "id": "Network Local",
             "message": "Network Local",
-            "translation": "本地網絡"
+            "translation": "本地網絡",
+            "position": "crocgui/settings.go:127:30"
         },
         {
             "id": "Disable Local",
             "message": "Disable Local",
-            "translation": "停用本地網絡"
+            "translation": "停用本地網絡",
+            "position": "crocgui/settings.go:129:25"
         },
         {
             "id": "Force Local Only",
             "message": "Force Local Only",
-            "translation": "強制僅限本地網絡"
+            "translation": "強制僅限本地網絡",
+            "position": "crocgui/settings.go:130:25"
         },
         {
             "id": "Multicast Address",
             "message": "Multicast Address",
-            "translation": "多點傳送位址"
+            "translation": "多點傳送位址",
+            "position": "crocgui/settings.go:131:25"
         },
         {
             "id": "Transfer Options",
             "message": "Transfer Options",
-            "translation": "傳輸選項"
+            "translation": "傳輸選項",
+            "position": "crocgui/settings.go:134:30"
         },
         {
             "id": "PAKE Curve",
             "message": "PAKE Curve",
-            "translation": "PAKE曲線"
+            "translation": "PAKE曲線",
+            "position": "crocgui/settings.go:136:25"
         },
         {
             "id": "Hash Algorithm",
             "message": "Hash Algorithm",
-            "translation": "雜湊演算法"
+            "translation": "雜湊演算法",
+            "position": "crocgui/settings.go:137:25"
         },
         {
             "id": "Disable Multiplexing",
             "message": "Disable Multiplexing",
-            "translation": "停用多工處理"
+            "translation": "停用多工處理",
+            "position": "crocgui/settings.go:138:25"
         },
         {
             "id": "Disable Compression",
             "message": "Disable Compression",
-            "translation": "停用壓縮"
+            "translation": "停用壓縮",
+            "position": "crocgui/settings.go:139:25"
         },
         {
             "id": "Upload Speed Throttle",
             "message": "Upload Speed Throttle",
-            "translation": "上傳速度限制"
-        },
-        {
-            "id": "{Value}",
-            "message": "{Value}",
-            "translation": "",
-            "placeholders": [
-                {
-                    "id": "Value",
-                    "string": "%[1]f",
-                    "type": "float64",
-                    "underlyingType": "float64",
-                    "argNum": 1,
-                    "expr": "value"
-                }
-            ]
-        },
-        {
-            "id": "\u0026d",
-            "message": "\u0026d",
-            "translation": "",
-            "placeholders": [
-                {
-                    "id": "Intvalue",
-                    "string": "%[1]v",
-                    "type": "int",
-                    "underlyingType": "int",
-                    "argNum": 1,
-                    "expr": "int(value)"
-                }
-            ]
+            "translation": "上傳速度限制",
+            "position": "crocgui/settings.go:141:25"
         }
     ]
 }

@@ -4,257 +4,272 @@
         {
             "id": "License Info",
             "message": "License Info",
-            "translation": "Лицензионная информация"
+            "translation": "Лицензионная информация",
+            "position": "crocgui/about.go:68:38"
         },
         {
             "id": "Export full log",
             "message": "Export full log",
-            "translation": "Сохранить журнал"
+            "translation": "Сохранить журнал",
+            "position": "crocgui/log.go:219:45"
         },
         {
             "id": "Saved all files to",
             "message": "Saved all files to",
-            "translation": "Сохранил всё в"
+            "translation": "Сохранил всё в",
+            "position": "crocgui/log.go:272:7"
         },
         {
             "id": "Enable Debug Log",
             "message": "Enable Debug Log",
-            "translation": "Журналировать"
+            "translation": "Журналировать",
+            "position": "crocgui/log.go:288:34"
         },
         {
             "id": "Cancel",
             "message": "Cancel",
-            "translation": "Отменить"
+            "translation": "Отменить",
+            "position": "crocgui/recv.go:63:44"
         },
         {
             "id": "Wait for them before pressing Download",
             "message": "Wait for them before pressing Download",
-            "translation": "Ждите прежде чем нажать Получить"
+            "translation": "Ждите прежде чем нажать Получить",
+            "position": "crocgui/recv.go:82:31"
         },
         {
             "id": "Download",
             "message": "Download",
-            "translation": "Получить"
+            "translation": "Получить",
+            "position": "crocgui/recv.go:527:42"
         },
         {
             "id": "Secret must be longer than 5 characters",
             "message": "Secret must be longer than 5 characters",
-            "translation": "Секрет должен быть длиннее 5 символов"
+            "translation": "Секрет должен быть длиннее 5 символов",
+            "position": "crocgui/recv.go:530:18"
         },
         {
             "id": "Send",
             "message": "Send",
-            "translation": "Дать"
+            "translation": "Дать",
+            "position": "crocgui/recv.go:535:35"
         },
         {
             "id": "Receive cancelled.",
             "message": "Receive cancelled.",
-            "translation": "Отмена получения."
+            "translation": "Отмена получения.",
+            "position": "crocgui/recv.go:625:34"
         },
         {
             "id": "Receiving file",
             "message": "Receiving file",
-            "translation": "Получаю"
+            "translation": "Получаю",
+            "position": "crocgui/recv.go:644:27"
         },
         {
             "id": "Send cancelled.",
             "message": "Send cancelled.",
-            "translation": "Отмена посылки."
+            "translation": "Отмена посылки.",
+            "position": "crocgui/recv.go:718:32"
         },
         {
             "id": "Received",
             "message": "Received",
-            "translation": "Получил"
+            "translation": "Получил",
+            "position": "crocgui/recv.go:726:46"
         },
         {
             "id": "Receive",
             "message": "Receive",
-            "translation": "Взять"
+            "translation": "Взять",
+            "position": "crocgui/recv.go:1003:38"
         },
         {
             "id": "Name already exists",
             "message": "Name already exists",
-            "translation": "Имя уже существует"
+            "translation": "Имя уже существует",
+            "position": "crocgui/relays.go:155:11"
         },
         {
             "id": "Empty name",
             "message": "Empty name",
-            "translation": "Пустое имя"
+            "translation": "Пустое имя",
+            "position": "crocgui/relays.go:166:18"
         },
         {
             "id": "Last item of list",
             "message": "Last item of list",
-            "translation": "Последний элемент списка"
+            "translation": "Последний элемент списка",
+            "position": "crocgui/relays.go:225:18"
         },
         {
             "id": "Pick a file to send",
             "message": "Pick a file to send",
-            "translation": "Что послать"
+            "translation": "Что послать",
+            "position": "crocgui/send.go:100:31"
         },
         {
             "id": "Have them not press the Download yet",
             "message": "Have them not press the Download yet",
-            "translation": "Пока пусть не нажимают Получить"
+            "translation": "Пока пусть не нажимают Получить",
+            "position": "crocgui/send.go:699:24"
         },
         {
             "id": "Have them press the Download now",
             "message": "Have them press the Download now",
-            "translation": "Теперь пусть нажмут Получить"
+            "translation": "Теперь пусть нажмут Получить",
+            "position": "crocgui/send.go:760:28"
         },
         {
             "id": "Sending file",
             "message": "Sending file",
-            "translation": "Посылаю"
+            "translation": "Посылаю",
+            "position": "crocgui/send.go:771:57"
         },
         {
             "id": "Sent file",
             "message": "Sent file",
-            "translation": "Послал"
+            "translation": "Послал",
+            "position": "crocgui/send.go:821:47"
         },
         {
             "id": "Show / Hide",
             "message": "Show / Hide",
-            "translation": "Показать / Скрыть"
+            "translation": "Показать / Скрыть",
+            "position": "crocgui/settings.go:93:35"
         },
         {
             "id": "Zip folders",
             "message": "Zip folders",
-            "translation": "Zip каталоги"
+            "translation": "Zip каталоги",
+            "position": "crocgui/settings.go:99:9"
         },
         {
             "id": "UnZip files",
             "message": "UnZip files",
-            "translation": "UnZip Файлы"
+            "translation": "UnZip Файлы",
+            "position": "crocgui/settings.go:101:18"
         },
         {
             "id": "Appearance",
             "message": "Appearance",
-            "translation": "Вид"
+            "translation": "Вид",
+            "position": "crocgui/settings.go:111:30"
         },
         {
             "id": "Language",
             "message": "Language",
-            "translation": "Язык"
+            "translation": "Язык",
+            "position": "crocgui/settings.go:113:25"
         },
         {
             "id": "Theme",
             "message": "Theme",
-            "translation": "Тема"
+            "translation": "Тема",
+            "position": "crocgui/settings.go:114:25"
         },
         {
             "id": "Font",
             "message": "Font",
-            "translation": "Шрифт"
+            "translation": "Шрифт",
+            "position": "crocgui/settings.go:115:25"
         },
         {
             "id": "Logo",
             "message": "Logo",
-            "translation": "Логотип"
+            "translation": "Логотип",
+            "position": "crocgui/settings.go:116:25"
         },
         {
             "id": "Relay",
             "message": "Relay",
-            "translation": "Посредник"
+            "translation": "Посредник",
+            "position": "crocgui/settings.go:119:30"
         },
         {
             "id": "Name",
             "message": "Name",
-            "translation": "Имя"
+            "translation": "Имя",
+            "position": "crocgui/settings.go:121:25"
         },
         {
             "id": "Address",
             "message": "Address",
-            "translation": "Адрес"
+            "translation": "Адрес",
+            "position": "crocgui/settings.go:122:25"
         },
         {
             "id": "Ports",
             "message": "Ports",
-            "translation": "Порты"
+            "translation": "Порты",
+            "position": "crocgui/settings.go:123:25"
         },
         {
             "id": "Password",
             "message": "Password",
-            "translation": "Пароль"
+            "translation": "Пароль",
+            "position": "crocgui/settings.go:124:25"
         },
         {
             "id": "Network Local",
             "message": "Network Local",
-            "translation": "сеть"
+            "translation": "сеть",
+            "position": "crocgui/settings.go:127:30"
         },
         {
             "id": "Disable Local",
             "message": "Disable Local",
-            "translation": "Не локально"
+            "translation": "Не локально",
+            "position": "crocgui/settings.go:129:25"
         },
         {
             "id": "Force Local Only",
             "message": "Force Local Only",
-            "translation": "Локально"
+            "translation": "Локально",
+            "position": "crocgui/settings.go:130:25"
         },
         {
             "id": "Multicast Address",
             "message": "Multicast Address",
-            "translation": "Группа"
+            "translation": "Группа",
+            "position": "crocgui/settings.go:131:25"
         },
         {
             "id": "Transfer Options",
             "message": "Transfer Options",
-            "translation": "Обмен"
+            "translation": "Обмен",
+            "position": "crocgui/settings.go:134:30"
         },
         {
             "id": "PAKE Curve",
             "message": "PAKE Curve",
-            "translation": "Кривая PAKE"
+            "translation": "Кривая PAKE",
+            "position": "crocgui/settings.go:136:25"
         },
         {
             "id": "Hash Algorithm",
             "message": "Hash Algorithm",
-            "translation": "Тип хеша"
+            "translation": "Тип хеша",
+            "position": "crocgui/settings.go:137:25"
         },
         {
             "id": "Disable Multiplexing",
             "message": "Disable Multiplexing",
-            "translation": "Без мультиплексирования"
+            "translation": "Без мультиплексирования",
+            "position": "crocgui/settings.go:138:25"
         },
         {
             "id": "Disable Compression",
             "message": "Disable Compression",
-            "translation": "Без сжатия"
+            "translation": "Без сжатия",
+            "position": "crocgui/settings.go:139:25"
         },
         {
             "id": "Upload Speed Throttle",
             "message": "Upload Speed Throttle",
-            "translation": "Медлить"
-        },
-        {
-            "id": "{Value}",
-            "message": "{Value}",
-            "translation": "",
-            "placeholders": [
-                {
-                    "id": "Value",
-                    "string": "%[1]f",
-                    "type": "float64",
-                    "underlyingType": "float64",
-                    "argNum": 1,
-                    "expr": "value"
-                }
-            ]
-        },
-        {
-            "id": "\u0026d",
-            "message": "\u0026d",
-            "translation": "",
-            "placeholders": [
-                {
-                    "id": "Intvalue",
-                    "string": "%[1]v",
-                    "type": "int",
-                    "underlyingType": "int",
-                    "argNum": 1,
-                    "expr": "int(value)"
-                }
-            ]
+            "translation": "Медлить",
+            "position": "crocgui/settings.go:141:25"
         }
     ]
 }

@@ -44,8 +44,6 @@ func init() {
 }
 
 var messageKeyToIndex = map[string]int{
-	"%f":                                   45,
-	"&d":                                   46,
 	"Address":                              32,
 	"Appearance":                           25,
 	"Cancel":                               4,
@@ -93,7 +91,7 @@ var messageKeyToIndex = map[string]int{
 	"Zip folders":                            23,
 }
 
-var en_USIndex = []uint32{ // 48 elements
+var en_USIndex = []uint32{ // 46 elements
 	// Entry 0 - 1F
 	0x00000000, 0x0000000d, 0x0000001d, 0x00000030,
 	0x00000041, 0x00000048, 0x0000006f, 0x00000078,
@@ -107,10 +105,10 @@ var en_USIndex = []uint32{ // 48 elements
 	0x000001dd, 0x000001e5, 0x000001eb, 0x000001f4,
 	0x00000202, 0x00000210, 0x00000221, 0x00000233,
 	0x00000244, 0x0000024f, 0x0000025e, 0x00000273,
-	0x00000287, 0x0000029d, 0x000002a3, 0x000002a6,
-} // Size: 216 bytes
+	0x00000287, 0x0000029d,
+} // Size: 208 bytes
 
-const en_USData string = "" + // Size: 678 bytes
+const en_USData string = "" + // Size: 669 bytes
 	"\x02License Info\x02Export full log\x02Saved all files to\x02Enable Debu" +
 	"g Log\x02Cancel\x02Wait for them before pressing Download\x02Download" +
 	"\x02Secret must be longer than 5 characters\x02Send\x02Receive cancelled" +
@@ -122,9 +120,9 @@ const en_USData string = "" + // Size: 678 bytes
 	"me\x02Address\x02Ports\x02Password\x02Network Local\x02Disable Local\x02" +
 	"Force Local Only\x02Multicast Address\x02Transfer Options\x02PAKE Curve" +
 	"\x02Hash Algorithm\x02Disable Multiplexing\x02Disable Compression\x02Upl" +
-	"oad Speed Throttle\x02%[1]f\x02&d"
+	"oad Speed Throttle"
 
-var ja_JPIndex = []uint32{ // 48 elements
+var ja_JPIndex = []uint32{ // 46 elements
 	// Entry 0 - 1F
 	0x00000000, 0x00000016, 0x0000003b, 0x0000006a,
 	0x00000089, 0x00000099, 0x000000d6, 0x000000e9,
@@ -138,8 +136,8 @@ var ja_JPIndex = []uint32{ // 48 elements
 	0x0000034b, 0x00000358, 0x00000362, 0x00000372,
 	0x00000391, 0x000003bc, 0x000003ed, 0x0000040f,
 	0x00000425, 0x00000430, 0x0000044f, 0x0000046b,
-	0x0000047e, 0x000004a0, 0x000004a0, 0x000004a0,
-} // Size: 216 bytes
+	0x0000047e, 0x000004a0,
+} // Size: 208 bytes
 
 const ja_JPData string = "" + // Size: 1184 bytes
 	"\x02ライセンス情報\x02完全なログをエクスポート\x02すべてのファイルを保存しました:\x02デバッグログを有効化\x02キャンセル" +
@@ -152,7 +150,7 @@ const ja_JPData string = "" + // Size: 1184 bytes
 	"アドレス\x02転送オプション\x02PAKE曲線\x02ハッシュアルゴリズム\x02多重化を無効にする\x02圧縮を無効化\x02アップロ" +
 	"ード速度の制限"
 
-var ru_RUIndex = []uint32{ // 48 elements
+var ru_RUIndex = []uint32{ // 46 elements
 	// Entry 0 - 1F
 	0x00000000, 0x0000002e, 0x0000004e, 0x00000069,
 	0x00000084, 0x00000095, 0x000000d2, 0x000000e3,
@@ -166,8 +164,8 @@ var ru_RUIndex = []uint32{ // 48 elements
 	0x00000334, 0x0000033f, 0x0000034a, 0x00000357,
 	0x00000360, 0x00000376, 0x00000387, 0x00000394,
 	0x0000039f, 0x000003b1, 0x000003c1, 0x000003ef,
-	0x00000403, 0x00000412, 0x00000412, 0x00000412,
-} // Size: 216 bytes
+	0x00000403, 0x00000412,
+} // Size: 208 bytes
 
 const ru_RUData string = "" + // Size: 1042 bytes
 	"\x02Лицензионная информация\x02Сохранить журнал\x02Сохранил всё в\x02Жур" +
@@ -181,7 +179,7 @@ const ru_RUData string = "" + // Size: 1042 bytes
 	"роль\x02сеть\x02Не локально\x02Локально\x02Группа\x02Обмен\x02Кривая PA" +
 	"KE\x02Тип хеша\x02Без мультиплексирования\x02Без сжатия\x02Медлить"
 
-var tr_TRIndex = []uint32{ // 48 elements
+var tr_TRIndex = []uint32{ // 46 elements
 	// Entry 0 - 1F
 	0x00000000, 0x00000011, 0x00000027, 0x00000049,
 	0x00000074, 0x0000007b, 0x000000a4, 0x000000ab,
@@ -195,8 +193,8 @@ var tr_TRIndex = []uint32{ // 48 elements
 	0x00000238, 0x0000023e, 0x00000246, 0x0000024d,
 	0x00000257, 0x00000278, 0x00000291, 0x000002ac,
 	0x000002c2, 0x000002cf, 0x000002e1, 0x00000305,
-	0x0000032c, 0x00000349, 0x00000349, 0x00000349,
-} // Size: 216 bytes
+	0x0000032c, 0x00000349,
+} // Size: 208 bytes
 
 const tr_TRData string = "" + // Size: 841 bytes
 	"\x02Lisans Bilgileri\x02Tam logu dışa aktar\x02Tüm dosyalar şuraya kayde" +
@@ -213,7 +211,7 @@ const tr_TRData string = "" + // Size: 841 bytes
 	" Algoritması\x02Çoğullamayı Devre Dışı Bırak\x02Sıkıştırmayı Devre Dışı " +
 	"Bırak\x02Yükleme Hızını Sınırla"
 
-var zh_CNIndex = []uint32{ // 48 elements
+var zh_CNIndex = []uint32{ // 46 elements
 	// Entry 0 - 1F
 	0x00000000, 0x00000010, 0x00000023, 0x0000003c,
 	0x0000004f, 0x00000056, 0x00000077, 0x0000007e,
@@ -227,8 +225,8 @@ var zh_CNIndex = []uint32{ // 48 elements
 	0x000001eb, 0x000001f2, 0x000001f9, 0x00000200,
 	0x0000020d, 0x00000220, 0x00000236, 0x00000243,
 	0x00000250, 0x0000025b, 0x00000268, 0x0000027b,
-	0x00000288, 0x0000029b, 0x0000029b, 0x0000029b,
-} // Size: 216 bytes
+	0x00000288, 0x0000029b,
+} // Size: 208 bytes
 
 const zh_CNData string = "" + // Size: 667 bytes
 	"\x02许可证信息\x02导出完整日志\x02所有文件已保存至\x02启用调试日志\x02取消\x02在按\x22下载\x22之前等待他们" +
@@ -239,7 +237,7 @@ const zh_CNData string = "" + // Size: 667 bytes
 	"\x02强制仅本地网络\x02组播地址\x02传输选项\x02PAKE曲线\x02哈希算法\x02禁用多路复用\x02禁用压缩\x02上传速度限" +
 	"制"
 
-var zh_HKIndex = []uint32{ // 48 elements
+var zh_HKIndex = []uint32{ // 46 elements
 	// Entry 0 - 1F
 	0x00000000, 0x00000010, 0x00000023, 0x0000003c,
 	0x0000004f, 0x00000056, 0x00000077, 0x0000007e,
@@ -253,8 +251,8 @@ var zh_HKIndex = []uint32{ // 48 elements
 	0x000001eb, 0x000001f2, 0x000001f6, 0x000001fd,
 	0x0000020a, 0x0000021d, 0x00000236, 0x00000249,
 	0x00000256, 0x00000261, 0x00000271, 0x00000284,
-	0x00000291, 0x000002a4, 0x000002a4, 0x000002a4,
-} // Size: 216 bytes
+	0x00000291, 0x000002a4,
+} // Size: 208 bytes
 
 const zh_HKData string = "" + // Size: 676 bytes
 	"\x02許可證資訊\x02匯出完整記錄\x02所有檔案已儲存至\x02啟用偵錯記錄\x02取消\x02在按\x22下載\x22之前等待他們" +
@@ -265,7 +263,7 @@ const zh_HKData string = "" + // Size: 676 bytes
 	"強制僅限本地網絡\x02多點傳送位址\x02傳輸選項\x02PAKE曲線\x02雜湊演算法\x02停用多工處理\x02停用壓縮\x02上傳速" +
 	"度限制"
 
-var zh_TWIndex = []uint32{ // 48 elements
+var zh_TWIndex = []uint32{ // 46 elements
 	// Entry 0 - 1F
 	0x00000000, 0x0000000d, 0x00000020, 0x00000039,
 	0x0000004c, 0x00000053, 0x00000074, 0x0000007b,
@@ -279,8 +277,8 @@ var zh_TWIndex = []uint32{ // 48 elements
 	0x000001e8, 0x000001ef, 0x000001f3, 0x000001fa,
 	0x00000207, 0x0000021a, 0x00000233, 0x00000246,
 	0x00000253, 0x0000025e, 0x0000026e, 0x00000281,
-	0x0000028e, 0x000002a1, 0x000002a1, 0x000002a1,
-} // Size: 216 bytes
+	0x0000028e, 0x000002a1,
+} // Size: 208 bytes
 
 const zh_TWData string = "" + // Size: 673 bytes
 	"\x02授權資訊\x02匯出完整記錄\x02所有檔案已儲存至\x02啟用偵錯記錄\x02取消\x02在按\x22下載\x22之前等待他們\x02" +
@@ -290,4 +288,4 @@ const zh_TWData string = "" + // Size: 673 bytes
 	"\x02主題\x02字型\x02標誌\x02轉發\x02名稱\x02位址\x02埠\x02密碼\x02本地網路\x02停用本地網路\x02強制僅" +
 	"限本地網路\x02多點傳送位址\x02傳輸選項\x02PAKE曲線\x02雜湊演算法\x02停用多工處理\x02停用壓縮\x02上傳速度限制"
 
-	// Total table size 7273 bytes (7KiB); checksum: 1AD0543C
+	// Total table size 7208 bytes (7KiB); checksum: B83C2FDF

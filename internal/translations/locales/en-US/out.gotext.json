@@ -6,349 +6,360 @@
             "message": "License Info",
             "translation": "License Info",
             "translatorComment": "Copied from source.",
-            "fuzzy": true
+            "fuzzy": true,
+            "position": "crocgui/about.go:68:38"
         },
         {
             "id": "Export full log",
             "message": "Export full log",
             "translation": "Export full log",
             "translatorComment": "Copied from source.",
-            "fuzzy": true
+            "fuzzy": true,
+            "position": "crocgui/log.go:219:45"
         },
         {
             "id": "Saved all files to",
             "message": "Saved all files to",
             "translation": "Saved all files to",
             "translatorComment": "Copied from source.",
-            "fuzzy": true
+            "fuzzy": true,
+            "position": "crocgui/log.go:272:7"
         },
         {
             "id": "Enable Debug Log",
             "message": "Enable Debug Log",
             "translation": "Enable Debug Log",
             "translatorComment": "Copied from source.",
-            "fuzzy": true
+            "fuzzy": true,
+            "position": "crocgui/log.go:288:34"
         },
         {
             "id": "Cancel",
             "message": "Cancel",
             "translation": "Cancel",
             "translatorComment": "Copied from source.",
-            "fuzzy": true
+            "fuzzy": true,
+            "position": "crocgui/recv.go:63:44"
         },
         {
             "id": "Wait for them before pressing Download",
             "message": "Wait for them before pressing Download",
             "translation": "Wait for them before pressing Download",
             "translatorComment": "Copied from source.",
-            "fuzzy": true
+            "fuzzy": true,
+            "position": "crocgui/recv.go:82:31"
         },
         {
             "id": "Download",
             "message": "Download",
             "translation": "Download",
             "translatorComment": "Copied from source.",
-            "fuzzy": true
+            "fuzzy": true,
+            "position": "crocgui/recv.go:527:42"
         },
         {
             "id": "Secret must be longer than 5 characters",
             "message": "Secret must be longer than 5 characters",
             "translation": "Secret must be longer than 5 characters",
             "translatorComment": "Copied from source.",
-            "fuzzy": true
+            "fuzzy": true,
+            "position": "crocgui/recv.go:530:18"
         },
         {
             "id": "Send",
             "message": "Send",
             "translation": "Send",
             "translatorComment": "Copied from source.",
-            "fuzzy": true
+            "fuzzy": true,
+            "position": "crocgui/recv.go:535:35"
         },
         {
             "id": "Receive cancelled.",
             "message": "Receive cancelled.",
             "translation": "Receive cancelled.",
             "translatorComment": "Copied from source.",
-            "fuzzy": true
+            "fuzzy": true,
+            "position": "crocgui/recv.go:625:34"
         },
         {
             "id": "Receiving file",
             "message": "Receiving file",
             "translation": "Receiving file",
             "translatorComment": "Copied from source.",
-            "fuzzy": true
+            "fuzzy": true,
+            "position": "crocgui/recv.go:644:27"
         },
         {
             "id": "Send cancelled.",
             "message": "Send cancelled.",
             "translation": "Send cancelled.",
             "translatorComment": "Copied from source.",
-            "fuzzy": true
+            "fuzzy": true,
+            "position": "crocgui/recv.go:718:32"
         },
         {
             "id": "Received",
             "message": "Received",
             "translation": "Received",
             "translatorComment": "Copied from source.",
-            "fuzzy": true
+            "fuzzy": true,
+            "position": "crocgui/recv.go:726:46"
         },
         {
             "id": "Receive",
             "message": "Receive",
             "translation": "Receive",
             "translatorComment": "Copied from source.",
-            "fuzzy": true
+            "fuzzy": true,
+            "position": "crocgui/recv.go:1003:38"
         },
         {
             "id": "Name already exists",
             "message": "Name already exists",
             "translation": "Name already exists",
             "translatorComment": "Copied from source.",
-            "fuzzy": true
+            "fuzzy": true,
+            "position": "crocgui/relays.go:155:11"
         },
         {
             "id": "Empty name",
             "message": "Empty name",
             "translation": "Empty name",
             "translatorComment": "Copied from source.",
-            "fuzzy": true
+            "fuzzy": true,
+            "position": "crocgui/relays.go:166:18"
         },
         {
             "id": "Last item of list",
             "message": "Last item of list",
             "translation": "Last item of list",
             "translatorComment": "Copied from source.",
-            "fuzzy": true
+            "fuzzy": true,
+            "position": "crocgui/relays.go:225:18"
         },
         {
             "id": "Pick a file to send",
             "message": "Pick a file to send",
             "translation": "Pick a file to send",
             "translatorComment": "Copied from source.",
-            "fuzzy": true
+            "fuzzy": true,
+            "position": "crocgui/send.go:100:31"
         },
         {
             "id": "Have them not press the Download yet",
             "message": "Have them not press the Download yet",
             "translation": "Have them not press the Download yet",
             "translatorComment": "Copied from source.",
-            "fuzzy": true
+            "fuzzy": true,
+            "position": "crocgui/send.go:699:24"
         },
         {
             "id": "Have them press the Download now",
             "message": "Have them press the Download now",
             "translation": "Have them press the Download now",
             "translatorComment": "Copied from source.",
-            "fuzzy": true
+            "fuzzy": true,
+            "position": "crocgui/send.go:760:28"
         },
         {
             "id": "Sending file",
             "message": "Sending file",
             "translation": "Sending file",
             "translatorComment": "Copied from source.",
-            "fuzzy": true
+            "fuzzy": true,
+            "position": "crocgui/send.go:771:57"
         },
         {
             "id": "Sent file",
             "message": "Sent file",
             "translation": "Sent file",
             "translatorComment": "Copied from source.",
-            "fuzzy": true
+            "fuzzy": true,
+            "position": "crocgui/send.go:821:47"
         },
         {
             "id": "Show / Hide",
             "message": "Show / Hide",
             "translation": "Show / Hide",
             "translatorComment": "Copied from source.",
-            "fuzzy": true
+            "fuzzy": true,
+            "position": "crocgui/settings.go:93:35"
         },
         {
             "id": "Zip folders",
             "message": "Zip folders",
             "translation": "Zip folders",
             "translatorComment": "Copied from source.",
-            "fuzzy": true
+            "fuzzy": true,
+            "position": "crocgui/settings.go:99:9"
         },
         {
             "id": "UnZip files",
             "message": "UnZip files",
             "translation": "UnZip files",
             "translatorComment": "Copied from source.",
-            "fuzzy": true
+            "fuzzy": true,
+            "position": "crocgui/settings.go:101:18"
         },
         {
             "id": "Appearance",
             "message": "Appearance",
             "translation": "Appearance",
             "translatorComment": "Copied from source.",
-            "fuzzy": true
+            "fuzzy": true,
+            "position": "crocgui/settings.go:111:30"
         },
         {
             "id": "Language",
             "message": "Language",
             "translation": "Language",
             "translatorComment": "Copied from source.",
-            "fuzzy": true
+            "fuzzy": true,
+            "position": "crocgui/settings.go:113:25"
         },
         {
             "id": "Theme",
             "message": "Theme",
             "translation": "Theme",
             "translatorComment": "Copied from source.",
-            "fuzzy": true
+            "fuzzy": true,
+            "position": "crocgui/settings.go:114:25"
         },
         {
             "id": "Font",
             "message": "Font",
             "translation": "Font",
             "translatorComment": "Copied from source.",
-            "fuzzy": true
+            "fuzzy": true,
+            "position": "crocgui/settings.go:115:25"
         },
         {
             "id": "Logo",
             "message": "Logo",
             "translation": "Logo",
             "translatorComment": "Copied from source.",
-            "fuzzy": true
+            "fuzzy": true,
+            "position": "crocgui/settings.go:116:25"
         },
         {
             "id": "Relay",
             "message": "Relay",
             "translation": "Relay",
             "translatorComment": "Copied from source.",
-            "fuzzy": true
+            "fuzzy": true,
+            "position": "crocgui/settings.go:119:30"
         },
         {
             "id": "Name",
             "message": "Name",
             "translation": "Name",
             "translatorComment": "Copied from source.",
-            "fuzzy": true
+            "fuzzy": true,
+            "position": "crocgui/settings.go:121:25"
         },
         {
             "id": "Address",
             "message": "Address",
             "translation": "Address",
             "translatorComment": "Copied from source.",
-            "fuzzy": true
+            "fuzzy": true,
+            "position": "crocgui/settings.go:122:25"
         },
         {
             "id": "Ports",
             "message": "Ports",
             "translation": "Ports",
             "translatorComment": "Copied from source.",
-            "fuzzy": true
+            "fuzzy": true,
+            "position": "crocgui/settings.go:123:25"
         },
         {
             "id": "Password",
             "message": "Password",
             "translation": "Password",
             "translatorComment": "Copied from source.",
-            "fuzzy": true
+            "fuzzy": true,
+            "position": "crocgui/settings.go:124:25"
         },
         {
             "id": "Network Local",
             "message": "Network Local",
             "translation": "Network Local",
             "translatorComment": "Copied from source.",
-            "fuzzy": true
+            "fuzzy": true,
+            "position": "crocgui/settings.go:127:30"
         },
         {
             "id": "Disable Local",
             "message": "Disable Local",
             "translation": "Disable Local",
             "translatorComment": "Copied from source.",
-            "fuzzy": true
+            "fuzzy": true,
+            "position": "crocgui/settings.go:129:25"
         },
         {
             "id": "Force Local Only",
             "message": "Force Local Only",
             "translation": "Force Local Only",
             "translatorComment": "Copied from source.",
-            "fuzzy": true
+            "fuzzy": true,
+            "position": "crocgui/settings.go:130:25"
         },
         {
             "id": "Multicast Address",
             "message": "Multicast Address",
             "translation": "Multicast Address",
             "translatorComment": "Copied from source.",
-            "fuzzy": true
+            "fuzzy": true,
+            "position": "crocgui/settings.go:131:25"
         },
         {
             "id": "Transfer Options",
             "message": "Transfer Options",
             "translation": "Transfer Options",
             "translatorComment": "Copied from source.",
-            "fuzzy": true
+            "fuzzy": true,
+            "position": "crocgui/settings.go:134:30"
         },
         {
             "id": "PAKE Curve",
             "message": "PAKE Curve",
             "translation": "PAKE Curve",
             "translatorComment": "Copied from source.",
-            "fuzzy": true
+            "fuzzy": true,
+            "position": "crocgui/settings.go:136:25"
         },
         {
             "id": "Hash Algorithm",
             "message": "Hash Algorithm",
             "translation": "Hash Algorithm",
             "translatorComment": "Copied from source.",
-            "fuzzy": true
+            "fuzzy": true,
+            "position": "crocgui/settings.go:137:25"
         },
         {
             "id": "Disable Multiplexing",
             "message": "Disable Multiplexing",
             "translation": "Disable Multiplexing",
             "translatorComment": "Copied from source.",
-            "fuzzy": true
+            "fuzzy": true,
+            "position": "crocgui/settings.go:138:25"
         },
         {
             "id": "Disable Compression",
             "message": "Disable Compression",
             "translation": "Disable Compression",
             "translatorComment": "Copied from source.",
-            "fuzzy": true
+            "fuzzy": true,
+            "position": "crocgui/settings.go:139:25"
         },
         {
             "id": "Upload Speed Throttle",
             "message": "Upload Speed Throttle",
             "translation": "Upload Speed Throttle",
             "translatorComment": "Copied from source.",
-            "fuzzy": true
-        },
-        {
-            "id": "{Value}",
-            "message": "{Value}",
-            "translation": "{Value}",
-            "translatorComment": "Copied from source.",
-            "placeholders": [
-                {
-                    "id": "Value",
-                    "string": "%[1]f",
-                    "type": "float64",
-                    "underlyingType": "float64",
-                    "argNum": 1,
-                    "expr": "value"
-                }
-            ],
-            "fuzzy": true
-        },
-        {
-            "id": "\u0026d",
-            "message": "\u0026d",
-            "translation": "\u0026d",
-            "translatorComment": "Copied from source.",
-            "placeholders": [
-                {
-                    "id": "Intvalue",
-                    "string": "%[1]v",
-                    "type": "int",
-                    "underlyingType": "int",
-                    "argNum": 1,
-                    "expr": "int(value)"
-                }
-            ],
-            "fuzzy": true
+            "fuzzy": true,
+            "position": "crocgui/settings.go:141:25"
         }
     ]
 }
