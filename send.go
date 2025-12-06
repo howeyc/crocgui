@@ -454,7 +454,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 	reload = func() {
 		prefixs := []string{}
 		p, n := lsr(join())
-		log.Tracef("lsr %v", n)
+		// log.Tracef("lsr %v", n)
 		for _, path := range p {
 			ext := filepath.Ext(path)
 			if strings.ToLower(ext) == DOTZIP {
@@ -462,7 +462,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 				prefixs = append(prefixs, dir+slash)
 			}
 		}
-		log.Tracef("prefixs %v", prefixs)
+		// log.Tracef("prefixs %v", prefixs)
 	loop:
 		for i, path := range p {
 			name := n[i]
@@ -587,22 +587,6 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 				return
 			}
 			filesInfo = filter(filesInfo, allowed...)
-			// if len(allowed) > 0 {
-			// 	filtered := []croc.FileInfo{}
-			// 	allowedSet := make(map[string]struct{})
-
-			// 	for _, a := range allowed {
-			// 		allowedSet[a] = struct{}{}
-			// 	}
-			// 	// log.Tracef("allowedSet %v", allowedSet)
-
-			// 	for _, fi := range filesInfo {
-			// 		if _, ok := allowedSet[filepath.Join(fi.FolderSource, fi.Name)]; ok {
-			// 			filtered = append(filtered, fi)
-			// 		}
-			// 	}
-			// 	filesInfo = filtered[:]
-			// }
 			// log.Tracef("filtered filesInfo %+v: %v", filesInfo, err)
 			if len(filesInfo) < 1 {
 				fyne.Do(NewToast(w, lp("Pick a file to send")).Show)
@@ -618,6 +602,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 
 			var crocOptions croc.Options
 			restore := a.Preferences().Bool("restore")
+			// log.Errorf("restore %v", restore)
 			remember := a.Preferences().Bool("remember")
 			if restore {
 				if b, errOpen := os.ReadFile(getSendConfigFile(false)); errOpen == nil {
@@ -670,10 +655,11 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 
 				return
 			}
+			// log.Errorf("remember %v", remember)
 			if remember {
 				p := NewPreferences(a.Preferences())
 				p.SetString("relay", crocOptions.RelayAddress)
-				p.SetString("relay6", crocOptions.RelayAddress6)
+				// p.SetString("relay6", crocOptions.RelayAddress6)
 				saveConfig(p, crocOptions)
 			}
 

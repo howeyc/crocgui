@@ -143,7 +143,7 @@
             "translation": "Pick a file to send",
             "translatorComment": "Copied from source.",
             "fuzzy": true,
-            "position": "crocgui/send.go:100:31"
+            "position": "crocgui/send.go:101:31"
         },
         {
             "id": "Have them not press the Download yet",
@@ -151,7 +151,7 @@
             "translation": "Have them not press the Download yet",
             "translatorComment": "Copied from source.",
             "fuzzy": true,
-            "position": "crocgui/send.go:699:24"
+            "position": "crocgui/send.go:725:24"
         },
         {
             "id": "Have them press the Download now",
@@ -159,7 +159,7 @@
             "translation": "Have them press the Download now",
             "translatorComment": "Copied from source.",
             "fuzzy": true,
-            "position": "crocgui/send.go:760:28"
+            "position": "crocgui/send.go:786:28"
         },
         {
             "id": "Sending file",
@@ -167,7 +167,7 @@
             "translation": "Sending file",
             "translatorComment": "Copied from source.",
             "fuzzy": true,
-            "position": "crocgui/send.go:771:57"
+            "position": "crocgui/send.go:797:57"
         },
         {
             "id": "Sent file",
@@ -175,7 +175,7 @@
             "translation": "Sent file",
             "translatorComment": "Copied from source.",
             "fuzzy": true,
-            "position": "crocgui/send.go:821:47"
+            "position": "crocgui/send.go:847:47"
         },
         {
             "id": "Show / Hide",

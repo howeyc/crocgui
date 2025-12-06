@@ -13,6 +13,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/schollz/croc/v10/src/models"
 	"github.com/schollz/croc/v10/src/utils"
 	log "github.com/schollz/logger"
 	"golang.org/x/text/language"
@@ -168,9 +169,9 @@ func main() {
 	a.Preferences().SetString("lang",
 		a.Preferences().StringWithFallback("lang", "en-US"))
 	a.Preferences().SetString("relay-address",
-		a.Preferences().StringWithFallback("relay-address", "croc.schollz.com:9009"))
+		a.Preferences().StringWithFallback("relay-address", models.DEFAULT_RELAY))
 	a.Preferences().SetString("relay-password",
-		a.Preferences().StringWithFallback("relay-password", "pass123"))
+		a.Preferences().StringWithFallback("relay-password", models.DEFAULT_PASSPHRASE))
 	a.Preferences().SetString("relay-ports",
 		a.Preferences().StringWithFallback("relay-ports", "9009,9010,9011,9012,9013,9014,9015,9016,9017"))
 	// a.Preferences().SetBool("disable-local", a.Preferences().BoolWithFallback("disable-local", false))
@@ -201,6 +202,8 @@ func main() {
 	a.Preferences().SetBool("remember",
 		a.Preferences().BoolWithFallback("remember", true))
 	// a.Preferences().SetBool("restore", a.Preferences().BoolWithFallback("restore", false))
+	a.Preferences().SetString("relay6",
+		a.Preferences().StringWithFallback("relay6", models.DEFAULT_RELAY6))
 
 	appTheme.color = theme.DefaultTheme()
 	appTheme.size = theme.DefaultTheme()

@@ -107,31 +107,31 @@
             "id": "Pick a file to send",
             "message": "Pick a file to send",
             "translation": "Gönderilecek dosyayı seçin",
-            "position": "crocgui/send.go:100:31"
+            "position": "crocgui/send.go:101:31"
         },
         {
             "id": "Have them not press the Download yet",
             "message": "Have them not press the Download yet",
             "translation": "Henüz İndir'e basmasınlar",
-            "position": "crocgui/send.go:699:24"
+            "position": "crocgui/send.go:725:24"
         },
         {
             "id": "Have them press the Download now",
             "message": "Have them press the Download now",
             "translation": "Şimdi İndir'e bassınlar",
-            "position": "crocgui/send.go:760:28"
+            "position": "crocgui/send.go:786:28"
         },
         {
             "id": "Sending file",
             "message": "Sending file",
             "translation": "Dosya gönderiliyor",
-            "position": "crocgui/send.go:771:57"
+            "position": "crocgui/send.go:797:57"
         },
         {
             "id": "Sent file",
             "message": "Sent file",
             "translation": "Dosya gönderildi",
-            "position": "crocgui/send.go:821:47"
+            "position": "crocgui/send.go:847:47"
         },
         {
             "id": "Show / Hide",

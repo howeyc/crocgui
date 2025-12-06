@@ -112,11 +112,14 @@ func saveConfig(c Preferences, crocOptions croc.Options) {
 		if c.String("code") == "" {
 			crocOptions.SharedSecret = ""
 		}
+		// log.Errorf("relay %s %s %v", c.String("relay"), models.DEFAULT_RELAY, c.String("relay") != models.DEFAULT_RELAY)
 		if c.String("relay") != models.DEFAULT_RELAY {
 			crocOptions.RelayAddress = "non-default: " + c.String("relay")
 		} else {
 			crocOptions.RelayAddress = "default"
 		}
+		// log.Errorf("RelayAddress %s", crocOptions.RelayAddress)
+
 		if c.String("relay6") != models.DEFAULT_RELAY6 {
 			crocOptions.RelayAddress6 = "non-default: " + c.String("relay6")
 		} else {

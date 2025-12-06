@@ -103,9 +103,14 @@ func settingsTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 
 	// Настройки посредников
 	relayAddressBinding := binding.BindPreferenceString("relay-address", a.Preferences())
+	relay6Binding := binding.BindPreferenceString("relay6", a.Preferences())
 	relayPortsBinding := binding.BindPreferenceString("relay-ports", a.Preferences())
 	relayPasswordBinding := binding.BindPreferenceString("relay-password", a.Preferences())
-	relayControls := createRelaySelector(a, w, relayAddressBinding, relayPortsBinding, relayPasswordBinding)
+	relayControls := createRelaySelector(a, w,
+		relayAddressBinding,
+		relay6Binding,
+		relayPortsBinding,
+		relayPasswordBinding)
 
 	return container.NewTabItemWithIcon(ZeroWidthNonJoiner, theme.SettingsIcon(), container.NewVScroll(container.NewVBox( //lp("Settings")
 		widget.NewLabelWithStyle(lp("Appearance"), fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
@@ -120,6 +125,7 @@ func settingsTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 		widget.NewForm(
 			widget.NewFormItem(lp("Name"), relayControls),
 			widget.NewFormItem(lp("Address"), widget.NewEntryWithData(relayAddressBinding)),
+			widget.NewFormItem(lp("Address6"), widget.NewEntryWithData(relay6Binding)),
 			widget.NewFormItem(lp("Ports"), widget.NewEntryWithData(relayPortsBinding)),
 			widget.NewFormItem(lp("Password"), widget.NewEntryWithData(relayPasswordBinding)),
 		),

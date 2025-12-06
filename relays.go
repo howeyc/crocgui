@@ -3,7 +3,6 @@ package main
 
 import (
 	"encoding/json"
-	"errors"
 	"slices"
 	"strings"
 
@@ -18,6 +17,7 @@ import (
 type Relay struct {
 	Name     string `json:"name"`
 	Address  string `json:"address"`
+	Address6 string `json:"address6"`
 	Ports    string `json:"ports"`
 	Password string `json:"password"`
 }
@@ -35,6 +35,7 @@ func getRelays(a fyne.App) []Relay {
 		{
 			Name:     DEFAULT,
 			Address:  a.Preferences().String("relay-address"),
+			Address6: a.Preferences().String("relay6"),
 			Ports:    a.Preferences().String("relay-ports"),
 			Password: a.Preferences().String("relay-password"),
 		},
@@ -72,8 +73,13 @@ func relayByName(relays []Relay, name string) (Relay, int) {
 }
 
 // updateRelayValues обновляет значения полей на основе выбранного посредника
-func updateRelayValues(relay Relay, addressBinding, portsBinding, passwordBinding binding.String) {
+func updateRelayValues(relay Relay,
+	addressBinding,
+	address6Binding,
+	portsBinding,
+	passwordBinding binding.String) {
 	addressBinding.Set(relay.Address)
+	address6Binding.Set(relay.Address6)
 	portsBinding.Set(relay.Ports)
 	passwordBinding.Set(relay.Password)
 }
@@ -89,7 +95,10 @@ func relayName(a fyne.App) string {
 }
 
 func createRelaySelector(a fyne.App, w fyne.Window,
-	addressBinding, portsBinding, passwordBinding binding.String) (rs *fyne.Container) {
+	addressBinding,
+	address6Binding,
+	portsBinding,
+	passwordBinding binding.String) (rs *fyne.Container) {
 
 	var (
 		relaySelect *widget.Select
@@ -115,15 +124,24 @@ func createRelaySelector(a fyne.App, w fyne.Window,
 		if currentRelayName != "" {
 			if relay, index := relayByName(relays, currentRelayName); index >= 0 {
 				relaySelect.SetSelected(relay.Name)
-				updateRelayValues(relay, addressBinding, portsBinding, passwordBinding)
+				updateRelayValues(relay,
+					addressBinding,
+					address6Binding,
+					portsBinding, passwordBinding)
 			} else if len(relays) > 0 {
 				relaySelect.SetSelected(relays[0].Name)
-				updateRelayValues(relays[0], addressBinding, portsBinding, passwordBinding)
+				updateRelayValues(relays[0],
+					addressBinding,
+					address6Binding,
+					portsBinding, passwordBinding)
 				setRelayName(a, relays[0].Name)
 			}
 		} else if len(relays) > 0 {
 			relaySelect.SetSelected(relays[0].Name)
-			updateRelayValues(relays[0], addressBinding, portsBinding, passwordBinding)
+			updateRelayValues(relays[0],
+				addressBinding,
+				address6Binding,
+				portsBinding, passwordBinding)
 			setRelayName(a, relays[0].Name)
 		}
 
@@ -134,7 +152,10 @@ func createRelaySelector(a fyne.App, w fyne.Window,
 	relaySelect = widget.NewSelect([]string{}, func(selection string) {
 		if selection != "" {
 			if relay, index := relayByName(getRelays(a), selection); index >= 0 {
-				updateRelayValues(relay, addressBinding, portsBinding, passwordBinding)
+				updateRelayValues(relay,
+					addressBinding,
+					address6Binding,
+					portsBinding, passwordBinding)
 				setRelayName(a, selection)
 			}
 		}
@@ -142,55 +163,48 @@ func createRelaySelector(a fyne.App, w fyne.Window,
 
 	// Создаем поле ввода для имени нового посредника
 	nameEntry = widget.NewEntry()
-	nameEntry.SetText(" ")
+	nameEntry.SetText("")
 
-	// Валидатор для проверки уникальности имени
-	nameEntry.Validator = func(text string) error {
-		if text == "" {
-			return nil // Пустое поле - это нормально для placeholder
-		}
-
-		// Проверяем, существует ли уже посредник с таким именем
-		if _, index := relayByName(getRelays(a), text); index >= 0 {
-			s := lp("Name already exists")
-			return errors.New(s)
-		}
-
-		return nil
-	}
-
-	// Функция добавления нового посредника
+	// Функция добавления/обновления посредника
 	addRelay := func() {
 		name := strings.TrimSpace(nameEntry.Text)
+		if name == "" {
+			name = strings.TrimSpace(relayName(a))
+		}
 		if name == "" {
 			NewToast(w, lp("Empty name")).Show()
 			return
 		}
 
-		// Проверяем валидацию
-		if err := nameEntry.Validator(name); err != nil {
-			NewToast(w, err.Error()).Show()
-			return
-		}
-
 		// Получаем текущие значения полей
-		currentAddress, _ := addressBinding.Get()
-		currentPorts, _ := portsBinding.Get()
-		currentPassword, _ := passwordBinding.Get()
+		address, _ := addressBinding.Get()
+		address6, _ := address6Binding.Get()
+		ports, _ := portsBinding.Get()
+		password, _ := passwordBinding.Get()
 
 		// Загружаем текущие релеи
 		relays := getRelays(a)
+		relay, index := relayByName(relays, name)
 
-		// Создаем нового посредника
-		newRelay := Relay{
-			Name:     name,
-			Address:  currentAddress,
-			Ports:    currentPorts,
-			Password: currentPassword,
+		// Если не найден - создаем НОВЫЙ релей с указанным именем
+		if index < 0 {
+			relay = Relay{
+				Name:     name,
+				Address:  address,
+				Address6: address6,
+				Ports:    ports,
+				Password: password,
+			}
+			relays = append(relays, relay)
+		} else {
+			// Обновляем существующий
+			relay.Address = address
+			relay.Address6 = address6
+			relay.Ports = ports
+			relay.Password = password
+			relays[index] = relay
 		}
 
-		// Добавляем и сохраняем
-		relays = append(relays, newRelay)
 		if err := saveRelays(a, relays); err != nil {
 			NewToast(w, err.Error()).Show()
 			return
@@ -199,7 +213,7 @@ func createRelaySelector(a fyne.App, w fyne.Window,
 		// Обновляем UI
 		updateRelaySelector()
 		setRelayName(a, name)
-		nameEntry.SetText(" ")
+		nameEntry.SetText("")
 		NewToast(w, "Ok").Show()
 	}
 
@@ -209,7 +223,21 @@ func createRelaySelector(a fyne.App, w fyne.Window,
 	}
 
 	// Кнопка для добавления нового посредника
-	addRelayBtn := widget.NewButtonWithIcon("", theme.ContentAddIcon(), addRelay)
+	addRelayBtn := widget.NewButtonWithIcon("", theme.ViewRefreshIcon(), addRelay)
+
+	nameEntry.OnChanged = func(name string) {
+		if strings.TrimSpace(name) == "" {
+			addRelayBtn.SetIcon(theme.ViewRefreshIcon())
+			return
+		}
+
+		if _, index := relayByName(getRelays(a), name); index >= 0 {
+			addRelayBtn.SetIcon(theme.ViewRefreshIcon())
+			return
+		}
+
+		addRelayBtn.SetIcon(theme.ContentAddIcon())
+	}
 
 	// Функция удаления текущего посредника
 	deleteRelay := func() {
