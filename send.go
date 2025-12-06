@@ -4,6 +4,7 @@ package main
 import (
 	"crypto/hmac"
 	"crypto/sha256"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"hash/crc32"
@@ -102,7 +103,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 	entry := widget.NewEntryWithData(binding.BindPreferenceString("secret", a.Preferences()))
 	cosED = append(cosED, entry)
 
-	entryText := os.Getenv(CROC_SECRET)
+	entryText := code
 	if entryText != "" {
 		entry.SetText(entryText)
 	}
@@ -322,17 +323,6 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 		} else {
 			return fmt.Errorf("not in cach %s", dst)
 		}
-		// fe := addEntry(dst, func(d *widget.Button, p *widget.ProgressBar, l *widget.Label) {
-		// 	p.Hide()
-		// 	if fi.IsDir() {
-		// 		l.SetText(base + slash)
-		// 	}
-		// })
-
-		// if fe == nil {
-		// 	log.Tracef("entry %s has %s", base, src)
-		// 	return nil
-		// }
 
 		if _, err := os.Stat(dst); err == nil {
 			log.Tracef("recached %s: %v", base, os.RemoveAll(dst))
@@ -596,23 +586,23 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 				fyne.Do(NewToast(w, lp("Pick a file to send")).Show)
 				return
 			}
+			filesInfo = filter(filesInfo, allowed...)
+			// if len(allowed) > 0 {
+			// 	filtered := []croc.FileInfo{}
+			// 	allowedSet := make(map[string]struct{})
 
-			if len(allowed) > 0 {
-				filtered := []croc.FileInfo{}
-				allowedSet := make(map[string]struct{})
+			// 	for _, a := range allowed {
+			// 		allowedSet[a] = struct{}{}
+			// 	}
+			// 	// log.Tracef("allowedSet %v", allowedSet)
 
-				for _, a := range allowed {
-					allowedSet[a] = struct{}{}
-				}
-				// log.Tracef("allowedSet %v", allowedSet)
-
-				for _, fi := range filesInfo {
-					if _, ok := allowedSet[filepath.Join(fi.FolderSource, fi.Name)]; ok {
-						filtered = append(filtered, fi)
-					}
-				}
-				filesInfo = filtered[:]
-			}
+			// 	for _, fi := range filesInfo {
+			// 		if _, ok := allowedSet[filepath.Join(fi.FolderSource, fi.Name)]; ok {
+			// 			filtered = append(filtered, fi)
+			// 		}
+			// 	}
+			// 	filesInfo = filtered[:]
+			// }
 			// log.Tracef("filtered filesInfo %+v: %v", filesInfo, err)
 			if len(filesInfo) < 1 {
 				fyne.Do(NewToast(w, lp("Pick a file to send")).Show)
@@ -626,31 +616,67 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 				secret = TOTP + secret
 			}
 
-			client, err := croc.New(croc.Options{
-				IsSender:         true,
-				SharedSecret:     secret,
-				Debug:            debugBool(a),
-				RelayAddress:     a.Preferences().String("relay-address"),
-				RelayPorts:       strings.Split(a.Preferences().String("relay-ports"), ","),
-				RelayPassword:    a.Preferences().String("relay-password"),
-				NoPrompt:         true,
-				DisableLocal:     a.Preferences().Bool("disable-local"),
-				NoMultiplexing:   a.Preferences().Bool("disable-multiplexing"),
-				OnlyLocal:        a.Preferences().Bool("force-local"),
-				NoCompress:       a.Preferences().Bool("disable-compression"),
-				Curve:            a.Preferences().String("pake-curve"),
-				HashAlgorithm:    a.Preferences().String("croc-hash"),
-				ThrottleUpload:   a.Preferences().String("upload-throttle"),
-				MulticastAddress: a.Preferences().String("multicast-address"),
-				Exclude:          []string{},
-				ZipFolder:        zipfolder,
-			})
+			var crocOptions croc.Options
+			restore := a.Preferences().Bool("restore")
+			remember := a.Preferences().Bool("remember")
+			if restore {
+				if b, errOpen := os.ReadFile(getSendConfigFile(false)); errOpen == nil {
+					var rememberedOptions croc.Options
+					if json.Unmarshal(b, &rememberedOptions) == nil {
+						p := NewPreferences(a.Preferences(), filepaths...)
+						p.SetBool("remember", false) // не влияет на a.Preferences()
+						if rememberedOptions.SharedSecret == "" {
+							p.SetString("code", secret)
+						}
+						p.SetString("debug", a.Preferences().String("debug-level"))
+
+						err = send(p)
+					}
+				}
+			}
+			if restore && err == nil {
+				crocOptions = spy.options
+				filesInfo = filter(spy.filesInfo, allowed...)
+				emptyfolders = spy.emptyFoldersToTransfer
+				totalNumberFolders = spy.totalNumberFolders
+			} else {
+				comm.Socks5Proxy = defs(socks5, a.Preferences().String("socks5"))
+				comm.HttpProxy = defs(connect, a.Preferences().String("connect"))
+				crocOptions = croc.Options{
+					IsSender:         true,
+					SharedSecret:     secret,
+					Debug:            debugBool(a),
+					RelayAddress:     defs(relay4, a.Preferences().String("relay-address")),
+					RelayAddress6:    defs(relay6, a.Preferences().String("relay6")),
+					RelayPorts:       strings.Split(a.Preferences().String("relay-ports"), ","),
+					RelayPassword:    defs(pass, a.Preferences().String("relay-password")),
+					NoPrompt:         true,
+					DisableLocal:     a.Preferences().Bool("disable-local"),
+					NoMultiplexing:   a.Preferences().Bool("disable-multiplexing"),
+					OnlyLocal:        a.Preferences().Bool("force-local"),
+					NoCompress:       a.Preferences().Bool("disable-compression"),
+					Curve:            a.Preferences().String("pake-curve"),
+					HashAlgorithm:    a.Preferences().String("croc-hash"),
+					ThrottleUpload:   a.Preferences().String("upload-throttle"),
+					MulticastAddress: a.Preferences().String("multicast-address"),
+					Exclude:          []string{},
+					ZipFolder:        zipfolder,
+				}
+			}
+			client, err := croc.New(crocOptions)
 			if err != nil {
 				log.Errorf("croc: %v", err)
 				fyne.Do(NewToast(w, err.Error()).Show)
 
 				return
 			}
+			if remember {
+				p := NewPreferences(a.Preferences())
+				p.SetString("relay", crocOptions.RelayAddress)
+				p.SetString("relay6", crocOptions.RelayAddress6)
+				saveConfig(p, crocOptions)
+			}
+
 			log.SetLevel(debugString(a))
 			log.Trace("croc client created")
 
@@ -957,6 +983,38 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 			processIntent()
 		})
 	} else {
+		stat, _ := os.Stdin.Stat()
+		if (stat.Mode() & os.ModeCharDevice) == 0 {
+			// cat file|crocgui
+			go func() {
+				fnames, err := getStdin()
+				if err != nil {
+					return
+				}
+				utils.MarkFileForRemoval(fnames[0])
+				var wga sync.WaitGroup
+				for _, src := range fnames {
+					src, err := filepath.Abs(src)
+					if err != nil {
+						log.Warnf("abs %s: %v", src, err)
+						continue
+					}
+					if err := addPath(src, &wga); err != nil {
+						log.Error(err.Error())
+					}
+				}
+				select {
+				case <-done:
+				default:
+					wga.Wait()
+					log.Tracef("done %v", fnames)
+					removeEntrys(false)
+					reload()
+					showPage()
+				}
+			}()
+		}
+
 		if len(os.Args) > 1 {
 			go func() {
 				var wga sync.WaitGroup
@@ -1660,4 +1718,43 @@ func trimDotSlash(fi croc.FileInfo) (s string) {
 	s = filepath.Clean(s)
 	s = filepath.FromSlash(s)
 	return
+}
+
+func filter(filesInfo []croc.FileInfo, allowed ...string) (filtered []croc.FileInfo) {
+	if len(allowed) > 0 {
+		allowedSet := make(map[string]struct{})
+		for _, a := range allowed {
+			allowedSet[a] = struct{}{}
+		}
+		// log.Tracef("allowedSet %v", allowedSet)
+
+		for _, fi := range filesInfo {
+			if _, ok := allowedSet[filepath.Join(fi.FolderSource, fi.Name)]; ok {
+				filtered = append(filtered, fi)
+			}
+		}
+	} else {
+		return filesInfo
+	}
+	return
+}
+
+func getStdin() (fnames []string, err error) {
+	f, err := os.CreateTemp("", STDIN+"*")
+	if err != nil {
+		return nil, err
+	}
+	fileName := f.Name()
+	defer f.Close()
+
+	_, err = io.Copy(f, os.Stdin)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := f.Close(); err != nil {
+		return nil, err
+	}
+
+	return []string{fileName}, nil
 }

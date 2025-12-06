@@ -19,6 +19,12 @@ func Symlink(oldname string, newname string) error {
 	if swap {
 		return fmt.Errorf("swap")
 	}
+
+	base := filepath.Base(oldname)
+	if strings.HasPrefix(base, STDIN) {
+		return fmt.Errorf("stdin")
+	}
+
 	// Создаем директорию для новой ссылки если нужно
 	dir := filepath.Dir(newname)
 	if err := os.MkdirAll(dir, 0700); err != nil {

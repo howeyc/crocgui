@@ -80,6 +80,13 @@ var (
 	// cmd/c "set CROC_CD_LOCK=1&crocgui.exe"
 	// CROC_CD_LOCK=1 crocgui
 	longCdLock = os.Getenv("CROC_CD_LOCK") != ""
+
+	relay4  = os.Getenv("CROC_RELAY")
+	relay6  = os.Getenv("CROC_RELAY6")
+	pass    = os.Getenv("CROC_PASS")
+	socks5  = os.Getenv("SOCKS5_PROXY")
+	connect = os.Getenv("HTTP_PROXY")
+	code    = os.Getenv("CROC_SECRET")
 )
 
 const (
@@ -96,6 +103,7 @@ const (
 	ID                     = "com.github.howeyc.crocgui"
 	LastFolder             = "fyne:fileDialogLastFolder"
 	DEFAULT                = "default"
+	STDIN                  = "croc-stdin-"
 )
 
 const (
@@ -157,29 +165,42 @@ func main() {
 	})
 
 	// Defaults
-	a.Preferences().SetString("lang", a.Preferences().StringWithFallback("lang", "en-US"))
-	a.Preferences().SetString("relay-address", a.Preferences().StringWithFallback("relay-address", "croc.schollz.com:9009"))
-	a.Preferences().SetString("relay-password", a.Preferences().StringWithFallback("relay-password", "pass123"))
-	a.Preferences().SetString("relay-ports", a.Preferences().StringWithFallback("relay-ports", "9009,9010,9011,9012,9013,9014,9015,9016,9017"))
-	a.Preferences().SetBool("disable-local", a.Preferences().BoolWithFallback("disable-local", false))
-	a.Preferences().SetBool("force-local", a.Preferences().BoolWithFallback("force-local", false))
-	a.Preferences().SetBool("disable-multiplexing", a.Preferences().BoolWithFallback("disable-multiplexing", false))
-	a.Preferences().SetBool("disable-compression", a.Preferences().BoolWithFallback("disable-compression", false))
-	a.Preferences().SetString("theme", a.Preferences().StringWithFallback("theme", "system"))
-	a.Preferences().SetString("font", a.Preferences().StringWithFallback("font", DEFAULT))
-	a.Preferences().SetString("debug-level", a.Preferences().StringWithFallback("debug-level", "error"))
-	a.Preferences().SetString("pake-curve", a.Preferences().StringWithFallback("pake-curve", "p256"))
-	a.Preferences().SetString("croc-hash", a.Preferences().StringWithFallback("croc-hash", "xxhash"))
-	a.Preferences().SetBool("hide-logo", a.Preferences().BoolWithFallback("hide-logo", false))
-	a.Preferences().SetString("multicast-address", a.Preferences().StringWithFallback("multicast-address", "239.255.255.250"))
+	a.Preferences().SetString("lang",
+		a.Preferences().StringWithFallback("lang", "en-US"))
+	a.Preferences().SetString("relay-address",
+		a.Preferences().StringWithFallback("relay-address", "croc.schollz.com:9009"))
+	a.Preferences().SetString("relay-password",
+		a.Preferences().StringWithFallback("relay-password", "pass123"))
+	a.Preferences().SetString("relay-ports",
+		a.Preferences().StringWithFallback("relay-ports", "9009,9010,9011,9012,9013,9014,9015,9016,9017"))
+	// a.Preferences().SetBool("disable-local", a.Preferences().BoolWithFallback("disable-local", false))
+	// a.Preferences().SetBool("force-local", a.Preferences().BoolWithFallback("force-local", false))
+	// a.Preferences().SetBool("disable-multiplexing", a.Preferences().BoolWithFallback("disable-multiplexing", false))
+	// a.Preferences().SetBool("disable-compression", a.Preferences().BoolWithFallback("disable-compression", false))
+	a.Preferences().SetString("theme",
+		a.Preferences().StringWithFallback("theme", "system"))
+	a.Preferences().SetString("font",
+		a.Preferences().StringWithFallback("font", DEFAULT))
+	a.Preferences().SetString("debug-level",
+		a.Preferences().StringWithFallback("debug-level", "error"))
+	a.Preferences().SetString("pake-curve",
+		a.Preferences().StringWithFallback("pake-curve", "p256"))
+	a.Preferences().SetString("croc-hash",
+		a.Preferences().StringWithFallback("croc-hash", "xxhash"))
+	// a.Preferences().SetBool("hide-logo", a.Preferences().BoolWithFallback("hide-logo", false))
+	a.Preferences().SetString("multicast-address",
+		a.Preferences().StringWithFallback("multicast-address", "239.255.255.250"))
 
-	a.Preferences().SetBool("totp-send", a.Preferences().BoolWithFallback("totp-send", false))
-	a.Preferences().SetBool("totp-recv", a.Preferences().BoolWithFallback("totp-recv", false))
-	a.Preferences().SetBool("zip-unzip", a.Preferences().BoolWithFallback("zip-unzip", false))
+	// a.Preferences().SetBool("totp-send", a.Preferences().BoolWithFallback("totp-send", false))
+	// a.Preferences().SetBool("totp-recv", a.Preferences().BoolWithFallback("totp-recv", false))
+	// a.Preferences().SetBool("zip-unzip", a.Preferences().BoolWithFallback("zip-unzip", false))
 	if a.Preferences().String(relaysKey) == "" {
 		saveRelays(a, getRelays(a))
 		setRelayName(a, DEFAULT)
 	}
+	a.Preferences().SetBool("remember",
+		a.Preferences().BoolWithFallback("remember", true))
+	// a.Preferences().SetBool("restore", a.Preferences().BoolWithFallback("restore", false))
 
 	appTheme.color = theme.DefaultTheme()
 	appTheme.size = theme.DefaultTheme()
@@ -255,4 +276,13 @@ func cleanup(w fyne.Window) {
 		log.Tracef("RemoveMarkedFiles: %v", utils.RemoveMarkedFiles())
 	}
 	w.Close()
+}
+
+func defs(ss ...string) string {
+	for _, s := range ss {
+		if s != "" {
+			return s
+		}
+	}
+	return ""
 }

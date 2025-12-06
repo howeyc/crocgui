@@ -84,7 +84,7 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 	entry := widget.NewEntryWithData(binding.BindPreferenceString("secret", a.Preferences()))
 	cosED = append(cosED, entry)
 
-	entryText := os.Getenv(CROC_SECRET)
+	entryText := code
 	if entryText != "" {
 		entry.SetText(entryText)
 	}
