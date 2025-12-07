@@ -4,13 +4,13 @@ package main
 import (
 	"crypto/hmac"
 	"crypto/sha256"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"hash/crc32"
 	"io"
 	"math"
 	"os"
+	"path"
 	"path/filepath"
 	"reflect"
 	"runtime"
@@ -545,11 +545,11 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 			return
 		}
 
-		zipfolder := a.Preferences().Bool("zip-unzip")
+		ZipFolder := a.Preferences().Bool("zip-unzip")
 
 		// Пути посылаемых файлов абсолютны. Переходим в каталог только если zipfolder
 		cdLocked := false
-		if hasFolder(join()) && zipfolder {
+		if hasFolder(join()) && ZipFolder {
 			log.Trace("hasFolders(join()) && zipfolder")
 			if cdLock.CompareAndSwap(0, 1) {
 				cdLocked = true
@@ -570,7 +570,9 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 		}
 		//
 		go func() {
-			filesInfo, emptyfolders, totalNumberFolders, err := croc.GetFilesInfo(filepaths, zipfolder, false, nil)
+			GitIgnore := a.Preferences().Bool("git")
+			Exclude := exclude(a.Preferences().String("exclude"))
+			filesInfo, emptyfolders, totalNumberFolders, err := croc.GetFilesInfo(filepaths, ZipFolder, GitIgnore, Exclude)
 
 			if cdLocked {
 				if longCdLock {
@@ -586,8 +588,11 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 				fyne.Do(NewToast(w, lp("Pick a file to send")).Show)
 				return
 			}
-			filesInfo = filter(filesInfo, allowed...)
-			// log.Tracef("filtered filesInfo %+v: %v", filesInfo, err)
+
+			// log.Tracef("filesInfo %+v %v %d: %v", filesInfo, emptyfolders, totalNumberFolders, err)
+
+			filesInfo, emptyfolders, totalNumberFolders = filter(filesInfo, emptyfolders, totalNumberFolders, Exclude, allowed...)
+			// log.Tracef("filtered filesInfo %+v %v %d", filesInfo, emptyfolders, totalNumberFolders)
 			if len(filesInfo) < 1 {
 				fyne.Do(NewToast(w, lp("Pick a file to send")).Show)
 				return
@@ -600,62 +605,29 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 				secret = TOTP + secret
 			}
 
-			var crocOptions croc.Options
-			restore := a.Preferences().Bool("restore")
-			log.Errorf("restore %v", restore)
-			remember := a.Preferences().Bool("remember")
-			log.Errorf("remember %v", remember)
-			if restore {
-				if b, errRead := os.ReadFile(getSendConfigFile(false)); errRead == nil {
-					var rememberedOptions croc.Options
-					if errUnm := json.Unmarshal(b, &rememberedOptions); errUnm == nil {
-						log.Tracef("rememberedOptions %+v", rememberedOptions)
-						p := NewPreferences(a.Preferences(), filepaths...)
-						p.SetBool("remember", false) // не влияет на a.Preferences()
-						if rememberedOptions.SharedSecret == "" {
-							p.SetString("code", secret)
-						}
-						p.SetString("debug", a.Preferences().String("debug-level"))
-						log.Tracef("p %+v", p)
-						err = send(p)
-						log.Errorf("send %v", err)
-
-					} else {
-						log.Errorf("Unmarshal %v", errUnm)
-					}
-				} else {
-					log.Errorf("ReadFile %v", errRead)
-				}
-			}
-			if restore && err == nil {
-				log.Tracef("spy %+v", spy)
-				crocOptions = spy.options
-				filesInfo = filter(spy.filesInfo, allowed...)
-				emptyfolders = spy.emptyFoldersToTransfer
-				totalNumberFolders = spy.totalNumberFolders
-			} else {
-				comm.Socks5Proxy = defs(socks5, a.Preferences().String("socks5"))
-				comm.HttpProxy = defs(connect, a.Preferences().String("connect"))
-				crocOptions = croc.Options{
-					IsSender:         true,
-					SharedSecret:     secret,
-					Debug:            debugBool(a),
-					RelayAddress:     defs(relay4, a.Preferences().String("relay-address")),
-					RelayAddress6:    defs(relay6, a.Preferences().String("relay6")),
-					RelayPorts:       strings.Split(a.Preferences().String("relay-ports"), ","),
-					RelayPassword:    defs(pass, a.Preferences().String("relay-password")),
-					NoPrompt:         true,
-					DisableLocal:     a.Preferences().Bool("disable-local"),
-					NoMultiplexing:   a.Preferences().Bool("disable-multiplexing"),
-					OnlyLocal:        a.Preferences().Bool("force-local"),
-					NoCompress:       a.Preferences().Bool("disable-compression"),
-					Curve:            a.Preferences().String("pake-curve"),
-					HashAlgorithm:    a.Preferences().String("croc-hash"),
-					ThrottleUpload:   a.Preferences().String("upload-throttle"),
-					MulticastAddress: a.Preferences().String("multicast-address"),
-					Exclude:          []string{},
-					ZipFolder:        zipfolder,
-				}
+			comm.Socks5Proxy = defs(socks5, a.Preferences().String("socks5"))
+			comm.HttpProxy = defs(connect, a.Preferences().String("connect"))
+			crocOptions := croc.Options{
+				IsSender:         true,
+				SharedSecret:     secret,
+				Debug:            debugBool(a),
+				RelayAddress:     defs(relay4, a.Preferences().String("relay-address")),
+				RelayAddress6:    defs(relay6, a.Preferences().String("relay6")),
+				RelayPorts:       strings.Split(a.Preferences().String("relay-ports"), ","),
+				RelayPassword:    defs(pass, a.Preferences().String("relay-password")),
+				NoPrompt:         true,
+				DisableLocal:     a.Preferences().Bool("disable-local"),
+				NoMultiplexing:   a.Preferences().Bool("disable-multiplexing"),
+				OnlyLocal:        a.Preferences().Bool("force-local"),
+				NoCompress:       a.Preferences().Bool("disable-compression"),
+				Curve:            a.Preferences().String("pake-curve"),
+				HashAlgorithm:    a.Preferences().String("croc-hash"),
+				ThrottleUpload:   a.Preferences().String("upload-throttle"),
+				MulticastAddress: a.Preferences().String("multicast-address"),
+				Exclude:          Exclude,
+				ZipFolder:        ZipFolder,
+				Overwrite:        a.Preferences().Bool("overwrite"),
+				GitIgnore:        GitIgnore,
 			}
 			client, err := croc.New(crocOptions)
 			if err != nil {
@@ -664,16 +636,15 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 
 				return
 			}
-			// log.Errorf("remember %v", remember)
-			if remember {
-				p := NewPreferences(a.Preferences())
-				p.SetString("relay", crocOptions.RelayAddress)
-				// p.SetString("relay6", crocOptions.RelayAddress6)
-				saveConfig(p, crocOptions)
-			}
-
 			log.SetLevel(debugString(a))
 			log.Trace("croc client created")
+
+			if a.Preferences().Bool("remember") {
+				p := NewPreferences(a.Preferences())
+				p.SetString("relay", crocOptions.RelayAddress)
+				a.Preferences().SetBool("send", true)
+				saveConfig(p, crocOptions, true)
+			}
 
 			var filename string
 			showCancel()
@@ -1443,13 +1414,33 @@ func allEnabled(enabled bool, cos ...fyne.CanvasObject) {
 			} else {
 				w.Disable()
 			}
-		case *widget.Entry:
+		case *fyne.Container:
+			allEnabled(enabled, w.Objects...)
+		case *widget.Select:
 			if enabled {
 				w.Enable()
 			} else {
 				w.Disable()
 			}
+
+		case *widget.Entry:
+			w.TextStyle.Italic = !enabled
+			if !enabled && w.OnChanged == nil {
+				w.OnChanged = func(string) {
+					if w.TextStyle.Italic {
+						w.Undo()
+					}
+				}
+			}
 		case *widget.Check:
+			if enabled {
+				w.Enable()
+			} else {
+				w.Disable()
+			}
+		case *widget.Label:
+			w.TextStyle.Italic = !enabled
+		case *widget.RadioGroup:
 			if enabled {
 				w.Enable()
 			} else {
@@ -1537,6 +1528,10 @@ func setupTOTP(a fyne.App, entry *widget.Entry, totpCheck *widget.Check, totpLab
 	}
 
 	entry.OnChanged = func(secret string) {
+		if entry.TextStyle.Italic {
+			entry.Undo()
+			return
+		}
 		os.Setenv(CROC_SECRET, secret)
 		update()
 	}
@@ -1715,21 +1710,75 @@ func trimDotSlash(fi croc.FileInfo) (s string) {
 	return
 }
 
-func filter(filesInfo []croc.FileInfo, allowed ...string) (filtered []croc.FileInfo) {
-	if len(allowed) > 0 {
-		allowedSet := make(map[string]struct{})
-		for _, a := range allowed {
-			allowedSet[a] = struct{}{}
+func filter(filesInfo, emptyFoldersToTransfer []croc.FileInfo, totalNumberFolders int, exclusions []string, allowed ...string) ([]croc.FileInfo, []croc.FileInfo, int) {
+	// Вспомогательная функция для проверки исключений
+	shouldExclude := func(f croc.FileInfo) bool {
+		if len(exclusions) == 0 {
+			return false
 		}
-		// log.Tracef("allowedSet %v", allowedSet)
-
-		for _, fi := range filesInfo {
-			if _, ok := allowedSet[filepath.Join(fi.FolderSource, fi.Name)]; ok {
-				filtered = append(filtered, fi)
+		fullPath := path.Join(strings.ToLower(f.FolderRemote), strings.ToLower(f.Name))
+		for _, exclusion := range exclusions {
+			if strings.Contains(fullPath, exclusion) {
+				return true
 			}
 		}
-	} else {
-		return filesInfo
+		return false
+	}
+
+	// Вспомогательная функция для проверки разрешений
+	isAllowed := func(f croc.FileInfo) bool {
+		if len(allowed) == 0 {
+			return true
+		}
+		sourcePath := filepath.Join(f.FolderSource, f.Name)
+		for _, a := range allowed {
+			if a == sourcePath {
+				return true
+			}
+		}
+		return false
+	}
+
+	// Функция фильтрации счета папок
+	countUniqueFolders := func(files, emptyFolders []croc.FileInfo) int {
+		folderMap := make(map[string]bool)
+		for _, f := range files {
+			folderMap[f.FolderRemote] = true
+		}
+		for _, f := range emptyFolders {
+			folderMap[f.FolderRemote] = true
+		}
+		return len(folderMap)
+	}
+
+	// Применяем фильтры к filesInfo
+	filteredFiles := make([]croc.FileInfo, 0, len(filesInfo))
+	for _, f := range filesInfo {
+		if !shouldExclude(f) && isAllowed(f) {
+			filteredFiles = append(filteredFiles, f)
+		}
+	}
+
+	// Применяем фильтры к emptyFoldersToTransfer
+	filteredEmpty := make([]croc.FileInfo, 0, len(emptyFoldersToTransfer))
+	for _, f := range emptyFoldersToTransfer {
+		if !shouldExclude(f) && isAllowed(f) {
+			filteredEmpty = append(filteredEmpty, f)
+		}
+	}
+
+	// Считаем уникальные папки
+	total := countUniqueFolders(filteredFiles, filteredEmpty)
+
+	return filteredFiles, filteredEmpty, total
+}
+
+func exclude(e string) (exclusions []string) {
+	for _, v := range strings.Split(e, ",") {
+		v = strings.ToLower(strings.TrimSpace(v))
+		if v != "" {
+			exclusions = append(exclusions, v)
+		}
 	}
 	return
 }

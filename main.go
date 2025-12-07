@@ -13,7 +13,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/schollz/croc/v10/src/models"
 	"github.com/schollz/croc/v10/src/utils"
 	log "github.com/schollz/logger"
 	"golang.org/x/text/language"
@@ -104,7 +103,12 @@ const (
 	ID                     = "com.github.howeyc.crocgui"
 	LastFolder             = "fyne:fileDialogLastFolder"
 	DEFAULT                = "default"
+	NONDEFAULT             = "non-default: "
 	STDIN                  = "croc-stdin-"
+	DEFAULT_RELAY          = "croc.schollz.com"
+	DEFAULT_RELAY6         = "croc6.schollz.com"
+	DEFAULT_PORT           = "9009"
+	DEFAULT_PASSPHRASE     = "pass123"
 )
 
 const (
@@ -169,9 +173,9 @@ func main() {
 	a.Preferences().SetString("lang",
 		a.Preferences().StringWithFallback("lang", "en-US"))
 	a.Preferences().SetString("relay-address",
-		a.Preferences().StringWithFallback("relay-address", models.DEFAULT_RELAY))
+		a.Preferences().StringWithFallback("relay-address", DEFAULT_RELAY))
 	a.Preferences().SetString("relay-password",
-		a.Preferences().StringWithFallback("relay-password", models.DEFAULT_PASSPHRASE))
+		a.Preferences().StringWithFallback("relay-password", DEFAULT_PASSPHRASE))
 	a.Preferences().SetString("relay-ports",
 		a.Preferences().StringWithFallback("relay-ports", "9009,9010,9011,9012,9013,9014,9015,9016,9017"))
 	// a.Preferences().SetBool("disable-local", a.Preferences().BoolWithFallback("disable-local", false))
@@ -203,7 +207,7 @@ func main() {
 		a.Preferences().BoolWithFallback("remember", true))
 	// a.Preferences().SetBool("restore", a.Preferences().BoolWithFallback("restore", false))
 	a.Preferences().SetString("relay6",
-		a.Preferences().StringWithFallback("relay6", models.DEFAULT_RELAY6))
+		a.Preferences().StringWithFallback("relay6", DEFAULT_RELAY6))
 	a.Preferences().SetBool("overwrite",
 		a.Preferences().BoolWithFallback("overwrite", true))
 

@@ -226,6 +226,10 @@ func createRelaySelector(a fyne.App, w fyne.Window,
 	addRelayBtn := widget.NewButtonWithIcon("", theme.ViewRefreshIcon(), addRelay)
 
 	nameEntry.OnChanged = func(name string) {
+		if nameEntry.TextStyle.Italic {
+			nameEntry.Undo()
+			return
+		}
 		if strings.TrimSpace(name) == "" {
 			addRelayBtn.SetIcon(theme.ViewRefreshIcon())
 			return

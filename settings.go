@@ -3,8 +3,13 @@ package main
 
 import (
 	"embed"
+	"encoding/json"
+	"fmt"
+	"os"
 	"strings"
 
+	"github.com/schollz/croc/v10/src/croc"
+	log "github.com/schollz/logger"
 	"golang.org/x/text/language"
 	"golang.org/x/text/message"
 
@@ -18,6 +23,20 @@ import (
 
 //go:embed internal/fonts
 var fsFonts embed.FS
+
+// Структура для хранения всех GUI настроек
+type GuiSettings struct {
+	RelayAddress  string
+	RelayAddress6 string
+	RelayPorts    []string
+	RelayPassword string
+	DisableLocal  bool
+	OnlyLocal     bool
+	Curve         string
+	HashAlgorithm string
+	GitIgnore     bool
+	Overwrite     bool
+}
 
 func settingsTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 	langBinding := binding.BindPreferenceString("lang", a.Preferences())
@@ -110,10 +129,114 @@ func settingsTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 	relayControls := createRelaySelector(a, w,
 		relayAddressBinding,
 		relay6Binding,
-		relayPortsBinding,
-		relayPasswordBinding)
+		relayPortsBinding, relayPasswordBinding)
 
-	return container.NewTabItemWithIcon(ZeroWidthNonJoiner, theme.SettingsIcon(), container.NewVScroll(container.NewVBox( //lp("Settings")
+	// Создаем виджеты для полей
+	relayAddressEntry := widget.NewEntryWithData(relayAddressBinding)
+	relay6Entry := widget.NewEntryWithData(relay6Binding)
+	relayPortsEntry := widget.NewEntryWithData(relayPortsBinding)
+	relayPasswordEntry := widget.NewEntryWithData(relayPasswordBinding)
+
+	disableLocalBinding := binding.BindPreferenceBool("disable-local", a.Preferences())
+	disableLocalCheck := widget.NewCheckWithData("", disableLocalBinding)
+
+	onlyLocalBinding := binding.BindPreferenceBool("force-local", a.Preferences())
+	onlyLocalCheck := widget.NewCheckWithData("", onlyLocalBinding)
+
+	gitIgnoreBinding := binding.BindPreferenceBool("git", a.Preferences())
+	gitIgnoreCheck := widget.NewCheckWithData("", gitIgnoreBinding)
+
+	overwriteBinding := binding.BindPreferenceBool("overwrite", a.Preferences())
+	overwriteCheck := widget.NewCheckWithData("", overwriteBinding)
+
+	sendBinding := binding.BindPreferenceBool("send", a.Preferences())
+	sendCheck := widget.NewCheckWithData(lp("Send"), sendBinding)
+
+	// Массив элементов для управления состоянием
+	cosED := []fyne.CanvasObject{
+		relayAddressEntry,
+		relay6Entry,
+		relayPortsEntry,
+		relayPasswordEntry,
+		disableLocalCheck,
+		onlyLocalCheck,
+		gitIgnoreCheck,
+		overwriteCheck,
+		curveSelect,
+		hashSelect,
+		relayControls,
+	}
+
+	var savedGuiSettings GuiSettings
+	var guiSettingsSaved bool
+
+	// Создаем restoreCheck после объявления всех переменных
+	restoreCheck := widget.NewCheckWithData(lp("Restore"), binding.BindPreferenceBool("restore", a.Preferences()))
+	restoreCheck.OnChanged = func(restore bool) {
+		if restore {
+			// Сохраняем текущие GUI значения
+			savedGuiSettings = saveCurrentGuiSettings(
+				relayAddressBinding,  // String
+				relay6Binding,        // String
+				relayPortsBinding,    // String
+				relayPasswordBinding, // String
+				disableLocalBinding,  // Bool
+				onlyLocalBinding,     // Bool
+				curveBinding,         // String
+				hashBinding,          // String
+				gitIgnoreBinding,     // Bool
+				overwriteBinding,     // Bool
+			)
+			guiSettingsSaved = true
+
+			// Отключаем элементы
+			allEnabled(false, cosED...)
+
+			// Загружаем настройки из файла
+			if err := loadAndApplyCliOptions(
+				relayAddressBinding,  // String
+				relay6Binding,        // String
+				relayPortsBinding,    // String
+				relayPasswordBinding, // String
+				disableLocalBinding,  // Bool
+				onlyLocalBinding,     // Bool
+				curveBinding,         // String
+				hashBinding,          // String
+				gitIgnoreBinding,     // Bool
+				overwriteBinding,     // Bool
+				sendBinding,          // Bool
+			); err != nil {
+				log.Errorf("Failed to load settings: %v", err)
+				NewToast(w, err.Error()).Show()
+				// При ошибке отключаем чекбокс и возвращаем GUI
+				restoreCheck.SetChecked(false)
+				allEnabled(true, cosED...)
+				return
+			}
+		} else {
+			// Включаем элементы
+			allEnabled(true, cosED...)
+
+			// Восстанавливаем сохраненные GUI значения
+			if guiSettingsSaved {
+				restoreGuiSettings(savedGuiSettings,
+					relayAddressBinding,  // String
+					relay6Binding,        // String
+					relayPortsBinding,    // String
+					relayPasswordBinding, // String
+					disableLocalBinding,  // Bool
+					onlyLocalBinding,     // Bool
+					curveBinding,         // String
+					hashBinding,          // String
+					gitIgnoreBinding,     // Bool
+					overwriteBinding,     // Bool
+				)
+				log.Info("GUI settings restored")
+			}
+		}
+	}
+
+	return container.NewTabItemWithIcon(ZeroWidthNonJoiner, theme.SettingsIcon(), container.NewVScroll(container.NewVBox(
 		widget.NewLabelWithStyle(lp("Appearance"), fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
 		widget.NewForm(
 			widget.NewFormItem(lp("Language"), langSelect),
@@ -125,23 +248,25 @@ func settingsTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 		container.NewHBox(
 			widget.NewLabelWithStyle(lp("Croc config"), fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
 			layout.NewSpacer(),
-			widget.NewCheckWithData(lp("Remember"), binding.BindPreferenceBool("remember", a.Preferences())),
-			widget.NewCheckWithData(lp("Restore"), binding.BindPreferenceBool("restore", a.Preferences())),
+			widget.NewCheckWithData(lp("Remember"),
+				binding.BindPreferenceBool("remember", a.Preferences())),
+			restoreCheck,
+			sendCheck,
 		),
 		widget.NewSeparator(),
 		widget.NewLabelWithStyle(lp("Relay"), fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
 		widget.NewForm(
 			widget.NewFormItem(lp("Name"), relayControls),
-			widget.NewFormItem(lp("Address"), widget.NewEntryWithData(relayAddressBinding)),
-			widget.NewFormItem(lp("Address6"), widget.NewEntryWithData(relay6Binding)),
-			widget.NewFormItem(lp("Ports"), widget.NewEntryWithData(relayPortsBinding)),
-			widget.NewFormItem(lp("Password"), widget.NewEntryWithData(relayPasswordBinding)),
+			widget.NewFormItem(lp("Address"), relayAddressEntry),
+			widget.NewFormItem(lp("Address6"), relay6Entry),
+			widget.NewFormItem(lp("Ports"), relayPortsEntry),
+			widget.NewFormItem(lp("Password"), relayPasswordEntry),
 		),
 		widget.NewSeparator(),
 		widget.NewLabelWithStyle(lp("Network Local"), fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
 		widget.NewForm(
-			widget.NewFormItem(lp("Disable Local"), widget.NewCheckWithData("", binding.BindPreferenceBool("disable-local", a.Preferences()))),
-			widget.NewFormItem(lp("Force Local Only"), widget.NewCheckWithData("", binding.BindPreferenceBool("force-local", a.Preferences()))),
+			widget.NewFormItem(lp("Disable Local"), disableLocalCheck),
+			widget.NewFormItem(lp("Force Local Only"), onlyLocalCheck),
 			widget.NewFormItem(lp("Multicast Address"), widget.NewEntryWithData(binding.BindPreferenceString("multicast-address", a.Preferences()))),
 		),
 		widget.NewSeparator(),
@@ -156,10 +281,107 @@ func settingsTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 		widget.NewSeparator(),
 		widget.NewLabelWithStyle(lp("Storage Options"), fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
 		widget.NewForm(
-			widget.NewFormItem(lp("Overwrite"), widget.NewCheckWithData("", binding.BindPreferenceBool("overwrite", a.Preferences()))),
-			widget.NewFormItem(lp("GitIgnore"), widget.NewCheckWithData("", binding.BindPreferenceBool("git", a.Preferences()))),
+			widget.NewFormItem(lp("Overwrite"), overwriteCheck),
+			widget.NewFormItem(lp("GitIgnore"), gitIgnoreCheck),
 			widget.NewFormItem(s, widget.NewCheckWithData("", binding.BindPreferenceBool("zip-unzip", a.Preferences()))),
 			widget.NewFormItem(lp("Exclude"), widget.NewEntryWithData(binding.BindPreferenceString("exclude", a.Preferences()))),
 		),
 	)))
+}
+
+// Вспомогательные функции для сохранения и восстановления настроек
+
+func saveCurrentGuiSettings(
+	relayAddressBinding, relay6Binding, relayPortsBinding, relayPasswordBinding binding.String,
+	disableLocalBinding, onlyLocalBinding binding.Bool,
+	curveBinding, hashBinding binding.String,
+	gitIgnoreBinding, overwriteBinding binding.Bool,
+) GuiSettings {
+	relayAddress, _ := relayAddressBinding.Get()
+	relay6, _ := relay6Binding.Get()
+	ports, _ := relayPortsBinding.Get()
+	relayPassword, _ := relayPasswordBinding.Get()
+
+	disableLocal, _ := disableLocalBinding.Get()
+	onlyLocal, _ := onlyLocalBinding.Get()
+	curve, _ := curveBinding.Get()
+	hash, _ := hashBinding.Get()
+	gitIgnore, _ := gitIgnoreBinding.Get()
+	overwrite, _ := overwriteBinding.Get()
+
+	return GuiSettings{
+		RelayAddress:  relayAddress,
+		RelayAddress6: relay6,
+		RelayPorts:    strings.Split(ports, ","),
+		RelayPassword: relayPassword,
+		DisableLocal:  disableLocal,
+		OnlyLocal:     onlyLocal,
+		Curve:         curve,
+		HashAlgorithm: hash,
+		GitIgnore:     gitIgnore,
+		Overwrite:     overwrite,
+	}
+}
+
+func loadAndApplyCliOptions(
+	relayAddressBinding, relay6Binding, relayPortsBinding, relayPasswordBinding binding.String,
+	disableLocalBinding, onlyLocalBinding binding.Bool,
+	curveBinding, hashBinding binding.String,
+	gitIgnoreBinding, overwriteBinding, saveBinding binding.Bool,
+) error {
+	save, _ := saveBinding.Get()
+	var options croc.Options
+	b, err := os.ReadFile(getConfigFile(false, save))
+	if err != nil {
+		return fmt.Errorf("read: %w", err)
+	}
+	if err := json.Unmarshal(b, &options); err != nil {
+		return fmt.Errorf("unmarshal: %w", err)
+	}
+
+	// Применяем настройки из файла ко всем привязкам
+	if options.RelayAddress == DEFAULT {
+		options.RelayAddress = DEFAULT_RELAY
+	} else {
+		options.RelayAddress = strings.TrimPrefix(options.RelayAddress, NONDEFAULT)
+	}
+	relayAddressBinding.Set(options.RelayAddress)
+
+	if options.RelayAddress6 == DEFAULT {
+		options.RelayAddress6 = DEFAULT_RELAY6
+	} else {
+		options.RelayAddress6 = strings.TrimPrefix(options.RelayAddress6, NONDEFAULT)
+	}
+	relay6Binding.Set(options.RelayAddress6)
+
+	relayPortsBinding.Set(strings.Join(options.RelayPorts, ","))
+	relayPasswordBinding.Set(options.RelayPassword)
+
+	// Применяем остальные настройки
+	disableLocalBinding.Set(options.DisableLocal)
+	onlyLocalBinding.Set(options.OnlyLocal)
+	curveBinding.Set(options.Curve)
+	hashBinding.Set(options.HashAlgorithm)
+	gitIgnoreBinding.Set(options.GitIgnore)
+	overwriteBinding.Set(options.Overwrite)
+
+	return nil
+}
+
+func restoreGuiSettings(settings GuiSettings,
+	relayAddressBinding, relay6Binding, relayPortsBinding, relayPasswordBinding binding.String,
+	disableLocalBinding, onlyLocalBinding binding.Bool,
+	curveBinding, hashBinding binding.String,
+	gitIgnoreBinding, overwriteBinding binding.Bool,
+) {
+	relayAddressBinding.Set(settings.RelayAddress)
+	relay6Binding.Set(settings.RelayAddress6)
+	relayPortsBinding.Set(strings.Join(settings.RelayPorts, ","))
+	relayPasswordBinding.Set(settings.RelayPassword)
+	disableLocalBinding.Set(settings.DisableLocal)
+	onlyLocalBinding.Set(settings.OnlyLocal)
+	curveBinding.Set(settings.Curve)
+	hashBinding.Set(settings.HashAlgorithm)
+	gitIgnoreBinding.Set(settings.GitIgnore)
+	overwriteBinding.Set(settings.Overwrite)
 }

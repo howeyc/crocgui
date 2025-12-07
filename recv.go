@@ -21,6 +21,7 @@ import (
 	"fyne.io/fyne/v2/storage"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
+	"github.com/schollz/croc/v10/src/comm"
 	"github.com/schollz/croc/v10/src/croc"
 	log "github.com/schollz/logger"
 )
@@ -553,17 +554,21 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 			secret = TOTP + secret
 		}
 
-		client, err := croc.New(croc.Options{
+		comm.Socks5Proxy = defs(socks5, a.Preferences().String("socks5"))
+		comm.HttpProxy = defs(connect, a.Preferences().String("connect"))
+		crocOptions := croc.Options{
 			SharedSecret:     secret,
 			Debug:            debugBool(a),
-			RelayAddress:     a.Preferences().String("relay-address"),
-			RelayPassword:    a.Preferences().String("relay-password"),
+			RelayAddress:     defs(relay4, a.Preferences().String("relay-address")),
+			RelayAddress6:    defs(relay6, a.Preferences().String("relay6")),
+			RelayPassword:    defs(pass, a.Preferences().String("relay-password")),
 			NoPrompt:         true,
 			OnlyLocal:        a.Preferences().Bool("force-local"),
 			Curve:            a.Preferences().String("pake-curve"),
-			Overwrite:        true,
+			Overwrite:        a.Preferences().Bool("overwrite"),
 			MulticastAddress: a.Preferences().String("multicast-address"),
-		})
+		}
+		client, err := croc.New(crocOptions)
 		if err != nil {
 			log.Errorf("croc: %v", err)
 			NewToast(w, err.Error()).Show()
@@ -572,6 +577,13 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 		}
 		log.SetLevel(debugString(a))
 		log.Trace("croc client created")
+
+		if a.Preferences().Bool("remember") {
+			p := NewPreferences(a.Preferences())
+			p.SetString("relay", crocOptions.RelayAddress)
+			a.Preferences().SetBool("send", false)
+			saveConfig(p, crocOptions, false)
+		}
 
 		var filename string
 		showCancel()

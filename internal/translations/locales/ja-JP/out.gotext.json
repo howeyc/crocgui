@@ -29,79 +29,73 @@
             "id": "Cancel",
             "message": "Cancel",
             "translation": "キャンセル",
-            "position": "crocgui/recv.go:63:44"
+            "position": "crocgui/recv.go:64:44"
         },
         {
             "id": "Wait for them before pressing Download",
             "message": "Wait for them before pressing Download",
             "translation": "「ダウンロード」を押す前に待ってください",
-            "position": "crocgui/recv.go:82:31"
+            "position": "crocgui/recv.go:83:31"
         },
         {
             "id": "Download",
             "message": "Download",
             "translation": "ダウンロード",
-            "position": "crocgui/recv.go:527:42"
+            "position": "crocgui/recv.go:528:42"
         },
         {
             "id": "Secret must be longer than 5 characters",
             "message": "Secret must be longer than 5 characters",
             "translation": "シークレットは5文字以上である必要があります",
-            "position": "crocgui/recv.go:530:18"
+            "position": "crocgui/recv.go:531:18"
         },
         {
             "id": "Send",
             "message": "Send",
             "translation": "送信",
-            "position": "crocgui/recv.go:535:35"
+            "position": "crocgui/recv.go:536:35"
         },
         {
             "id": "Receive cancelled.",
             "message": "Receive cancelled.",
             "translation": "受信がキャンセルされました。",
-            "position": "crocgui/recv.go:625:34"
+            "position": "crocgui/recv.go:637:34"
         },
         {
             "id": "Receiving file",
             "message": "Receiving file",
             "translation": "ファイルを受信中",
-            "position": "crocgui/recv.go:644:27"
+            "position": "crocgui/recv.go:656:27"
         },
         {
             "id": "Send cancelled.",
             "message": "Send cancelled.",
             "translation": "送信がキャンセルされました。",
-            "position": "crocgui/recv.go:718:32"
+            "position": "crocgui/recv.go:730:32"
         },
         {
             "id": "Received",
             "message": "Received",
             "translation": "受信しました",
-            "position": "crocgui/recv.go:726:46"
+            "position": "crocgui/recv.go:738:46"
         },
         {
             "id": "Receive",
             "message": "Receive",
             "translation": "受信",
-            "position": "crocgui/recv.go:1003:38"
-        },
-        {
-            "id": "Name already exists",
-            "message": "Name already exists",
-            "translation": "名前がすでに存在します",
-            "position": "crocgui/relays.go:155:11"
+            "position": "crocgui/recv.go:1015:38"
         },
         {
             "id": "Empty name",
             "message": "Empty name",
             "translation": "名前が空です",
-            "position": "crocgui/relays.go:166:18"
+            "position": "crocgui/relays.go:175:18"
         },
         {
             "id": "Last item of list",
             "message": "Last item of list",
             "translation": "リストの最後の項目",
-            "position": "crocgui/relays.go:225:18"
+            "position": "crocgui/relays.go:257:18"
         },
         {
             "id": "Pick a file to send",
@@ -113,163 +107,211 @@
             "id": "Have them not press the Download yet",
             "message": "Have them not press the Download yet",
             "translation": "まだ「ダウンロード」を押さないでください",
-            "position": "crocgui/send.go:725:24"
+            "position": "crocgui/send.go:691:24"
         },
         {
             "id": "Have them press the Download now",
             "message": "Have them press the Download now",
             "translation": "今「ダウンロード」を押してください",
-            "position": "crocgui/send.go:786:28"
+            "position": "crocgui/send.go:752:28"
         },
         {
             "id": "Sending file",
             "message": "Sending file",
             "translation": "ファイルを送信中",
-            "position": "crocgui/send.go:797:57"
+            "position": "crocgui/send.go:763:57"
         },
         {
             "id": "Sent file",
             "message": "Sent file",
             "translation": "ファイルを送信しました",
-            "position": "crocgui/send.go:847:47"
+            "position": "crocgui/send.go:813:47"
         },
         {
             "id": "Show / Hide",
             "message": "Show / Hide",
             "translation": "表示 / 非表示",
-            "position": "crocgui/settings.go:93:35"
+            "position": "crocgui/settings.go:113:35"
         },
         {
             "id": "Zip folders",
             "message": "Zip folders",
             "translation": "Zipフォルダ",
-            "position": "crocgui/settings.go:99:9"
+            "position": "crocgui/settings.go:119:9"
         },
         {
             "id": "UnZip files",
             "message": "UnZip files",
             "translation": "UnZipファイル",
-            "position": "crocgui/settings.go:101:18"
+            "position": "crocgui/settings.go:121:18"
+        },
+        {
+            "id": "Restore",
+            "message": "Restore",
+            "translation": "",
+            "position": "crocgui/settings.go:174:44"
         },
         {
             "id": "Appearance",
             "message": "Appearance",
             "translation": "外観",
-            "position": "crocgui/settings.go:111:30"
+            "position": "crocgui/settings.go:240:30"
         },
         {
             "id": "Language",
             "message": "Language",
             "translation": "言語",
-            "position": "crocgui/settings.go:113:25"
+            "position": "crocgui/settings.go:242:25"
         },
         {
             "id": "Theme",
             "message": "Theme",
             "translation": "テーマ",
-            "position": "crocgui/settings.go:114:25"
+            "position": "crocgui/settings.go:243:25"
         },
         {
             "id": "Font",
             "message": "Font",
             "translation": "フォント",
-            "position": "crocgui/settings.go:115:25"
+            "position": "crocgui/settings.go:244:25"
         },
         {
             "id": "Logo",
             "message": "Logo",
             "translation": "ロゴ",
-            "position": "crocgui/settings.go:116:25"
+            "position": "crocgui/settings.go:245:25"
+        },
+        {
+            "id": "Croc config",
+            "message": "Croc config",
+            "translation": "",
+            "position": "crocgui/settings.go:249:31"
+        },
+        {
+            "id": "Remember",
+            "message": "Remember",
+            "translation": "",
+            "position": "crocgui/settings.go:251:30"
         },
         {
             "id": "Relay",
             "message": "Relay",
             "translation": "リレー",
-            "position": "crocgui/settings.go:119:30"
+            "position": "crocgui/settings.go:257:30"
         },
         {
             "id": "Name",
             "message": "Name",
             "translation": "名前",
-            "position": "crocgui/settings.go:121:25"
+            "position": "crocgui/settings.go:259:25"
         },
         {
             "id": "Address",
             "message": "Address",
             "translation": "アドレス",
-            "position": "crocgui/settings.go:122:25"
+            "position": "crocgui/settings.go:260:25"
+        },
+        {
+            "id": "Address6",
+            "message": "Address6",
+            "translation": "",
+            "position": "crocgui/settings.go:261:25"
         },
         {
             "id": "Ports",
             "message": "Ports",
             "translation": "ポート",
-            "position": "crocgui/settings.go:123:25"
+            "position": "crocgui/settings.go:262:25"
         },
         {
             "id": "Password",
             "message": "Password",
             "translation": "パスワード",
-            "position": "crocgui/settings.go:124:25"
+            "position": "crocgui/settings.go:263:25"
         },
         {
             "id": "Network Local",
             "message": "Network Local",
             "translation": "ローカルネットワーク",
-            "position": "crocgui/settings.go:127:30"
+            "position": "crocgui/settings.go:266:30"
         },
         {
             "id": "Disable Local",
             "message": "Disable Local",
             "translation": "ローカルネットワークを無効化",
-            "position": "crocgui/settings.go:129:25"
+            "position": "crocgui/settings.go:268:25"
         },
         {
             "id": "Force Local Only",
             "message": "Force Local Only",
             "translation": "ローカルネットワークのみ使用する",
-            "position": "crocgui/settings.go:130:25"
+            "position": "crocgui/settings.go:269:25"
         },
         {
             "id": "Multicast Address",
             "message": "Multicast Address",
             "translation": "マルチキャストアドレス",
-            "position": "crocgui/settings.go:131:25"
+            "position": "crocgui/settings.go:270:25"
         },
         {
             "id": "Transfer Options",
             "message": "Transfer Options",
             "translation": "転送オプション",
-            "position": "crocgui/settings.go:134:30"
+            "position": "crocgui/settings.go:273:30"
         },
         {
             "id": "PAKE Curve",
             "message": "PAKE Curve",
             "translation": "PAKE曲線",
-            "position": "crocgui/settings.go:136:25"
+            "position": "crocgui/settings.go:275:25"
         },
         {
             "id": "Hash Algorithm",
             "message": "Hash Algorithm",
             "translation": "ハッシュアルゴリズム",
-            "position": "crocgui/settings.go:137:25"
+            "position": "crocgui/settings.go:276:25"
         },
         {
             "id": "Disable Multiplexing",
             "message": "Disable Multiplexing",
             "translation": "多重化を無効にする",
-            "position": "crocgui/settings.go:138:25"
+            "position": "crocgui/settings.go:277:25"
         },
         {
             "id": "Disable Compression",
             "message": "Disable Compression",
             "translation": "圧縮を無効化",
-            "position": "crocgui/settings.go:139:25"
+            "position": "crocgui/settings.go:278:25"
         },
         {
             "id": "Upload Speed Throttle",
             "message": "Upload Speed Throttle",
             "translation": "アップロード速度の制限",
-            "position": "crocgui/settings.go:141:25"
+            "position": "crocgui/settings.go:279:25"
+        },
+        {
+            "id": "Storage Options",
+            "message": "Storage Options",
+            "translation": "",
+            "position": "crocgui/settings.go:282:30"
+        },
+        {
+            "id": "Overwrite",
+            "message": "Overwrite",
+            "translation": "",
+            "position": "crocgui/settings.go:284:25"
+        },
+        {
+            "id": "GitIgnore",
+            "message": "GitIgnore",
+            "translation": "",
+            "position": "crocgui/settings.go:285:25"
+        },
+        {
+            "id": "Exclude",
+            "message": "Exclude",
+            "translation": "",
+            "position": "crocgui/settings.go:287:25"
         }
     ]
 }
