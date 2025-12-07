@@ -602,24 +602,33 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 
 			var crocOptions croc.Options
 			restore := a.Preferences().Bool("restore")
-			// log.Errorf("restore %v", restore)
+			log.Errorf("restore %v", restore)
 			remember := a.Preferences().Bool("remember")
+			log.Errorf("remember %v", remember)
 			if restore {
-				if b, errOpen := os.ReadFile(getSendConfigFile(false)); errOpen == nil {
+				if b, errRead := os.ReadFile(getSendConfigFile(false)); errRead == nil {
 					var rememberedOptions croc.Options
-					if json.Unmarshal(b, &rememberedOptions) == nil {
+					if errUnm := json.Unmarshal(b, &rememberedOptions); errUnm == nil {
+						log.Tracef("rememberedOptions %+v", rememberedOptions)
 						p := NewPreferences(a.Preferences(), filepaths...)
 						p.SetBool("remember", false) // не влияет на a.Preferences()
 						if rememberedOptions.SharedSecret == "" {
 							p.SetString("code", secret)
 						}
 						p.SetString("debug", a.Preferences().String("debug-level"))
-
+						log.Tracef("p %+v", p)
 						err = send(p)
+						log.Errorf("send %v", err)
+
+					} else {
+						log.Errorf("Unmarshal %v", errUnm)
 					}
+				} else {
+					log.Errorf("ReadFile %v", errRead)
 				}
 			}
 			if restore && err == nil {
+				log.Tracef("spy %+v", spy)
 				crocOptions = spy.options
 				filesInfo = filter(spy.filesInfo, allowed...)
 				emptyfolders = spy.emptyFoldersToTransfer

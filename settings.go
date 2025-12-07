@@ -11,6 +11,7 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/data/binding"
+	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 )
@@ -121,6 +122,13 @@ func settingsTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 			widget.NewFormItem(lp("Logo"), toggleLogo),
 		),
 		widget.NewSeparator(),
+		container.NewHBox(
+			widget.NewLabelWithStyle(lp("Croc config"), fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
+			layout.NewSpacer(),
+			widget.NewCheckWithData(lp("Remember"), binding.BindPreferenceBool("remember", a.Preferences())),
+			widget.NewCheckWithData(lp("Restore"), binding.BindPreferenceBool("restore", a.Preferences())),
+		),
+		widget.NewSeparator(),
 		widget.NewLabelWithStyle(lp("Relay"), fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
 		widget.NewForm(
 			widget.NewFormItem(lp("Name"), relayControls),
@@ -143,8 +151,15 @@ func settingsTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 			widget.NewFormItem(lp("Hash Algorithm"), hashSelect),
 			widget.NewFormItem(lp("Disable Multiplexing"), widget.NewCheckWithData("", binding.BindPreferenceBool("disable-multiplexing", a.Preferences()))),
 			widget.NewFormItem(lp("Disable Compression"), widget.NewCheckWithData("", binding.BindPreferenceBool("disable-compression", a.Preferences()))),
-			widget.NewFormItem(s, widget.NewCheckWithData("", binding.BindPreferenceBool("zip-unzip", a.Preferences()))),
 			widget.NewFormItem(lp("Upload Speed Throttle"), widget.NewEntryWithData(binding.BindPreferenceString("upload-throttle", a.Preferences()))),
+		),
+		widget.NewSeparator(),
+		widget.NewLabelWithStyle(lp("Storage Options"), fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
+		widget.NewForm(
+			widget.NewFormItem(lp("Overwrite"), widget.NewCheckWithData("", binding.BindPreferenceBool("overwrite", a.Preferences()))),
+			widget.NewFormItem(lp("GitIgnore"), widget.NewCheckWithData("", binding.BindPreferenceBool("git", a.Preferences()))),
+			widget.NewFormItem(s, widget.NewCheckWithData("", binding.BindPreferenceBool("zip-unzip", a.Preferences()))),
+			widget.NewFormItem(lp("Exclude"), widget.NewEntryWithData(binding.BindPreferenceString("exclude", a.Preferences()))),
 		),
 	)))
 }

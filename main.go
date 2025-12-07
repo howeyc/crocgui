@@ -204,6 +204,8 @@ func main() {
 	// a.Preferences().SetBool("restore", a.Preferences().BoolWithFallback("restore", false))
 	a.Preferences().SetString("relay6",
 		a.Preferences().StringWithFallback("relay6", models.DEFAULT_RELAY6))
+	a.Preferences().SetBool("overwrite",
+		a.Preferences().BoolWithFallback("overwrite", true))
 
 	appTheme.color = theme.DefaultTheme()
 	appTheme.size = theme.DefaultTheme()

@@ -237,14 +237,19 @@ func send(c Preferences) (err error) {
 	} else if crocOptions.RelayAddress6 != models.DEFAULT_RELAY6 {
 		crocOptions.RelayAddress = ""
 	}
+
+	log.Tracef("crocOptions %+v", crocOptions)
+
 	b, errOpen := os.ReadFile(getSendConfigFile(false))
 	if errOpen == nil && !c.Bool("remember") {
+
 		var rememberedOptions croc.Options
 		err = json.Unmarshal(b, &rememberedOptions)
 		if err != nil {
 			log.Error(err)
 			return
 		}
+		log.Tracef("rememberedOptions %+v", rememberedOptions)
 		// update anything that isn't explicitly set
 		if !c.IsSet("no-local") {
 			crocOptions.DisableLocal = rememberedOptions.DisableLocal
@@ -283,6 +288,7 @@ func send(c Preferences) (err error) {
 			rememberedAddr = strings.TrimSpace(rememberedAddr)
 			crocOptions.RelayAddress6 = rememberedAddr
 		}
+		log.Tracef("rememberedOptions %+v", rememberedOptions)
 	}
 
 	var fnames []string
@@ -349,6 +355,7 @@ Or you can go back to the classic croc behavior by enabling classic mode:
 		crocOptions.SharedSecret = utils.GetRandomName()
 	}
 	minimalFileInfos, emptyFoldersToTransfer, totalNumberFolders, err := croc.GetFilesInfo(fnames, crocOptions.ZipFolder, crocOptions.GitIgnore, crocOptions.Exclude)
+	log.Tracef("GetFilesInfo %v", err)
 	if err != nil {
 		return
 	}
