@@ -1447,6 +1447,7 @@ func allEnabled(enabled bool, cos ...fyne.CanvasObject) {
 				w.Disable()
 			}
 		}
+		co.Refresh()
 	}
 }
 

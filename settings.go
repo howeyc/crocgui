@@ -150,7 +150,18 @@ func settingsTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 	overwriteCheck := widget.NewCheckWithData("", overwriteBinding)
 
 	sendBinding := binding.BindPreferenceBool("send", a.Preferences())
-	sendCheck := widget.NewCheckWithData(lp("Send"), sendBinding)
+
+	sendCheck := widget.NewCheckWithData("", sendBinding)
+	sendCheck.OnChanged = func(send bool) {
+		json := "receive"
+		if send {
+			json = "send"
+		}
+		json += ".json"
+		sendCheck.SetText(json)
+	}
+	send, _ := sendBinding.Get()
+	sendCheck.OnChanged(send)
 
 	// Массив элементов для управления состоянием
 	cosED := []fyne.CanvasObject{
@@ -245,13 +256,18 @@ func settingsTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 			widget.NewFormItem(lp("Logo"), toggleLogo),
 		),
 		widget.NewSeparator(),
-		container.NewHBox(
-			widget.NewLabelWithStyle(lp("Croc config"), fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
-			layout.NewSpacer(),
-			widget.NewCheckWithData(lp("Remember"),
-				binding.BindPreferenceBool("remember", a.Preferences())),
-			restoreCheck,
-			sendCheck,
+		widget.NewForm(
+			widget.NewFormItem(lp("Configs"), container.NewHBox(
+				widget.NewLabel(".config/croc/"),
+				layout.NewSpacer(),
+				widget.NewCheckWithData(lp("Remember"),
+					binding.BindPreferenceBool("remember", a.Preferences())),
+			)),
+			widget.NewFormItem(lp("Config"), container.NewHBox(
+				sendCheck,
+				layout.NewSpacer(),
+				restoreCheck,
+			)),
 		),
 		widget.NewSeparator(),
 		widget.NewLabelWithStyle(lp("Relay"), fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),

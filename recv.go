@@ -481,7 +481,7 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 	reload = func() {
 		prefixs := []string{}
 		p, n := lsr(join())
-		log.Tracef("lsr %v", n)
+		// log.Tracef("lsr %v", n)
 		for _, path := range p {
 			ext := filepath.Ext(path)
 			if strings.ToLower(ext) == DOTZIP {
@@ -489,7 +489,7 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 				prefixs = append(prefixs, dir+slash)
 			}
 		}
-		log.Tracef("prefixs %v", prefixs)
+		// log.Tracef("prefixs %v", prefixs)
 	loop:
 		for i, path := range p {
 			name := n[i]
