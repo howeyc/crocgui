@@ -149,169 +149,175 @@
             "id": "Restore",
             "message": "Restore",
             "translation": "Восстановить",
-            "position": "crocgui/settings.go:174:44"
+            "position": "crocgui/settings.go:185:44"
         },
         {
             "id": "Appearance",
             "message": "Appearance",
             "translation": "Вид",
-            "position": "crocgui/settings.go:240:30"
+            "position": "crocgui/settings.go:251:30"
         },
         {
             "id": "Language",
             "message": "Language",
             "translation": "Язык",
-            "position": "crocgui/settings.go:242:25"
+            "position": "crocgui/settings.go:253:25"
         },
         {
             "id": "Theme",
             "message": "Theme",
             "translation": "Тема",
-            "position": "crocgui/settings.go:243:25"
+            "position": "crocgui/settings.go:254:25"
         },
         {
             "id": "Font",
             "message": "Font",
             "translation": "Шрифт",
-            "position": "crocgui/settings.go:244:25"
+            "position": "crocgui/settings.go:255:25"
         },
         {
             "id": "Logo",
             "message": "Logo",
             "translation": "Логотип",
-            "position": "crocgui/settings.go:245:25"
+            "position": "crocgui/settings.go:256:25"
         },
         {
-            "id": "Croc config",
-            "message": "Croc config",
-            "translation": "Конфиг Croc",
-            "position": "crocgui/settings.go:249:31"
+            "id": "Configs",
+            "message": "Configs",
+            "translation": "Конфиги",
+            "position": "crocgui/settings.go:260:25"
         },
         {
             "id": "Remember",
             "message": "Remember",
             "translation": "Запомнить",
-            "position": "crocgui/settings.go:251:30"
+            "position": "crocgui/settings.go:263:31"
+        },
+        {
+            "id": "Config",
+            "message": "Config",
+            "translation": "Конфиг",
+            "position": "crocgui/settings.go:266:25"
         },
         {
             "id": "Relay",
             "message": "Relay",
             "translation": "Посредник",
-            "position": "crocgui/settings.go:257:30"
+            "position": "crocgui/settings.go:273:30"
         },
         {
             "id": "Name",
             "message": "Name",
             "translation": "Имя",
-            "position": "crocgui/settings.go:259:25"
+            "position": "crocgui/settings.go:275:25"
         },
         {
             "id": "Address",
             "message": "Address",
             "translation": "Адрес",
-            "position": "crocgui/settings.go:260:25"
+            "position": "crocgui/settings.go:276:25"
         },
         {
             "id": "Address6",
             "message": "Address6",
             "translation": "Адрес6",
-            "position": "crocgui/settings.go:261:25"
+            "position": "crocgui/settings.go:277:25"
         },
         {
             "id": "Ports",
             "message": "Ports",
             "translation": "Порты",
-            "position": "crocgui/settings.go:262:25"
+            "position": "crocgui/settings.go:278:25"
         },
         {
             "id": "Password",
             "message": "Password",
             "translation": "Пароль",
-            "position": "crocgui/settings.go:263:25"
+            "position": "crocgui/settings.go:279:25"
         },
         {
             "id": "Network Local",
             "message": "Network Local",
             "translation": "Локальная сеть",
-            "position": "crocgui/settings.go:266:30"
+            "position": "crocgui/settings.go:282:30"
         },
         {
             "id": "Disable Local",
             "message": "Disable Local",
             "translation": "Не локально",
-            "position": "crocgui/settings.go:268:25"
+            "position": "crocgui/settings.go:284:25"
         },
         {
             "id": "Force Local Only",
             "message": "Force Local Only",
             "translation": "Локально",
-            "position": "crocgui/settings.go:269:25"
+            "position": "crocgui/settings.go:285:25"
         },
         {
             "id": "Multicast Address",
             "message": "Multicast Address",
             "translation": "Группа",
-            "position": "crocgui/settings.go:270:25"
+            "position": "crocgui/settings.go:286:25"
         },
         {
             "id": "Transfer Options",
             "message": "Transfer Options",
             "translation": "Обмен",
-            "position": "crocgui/settings.go:273:30"
+            "position": "crocgui/settings.go:289:30"
         },
         {
             "id": "PAKE Curve",
             "message": "PAKE Curve",
             "translation": "Кривая PAKE",
-            "position": "crocgui/settings.go:275:25"
+            "position": "crocgui/settings.go:291:25"
         },
         {
             "id": "Hash Algorithm",
             "message": "Hash Algorithm",
             "translation": "Тип хеша",
-            "position": "crocgui/settings.go:276:25"
+            "position": "crocgui/settings.go:292:25"
         },
         {
             "id": "Disable Multiplexing",
             "message": "Disable Multiplexing",
             "translation": "Без мультиплексирования",
-            "position": "crocgui/settings.go:277:25"
+            "position": "crocgui/settings.go:293:25"
         },
         {
             "id": "Disable Compression",
             "message": "Disable Compression",
             "translation": "Без сжатия",
-            "position": "crocgui/settings.go:278:25"
+            "position": "crocgui/settings.go:294:25"
         },
         {
             "id": "Upload Speed Throttle",
             "message": "Upload Speed Throttle",
             "translation": "Медлить",
-            "position": "crocgui/settings.go:279:25"
+            "position": "crocgui/settings.go:295:25"
         },
         {
             "id": "Storage Options",
             "message": "Storage Options",
             "translation": "Хранилище",
-            "position": "crocgui/settings.go:282:30"
+            "position": "crocgui/settings.go:298:30"
         },
         {
             "id": "Overwrite",
             "message": "Overwrite",
             "translation": "Перезаписать",
-            "position": "crocgui/settings.go:284:25"
+            "position": "crocgui/settings.go:300:25"
         },
         {
             "id": "GitIgnore",
             "message": "GitIgnore",
             "translation": "Git игнор",
-            "position": "crocgui/settings.go:285:25"
+            "position": "crocgui/settings.go:301:25"
         },
         {
             "id": "Exclude",
             "message": "Exclude",
             "translation": "Исключить",
-            "position": "crocgui/settings.go:287:25"
+            "position": "crocgui/settings.go:303:25"
         }
     ]
 }

@@ -199,7 +199,7 @@
             "translation": "Restore",
             "translatorComment": "Copied from source.",
             "fuzzy": true,
-            "position": "crocgui/settings.go:174:44"
+            "position": "crocgui/settings.go:185:44"
         },
         {
             "id": "Appearance",
@@ -207,7 +207,7 @@
             "translation": "Appearance",
             "translatorComment": "Copied from source.",
             "fuzzy": true,
-            "position": "crocgui/settings.go:240:30"
+            "position": "crocgui/settings.go:251:30"
         },
         {
             "id": "Language",
@@ -215,7 +215,7 @@
             "translation": "Language",
             "translatorComment": "Copied from source.",
             "fuzzy": true,
-            "position": "crocgui/settings.go:242:25"
+            "position": "crocgui/settings.go:253:25"
         },
         {
             "id": "Theme",
@@ -223,7 +223,7 @@
             "translation": "Theme",
             "translatorComment": "Copied from source.",
             "fuzzy": true,
-            "position": "crocgui/settings.go:243:25"
+            "position": "crocgui/settings.go:254:25"
         },
         {
             "id": "Font",
@@ -231,7 +231,7 @@
             "translation": "Font",
             "translatorComment": "Copied from source.",
             "fuzzy": true,
-            "position": "crocgui/settings.go:244:25"
+            "position": "crocgui/settings.go:255:25"
         },
         {
             "id": "Logo",
@@ -239,15 +239,15 @@
             "translation": "Logo",
             "translatorComment": "Copied from source.",
             "fuzzy": true,
-            "position": "crocgui/settings.go:245:25"
+            "position": "crocgui/settings.go:256:25"
         },
         {
-            "id": "Croc config",
-            "message": "Croc config",
-            "translation": "Croc config",
+            "id": "Configs",
+            "message": "Configs",
+            "translation": "Configs",
             "translatorComment": "Copied from source.",
             "fuzzy": true,
-            "position": "crocgui/settings.go:249:31"
+            "position": "crocgui/settings.go:260:25"
         },
         {
             "id": "Remember",
@@ -255,7 +255,15 @@
             "translation": "Remember",
             "translatorComment": "Copied from source.",
             "fuzzy": true,
-            "position": "crocgui/settings.go:251:30"
+            "position": "crocgui/settings.go:263:31"
+        },
+        {
+            "id": "Config",
+            "message": "Config",
+            "translation": "Config",
+            "translatorComment": "Copied from source.",
+            "fuzzy": true,
+            "position": "crocgui/settings.go:266:25"
         },
         {
             "id": "Relay",
@@ -263,7 +271,7 @@
             "translation": "Relay",
             "translatorComment": "Copied from source.",
             "fuzzy": true,
-            "position": "crocgui/settings.go:257:30"
+            "position": "crocgui/settings.go:273:30"
         },
         {
             "id": "Name",
@@ -271,7 +279,7 @@
             "translation": "Name",
             "translatorComment": "Copied from source.",
             "fuzzy": true,
-            "position": "crocgui/settings.go:259:25"
+            "position": "crocgui/settings.go:275:25"
         },
         {
             "id": "Address",
@@ -279,7 +287,7 @@
             "translation": "Address",
             "translatorComment": "Copied from source.",
             "fuzzy": true,
-            "position": "crocgui/settings.go:260:25"
+            "position": "crocgui/settings.go:276:25"
         },
         {
             "id": "Address6",
@@ -287,7 +295,7 @@
             "translation": "Address6",
             "translatorComment": "Copied from source.",
             "fuzzy": true,
-            "position": "crocgui/settings.go:261:25"
+            "position": "crocgui/settings.go:277:25"
         },
         {
             "id": "Ports",
@@ -295,7 +303,7 @@
             "translation": "Ports",
             "translatorComment": "Copied from source.",
             "fuzzy": true,
-            "position": "crocgui/settings.go:262:25"
+            "position": "crocgui/settings.go:278:25"
         },
         {
             "id": "Password",
@@ -303,7 +311,7 @@
             "translation": "Password",
             "translatorComment": "Copied from source.",
             "fuzzy": true,
-            "position": "crocgui/settings.go:263:25"
+            "position": "crocgui/settings.go:279:25"
         },
         {
             "id": "Network Local",
@@ -311,7 +319,7 @@
             "translation": "Network Local",
             "translatorComment": "Copied from source.",
             "fuzzy": true,
-            "position": "crocgui/settings.go:266:30"
+            "position": "crocgui/settings.go:282:30"
         },
         {
             "id": "Disable Local",
@@ -319,7 +327,7 @@
             "translation": "Disable Local",
             "translatorComment": "Copied from source.",
             "fuzzy": true,
-            "position": "crocgui/settings.go:268:25"
+            "position": "crocgui/settings.go:284:25"
         },
         {
             "id": "Force Local Only",
@@ -327,7 +335,7 @@
             "translation": "Force Local Only",
             "translatorComment": "Copied from source.",
             "fuzzy": true,
-            "position": "crocgui/settings.go:269:25"
+            "position": "crocgui/settings.go:285:25"
         },
         {
             "id": "Multicast Address",
@@ -335,7 +343,7 @@
             "translation": "Multicast Address",
             "translatorComment": "Copied from source.",
             "fuzzy": true,
-            "position": "crocgui/settings.go:270:25"
+            "position": "crocgui/settings.go:286:25"
         },
         {
             "id": "Transfer Options",
@@ -343,7 +351,7 @@
             "translation": "Transfer Options",
             "translatorComment": "Copied from source.",
             "fuzzy": true,
-            "position": "crocgui/settings.go:273:30"
+            "position": "crocgui/settings.go:289:30"
         },
         {
             "id": "PAKE Curve",
@@ -351,7 +359,7 @@
             "translation": "PAKE Curve",
             "translatorComment": "Copied from source.",
             "fuzzy": true,
-            "position": "crocgui/settings.go:275:25"
+            "position": "crocgui/settings.go:291:25"
         },
         {
             "id": "Hash Algorithm",
@@ -359,7 +367,7 @@
             "translation": "Hash Algorithm",
             "translatorComment": "Copied from source.",
             "fuzzy": true,
-            "position": "crocgui/settings.go:276:25"
+            "position": "crocgui/settings.go:292:25"
         },
         {
             "id": "Disable Multiplexing",
@@ -367,7 +375,7 @@
             "translation": "Disable Multiplexing",
             "translatorComment": "Copied from source.",
             "fuzzy": true,
-            "position": "crocgui/settings.go:277:25"
+            "position": "crocgui/settings.go:293:25"
         },
         {
             "id": "Disable Compression",
@@ -375,7 +383,7 @@
             "translation": "Disable Compression",
             "translatorComment": "Copied from source.",
             "fuzzy": true,
-            "position": "crocgui/settings.go:278:25"
+            "position": "crocgui/settings.go:294:25"
         },
         {
             "id": "Upload Speed Throttle",
@@ -383,7 +391,7 @@
             "translation": "Upload Speed Throttle",
             "translatorComment": "Copied from source.",
             "fuzzy": true,
-            "position": "crocgui/settings.go:279:25"
+            "position": "crocgui/settings.go:295:25"
         },
         {
             "id": "Storage Options",
@@ -391,7 +399,7 @@
             "translation": "Storage Options",
             "translatorComment": "Copied from source.",
             "fuzzy": true,
-            "position": "crocgui/settings.go:282:30"
+            "position": "crocgui/settings.go:298:30"
         },
         {
             "id": "Overwrite",
@@ -399,7 +407,7 @@
             "translation": "Overwrite",
             "translatorComment": "Copied from source.",
             "fuzzy": true,
-            "position": "crocgui/settings.go:284:25"
+            "position": "crocgui/settings.go:300:25"
         },
         {
             "id": "GitIgnore",
@@ -407,7 +415,7 @@
             "translation": "GitIgnore",
             "translatorComment": "Copied from source.",
             "fuzzy": true,
-            "position": "crocgui/settings.go:285:25"
+            "position": "crocgui/settings.go:301:25"
         },
         {
             "id": "Exclude",
@@ -415,7 +423,7 @@
             "translation": "Exclude",
             "translatorComment": "Copied from source.",
             "fuzzy": true,
-            "position": "crocgui/settings.go:287:25"
+            "position": "crocgui/settings.go:303:25"
         }
     ]
 }
