@@ -10,6 +10,7 @@ import (
 
 	"github.com/schollz/croc/v10/src/croc"
 	log "github.com/schollz/logger"
+	"github.com/schollz/pake/v3"
 	"golang.org/x/text/language"
 	"golang.org/x/text/message"
 
@@ -96,7 +97,8 @@ func settingsTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 	fontSelect.SetSelected(currentFont)
 
 	curveBinding := binding.BindPreferenceString("pake-curve", a.Preferences())
-	curveSelect := widget.NewSelect([]string{"siec", "p256", "p348", "p521"}, func(selection string) {
+
+	curveSelect := widget.NewSelect(pake.AvailableCurves(), func(selection string) {
 		curveBinding.Set(selection)
 	})
 	currentCurve, _ := curveBinding.Get()
