@@ -178,10 +178,14 @@ func main() {
 		a.Preferences().StringWithFallback("relay-password", DEFAULT_PASSPHRASE))
 	a.Preferences().SetString("relay-ports",
 		a.Preferences().StringWithFallback("relay-ports", "9009,9010,9011,9012,9013,9014,9015,9016,9017"))
-	// a.Preferences().SetBool("disable-local", a.Preferences().BoolWithFallback("disable-local", false))
-	// a.Preferences().SetBool("force-local", a.Preferences().BoolWithFallback("force-local", false))
-	// a.Preferences().SetBool("disable-multiplexing", a.Preferences().BoolWithFallback("disable-multiplexing", false))
-	// a.Preferences().SetBool("disable-compression", a.Preferences().BoolWithFallback("disable-compression", false))
+	// a.Preferences().SetBool("disable-local",
+	// 	a.Preferences().BoolWithFallback("disable-local", false))
+	// a.Preferences().SetBool("force-local",
+	// 	a.Preferences().BoolWithFallback("force-local", false))
+	// a.Preferences().SetBool("disable-multiplexing",
+	// 	a.Preferences().BoolWithFallback("disable-multiplexing", false))
+	// a.Preferences().SetBool("disable-compression",
+	// 	a.Preferences().BoolWithFallback("disable-compression", false))
 	a.Preferences().SetString("theme",
 		a.Preferences().StringWithFallback("theme", "system"))
 	a.Preferences().SetString("font",
@@ -192,20 +196,27 @@ func main() {
 		a.Preferences().StringWithFallback("pake-curve", "p256"))
 	a.Preferences().SetString("croc-hash",
 		a.Preferences().StringWithFallback("croc-hash", "xxhash"))
-	// a.Preferences().SetBool("hide-logo", a.Preferences().BoolWithFallback("hide-logo", false))
+	// a.Preferences().SetBool("hide-logo",
+	// 	a.Preferences().BoolWithFallback("hide-logo", false))
 	a.Preferences().SetString("multicast-address",
 		a.Preferences().StringWithFallback("multicast-address", "239.255.255.250"))
 
-	// a.Preferences().SetBool("totp-send", a.Preferences().BoolWithFallback("totp-send", false))
-	// a.Preferences().SetBool("totp-recv", a.Preferences().BoolWithFallback("totp-recv", false))
-	// a.Preferences().SetBool("zip-unzip", a.Preferences().BoolWithFallback("zip-unzip", false))
+	// a.Preferences().SetBool("totp-send",
+	// 	a.Preferences().BoolWithFallback("totp-send", false))
+	// a.Preferences().SetBool("totp-recv",
+	// 	a.Preferences().BoolWithFallback("totp-recv", false))
+	// a.Preferences().SetBool("zip-unzip",
+	// 	a.Preferences().BoolWithFallback("zip-unzip", false))
 	if a.Preferences().String(relaysKey) == "" {
 		saveRelays(a, getRelays(a))
 		setRelayName(a, DEFAULT)
 	}
 	a.Preferences().SetBool("remember",
 		a.Preferences().BoolWithFallback("remember", true))
-	// a.Preferences().SetBool("restore", a.Preferences().BoolWithFallback("restore", false))
+	a.Preferences().SetBool("send",
+		a.Preferences().BoolWithFallback("send", false))
+	a.Preferences().SetBool("restore",
+		a.Preferences().BoolWithFallback("restore", false))
 	a.Preferences().SetString("relay6",
 		a.Preferences().StringWithFallback("relay6", DEFAULT_RELAY6))
 	a.Preferences().SetBool("overwrite",

@@ -3,7 +3,7 @@ package main
 import (
 	"encoding/json"
 	"os"
-	"path"
+	"path/filepath"
 
 	"fyne.io/fyne/v2"
 	"github.com/schollz/croc/v10/src/croc"
@@ -32,7 +32,7 @@ func getConfigFile(requireValidPath bool, save bool) string {
 	if save {
 		json = "send"
 	}
-	return path.Join(configFile, json+".json")
+	return filepath.Join(configFile, json+".json")
 }
 
 func saveConfig(c Preferences, crocOptions croc.Options, save bool) {

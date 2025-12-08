@@ -1808,7 +1808,7 @@ func GetConfigDir(requireValidPath bool) (homedir string, err error) {
 	if envHomedir, isSet := os.LookupEnv("CROC_CONFIG_DIR"); isSet {
 		homedir = envHomedir
 	} else if xdgConfigHome, isSet := os.LookupEnv("XDG_CONFIG_HOME"); isSet {
-		homedir = path.Join(xdgConfigHome, "croc")
+		homedir = filepath.Join(xdgConfigHome, "croc")
 	} else {
 		if isAndroid {
 			homedir = tempDir
@@ -1822,7 +1822,7 @@ func GetConfigDir(requireValidPath bool) (homedir string, err error) {
 				return
 			}
 		}
-		homedir = path.Join(homedir, ".config", "croc")
+		homedir = filepath.Join(homedir, ".config", "croc")
 	}
 
 	if requireValidPath {
