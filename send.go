@@ -1803,3 +1803,32 @@ func getStdin() (fnames []string, err error) {
 
 	return []string{fileName}, nil
 }
+
+func GetConfigDir(requireValidPath bool) (homedir string, err error) {
+	if envHomedir, isSet := os.LookupEnv("CROC_CONFIG_DIR"); isSet {
+		homedir = envHomedir
+	} else if xdgConfigHome, isSet := os.LookupEnv("XDG_CONFIG_HOME"); isSet {
+		homedir = path.Join(xdgConfigHome, "croc")
+	} else {
+		if isAndroid {
+			homedir = tempDir
+		} else {
+			homedir, err = os.UserHomeDir()
+			if err != nil {
+				if !requireValidPath {
+					err = nil
+					homedir = ""
+				}
+				return
+			}
+		}
+		homedir = path.Join(homedir, ".config", "croc")
+	}
+
+	if requireValidPath {
+		if _, err = os.Stat(homedir); os.IsNotExist(err) {
+			err = os.MkdirAll(homedir, 0o700)
+		}
+	}
+	return
+}

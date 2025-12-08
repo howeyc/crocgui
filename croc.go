@@ -7,7 +7,6 @@ import (
 
 	"fyne.io/fyne/v2"
 	"github.com/schollz/croc/v10/src/croc"
-	"github.com/schollz/croc/v10/src/utils"
 	log "github.com/schollz/logger"
 )
 
@@ -24,7 +23,7 @@ func NewPreferences(p fyne.Preferences, paths ...string) Preferences {
 }
 
 func getConfigFile(requireValidPath bool, save bool) string {
-	configFile, err := utils.GetConfigDir(requireValidPath)
+	configFile, err := GetConfigDir(requireValidPath)
 	if err != nil {
 		log.Error(err)
 		return ""
