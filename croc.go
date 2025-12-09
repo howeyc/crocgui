@@ -4,21 +4,26 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 
 	"fyne.io/fyne/v2"
 	"github.com/schollz/croc/v10/src/croc"
+	"github.com/schollz/croc/v10/src/tcp"
 	log "github.com/schollz/logger"
 )
 
 type Preferences struct {
 	fyne.Preferences
 	temp map[string]any
+	w    fyne.Window
 }
 
-func NewPreferences(p fyne.Preferences, paths ...string) Preferences {
+func NewPreferences(p fyne.Preferences, w fyne.Window) Preferences {
 	return Preferences{
 		Preferences: p,
-		temp:        make(map[string]any), // инициализируем мапу
+		temp:        make(map[string]any),
+		w:           w,
 	}
 }
 
@@ -191,4 +196,60 @@ func (p Preferences) SetString(key, value string) {
 		p.temp = make(map[string]any)
 	}
 	p.temp[key] = value
+}
+func (p Preferences) IsSet(key string) bool {
+	return true
+}
+
+func relayRun(c Preferences) (err error) {
+	// log.Infof("starting croc relay version %v", Version)
+	debugString := "info"
+	if c.Bool("debug") {
+		debugString = "debug"
+	}
+	host := c.String("host")
+	var ports []string
+
+	if c.IsSet("ports") {
+		ports = strings.Split(c.String("ports"), ",")
+	} else {
+		portString := c.Int("port")
+		if portString == 0 {
+			portString = 9009
+		}
+		transfersString := c.Int("transfers")
+		if transfersString == 0 {
+			transfersString = 4
+		}
+		ports = make([]string, transfersString)
+		for i := range ports {
+			ports[i] = strconv.Itoa(portString + i)
+		}
+	}
+
+	tcpPorts := strings.Join(ports[1:], ",")
+	for i, port := range ports {
+		if i == 0 {
+			continue
+		}
+		go func(portStr string) {
+			err := tcp.Run(debugString, host, portStr, determinePass(c))
+			if err != nil {
+				// panic(err)
+				fyne.Do(func() {
+					NewToast(c.w, err.Error()).Show()
+				})
+			}
+		}(port)
+	}
+	return tcp.Run(debugString, host, ports[0], determinePass(c), tcpPorts)
+}
+
+func determinePass(c Preferences) (pass string) {
+	pass = c.String("pass")
+	b, err := os.ReadFile(pass)
+	if err == nil {
+		pass = strings.TrimSpace(string(b))
+	}
+	return
 }

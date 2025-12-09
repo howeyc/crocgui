@@ -4,6 +4,7 @@ package main
 import (
 	"embed"
 	"encoding/json"
+	"fmt"
 	"os"
 	"reflect"
 	"strings"
@@ -153,7 +154,6 @@ func settingsTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 	overwriteCheck := widget.NewCheckWithData("", overwriteBinding)
 
 	sendBinding := binding.BindPreferenceBool("send", a.Preferences())
-
 	sendCheck := widget.NewCheckWithData("", sendBinding)
 	sendCheck.OnChanged = func(send bool) {
 		json := "receive"
@@ -166,6 +166,49 @@ func settingsTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 	}
 	send, _ := sendBinding.Get()
 	sendCheck.OnChanged(send)
+
+	runLabel := widget.NewLabel("")
+
+	runBinding := binding.BindPreferenceBool("run", a.Preferences())
+	runCheck := widget.NewCheckWithData(lp("Run"), runBinding)
+	runCheck.OnChanged = func(run bool) {
+		runBinding.Set(run)
+		running := runLabel.Text != ""
+		if run {
+			if !running {
+				c := NewPreferences(a.Preferences(), w)
+				c.SetBool("debug", debugBool(a))
+				host := a.Preferences().String("relay-address")
+				c.SetString("host", host)
+				ports := a.Preferences().String("relay-ports")
+				c.SetString("ports", ports)
+				pass := a.Preferences().String("relay-password")
+				c.SetString("pass", pass)
+				runLabel.SetText(fmt.Sprintf(":%s@%s:%s", pass, host, ports))
+				go func() {
+					err := relayRun(c)
+					// netstat -tlnp|grep crocgui
+					fyne.Do(func() {
+						runLabel.SetText("")
+						runBinding.Set(false)
+						if err != nil {
+							NewToast(c.w, err.Error()).Show()
+						}
+					})
+				}()
+			}
+			return
+		}
+		if running {
+			restart(w)
+		}
+	}
+
+	// if doRun, _ := runBinding.Get(); doRun {
+	// 	runCheck.OnChanged(doRun)
+	// }
+	doRun, _ := runBinding.Get()
+	runCheck.OnChanged(doRun)
 
 	// Массив элементов для управления состоянием
 	cosED := []fyne.CanvasObject{
@@ -226,7 +269,12 @@ func settingsTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 			)),
 		),
 		widget.NewSeparator(),
-		widget.NewLabelWithStyle(lp("Relay"), fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
+		container.NewHBox(
+			widget.NewLabelWithStyle(lp("Relay"), fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
+			layout.NewSpacer(),
+			runLabel,
+			runCheck,
+		),
 		widget.NewForm(
 			widget.NewFormItem(lp("Name"), relayControls),
 			widget.NewFormItem(lp("Address"), relayAddressEntry),
@@ -254,7 +302,7 @@ func settingsTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 		widget.NewLabelWithStyle(lp("Storage Options"), fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
 		widget.NewForm(
 			widget.NewFormItem(lp("Overwrite"), overwriteCheck),
-			widget.NewFormItem(lp("GitIgnore"), gitIgnoreCheck),
+			widget.NewFormItem(".gitignore", gitIgnoreCheck),
 			widget.NewFormItem(s, widget.NewCheckWithData("", binding.BindPreferenceBool("zip-unzip", a.Preferences()))),
 			widget.NewFormItem(lp("Exclude"), widget.NewEntryWithData(binding.BindPreferenceString("exclude", a.Preferences()))),
 		),

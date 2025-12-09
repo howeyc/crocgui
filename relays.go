@@ -98,7 +98,7 @@ func createRelaySelector(a fyne.App, w fyne.Window,
 	addressBinding,
 	address6Binding,
 	portsBinding,
-	passwordBinding binding.String) (rs *fyne.Container) {
+	passwordBinding binding.String) (relayControls *fyne.Container) {
 
 	var (
 		relaySelect *widget.Select
@@ -280,7 +280,7 @@ func createRelaySelector(a fyne.App, w fyne.Window,
 	// Первоначальная загрузка
 	updateRelaySelector()
 
-	rs = container.NewBorder(
+	relayControls = container.NewBorder(
 		nil, nil,
 		container.NewHBox(
 			container.NewGridWrap(fyne.NewSize(92, relaySelect.MinSize().Height), relaySelect),
