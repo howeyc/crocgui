@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -201,8 +202,23 @@ func (p Preferences) IsSet(key string) bool {
 	return true
 }
 
+func makePorts(port, transfers int) (ports []string) {
+	if port == 0 {
+		port = DEFAULT_PORT
+	}
+	if transfers == 0 {
+		transfers = TRANSFERS
+	}
+	ports = make([]string, transfers)
+	for i := range ports {
+		ports[i] = strconv.Itoa(port + i)
+	}
+	return
+}
+
 func relayRun(c Preferences) (err error) {
 	// log.Infof("starting croc relay version %v", Version)
+	log.Info("starting croc relay")
 	debugString := "info"
 	if c.Bool("debug") {
 		debugString = "debug"
@@ -213,27 +229,31 @@ func relayRun(c Preferences) (err error) {
 	if c.IsSet("ports") {
 		ports = strings.Split(c.String("ports"), ",")
 	} else {
-		portString := c.Int("port")
-		if portString == 0 {
-			portString = 9009
-		}
-		transfersString := c.Int("transfers")
-		if transfersString == 0 {
-			transfersString = 4
-		}
-		ports = make([]string, transfersString)
-		for i := range ports {
-			ports[i] = strconv.Itoa(portString + i)
-		}
+		// portString := c.Int("port")
+		// if portString == 0 {
+		// 	portString = 9009
+		// }
+		// transfersString := c.Int("transfers")
+		// if transfersString == 0 {
+		// 	transfersString = 4
+		// }
+		// ports = make([]string, transfersString)
+		// for i := range ports {
+		// 	ports[i] = strconv.Itoa(portString + i)
+		// }
+		ports = makePorts(c.Int("port"), c.Int("transfers"))
 	}
 
-	tcpPorts := strings.Join(ports[1:], ",")
-	for i, port := range ports {
-		if i == 0 {
-			continue
-		}
+	if len(ports) < 2 {
+		return errors.New("ports<2")
+	}
+	pass = determinePass(c)
+	for _, port := range ports[1:] {
+		// if i == 0 {
+		// 	continue
+		// }
 		go func(portStr string) {
-			err := tcp.Run(debugString, host, portStr, determinePass(c))
+			err := tcp.Run(debugString, host, portStr, pass)
 			if err != nil {
 				// panic(err)
 				fyne.Do(func() {
@@ -242,7 +262,8 @@ func relayRun(c Preferences) (err error) {
 			}
 		}(port)
 	}
-	return tcp.Run(debugString, host, ports[0], determinePass(c), tcpPorts)
+	tcpPorts := strings.Join(ports[1:], ",")
+	return tcp.Run(debugString, host, ports[0], pass, tcpPorts)
 }
 
 func determinePass(c Preferences) (pass string) {

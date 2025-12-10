@@ -285,7 +285,7 @@ func logTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 	exportButton.Hide()
 
 	debugLevelBinding := binding.BindPreferenceString("debug-level", a.Preferences())
-	debugCheck := widget.NewCheck(lp("Enable Debug Log"), func(debug bool) {
+	debugCheck := widget.NewCheck("--debug", func(debug bool) {
 		if debug {
 			log.SetLevel("trace")
 			debugLevelBinding.Set("trace")

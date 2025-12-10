@@ -4,7 +4,6 @@ package main
 import (
 	"embed"
 	"encoding/json"
-	"fmt"
 	"os"
 	"reflect"
 	"strings"
@@ -120,7 +119,7 @@ func settingsTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 		refreshWindow(a, w)
 	})
 
-	s := lp("Zip folders")
+	s := "--zip"
 	if !(isMobile || asMobile) {
 		s += " / " + lp("UnZip files")
 	}
@@ -137,6 +136,7 @@ func settingsTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 
 	// Создаем виджеты для полей
 	relayAddressEntry := widget.NewEntryWithData(relayAddressBinding)
+	relayAddressEntry.SetPlaceHolder("--local")
 	relay6Entry := widget.NewEntryWithData(relay6Binding)
 	relayPortsEntry := widget.NewEntryWithData(relayPortsBinding)
 	relayPasswordEntry := widget.NewEntryWithData(relayPasswordBinding)
@@ -167,30 +167,41 @@ func settingsTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 	send, _ := sendBinding.Get()
 	sendCheck.OnChanged(send)
 
-	runLabel := widget.NewLabel("")
+	listen := "0.0.0.0"
+	runLabel := widget.NewLabel(listen)
 
 	runBinding := binding.BindPreferenceBool("run", a.Preferences())
-	runCheck := widget.NewCheckWithData(lp("Run"), runBinding)
+	runCheck := widget.NewCheckWithData("--host", runBinding)
+
 	runCheck.OnChanged = func(run bool) {
 		runBinding.Set(run)
-		running := runLabel.Text != ""
+		running := runLabel.Text != listen
 		if run {
 			if !running {
 				c := NewPreferences(a.Preferences(), w)
 				c.SetBool("debug", debugBool(a))
-				host := a.Preferences().String("relay-address")
-				c.SetString("host", host)
-				ports := a.Preferences().String("relay-ports")
-				c.SetString("ports", ports)
-				pass := a.Preferences().String("relay-password")
-				c.SetString("pass", pass)
-				runLabel.SetText(fmt.Sprintf(":%s@%s:%s", pass, host, ports))
+
+				pass := defs(pass, a.Preferences().String("relay-password"), DEFAULT_PASSPHRASE)
+				relay := defs(relay4, a.Preferences().String("relay-address"))
+				ports := defs(a.Preferences().String("relay-ports"), strings.Join(makePorts(0, 0), ","))
+				bind := a.Preferences().StringListWithFallback("bind", []string{pass, relay, ports})
+
+				c.SetString("pass", bind[0])
+				c.SetString("host", bind[1])
+				c.SetString("ports", bind[2])
+
+				runLabel.SetText(bind[1])
+				disableLocalBinding.Set(true)
+				a.Preferences().SetStringList("bind", bind)
 				go func() {
 					err := relayRun(c)
 					// netstat -tlnp|grep crocgui
+					// netstat -a -n -p tcp |find ":90"
 					fyne.Do(func() {
-						runLabel.SetText("")
+						runLabel.SetText(listen)
 						runBinding.Set(false)
+						a.Preferences().RemoveValue("bind")
+						disableLocalBinding.Set(false)
 						if err != nil {
 							NewToast(c.w, err.Error()).Show()
 						}
@@ -199,14 +210,13 @@ func settingsTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 			}
 			return
 		}
+		disableLocalBinding.Set(false)
+		a.Preferences().RemoveValue("bind")
 		if running {
 			restart(w)
 		}
 	}
 
-	// if doRun, _ := runBinding.Get(); doRun {
-	// 	runCheck.OnChanged(doRun)
-	// }
 	doRun, _ := runBinding.Get()
 	runCheck.OnChanged(doRun)
 
@@ -259,7 +269,7 @@ func settingsTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 			widget.NewFormItem(lp("Configs"), container.NewHBox(
 				widget.NewLabel(".config/croc/"),
 				layout.NewSpacer(),
-				widget.NewCheckWithData(lp("Remember"),
+				widget.NewCheckWithData("--remember",
 					binding.BindPreferenceBool("remember", a.Preferences())),
 			)),
 			widget.NewFormItem(lp("Config"), container.NewHBox(
@@ -269,42 +279,42 @@ func settingsTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 			)),
 		),
 		widget.NewSeparator(),
-		container.NewHBox(
-			widget.NewLabelWithStyle(lp("Relay"), fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
-			layout.NewSpacer(),
-			runLabel,
-			runCheck,
-		),
+		widget.NewLabelWithStyle(lp("Relay"), fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
 		widget.NewForm(
 			widget.NewFormItem(lp("Name"), relayControls),
-			widget.NewFormItem(lp("Address"), relayAddressEntry),
-			widget.NewFormItem(lp("Address6"), relay6Entry),
-			widget.NewFormItem(lp("Ports"), relayPortsEntry),
-			widget.NewFormItem(lp("Password"), relayPasswordEntry),
+			widget.NewFormItem("--relay", relayAddressEntry),
+			widget.NewFormItem("--relay6", relay6Entry),
+			widget.NewFormItem("--ports", relayPortsEntry),
+			widget.NewFormItem("--pass", relayPasswordEntry),
 		),
 		widget.NewSeparator(),
 		widget.NewLabelWithStyle(lp("Network Local"), fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
 		widget.NewForm(
-			widget.NewFormItem(lp("Disable Local"), disableLocalCheck),
-			widget.NewFormItem(lp("Force Local Only"), onlyLocalCheck),
-			widget.NewFormItem(lp("Multicast Address"), widget.NewEntryWithData(binding.BindPreferenceString("multicast-address", a.Preferences()))),
+			widget.NewFormItem("--no-local", container.NewHBox(
+				disableLocalCheck,
+				layout.NewSpacer(),
+				runCheck,
+				runLabel,
+			)),
+			widget.NewFormItem("--local", onlyLocalCheck),
+			widget.NewFormItem("--multicast", widget.NewEntryWithData(binding.BindPreferenceString("multicast-address", a.Preferences()))),
 		),
 		widget.NewSeparator(),
 		widget.NewLabelWithStyle(lp("Transfer Options"), fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
 		widget.NewForm(
-			widget.NewFormItem(lp("PAKE Curve"), curveSelect),
-			widget.NewFormItem(lp("Hash Algorithm"), hashSelect),
-			widget.NewFormItem(lp("Disable Multiplexing"), widget.NewCheckWithData("", binding.BindPreferenceBool("disable-multiplexing", a.Preferences()))),
-			widget.NewFormItem(lp("Disable Compression"), widget.NewCheckWithData("", binding.BindPreferenceBool("disable-compression", a.Preferences()))),
-			widget.NewFormItem(lp("Upload Speed Throttle"), widget.NewEntryWithData(binding.BindPreferenceString("upload-throttle", a.Preferences()))),
+			widget.NewFormItem("--curve", curveSelect),
+			widget.NewFormItem("--hash", hashSelect),
+			widget.NewFormItem("--no-multi", widget.NewCheckWithData("", binding.BindPreferenceBool("disable-multiplexing", a.Preferences()))),
+			widget.NewFormItem("--no-compress", widget.NewCheckWithData("", binding.BindPreferenceBool("disable-compression", a.Preferences()))),
+			widget.NewFormItem("--throttleUpload", widget.NewEntryWithData(binding.BindPreferenceString("upload-throttle", a.Preferences()))),
 		),
 		widget.NewSeparator(),
 		widget.NewLabelWithStyle(lp("Storage Options"), fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
 		widget.NewForm(
-			widget.NewFormItem(lp("Overwrite"), overwriteCheck),
-			widget.NewFormItem(".gitignore", gitIgnoreCheck),
+			widget.NewFormItem("--overwrite", overwriteCheck),
+			widget.NewFormItem("--git", gitIgnoreCheck),
 			widget.NewFormItem(s, widget.NewCheckWithData("", binding.BindPreferenceBool("zip-unzip", a.Preferences()))),
-			widget.NewFormItem(lp("Exclude"), widget.NewEntryWithData(binding.BindPreferenceString("exclude", a.Preferences()))),
+			widget.NewFormItem("--exclude", widget.NewEntryWithData(binding.BindPreferenceString("exclude", a.Preferences()))),
 		),
 	)))
 

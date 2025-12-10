@@ -556,12 +556,23 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 
 		comm.Socks5Proxy = defs(socks5, a.Preferences().String("socks5"))
 		comm.HttpProxy = defs(connect, a.Preferences().String("connect"))
+		relay := defs(relay4, a.Preferences().String("relay-address"))
+		relay6 := defs(relay6, a.Preferences().String("relay6"))
+		pass := defs(pass, a.Preferences().String("relay-password"), DEFAULT_PASSPHRASE)
+		ip := ""
+		if strings.HasPrefix(relay, "0") {
+			relay = strings.TrimPrefix(relay, "0")
+			// Подключаемся напрямую к отправителю
+			// --ip
+			ip = relay
+		}
 		crocOptions := croc.Options{
 			SharedSecret:     secret,
 			Debug:            debugBool(a),
-			RelayAddress:     defs(relay4, a.Preferences().String("relay-address")),
-			RelayAddress6:    defs(relay6, a.Preferences().String("relay6")),
-			RelayPassword:    defs(pass, a.Preferences().String("relay-password")),
+			RelayAddress:     relay,
+			RelayAddress6:    relay6,
+			RelayPassword:    pass,
+			IP:               ip,
 			NoPrompt:         true,
 			OnlyLocal:        a.Preferences().Bool("force-local"),
 			Curve:            a.Preferences().String("pake-curve"),

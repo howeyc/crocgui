@@ -607,18 +607,28 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 
 			comm.Socks5Proxy = defs(socks5, a.Preferences().String("socks5"))
 			comm.HttpProxy = defs(connect, a.Preferences().String("connect"))
+			relay := defs(relay4, a.Preferences().String("relay-address"))
+			relay6 := defs(relay6, a.Preferences().String("relay6"))
+			ports := defs(a.Preferences().String("relay-ports"), strings.Join(makePorts(0, 0), ","))
+			pass := defs(pass, a.Preferences().String("relay-password"), DEFAULT_PASSPHRASE)
+			OnlyLocal := a.Preferences().Bool("force-local")
+			if relay == "" && relay6 == "" {
+				// OnlyLocal
+				// --local
+				OnlyLocal = true
+			}
 			crocOptions := croc.Options{
 				IsSender:         true,
 				SharedSecret:     secret,
 				Debug:            debugBool(a),
-				RelayAddress:     defs(relay4, a.Preferences().String("relay-address")),
-				RelayAddress6:    defs(relay6, a.Preferences().String("relay6")),
-				RelayPorts:       strings.Split(a.Preferences().String("relay-ports"), ","),
-				RelayPassword:    defs(pass, a.Preferences().String("relay-password")),
+				RelayAddress:     relay,
+				RelayAddress6:    relay6,
+				RelayPorts:       strings.Split(ports, ","),
+				RelayPassword:    pass,
 				NoPrompt:         true,
 				DisableLocal:     a.Preferences().Bool("disable-local"),
 				NoMultiplexing:   a.Preferences().Bool("disable-multiplexing"),
-				OnlyLocal:        a.Preferences().Bool("force-local"),
+				OnlyLocal:        OnlyLocal,
 				NoCompress:       a.Preferences().Bool("disable-compression"),
 				Curve:            a.Preferences().String("pake-curve"),
 				HashAlgorithm:    a.Preferences().String("croc-hash"),

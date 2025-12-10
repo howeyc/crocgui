@@ -106,9 +106,11 @@ const (
 	NONDEFAULT             = "non-default: "
 	STDIN                  = "croc-stdin-"
 	DEFAULT_RELAY          = "croc.schollz.com"
-	DEFAULT_RELAY6         = "croc6.schollz.com"
-	DEFAULT_PORT           = "9009"
-	DEFAULT_PASSPHRASE     = "pass123"
+	// DEFAULT_RELAY6         = "croc6.schollz.com"
+	DEFAULT_RELAY6     = "2a01:4f9:c013:7b04::1"
+	DEFAULT_PORT       = 9009
+	TRANSFERS          = 4
+	DEFAULT_PASSPHRASE = "pass123"
 )
 
 const (
@@ -177,7 +179,7 @@ func main() {
 	a.Preferences().SetString("relay-password",
 		a.Preferences().StringWithFallback("relay-password", DEFAULT_PASSPHRASE))
 	a.Preferences().SetString("relay-ports",
-		a.Preferences().StringWithFallback("relay-ports", "9009,9010,9011,9012,9013,9014,9015,9016,9017"))
+		a.Preferences().StringWithFallback("relay-ports", strings.Join(makePorts(0, 9), ",")))
 	// a.Preferences().SetBool("disable-local",
 	// 	a.Preferences().BoolWithFallback("disable-local", false))
 	// a.Preferences().SetBool("force-local",
