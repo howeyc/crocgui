@@ -554,32 +554,24 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 			secret = TOTP + secret
 		}
 
-		comm.Socks5Proxy = defs(socks5, a.Preferences().String("socks5"))
-		comm.HttpProxy = defs(connect, a.Preferences().String("connect"))
-		relay := defs(relay4, a.Preferences().String("relay-address"))
-		relay6 := defs(relay6, a.Preferences().String("relay6"))
-		pass := defs(pass, a.Preferences().String("relay-password"), DEFAULT_PASSPHRASE)
-		ip := ""
-		if strings.HasPrefix(relay, "0") {
-			relay = strings.TrimPrefix(relay, "0")
-			// Подключаемся напрямую к отправителю
-			// --ip
-			ip = relay
-		}
-		crocOptions := croc.Options{
+		opt := croc.Options{
 			SharedSecret:     secret,
 			Debug:            debugBool(a),
-			RelayAddress:     relay,
-			RelayAddress6:    relay6,
-			RelayPassword:    pass,
-			IP:               ip,
 			NoPrompt:         true,
 			OnlyLocal:        a.Preferences().Bool("force-local"),
 			Curve:            a.Preferences().String("pake-curve"),
 			Overwrite:        a.Preferences().Bool("overwrite"),
 			MulticastAddress: a.Preferences().String("multicast-address"),
 		}
-		client, err := croc.New(crocOptions)
+		opt.RelayPassword, opt.RelayAddress, opt.RelayAddress6, _,
+			comm.Socks5Proxy, comm.HttpProxy = def(a)
+		if strings.HasPrefix(opt.RelayAddress, "0") {
+			opt.RelayAddress = strings.TrimPrefix(opt.RelayAddress, "0")
+			// Подключаемся напрямую к отправителю
+			// --ip
+			opt.IP = opt.RelayAddress
+		}
+		client, err := croc.New(opt)
 		if err != nil {
 			log.Errorf("croc: %v", err)
 			NewToast(w, err.Error()).Show()
@@ -591,9 +583,9 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 
 		if a.Preferences().Bool("remember") {
 			p := NewPreferences(a.Preferences(), w)
-			p.SetString("relay", crocOptions.RelayAddress)
+			p.SetString("relay", opt.RelayAddress)
 			a.Preferences().SetBool("send", false)
-			saveConfig(p, crocOptions, false)
+			saveConfig(p, opt, false)
 		}
 
 		var filename string

@@ -113,15 +113,17 @@ func settingsTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 	hashSelect.SetSelected(currentHash)
 
 	hideLogoBinding := binding.BindPreferenceBool("hide-logo", a.Preferences())
-	toggleLogo := widget.NewButton(lp("Show / Hide"), func() {
+	toggleLogo := widget.NewCheck(lp("Hide"), nil)
+	toggleLogo.Checked, _ = hideLogoBinding.Get()
+	toggleLogo.OnChanged = func(b bool) {
 		hideLogo, _ := hideLogoBinding.Get()
 		hideLogoBinding.Set(!hideLogo)
 		refreshWindow(a, w)
-	})
+	}
 
-	s := "--zip"
-	if !(isMobile || asMobile) {
-		s += " / " + lp("UnZip files")
+	s := lp("UnZip files")
+	if isMobile || asMobile {
+		lp("Zip folders")
 	}
 
 	// Настройки посредников
@@ -139,19 +141,21 @@ func settingsTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 	relayAddressEntry.SetPlaceHolder("--local")
 	relay6Entry := widget.NewEntryWithData(relay6Binding)
 	relayPortsEntry := widget.NewEntryWithData(relayPortsBinding)
+	relayPortsEntry.SetPlaceHolder(ports0)
 	relayPasswordEntry := widget.NewEntryWithData(relayPasswordBinding)
+	relayPasswordEntry.SetPlaceHolder(DEFAULT_PASSPHRASE)
 
 	disableLocalBinding := binding.BindPreferenceBool("disable-local", a.Preferences())
 	disableLocalCheck := widget.NewCheckWithData("", disableLocalBinding)
 
 	onlyLocalBinding := binding.BindPreferenceBool("force-local", a.Preferences())
-	onlyLocalCheck := widget.NewCheckWithData("", onlyLocalBinding)
+	onlyLocalCheck := widget.NewCheckWithData(lp("Force Local Only"), onlyLocalBinding)
 
 	gitIgnoreBinding := binding.BindPreferenceBool("git", a.Preferences())
-	gitIgnoreCheck := widget.NewCheckWithData("", gitIgnoreBinding)
+	gitIgnoreCheck := widget.NewCheckWithData(".gitignore", gitIgnoreBinding)
 
 	overwriteBinding := binding.BindPreferenceBool("overwrite", a.Preferences())
-	overwriteCheck := widget.NewCheckWithData("", overwriteBinding)
+	overwriteCheck := widget.NewCheckWithData(lp("Overwrite"), overwriteBinding)
 
 	sendBinding := binding.BindPreferenceBool("send", a.Preferences())
 	sendCheck := widget.NewCheckWithData("", sendBinding)
@@ -167,24 +171,25 @@ func settingsTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 	send, _ := sendBinding.Get()
 	sendCheck.OnChanged(send)
 
-	listen := "0.0.0.0"
-	runLabel := widget.NewLabel(listen)
+	all := "0.0.0.0"
+	runLabel := widget.NewLabel(all)
 
 	runBinding := binding.BindPreferenceBool("run", a.Preferences())
 	runCheck := widget.NewCheckWithData("--host", runBinding)
 
 	runCheck.OnChanged = func(run bool) {
 		runBinding.Set(run)
-		running := runLabel.Text != listen
+		running := runLabel.Text != all
 		if run {
 			if !running {
 				c := NewPreferences(a.Preferences(), w)
 				c.SetBool("debug", debugBool(a))
 
-				pass := defs(pass, a.Preferences().String("relay-password"), DEFAULT_PASSPHRASE)
-				relay := defs(relay4, a.Preferences().String("relay-address"))
-				ports := defs(a.Preferences().String("relay-ports"), strings.Join(makePorts(0, 0), ","))
+				pass, relay, _, ports,
+					_, _ := def(a)
+
 				bind := a.Preferences().StringListWithFallback("bind", []string{pass, relay, ports})
+				a.Preferences().SetStringList("bind", bind)
 
 				c.SetString("pass", bind[0])
 				c.SetString("host", bind[1])
@@ -192,13 +197,13 @@ func settingsTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 
 				runLabel.SetText(bind[1])
 				disableLocalBinding.Set(true)
-				a.Preferences().SetStringList("bind", bind)
+
 				go func() {
 					err := relayRun(c)
 					// netstat -tlnp|grep crocgui
 					// netstat -a -n -p tcp |find ":90"
 					fyne.Do(func() {
-						runLabel.SetText(listen)
+						runLabel.SetText(all)
 						runBinding.Set(false)
 						a.Preferences().RemoveValue("bind")
 						disableLocalBinding.Set(false)
@@ -256,66 +261,72 @@ func settingsTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 		"overwrite":      overwriteBinding,
 	}
 
+	NewRow := func(text string, objects ...fyne.CanvasObject) *fyne.Container {
+		prefix := strings.TrimSpace(text)
+		tab := strings.TrimPrefix(text, prefix)
+		label := widget.NewLabel(prefix)
+		label.Alignment = fyne.TextAlignTrailing
+		return container.NewBorder(
+			nil, nil, container.NewStack(widget.NewLabel(tab), label),
+			nil, objects...)
+	}
+	head := func(text string) *widget.Label {
+		return widget.NewLabelWithStyle(text, fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
+	}
 	ti = container.NewTabItemWithIcon(ZeroWidthNonJoiner, theme.SettingsIcon(), container.NewVScroll(container.NewVBox(
-		widget.NewLabelWithStyle(lp("Appearance"), fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
-		widget.NewForm(
-			widget.NewFormItem(lp("Language"), langSelect),
-			widget.NewFormItem(lp("Theme"), themeSelect),
-			widget.NewFormItem(lp("Font"), fontSelect),
-			widget.NewFormItem(lp("Logo"), toggleLogo),
-		),
+		head(lp("Appearance")),
+		NewRow(lp("Language")+"\t\t", langSelect),
+		NewRow(lp("Theme")+"\t\t", themeSelect),
+		NewRow(lp("Font")+"\t\t", fontSelect),
+		NewRow(lp("Logo")+"\t\t", toggleLogo),
+
 		widget.NewSeparator(),
-		widget.NewForm(
-			widget.NewFormItem(lp("Configs"), container.NewHBox(
-				widget.NewLabel(".config/croc/"),
-				layout.NewSpacer(),
-				widget.NewCheckWithData("--remember",
-					binding.BindPreferenceBool("remember", a.Preferences())),
-			)),
-			widget.NewFormItem(lp("Config"), container.NewHBox(
-				sendCheck,
-				layout.NewSpacer(),
-				restoreCheck,
-			)),
-		),
+		head("Croc"),
+		NewRow(lp("Configs")+"\t\t", container.NewHBox(
+			widget.NewLabel(".config/croc/"),
+			layout.NewSpacer(),
+			widget.NewCheckWithData("--remember",
+				binding.BindPreferenceBool("remember", a.Preferences())),
+		)),
+		NewRow(lp("Config")+"\t\t", container.NewHBox(
+			sendCheck,
+			layout.NewSpacer(),
+			restoreCheck,
+		)),
+
 		widget.NewSeparator(),
-		widget.NewLabelWithStyle(lp("Relay"), fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
-		widget.NewForm(
-			widget.NewFormItem(lp("Name"), relayControls),
-			widget.NewFormItem("--relay", relayAddressEntry),
-			widget.NewFormItem("--relay6", relay6Entry),
-			widget.NewFormItem("--ports", relayPortsEntry),
-			widget.NewFormItem("--pass", relayPasswordEntry),
-		),
+		head(lp("Relay")),
+		NewRow(lp("Name")+"\t\t", relayControls),
+		NewRow("--relay\t\t", relayAddressEntry),
+		NewRow("--relay6\t\t", relay6Entry),
+		NewRow("--ports\t\t", relayPortsEntry),
+		NewRow("--pass\t\t", relayPasswordEntry),
+
 		widget.NewSeparator(),
 		widget.NewLabelWithStyle(lp("Network Local"), fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
-		widget.NewForm(
-			widget.NewFormItem("--no-local", container.NewHBox(
-				disableLocalCheck,
-				layout.NewSpacer(),
-				runCheck,
-				runLabel,
-			)),
-			widget.NewFormItem("--local", onlyLocalCheck),
-			widget.NewFormItem("--multicast", widget.NewEntryWithData(binding.BindPreferenceString("multicast-address", a.Preferences()))),
-		),
+		NewRow("--no-local\t\t", container.NewHBox(
+			disableLocalCheck,
+			layout.NewSpacer(),
+			runCheck,
+			runLabel,
+		)),
+		NewRow("--local\t\t", onlyLocalCheck),
+		NewRow("--multicast\t\t", widget.NewEntryWithData(binding.BindPreferenceString("multicast-address", a.Preferences()))),
+
 		widget.NewSeparator(),
-		widget.NewLabelWithStyle(lp("Transfer Options"), fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
-		widget.NewForm(
-			widget.NewFormItem("--curve", curveSelect),
-			widget.NewFormItem("--hash", hashSelect),
-			widget.NewFormItem("--no-multi", widget.NewCheckWithData("", binding.BindPreferenceBool("disable-multiplexing", a.Preferences()))),
-			widget.NewFormItem("--no-compress", widget.NewCheckWithData("", binding.BindPreferenceBool("disable-compression", a.Preferences()))),
-			widget.NewFormItem("--throttleUpload", widget.NewEntryWithData(binding.BindPreferenceString("upload-throttle", a.Preferences()))),
-		),
+		head(lp("Storage Options")),
+		NewRow("--overwrite\t\t", overwriteCheck),
+		NewRow("--git\t\t", gitIgnoreCheck),
+		NewRow("--zip\t\t", widget.NewCheckWithData(s, binding.BindPreferenceBool("zip-unzip", a.Preferences()))),
+		NewRow("--exclude\t\t", widget.NewEntryWithData(binding.BindPreferenceString("exclude", a.Preferences()))),
+
 		widget.NewSeparator(),
-		widget.NewLabelWithStyle(lp("Storage Options"), fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
-		widget.NewForm(
-			widget.NewFormItem("--overwrite", overwriteCheck),
-			widget.NewFormItem("--git", gitIgnoreCheck),
-			widget.NewFormItem(s, widget.NewCheckWithData("", binding.BindPreferenceBool("zip-unzip", a.Preferences()))),
-			widget.NewFormItem("--exclude", widget.NewEntryWithData(binding.BindPreferenceString("exclude", a.Preferences()))),
-		),
+		head(lp("Transfer Options")),
+		NewRow("--curve\t\t\t", curveSelect),
+		NewRow("--hash\t\t\t", hashSelect),
+		NewRow("--no-multi\t\t\t", widget.NewCheckWithData(lp("Disable Multiplexing"), binding.BindPreferenceBool("disable-multiplexing", a.Preferences()))),
+		NewRow("--no-compress\t\t\t", widget.NewCheckWithData(lp("Disable Compression"), binding.BindPreferenceBool("disable-compression", a.Preferences()))),
+		NewRow("--throttleUpload\t\t\t", widget.NewEntryWithData(binding.BindPreferenceString("upload-throttle", a.Preferences()))),
 	)))
 
 	restoreCheck.OnChanged = func(restore bool) {

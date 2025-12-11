@@ -81,9 +81,10 @@ var (
 	// CROC_CD_LOCK=1 crocgui
 	longCdLock = os.Getenv("CROC_CD_LOCK") != ""
 
+	pass    = os.Getenv("CROC_PASS")
 	relay4  = os.Getenv("CROC_RELAY")
 	relay6  = os.Getenv("CROC_RELAY6")
-	pass    = os.Getenv("CROC_PASS")
+	ports0  = strings.Join(makePorts(0, 0), ",")
 	socks5  = os.Getenv("SOCKS5_PROXY")
 	connect = os.Getenv("HTTP_PROXY")
 	code    = os.Getenv("CROC_SECRET")
@@ -106,11 +107,10 @@ const (
 	NONDEFAULT             = "non-default: "
 	STDIN                  = "croc-stdin-"
 	DEFAULT_RELAY          = "croc.schollz.com"
-	// DEFAULT_RELAY6         = "croc6.schollz.com"
-	DEFAULT_RELAY6     = "2a01:4f9:c013:7b04::1"
-	DEFAULT_PORT       = 9009
-	TRANSFERS          = 4
-	DEFAULT_PASSPHRASE = "pass123"
+	DEFAULT_RELAY6         = "croc6.schollz.com"
+	DEFAULT_PORT           = 9009
+	TRANSFERS              = 4
+	DEFAULT_PASSPHRASE     = "pass123"
 )
 
 const (
@@ -176,10 +176,10 @@ func main() {
 		a.Preferences().StringWithFallback("lang", "en-US"))
 	a.Preferences().SetString("relay-address",
 		a.Preferences().StringWithFallback("relay-address", DEFAULT_RELAY))
-	a.Preferences().SetString("relay-password",
-		a.Preferences().StringWithFallback("relay-password", DEFAULT_PASSPHRASE))
+	// a.Preferences().SetString("relay-password",
+	// 	a.Preferences().StringWithFallback("relay-password", DEFAULT_PASSPHRASE))
 	a.Preferences().SetString("relay-ports",
-		a.Preferences().StringWithFallback("relay-ports", strings.Join(makePorts(0, 9), ",")))
+		a.Preferences().StringWithFallback("relay-ports", strings.Join(makePorts(0, 8), ",")))
 	// a.Preferences().SetBool("disable-local",
 	// 	a.Preferences().BoolWithFallback("disable-local", false))
 	// a.Preferences().SetBool("force-local",

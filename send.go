@@ -605,30 +605,13 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 				secret = TOTP + secret
 			}
 
-			comm.Socks5Proxy = defs(socks5, a.Preferences().String("socks5"))
-			comm.HttpProxy = defs(connect, a.Preferences().String("connect"))
-			relay := defs(relay4, a.Preferences().String("relay-address"))
-			relay6 := defs(relay6, a.Preferences().String("relay6"))
-			ports := defs(a.Preferences().String("relay-ports"), strings.Join(makePorts(0, 0), ","))
-			pass := defs(pass, a.Preferences().String("relay-password"), DEFAULT_PASSPHRASE)
-			OnlyLocal := a.Preferences().Bool("force-local")
-			if relay == "" && relay6 == "" {
-				// OnlyLocal
-				// --local
-				OnlyLocal = true
-			}
-			crocOptions := croc.Options{
+			opt := croc.Options{
 				IsSender:         true,
 				SharedSecret:     secret,
 				Debug:            debugBool(a),
-				RelayAddress:     relay,
-				RelayAddress6:    relay6,
-				RelayPorts:       strings.Split(ports, ","),
-				RelayPassword:    pass,
 				NoPrompt:         true,
 				DisableLocal:     a.Preferences().Bool("disable-local"),
 				NoMultiplexing:   a.Preferences().Bool("disable-multiplexing"),
-				OnlyLocal:        OnlyLocal,
 				NoCompress:       a.Preferences().Bool("disable-compression"),
 				Curve:            a.Preferences().String("pake-curve"),
 				HashAlgorithm:    a.Preferences().String("croc-hash"),
@@ -639,7 +622,13 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 				Overwrite:        a.Preferences().Bool("overwrite"),
 				GitIgnore:        GitIgnore,
 			}
-			client, err := croc.New(crocOptions)
+			RelayPorts := ""
+			opt.RelayPassword, opt.RelayAddress, opt.RelayAddress6, RelayPorts,
+				comm.Socks5Proxy, comm.HttpProxy = def(a)
+			opt.RelayPorts = strings.Split(RelayPorts, ",")
+			opt.OnlyLocal = a.Preferences().Bool("force-local") || opt.RelayAddress == "" && opt.RelayAddress6 == ""
+
+			client, err := croc.New(opt)
 			if err != nil {
 				log.Errorf("croc: %v", err)
 				fyne.Do(NewToast(w, err.Error()).Show)
@@ -651,9 +640,9 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 
 			if a.Preferences().Bool("remember") {
 				p := NewPreferences(a.Preferences(), w)
-				p.SetString("relay", crocOptions.RelayAddress)
+				p.SetString("relay", opt.RelayAddress)
 				a.Preferences().SetBool("send", true)
-				saveConfig(p, crocOptions, true)
+				saveConfig(p, opt, true)
 			}
 
 			var filename string
@@ -1840,5 +1829,15 @@ func GetConfigDir(requireValidPath bool) (homedir string, err error) {
 			err = os.MkdirAll(homedir, 0o700)
 		}
 	}
+	return
+}
+
+func def(a fyne.App) (p, r, r6, ps, s, h string) {
+	p = defs(pass, a.Preferences().String("relay-password"), DEFAULT_PASSPHRASE)
+	r = defs(relay4, a.Preferences().String("relay-address"))
+	r6 = defs(relay6, a.Preferences().String("relay6"))
+	ps = defs(a.Preferences().String("relay-ports"), ports0)
+	s = defs(socks5, a.Preferences().String("socks5"))
+	h = defs(connect, a.Preferences().String("connect"))
 	return
 }

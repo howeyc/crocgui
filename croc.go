@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"errors"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -229,29 +228,14 @@ func relayRun(c Preferences) (err error) {
 	if c.IsSet("ports") {
 		ports = strings.Split(c.String("ports"), ",")
 	} else {
-		// portString := c.Int("port")
-		// if portString == 0 {
-		// 	portString = 9009
-		// }
-		// transfersString := c.Int("transfers")
-		// if transfersString == 0 {
-		// 	transfersString = 4
-		// }
-		// ports = make([]string, transfersString)
-		// for i := range ports {
-		// 	ports[i] = strconv.Itoa(portString + i)
-		// }
 		ports = makePorts(c.Int("port"), c.Int("transfers"))
 	}
 
 	if len(ports) < 2 {
-		return errors.New("ports<2")
+		ports = makePorts(c.Int("port"), c.Int("transfers"))
 	}
-	pass = determinePass(c)
+	pass := determinePass(c)
 	for _, port := range ports[1:] {
-		// if i == 0 {
-		// 	continue
-		// }
 		go func(portStr string) {
 			err := tcp.Run(debugString, host, portStr, pass)
 			if err != nil {
