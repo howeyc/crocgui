@@ -260,100 +260,83 @@ func settingsTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 		"git":            gitIgnoreBinding,
 		"overwrite":      overwriteBinding,
 	}
-	tab := widget.NewLabel("throttleUpload")
-	tabSize := tab.MinSize()
-	NewRow := func(text string, objects ...fyne.CanvasObject) *fyne.Container {
-		label := widget.NewLabel(text)
-		label.Alignment = fyne.TextAlignTrailing
-		// if isAndroid {
-		row := container.NewBorder(
-			nil, nil, container.NewGridWrap(tabSize, label),
-			nil, objects...)
-		return row
-		// }
-		// pad := container.NewGridWrap(fyne.NewSize(7, tabSize.Height), layout.NewSpacer())
-		// return container.NewBorder(
-		// 	nil, nil, container.NewGridWrap(tabSize, label),
-		// 	pad, objects...)
-	}
 
-	// Создаём аккордеон
-	accordion := widget.NewAccordion()
-
+	// Создаём формы для каждой секции
 	// 1. Секция Appearance
-	appearanceItems := container.NewVBox(
-		NewRow(lp("Language"), langSelect),
-		NewRow(lp("Theme"), themeSelect),
-		NewRow(lp("Font"), fontSelect),
-		NewRow(lp("Logo"), toggleLogo),
+	appearanceForm := widget.NewForm(
+		widget.NewFormItem(lp("Language"), langSelect),
+		widget.NewFormItem(lp("Theme"), themeSelect),
+		widget.NewFormItem(lp("Font"), fontSelect),
+		widget.NewFormItem(lp("Logo"), toggleLogo),
 	)
-	accordion.Append(widget.NewAccordionItem(lp("Appearance"), appearanceItems))
 
 	// 2. Секция Croc Config
-	crocItems := container.NewVBox(
-		NewRow(lp("Configs"), container.NewHBox(
+	crocForm := widget.NewForm(
+		widget.NewFormItem(lp("Configs"), container.NewHBox(
 			widget.NewLabel(".config/croc/"),
 			layout.NewSpacer(),
-			widget.NewCheckWithData("remember",
-				binding.BindPreferenceBool("remember", a.Preferences())),
+			widget.NewCheckWithData("remember", binding.BindPreferenceBool("remember", a.Preferences())),
 		)),
-		NewRow(lp("Config"), container.NewHBox(
+		widget.NewFormItem(lp("Config"), container.NewHBox(
 			sendCheck,
 			layout.NewSpacer(),
 			restoreCheck,
 		)),
 	)
-	accordion.Append(widget.NewAccordionItem("Croc", crocItems))
 
 	// 3. Секция Relay Settings
-	relayItems := container.NewVBox(
-		NewRow(lp("Name"), relayControls),
-		NewRow("relay", relayAddressEntry),
-		NewRow("relay6", relay6Entry),
-		NewRow("ports", relayPortsEntry),
-		NewRow("pass", relayPasswordEntry),
+	relayForm := widget.NewForm(
+		widget.NewFormItem(lp("Name"), relayControls),
+		widget.NewFormItem("relay", relayAddressEntry),
+		widget.NewFormItem("relay6", relay6Entry),
+		widget.NewFormItem("ports", relayPortsEntry),
+		widget.NewFormItem("pass", relayPasswordEntry),
 	)
-	accordion.Append(widget.NewAccordionItem(lp("Relay"), relayItems))
 
 	// 4. Секция Network Local
-	networkItems := container.NewVBox(
-		NewRow("no-local", container.NewHBox(
+	networkForm := widget.NewForm(
+		widget.NewFormItem("no-local", container.NewHBox(
 			disableLocalCheck,
 			layout.NewSpacer(),
 			runCheck,
 			runLabel,
 		)),
-		NewRow("local", onlyLocalCheck),
-		NewRow("multicast", widget.NewEntryWithData(binding.BindPreferenceString("multicast-address", a.Preferences()))),
+		widget.NewFormItem("local", onlyLocalCheck),
+		widget.NewFormItem("multicast", widget.NewEntryWithData(binding.BindPreferenceString("multicast-address", a.Preferences()))),
 	)
-	accordion.Append(widget.NewAccordionItem(lp("Network Local"), networkItems))
 
 	// 5. Секция Storage Options
-	storageItems := container.NewVBox(
-		NewRow("overwrite", overwriteCheck),
-		NewRow("git", gitIgnoreCheck),
-		NewRow("zip", widget.NewCheckWithData(s, binding.BindPreferenceBool("zip-unzip", a.Preferences()))),
-		NewRow("exclude", widget.NewEntryWithData(binding.BindPreferenceString("exclude", a.Preferences()))),
+	storageForm := widget.NewForm(
+		widget.NewFormItem("overwrite", overwriteCheck),
+		widget.NewFormItem("git", gitIgnoreCheck),
+		widget.NewFormItem("zip", widget.NewCheckWithData(s, binding.BindPreferenceBool("zip-unzip", a.Preferences()))),
+		widget.NewFormItem("exclude", widget.NewEntryWithData(binding.BindPreferenceString("exclude", a.Preferences()))),
 	)
-	accordion.Append(widget.NewAccordionItem(lp("Storage Options"), storageItems))
 
 	// 6. Секция Transfer Options
-	transferItems := container.NewVBox(
-		NewRow("curve", curveSelect),
-		NewRow("hash", hashSelect),
-		NewRow("no-multi", widget.NewCheckWithData(lp("Disable Multiplexing"), binding.BindPreferenceBool("disable-multiplexing", a.Preferences()))),
-		NewRow("no-compress", widget.NewCheckWithData(lp("Disable Compression"), binding.BindPreferenceBool("disable-compression", a.Preferences()))),
-		NewRow("throttleUpload", widget.NewEntryWithData(binding.BindPreferenceString("upload-throttle", a.Preferences()))),
+	transferForm := widget.NewForm(
+		widget.NewFormItem("curve", curveSelect),
+		widget.NewFormItem("hash", hashSelect),
+		widget.NewFormItem("no-multi", widget.NewCheckWithData(lp("Disable Multiplexing"), binding.BindPreferenceBool("disable-multiplexing", a.Preferences()))),
+		widget.NewFormItem("no-compress", widget.NewCheckWithData(lp("Disable Compression"), binding.BindPreferenceBool("disable-compression", a.Preferences()))),
+		widget.NewFormItem("throttleUpload", widget.NewEntryWithData(binding.BindPreferenceString("upload-throttle", a.Preferences()))),
 	)
-	accordion.Append(widget.NewAccordionItem(lp("Transfer Options"), transferItems))
+
+	// Создаём аккордеон
+	accordion := widget.NewAccordion(
+		widget.NewAccordionItem(lp("Appearance"), appearanceForm),
+		widget.NewAccordionItem("Croc", crocForm),
+		widget.NewAccordionItem(lp("Relay"), relayForm),
+		widget.NewAccordionItem(lp("Network Local"), networkForm),
+		widget.NewAccordionItem(lp("Storage Options"), storageForm),
+		widget.NewAccordionItem(lp("Transfer Options"), transferForm),
+	)
 
 	// Собираем финальный интерфейс
 	ti = container.NewTabItemWithIcon(ZeroWidthNonJoiner, theme.SettingsIcon(),
-		// container.NewVScroll(
-		container.NewVBox(
-			accordion,
+		container.NewVScroll(
+			container.NewVBox(accordion),
 		),
-		// ),
 	)
 
 	restoreCheck.OnChanged = func(restore bool) {
