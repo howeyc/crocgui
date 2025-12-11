@@ -138,7 +138,7 @@ func settingsTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 
 	// Создаем виджеты для полей
 	relayAddressEntry := widget.NewEntryWithData(relayAddressBinding)
-	relayAddressEntry.SetPlaceHolder("--local")
+	relayAddressEntry.SetPlaceHolder("local")
 	relay6Entry := widget.NewEntryWithData(relay6Binding)
 	relayPortsEntry := widget.NewEntryWithData(relayPortsBinding)
 	relayPortsEntry.SetPlaceHolder(ports0)
@@ -175,7 +175,7 @@ func settingsTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 	runLabel := widget.NewLabel(all)
 
 	runBinding := binding.BindPreferenceBool("run", a.Preferences())
-	runCheck := widget.NewCheckWithData("--host", runBinding)
+	runCheck := widget.NewCheckWithData("host", runBinding)
 
 	runCheck.OnChanged = func(run bool) {
 		runBinding.Set(run)
@@ -260,75 +260,92 @@ func settingsTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 		"git":            gitIgnoreBinding,
 		"overwrite":      overwriteBinding,
 	}
-
+	tab := widget.NewLabel("throttleUpload")
+	tabSize := tab.MinSize()
 	NewRow := func(text string, objects ...fyne.CanvasObject) *fyne.Container {
-		prefix := strings.TrimSpace(text)
-		tab := strings.TrimPrefix(text, prefix)
-		label := widget.NewLabel(prefix)
+		label := widget.NewLabel(text)
 		label.Alignment = fyne.TextAlignTrailing
+		if isAndroid {
+			row := container.NewBorder(
+				nil, nil, container.NewGridWrap(tabSize, label),
+				nil, objects...)
+			// log.Tracef("ms %s %v", text, row.MinSize())
+			// return container.NewGridWrap(fyne.NewSize(329, tabSize.Height), row)
+			return row
+
+		}
+		pad := container.NewGridWrap(fyne.NewSize(7, tabSize.Height), layout.NewSpacer())
 		return container.NewBorder(
-			nil, nil, container.NewStack(widget.NewLabel(tab), label),
-			nil, objects...)
+			nil, nil, container.NewGridWrap(tabSize, label),
+			pad, objects...)
 	}
 	head := func(text string) *widget.Label {
 		return widget.NewLabelWithStyle(text, fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
 	}
-	ti = container.NewTabItemWithIcon(ZeroWidthNonJoiner, theme.SettingsIcon(), container.NewVScroll(container.NewVBox(
-		head(lp("Appearance")),
-		NewRow(lp("Language")+"\t\t", langSelect),
-		NewRow(lp("Theme")+"\t\t", themeSelect),
-		NewRow(lp("Font")+"\t\t", fontSelect),
-		NewRow(lp("Logo")+"\t\t", toggleLogo),
+	ti = container.NewTabItemWithIcon(ZeroWidthNonJoiner, theme.SettingsIcon(),
+		container.NewVScroll(
+			// container.NewCenter(
+			container.NewVBox(
+				head(lp("Appearance")),
+				NewRow(lp("Language"), langSelect),
+				NewRow(lp("Theme"), themeSelect),
+				NewRow(lp("Font"), fontSelect),
+				NewRow(lp("Logo"), toggleLogo),
 
-		widget.NewSeparator(),
-		head("Croc"),
-		NewRow(lp("Configs")+"\t\t", container.NewHBox(
-			widget.NewLabel(".config/croc/"),
-			layout.NewSpacer(),
-			widget.NewCheckWithData("--remember",
-				binding.BindPreferenceBool("remember", a.Preferences())),
-		)),
-		NewRow(lp("Config")+"\t\t", container.NewHBox(
-			sendCheck,
-			layout.NewSpacer(),
-			restoreCheck,
-		)),
+				widget.NewSeparator(),
+				head("Croc"),
+				NewRow(lp("Configs"), container.NewHBox(
+					widget.NewLabel(".config/croc/"),
+					layout.NewSpacer(),
+					widget.NewCheckWithData("remember",
+						binding.BindPreferenceBool("remember", a.Preferences())),
+				)),
+				NewRow(lp("Config"), container.NewHBox(
+					sendCheck,
+					layout.NewSpacer(),
+					restoreCheck,
+				)),
 
-		widget.NewSeparator(),
-		head(lp("Relay")),
-		NewRow(lp("Name")+"\t\t", relayControls),
-		NewRow("--relay\t\t", relayAddressEntry),
-		NewRow("--relay6\t\t", relay6Entry),
-		NewRow("--ports\t\t", relayPortsEntry),
-		NewRow("--pass\t\t", relayPasswordEntry),
+				widget.NewSeparator(),
+				head(lp("Relay")),
+				NewRow(lp("Name"), relayControls),
+				NewRow("relay", relayAddressEntry),
+				NewRow("relay6", relay6Entry),
+				NewRow("ports", relayPortsEntry),
+				NewRow("pass", relayPasswordEntry),
 
-		widget.NewSeparator(),
-		widget.NewLabelWithStyle(lp("Network Local"), fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
-		NewRow("--no-local\t\t", container.NewHBox(
-			disableLocalCheck,
-			layout.NewSpacer(),
-			runCheck,
-			runLabel,
-		)),
-		NewRow("--local\t\t", onlyLocalCheck),
-		NewRow("--multicast\t\t", widget.NewEntryWithData(binding.BindPreferenceString("multicast-address", a.Preferences()))),
+				widget.NewSeparator(),
+				widget.NewLabelWithStyle(lp("Network Local"), fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
+				NewRow("no-local", container.NewHBox(
+					disableLocalCheck,
+					layout.NewSpacer(),
+					runCheck,
+					runLabel,
+				)),
+				NewRow("local", onlyLocalCheck),
+				NewRow("multicast", widget.NewEntryWithData(binding.BindPreferenceString("multicast-address", a.Preferences()))),
 
-		widget.NewSeparator(),
-		head(lp("Storage Options")),
-		NewRow("--overwrite\t\t", overwriteCheck),
-		NewRow("--git\t\t", gitIgnoreCheck),
-		NewRow("--zip\t\t", widget.NewCheckWithData(s, binding.BindPreferenceBool("zip-unzip", a.Preferences()))),
-		NewRow("--exclude\t\t", widget.NewEntryWithData(binding.BindPreferenceString("exclude", a.Preferences()))),
+				widget.NewSeparator(),
+				head(lp("Storage Options")),
+				NewRow("overwrite", overwriteCheck),
+				NewRow("git", gitIgnoreCheck),
+				NewRow("zip", widget.NewCheckWithData(s, binding.BindPreferenceBool("zip-unzip", a.Preferences()))),
+				NewRow("exclude", widget.NewEntryWithData(binding.BindPreferenceString("exclude", a.Preferences()))),
 
-		widget.NewSeparator(),
-		head(lp("Transfer Options")),
-		NewRow("--curve\t\t\t", curveSelect),
-		NewRow("--hash\t\t\t", hashSelect),
-		NewRow("--no-multi\t\t\t", widget.NewCheckWithData(lp("Disable Multiplexing"), binding.BindPreferenceBool("disable-multiplexing", a.Preferences()))),
-		NewRow("--no-compress\t\t\t", widget.NewCheckWithData(lp("Disable Compression"), binding.BindPreferenceBool("disable-compression", a.Preferences()))),
-		NewRow("--throttleUpload\t\t\t", widget.NewEntryWithData(binding.BindPreferenceString("upload-throttle", a.Preferences()))),
-	)))
-
+				widget.NewSeparator(),
+				head(lp("Transfer Options")),
+				NewRow("curve", curveSelect),
+				NewRow("hash", hashSelect),
+				NewRow("no-multi", widget.NewCheckWithData(lp("Disable Multiplexing"), binding.BindPreferenceBool("disable-multiplexing", a.Preferences()))),
+				NewRow("no-compress", widget.NewCheckWithData(lp("Disable Compression"), binding.BindPreferenceBool("disable-compression", a.Preferences()))),
+				NewRow("throttleUpload", widget.NewEntryWithData(binding.BindPreferenceString("upload-throttle", a.Preferences()))),
+			),
+			// ),
+		),
+	)
+	// log.Tracef("ti %v", ti.Content.MinSize())
+	// ti.Content.Resize(ti.Content.MinSize().SubtractWidthHeight(40, 0))
+	// log.Tracef("ti %v", ti.Content.MinSize())
 	restoreCheck.OnChanged = func(restore bool) {
 		restoreBinding.Set(restore)
 		if restore {

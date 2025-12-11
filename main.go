@@ -54,7 +54,7 @@ var (
 	ErrNilURI       = errors.New("uri is nil")
 	crocRemovalFile = "croc-marked-files.txt"
 	ftw             fyne.Window
-	size            = fyne.NewSize(370, 740)
+	size            = fyne.NewSize(350, 700)
 
 	// Чтоб на десктопе отладить как будто это мобильная ОС
 	// cmd/c "set CROC_AS_MOBILE=1&crocgui.exe"
