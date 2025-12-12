@@ -40,6 +40,8 @@ type GuiPrefsData struct {
 	Overwrite     bool   `json:"overwrite"`
 }
 
+var accordion *widget.Accordion
+
 func settingsTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 	langBinding := binding.BindPreferenceString("lang", a.Preferences())
 	langSelect := widget.NewSelect([]string{"en-US", "tr-TR", "ja-JP", "zh-CN", "zh-HK", "zh-TW", "ru-RU"}, func(selection string) {
@@ -146,10 +148,10 @@ func settingsTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 	relayPasswordEntry.SetPlaceHolder(DEFAULT_PASSPHRASE)
 
 	disableLocalBinding := binding.BindPreferenceBool("disable-local", a.Preferences())
-	disableLocalCheck := widget.NewCheckWithData("", disableLocalBinding)
+	disableLocalCheck := widget.NewCheckWithData(lp("No local relay"), disableLocalBinding)
 
 	onlyLocalBinding := binding.BindPreferenceBool("force-local", a.Preferences())
-	onlyLocalCheck := widget.NewCheckWithData(lp("Force Local Only"), onlyLocalBinding)
+	onlyLocalCheck := widget.NewCheckWithData(lp("No dial relay"), onlyLocalBinding)
 
 	gitIgnoreBinding := binding.BindPreferenceBool("git", a.Preferences())
 	gitIgnoreCheck := widget.NewCheckWithData(".gitignore", gitIgnoreBinding)
@@ -323,7 +325,7 @@ func settingsTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 	)
 
 	// Создаём аккордеон
-	accordion := widget.NewAccordion(
+	accordion = widget.NewAccordion(
 		widget.NewAccordionItem(lp("Appearance"), appearanceForm),
 		widget.NewAccordionItem("Croc", crocForm),
 		widget.NewAccordionItem(lp("Relay"), relayForm),
@@ -331,6 +333,8 @@ func settingsTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 		widget.NewAccordionItem(lp("Storage Options"), storageForm),
 		widget.NewAccordionItem(lp("Transfer Options"), transferForm),
 	)
+	accordion.MultiOpen = true
+	restoreAccordionState()
 
 	// Собираем финальный интерфейс
 	ti = container.NewTabItemWithIcon(ZeroWidthNonJoiner, theme.SettingsIcon(),
@@ -485,4 +489,35 @@ func loadAndApplyCliOptionsToBindings(bindings map[string]interface{}, save bool
 	applyStructToBindings(data, bindings)
 
 	return nil
+}
+
+// Сохраняем индексы открытых секций
+func saveAccordionState() {
+	if accordion == nil {
+		return
+	}
+	var openIndices []int
+	for i, item := range accordion.Items {
+		if item.Open {
+			openIndices = append(openIndices, i)
+		}
+	}
+	// Сохраняем как список интов
+	fyne.CurrentApp().Preferences().SetIntList("accordion", openIndices)
+	// log.Tracef("saveAccordionState %v", openIndices)
+}
+
+// Восстанавливаем открытые секции
+func restoreAccordionState() {
+	if accordion == nil {
+		return
+	}
+	openIndices := fyne.CurrentApp().Preferences().IntList("accordion")
+	// log.Tracef("restoreAccordionState %v", openIndices)
+
+	for _, idx := range openIndices {
+		if idx >= 0 && idx < len(accordion.Items) {
+			accordion.Open(idx)
+		}
+	}
 }

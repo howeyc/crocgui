@@ -246,6 +246,7 @@ func main() {
 }
 
 func refreshWindow(a fyne.App, w fyne.Window) {
+	saveAccordionState()
 	textlogores := fyne.NewStaticResource("text-logo", textlogobytes)
 	textlogo := canvas.NewImageFromResource(textlogores)
 	textlogo.SetMinSize(fyne.NewSize(205, 100))
@@ -293,6 +294,7 @@ func ls(path string) (files []string) {
 }
 
 func cleanup(w fyne.Window) {
+	saveAccordionState()
 	close(done)
 	if err := os.Chdir(join()); err == nil {
 		log.Tracef("RemoveMarkedFiles: %v", utils.RemoveMarkedFiles())
