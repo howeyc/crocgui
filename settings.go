@@ -148,10 +148,10 @@ func settingsTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 	relayPasswordEntry.SetPlaceHolder(DEFAULT_PASSPHRASE)
 
 	disableLocalBinding := binding.BindPreferenceBool("disable-local", a.Preferences())
-	disableLocalCheck := widget.NewCheckWithData(lp("No local relay"), disableLocalBinding)
+	disableLocalCheck := widget.NewCheckWithData(lp("Sender not listen"), disableLocalBinding)
 
 	onlyLocalBinding := binding.BindPreferenceBool("force-local", a.Preferences())
-	onlyLocalCheck := widget.NewCheckWithData(lp("No dial relay"), onlyLocalBinding)
+	onlyLocalCheck := widget.NewCheckWithData(lp("Search sender in LAN"), onlyLocalBinding)
 
 	gitIgnoreBinding := binding.BindPreferenceBool("git", a.Preferences())
 	gitIgnoreCheck := widget.NewCheckWithData(".gitignore", gitIgnoreBinding)
@@ -287,13 +287,34 @@ func settingsTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 	)
 
 	// 3. Секция Relay Settings
+	ip := &widget.FormItem{
+		Text:     "",
+		Widget:   relayAddressEntry,
+		HintText: lp("If value like 01.2.3.4 then it used as --ip 1.2.3.4"),
+	}
+
 	relayForm := widget.NewForm(
 		widget.NewFormItem(lp("Name"), relayControls),
-		widget.NewFormItem("relay", relayAddressEntry),
+		ip,
 		widget.NewFormItem("relay6", relay6Entry),
 		widget.NewFormItem("ports", relayPortsEntry),
 		widget.NewFormItem("pass", relayPasswordEntry),
 	)
+
+	relayAddressEntry.OnChanged = func(s string) {
+		text := "relay"
+		if strings.HasPrefix(s, "0") {
+			text = "ip"
+			NewToast(w, lp("Connect to sender")+" "+strings.TrimPrefix(s, "0")).Show()
+		}
+		if text != ip.Text {
+			ip.Text = text
+			doMonitor.DoRequest(relayForm.Refresh)
+		}
+
+	}
+	ra, _ := relayAddressBinding.Get()
+	relayAddressEntry.OnChanged(ra)
 
 	// 4. Секция Network Local
 	networkForm := widget.NewForm(
@@ -312,7 +333,12 @@ func settingsTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 		widget.NewFormItem("overwrite", overwriteCheck),
 		widget.NewFormItem("git", gitIgnoreCheck),
 		widget.NewFormItem("zip", widget.NewCheckWithData(s, binding.BindPreferenceBool("zip-unzip", a.Preferences()))),
-		widget.NewFormItem("exclude", widget.NewEntryWithData(binding.BindPreferenceString("exclude", a.Preferences()))),
+		// widget.NewFormItem("exclude", widget.NewEntryWithData(binding.BindPreferenceString("exclude", a.Preferences()))),
+		&widget.FormItem{
+			Text:     "exclude",
+			Widget:   widget.NewEntryWithData(binding.BindPreferenceString("exclude", a.Preferences())),
+			HintText: lp("CSV parts of paths name"),
+		},
 	)
 
 	// 6. Секция Transfer Options
@@ -322,6 +348,11 @@ func settingsTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 		widget.NewFormItem("no-multi", widget.NewCheckWithData(lp("Disable Multiplexing"), binding.BindPreferenceBool("disable-multiplexing", a.Preferences()))),
 		widget.NewFormItem("no-compress", widget.NewCheckWithData(lp("Disable Compression"), binding.BindPreferenceBool("disable-compression", a.Preferences()))),
 		widget.NewFormItem("throttleUpload", widget.NewEntryWithData(binding.BindPreferenceString("upload-throttle", a.Preferences()))),
+		&widget.FormItem{
+			Text:     "throttleUpload",
+			Widget:   widget.NewEntryWithData(binding.BindPreferenceString("upload-throttle", a.Preferences())),
+			HintText: lp("speed e.g. 500k"),
+		},
 	)
 
 	// Создаём аккордеон
