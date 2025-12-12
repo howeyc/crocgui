@@ -185,14 +185,12 @@ func settingsTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 	sendCheck.OnChanged(ok)
 
 	all := "0.0.0.0"
-	runLabel := widget.NewLabel(all)
-
 	runBinding := binding.BindPreferenceBool("run", a.Preferences())
-	runCheck := widget.NewCheckWithData("host", runBinding)
+	runCheck := widget.NewCheckWithData(all, runBinding)
 
 	runCheck.OnChanged = func(ok bool) {
 		runBinding.Set(ok)
-		running := runLabel.Text != all
+		running := runCheck.Text != all
 		if ok {
 			if !running {
 				pass, relay, _, ports,
@@ -215,7 +213,7 @@ func settingsTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 
 				a.Preferences().SetStringList("bind", bind)
 
-				runLabel.SetText(bind[1])
+				runCheck.SetText(bind[1])
 				disableLocalBinding.Set(true)
 
 				go func() {
@@ -224,7 +222,7 @@ func settingsTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 					// ss -tlnp|grep crocgui
 					// netstat -a -n -p tcp |find ":90"
 					fyne.Do(func() {
-						runLabel.SetText(all)
+						runCheck.SetText(all)
 						runBinding.Set(false)
 						a.Preferences().RemoveValue("bind")
 						disableLocalBinding.Set(false)
@@ -367,12 +365,8 @@ func settingsTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 
 	// 4. Секция Network Local
 	networkForm := widget.NewForm(
-		widget.NewFormItem("no-local", container.NewHBox(
-			disableLocalCheck,
-			layout.NewSpacer(),
-			runCheck,
-			runLabel,
-		)),
+		widget.NewFormItem("host", runCheck),
+		widget.NewFormItem("no-local", disableLocalCheck),
 		widget.NewFormItem("local", onlyLocalCheck),
 		widget.NewFormItem("multicast", widget.NewEntryWithData(binding.BindPreferenceString("multicast-address", a.Preferences()))),
 	)
@@ -413,7 +407,7 @@ func settingsTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 		widget.NewAccordionItem(lp("Storage Options"), storageForm),
 		widget.NewAccordionItem(lp("Transfer Options"), transferForm),
 	)
-	accordion.MultiOpen = true
+	accordion.MultiOpen = !(isMobile || asMobile)
 	restoreAccordionState()
 
 	// Собираем финальный интерфейс

@@ -214,7 +214,7 @@ func makePorts(port, transfers int) (ports []string) {
 }
 
 func relayRun(w fyne.Window, debug bool, pass, host, CSVports string) (err error) {
-	log.Info("starting croc relay %s@%s:%s", pass, host, CSVports)
+	log.Infof("starting croc relay %s@%s:%s", pass, host, CSVports)
 	debugString := "info"
 	if debug {
 		debugString = "debug"
