@@ -16,14 +16,12 @@ import (
 type Preferences struct {
 	fyne.Preferences
 	temp map[string]any
-	w    fyne.Window
 }
 
-func NewPreferences(p fyne.Preferences, w fyne.Window) Preferences {
+func NewPreferences(p fyne.Preferences) Preferences {
 	return Preferences{
 		Preferences: p,
 		temp:        make(map[string]any),
-		w:           w,
 	}
 }
 
@@ -215,33 +213,28 @@ func makePorts(port, transfers int) (ports []string) {
 	return
 }
 
-func relayRun(c Preferences) (err error) {
-	// log.Infof("starting croc relay version %v", Version)
-	log.Info("starting croc relay")
+func relayRun(w fyne.Window, debug bool, pass, host, CSVports string) (err error) {
+	log.Info("starting croc relay %s@%s:%s", pass, host, CSVports)
 	debugString := "info"
-	if c.Bool("debug") {
+	if debug {
 		debugString = "debug"
 	}
-	host := c.String("host")
 	var ports []string
 
-	if c.IsSet("ports") {
-		ports = strings.Split(c.String("ports"), ",")
-	} else {
-		ports = makePorts(c.Int("port"), c.Int("transfers"))
+	if CSVports == "" {
+		CSVports = ports0
 	}
+	ports = strings.Split(CSVports, ",")
 
 	if len(ports) < 2 {
-		ports = makePorts(c.Int("port"), c.Int("transfers"))
+		ports = strings.Split(ports0, ",")
 	}
-	pass := determinePass(c)
 	for _, port := range ports[1:] {
 		go func(portStr string) {
 			err := tcp.Run(debugString, host, portStr, pass)
 			if err != nil {
-				// panic(err)
 				fyne.Do(func() {
-					NewToast(c.w, err.Error()).Show()
+					NewToast(w, err.Error()).Show()
 				})
 			}
 		}(port)
@@ -250,8 +243,8 @@ func relayRun(c Preferences) (err error) {
 	return tcp.Run(debugString, host, ports[0], pass, tcpPorts)
 }
 
-func determinePass(c Preferences) (pass string) {
-	pass = c.String("pass")
+func determinePass(s string) (pass string) {
+	pass = s
 	b, err := os.ReadFile(pass)
 	if err == nil {
 		pass = strings.TrimSpace(string(b))

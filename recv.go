@@ -582,7 +582,7 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 		log.Trace("croc client created")
 
 		if a.Preferences().Bool("remember") {
-			p := NewPreferences(a.Preferences(), w)
+			p := NewPreferences(a.Preferences())
 			p.SetString("relay", opt.RelayAddress)
 			a.Preferences().SetBool("send", false)
 			saveConfig(p, opt, false)

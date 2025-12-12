@@ -117,7 +117,7 @@ func settingsTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 	hideLogoBinding := binding.BindPreferenceBool("hide-logo", a.Preferences())
 	toggleLogo := widget.NewCheck(lp("Hide"), nil)
 	toggleLogo.Checked, _ = hideLogoBinding.Get()
-	toggleLogo.OnChanged = func(b bool) {
+	toggleLogo.OnChanged = func(bool) {
 		hideLogo, _ := hideLogoBinding.Get()
 		hideLogoBinding.Set(!hideLogo)
 		refreshWindow(a, w)
@@ -133,10 +133,18 @@ func settingsTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 	relay6Binding := binding.BindPreferenceString("relay6", a.Preferences())
 	relayPortsBinding := binding.BindPreferenceString("relay-ports", a.Preferences())
 	relayPasswordBinding := binding.BindPreferenceString("relay-password", a.Preferences())
+
+	relaySocks5Binding := binding.BindPreferenceString("socks5", a.Preferences())
+	relayConnectBinding := binding.BindPreferenceString("connect", a.Preferences())
+
 	relayControls := createRelaySelector(a, w,
 		relayAddressBinding,
 		relay6Binding,
-		relayPortsBinding, relayPasswordBinding)
+		relayPortsBinding,
+		relayPasswordBinding,
+		relaySocks5Binding,
+		relayConnectBinding,
+	)
 
 	// Создаем виджеты для полей
 	relayAddressEntry := widget.NewEntryWithData(relayAddressBinding)
@@ -146,6 +154,9 @@ func settingsTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 	relayPortsEntry.SetPlaceHolder(ports0)
 	relayPasswordEntry := widget.NewEntryWithData(relayPasswordBinding)
 	relayPasswordEntry.SetPlaceHolder(DEFAULT_PASSPHRASE)
+
+	relaySocks5Entry := widget.NewEntryWithData(relaySocks5Binding)
+	relayConnectEntry := widget.NewEntryWithData(relayConnectBinding)
 
 	disableLocalBinding := binding.BindPreferenceBool("disable-local", a.Preferences())
 	disableLocalCheck := widget.NewCheckWithData(lp("Sender not listen"), disableLocalBinding)
@@ -161,17 +172,17 @@ func settingsTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 
 	sendBinding := binding.BindPreferenceBool("send", a.Preferences())
 	sendCheck := widget.NewCheckWithData("", sendBinding)
-	sendCheck.OnChanged = func(send bool) {
+	sendCheck.OnChanged = func(ok bool) {
+		sendBinding.Set(ok)
 		json := "receive"
-		if send {
+		if ok {
 			json = "send"
 		}
 		json += ".json"
 		sendCheck.SetText(json)
-		sendBinding.Set(send)
 	}
-	send, _ := sendBinding.Get()
-	sendCheck.OnChanged(send)
+	ok, _ := sendBinding.Get()
+	sendCheck.OnChanged(ok)
 
 	all := "0.0.0.0"
 	runLabel := widget.NewLabel(all)
@@ -179,30 +190,38 @@ func settingsTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 	runBinding := binding.BindPreferenceBool("run", a.Preferences())
 	runCheck := widget.NewCheckWithData("host", runBinding)
 
-	runCheck.OnChanged = func(run bool) {
-		runBinding.Set(run)
+	runCheck.OnChanged = func(ok bool) {
+		runBinding.Set(ok)
 		running := runLabel.Text != all
-		if run {
+		if ok {
 			if !running {
-				c := NewPreferences(a.Preferences(), w)
-				c.SetBool("debug", debugBool(a))
-
 				pass, relay, _, ports,
 					_, _ := def(a)
 
 				bind := a.Preferences().StringListWithFallback("bind", []string{pass, relay, ports})
-				a.Preferences().SetStringList("bind", bind)
+				// На всякий случай
+				if len(bind) < 1 {
+					bind = append(bind, pass)
+				}
+				pass = bind[0]
+				if len(bind) < 2 {
+					bind = append(bind, relay)
+				}
+				relay = bind[1]
+				if len(bind) < 3 {
+					bind = append(bind, ports)
+				}
+				ports = bind[2]
 
-				c.SetString("pass", bind[0])
-				c.SetString("host", bind[1])
-				c.SetString("ports", bind[2])
+				a.Preferences().SetStringList("bind", bind)
 
 				runLabel.SetText(bind[1])
 				disableLocalBinding.Set(true)
 
 				go func() {
-					err := relayRun(c)
+					err := relayRun(w, debugBool(a), pass, relay, ports)
 					// netstat -tlnp|grep crocgui
+					// ss -tlnp|grep crocgui
 					// netstat -a -n -p tcp |find ":90"
 					fyne.Do(func() {
 						runLabel.SetText(all)
@@ -210,7 +229,7 @@ func settingsTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 						a.Preferences().RemoveValue("bind")
 						disableLocalBinding.Set(false)
 						if err != nil {
-							NewToast(c.w, err.Error()).Show()
+							NewToast(w, err.Error()).Show()
 						}
 					})
 				}()
@@ -224,8 +243,8 @@ func settingsTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 		}
 	}
 
-	doRun, _ := runBinding.Get()
-	runCheck.OnChanged(doRun)
+	ok, _ = runBinding.Get()
+	runCheck.OnChanged(ok)
 
 	// Массив элементов для управления состоянием
 	cosED := []fyne.CanvasObject{
@@ -287,31 +306,61 @@ func settingsTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 	)
 
 	// 3. Секция Relay Settings
+	env := []string{
+		"$CROC_RELAY ",
+		"$CROC_RELAY6",
+		"$CROC_PASS " + lp("Value may be file with value"),
+		"$SOCKS5_PROXY",
+		"$HTTP_PROXY",
+	}
+	if isMobile || asMobile {
+		env = make([]string, len(env))
+	}
 	ip := &widget.FormItem{
 		Text:     "",
 		Widget:   relayAddressEntry,
-		HintText: lp("If value like 01.2.3.4 then it used as --ip 1.2.3.4"),
+		HintText: env[0] + lp("If value like 0IP then it used as --ip IP"),
 	}
 
 	relayForm := widget.NewForm(
 		widget.NewFormItem(lp("Name"), relayControls),
 		ip,
-		widget.NewFormItem("relay6", relay6Entry),
+		// widget.NewFormItem("relay6", relay6Entry),
+		&widget.FormItem{
+			Text:     "relay6",
+			Widget:   relay6Entry,
+			HintText: env[1],
+		},
 		widget.NewFormItem("ports", relayPortsEntry),
-		widget.NewFormItem("pass", relayPasswordEntry),
+		// widget.NewFormItem("pass", relayPasswordEntry),
+		&widget.FormItem{
+			Text:     "pass",
+			Widget:   relayPasswordEntry,
+			HintText: env[2],
+		},
+		&widget.FormItem{
+			Text:     "socks5",
+			Widget:   relaySocks5Entry,
+			HintText: env[3],
+		},
+		&widget.FormItem{
+			Text:     "connect",
+			Widget:   relayConnectEntry,
+			HintText: env[4],
+		},
 	)
 
-	relayAddressEntry.OnChanged = func(s string) {
+	relayAddressEntry.OnChanged = func(ra string) {
+		relayAddressBinding.Set(ra)
 		text := "relay"
-		if strings.HasPrefix(s, "0") {
+		if strings.HasPrefix(ra, "0") {
 			text = "ip"
-			NewToast(w, lp("Connect to sender")+" "+strings.TrimPrefix(s, "0")).Show()
+			NewToast(w, lp("Connect to sender")+" "+strings.TrimPrefix(ra, "0")).Show()
 		}
 		if text != ip.Text {
 			ip.Text = text
 			doMonitor.DoRequest(relayForm.Refresh)
 		}
-
 	}
 	ra, _ := relayAddressBinding.Get()
 	relayAddressEntry.OnChanged(ra)
@@ -347,7 +396,7 @@ func settingsTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 		widget.NewFormItem("hash", hashSelect),
 		widget.NewFormItem("no-multi", widget.NewCheckWithData(lp("Disable Multiplexing"), binding.BindPreferenceBool("disable-multiplexing", a.Preferences()))),
 		widget.NewFormItem("no-compress", widget.NewCheckWithData(lp("Disable Compression"), binding.BindPreferenceBool("disable-compression", a.Preferences()))),
-		widget.NewFormItem("throttleUpload", widget.NewEntryWithData(binding.BindPreferenceString("upload-throttle", a.Preferences()))),
+		// widget.NewFormItem("throttleUpload", widget.NewEntryWithData(binding.BindPreferenceString("upload-throttle", a.Preferences()))),
 		&widget.FormItem{
 			Text:     "throttleUpload",
 			Widget:   widget.NewEntryWithData(binding.BindPreferenceString("upload-throttle", a.Preferences())),
@@ -374,9 +423,9 @@ func settingsTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 		),
 	)
 
-	restoreCheck.OnChanged = func(restore bool) {
-		restoreBinding.Set(restore)
-		if restore {
+	restoreCheck.OnChanged = func(ok bool) {
+		restoreBinding.Set(ok)
+		if ok {
 			// Сохраняем текущие значения привязок в структуру
 			savedGuiPrefsData = saveBindingsToStruct(prefBindings)
 			guiSettingsSaved = true
@@ -407,8 +456,8 @@ func settingsTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 			}
 		}
 	}
-	restored, _ := restoreBinding.Get()
-	restoreCheck.OnChanged(restored)
+	ok, _ = restoreBinding.Get()
+	restoreCheck.OnChanged(ok)
 
 	return
 }

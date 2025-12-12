@@ -639,7 +639,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 			log.Trace("croc client created")
 
 			if a.Preferences().Bool("remember") {
-				p := NewPreferences(a.Preferences(), w)
+				p := NewPreferences(a.Preferences())
 				p.SetString("relay", opt.RelayAddress)
 				a.Preferences().SetBool("send", true)
 				saveConfig(p, opt, true)
@@ -1809,7 +1809,7 @@ func GetConfigDir(requireValidPath bool) (homedir string, err error) {
 	} else if xdgConfigHome, isSet := os.LookupEnv("XDG_CONFIG_HOME"); isSet {
 		homedir = filepath.Join(xdgConfigHome, "croc")
 	} else {
-		if isAndroid {
+		if isMobile || asMobile {
 			homedir = tempDir
 		} else {
 			homedir, err = os.UserHomeDir()
@@ -1834,6 +1834,9 @@ func GetConfigDir(requireValidPath bool) (homedir string, err error) {
 
 func def(a fyne.App) (p, r, r6, ps, s, h string) {
 	p = defs(pass, a.Preferences().String("relay-password"), DEFAULT_PASSPHRASE)
+	if p != DEFAULT_PASSPHRASE && !(isMobile || asMobile) {
+		p = determinePass(p)
+	}
 	r = defs(relay4, a.Preferences().String("relay-address"))
 	r6 = defs(relay6, a.Preferences().String("relay6"))
 	ps = defs(a.Preferences().String("relay-ports"), ports0)
