@@ -4,6 +4,7 @@ package main
 import (
 	"embed"
 	"encoding/json"
+	"net"
 	"os"
 	"reflect"
 	"strings"
@@ -123,11 +124,6 @@ func settingsTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 		refreshWindow(a, w)
 	}
 
-	s := lp("UnZip files")
-	if isMobile || asMobile {
-		lp("Zip folders")
-	}
-
 	// Настройки посредников
 	relayAddressBinding := binding.BindPreferenceString("relay-address", a.Preferences())
 	relay6Binding := binding.BindPreferenceString("relay6", a.Preferences())
@@ -137,7 +133,7 @@ func settingsTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 	relaySocks5Binding := binding.BindPreferenceString("socks5", a.Preferences())
 	relayConnectBinding := binding.BindPreferenceString("connect", a.Preferences())
 
-	relayControls := createRelaySelector(a, w,
+	relayControls, relayUpdate := createRelaySelector(a, w,
 		relayAddressBinding,
 		relay6Binding,
 		relayPortsBinding,
@@ -181,68 +177,79 @@ func settingsTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 		json += ".json"
 		sendCheck.SetText(json)
 	}
-	ok, _ := sendBinding.Get()
-	sendCheck.OnChanged(ok)
+	on, _ := sendBinding.Get()
+	sendCheck.OnChanged(on)
 
+	off := "..."
 	all := "0.0.0.0"
-	runBinding := binding.BindPreferenceBool("run", a.Preferences())
-	runCheck := widget.NewCheckWithData(all, runBinding)
+	// Функция для обновления опций селекта
+	hostSelectOptions := func() []string {
+		ips, err := localIPs()
+		options := []string{off}
 
-	runCheck.OnChanged = func(ok bool) {
-		runBinding.Set(ok)
-		running := runCheck.Text != all
-		if ok {
-			if !running {
-				pass, relay, _, ports,
-					_, _ := def(a)
+		if err == nil && len(ips) > 0 {
+			options = append(options, ips...)
+		}
+		if len(options) > 1 {
+			options = append(options, all)
+		}
 
-				bind := a.Preferences().StringListWithFallback("bind", []string{pass, relay, ports})
-				// На всякий случай
-				if len(bind) < 1 {
-					bind = append(bind, pass)
-				}
-				pass = bind[0]
-				if len(bind) < 2 {
-					bind = append(bind, relay)
-				}
-				relay = bind[1]
-				if len(bind) < 3 {
-					bind = append(bind, ports)
-				}
-				ports = bind[2]
+		return options
+	}
+	hostBinding := binding.BindPreferenceString("host", a.Preferences())
+	bind := off
 
-				a.Preferences().SetStringList("bind", bind)
+	hostSelect := widget.NewSelect(hostSelectOptions(), func(s string) {
+		hostBinding.Set(s)
 
-				runCheck.SetText(bind[1])
-				disableLocalBinding.Set(true)
-
-				go func() {
-					err := relayRun(w, debugBool(a), pass, relay, ports)
-					// netstat -tlnp|grep crocgui
-					// ss -tlnp|grep crocgui
-					// netstat -a -n -p tcp |find ":90"
-					fyne.Do(func() {
-						runCheck.SetText(all)
-						runBinding.Set(false)
-						a.Preferences().RemoveValue("bind")
-						disableLocalBinding.Set(false)
-						if err != nil {
-							NewToast(w, err.Error()).Show()
-						}
-					})
-				}()
+		if s == off {
+			disableLocalBinding.Set(false)
+			if bind != off {
+				restart(w)
 			}
 			return
 		}
-		disableLocalBinding.Set(false)
-		a.Preferences().RemoveValue("bind")
-		if running {
-			restart(w)
+		if bind != off {
+			if s != bind {
+				restart(w)
+			}
+			return
 		}
+		var pass, host, ports string
+		relay := getRelayByAddress(a, s)
+		if relay.Name == "" {
+			pass = DEFAULT_PASSPHRASE
+			host = s
+			ports = ports0
+		} else {
+			setRelayName(a, relay.Name)
+			relayUpdate()
+			pass = relay.Password
+			host = relay.Address
+			ports = relay.Ports
+		}
+		bind = host
+		disableLocalBinding.Set(true)
+		go func() {
+			err := relayRun(w, pass, host, ports)
+			// netstat -tlnp|grep crocgui
+			// ss -tlnp|grep crocgui
+			// netstat -a -n -p tcp |find ":90"
+			fyne.Do(func() {
+				bind = off
+				hostBinding.Set(off)
+				disableLocalBinding.Set(false)
+				if err != nil {
+					NewToast(w, err.Error()).Show()
+				}
+			})
+		}()
+	})
+	s, _ := hostBinding.Get()
+	if s == "" {
+		s = off
 	}
-
-	ok, _ = runBinding.Get()
-	runCheck.OnChanged(ok)
+	hostSelect.SetSelected(s)
 
 	// Массив элементов для управления состоянием
 	cosED := []fyne.CanvasObject{
@@ -359,28 +366,35 @@ func settingsTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 			ip.Text = text
 			doMonitor.DoRequest(relayForm.Refresh)
 		}
+		// Обновляем опции селекта при изменении адреса релея
+		hostSelect.Options = hostSelectOptions()
+		hostSelect.Refresh()
 	}
 	ra, _ := relayAddressBinding.Get()
 	relayAddressEntry.OnChanged(ra)
 
 	// 4. Секция Network Local
 	networkForm := widget.NewForm(
-		widget.NewFormItem("host", runCheck),
+		widget.NewFormItem("host", hostSelect),
 		widget.NewFormItem("no-local", disableLocalCheck),
 		widget.NewFormItem("local", onlyLocalCheck),
 		widget.NewFormItem("multicast", widget.NewEntryWithData(binding.BindPreferenceString("multicast-address", a.Preferences()))),
 	)
 
 	// 5. Секция Storage Options
+	s = lp("UnZip files")
+	if isMobile || asMobile {
+		lp("Zip folders")
+	}
+
 	storageForm := widget.NewForm(
 		widget.NewFormItem("overwrite", overwriteCheck),
 		widget.NewFormItem("git", gitIgnoreCheck),
 		widget.NewFormItem("zip", widget.NewCheckWithData(s, binding.BindPreferenceBool("zip-unzip", a.Preferences()))),
-		// widget.NewFormItem("exclude", widget.NewEntryWithData(binding.BindPreferenceString("exclude", a.Preferences()))),
 		&widget.FormItem{
 			Text:     "exclude",
 			Widget:   widget.NewEntryWithData(binding.BindPreferenceString("exclude", a.Preferences())),
-			HintText: lp("CSV parts of paths name"),
+			HintText: lp("File path CSV parts"),
 		},
 	)
 
@@ -450,8 +464,8 @@ func settingsTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 			}
 		}
 	}
-	ok, _ = restoreBinding.Get()
-	restoreCheck.OnChanged(ok)
+	on, _ = restoreBinding.Get()
+	restoreCheck.OnChanged(on)
 
 	return
 }
@@ -498,7 +512,7 @@ func saveBindingsToStruct(bindings map[string]interface{}) GuiPrefsData {
 	return data
 }
 
-// applyStructToBindings устанавливает значения в map привязок из структуры GuiPrefsData.
+// applyStructToBindings устанавливает значения в map привязок из структуру GuiPrefsData.
 func applyStructToBindings(data GuiPrefsData, bindings map[string]interface{}) {
 	dataType := reflect.TypeOf(data)
 	dataValue := reflect.ValueOf(data)
@@ -594,4 +608,76 @@ func restoreAccordionState() {
 			accordion.Open(idx)
 		}
 	}
+}
+
+// Функция для получения списка локальных IP-адресов
+func localIPs() ([]string, error) {
+	var ips []string
+
+	interfaces, err := net.Interfaces()
+	if err != nil {
+		return nil, err
+	}
+
+	for _, iface := range interfaces {
+		// Пропускаем неактивные интерфейсы
+		if iface.Flags&net.FlagUp == 0 {
+			continue
+		}
+
+		addrs, err := iface.Addrs()
+		if err != nil {
+			continue
+		}
+
+		for _, addr := range addrs {
+			var ip net.IP
+
+			switch v := addr.(type) {
+			case *net.IPNet:
+				ip = v.IP
+			case *net.IPAddr:
+				ip = v.IP
+			}
+
+			// Пропускаем loopback и IPv6 (если нужно только IPv4)
+			if ip == nil || ip.IsLoopback() || ip.IsLinkLocalUnicast() {
+				continue
+			}
+
+			// Для IPv4
+			if ip.To4() != nil {
+				ips = append(ips, ip.String())
+			}
+		}
+	}
+
+	return ips, nil
+}
+
+// Функция для получения списка локальных IP-адресов, пересекающихся с адресами релеев
+func GetLocalRelayIPs(relays []Relay) ([]string, error) {
+	// Получаем все локальные IP
+	localIPs, err := localIPs()
+	if err != nil {
+		return nil, err
+	}
+
+	// Собираем уникальные адреса из релеев
+	relayAddresses := make(map[string]bool)
+	for _, relay := range relays {
+		if relay.Address != "" {
+			relayAddresses[relay.Address] = true
+		}
+	}
+
+	// Находим пересечение
+	var result []string
+	for _, ip := range localIPs {
+		if relayAddresses[ip] {
+			result = append(result, ip)
+		}
+	}
+
+	return result, nil
 }

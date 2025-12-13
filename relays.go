@@ -4,6 +4,7 @@ package main
 import (
 	"encoding/json"
 	"slices"
+	"strconv"
 	"strings"
 
 	"fyne.io/fyne/v2"
@@ -90,7 +91,7 @@ func createRelaySelector(a fyne.App, w fyne.Window,
 	portsBinding,
 	passwordBinding,
 	socks5Binding,
-	connectBinding binding.String) (relayControls *fyne.Container) {
+	connectBinding binding.String) (relayControls *fyne.Container, updateRelaySelector func()) {
 
 	var (
 		relaySelect *widget.Select
@@ -106,7 +107,7 @@ func createRelaySelector(a fyne.App, w fyne.Window,
 		connectBinding.Set(relay.Connect)
 	}
 	// Функция для обновления комбобокса из актуальных данных
-	updateRelaySelector := func() {
+	updateRelaySelector = func() {
 		relays := getRelays(a)
 
 		// Создаем список имен посредников
@@ -121,16 +122,16 @@ func createRelaySelector(a fyne.App, w fyne.Window,
 
 		// Устанавливаем текущего посредника
 		currentRelayName := relayName(a)
-		if currentRelayName != "" {
+
+		switch {
+		case currentRelayName != "":
 			if relay, index := relayByName(relays, currentRelayName); index >= 0 {
 				relaySelect.SetSelected(relay.Name)
 				updateRelayValues(relay)
-			} else if len(relays) > 0 {
-				relaySelect.SetSelected(relays[0].Name)
-				updateRelayValues(relays[0])
-				setRelayName(a, relays[0].Name)
+				break
 			}
-		} else if len(relays) > 0 {
+			fallthrough // Если не найден, переходим к случаю ниже
+		case len(relays) > 0:
 			relaySelect.SetSelected(relays[0].Name)
 			updateRelayValues(relays[0])
 			setRelayName(a, relays[0].Name)
@@ -164,38 +165,20 @@ func createRelaySelector(a fyne.App, w fyne.Window,
 			return
 		}
 
-		// Получаем текущие значения полей
-		address, _ := addressBinding.Get()
-		address6, _ := address6Binding.Get()
-		ports, _ := portsBinding.Get()
-		password, _ := passwordBinding.Get()
-		socks5, _ := socks5Binding.Get()
-		connect, _ := connectBinding.Get()
-
 		// Загружаем текущие релеи
 		relays := getRelays(a)
 		relay, index := relayByName(relays, name)
+		relay.Address, _ = addressBinding.Get()
+		relay.Address6, _ = address6Binding.Get()
+		relay.Ports, _ = portsBinding.Get()
+		relay.Password, _ = passwordBinding.Get()
+		relay.Socks5, _ = socks5Binding.Get()
+		relay.Connect, _ = connectBinding.Get()
 
-		// Если не найден - создаем НОВЫЙ релей с указанным именем
 		if index < 0 {
-			relay = Relay{
-				Name:     name,
-				Address:  address,
-				Address6: address6,
-				Ports:    ports,
-				Password: password,
-				Socks5:   socks5,
-				Connect:  connect,
-			}
+			relay.Name = name
 			relays = append(relays, relay)
 		} else {
-			// Обновляем существующий
-			relay.Address = address
-			relay.Address6 = address6
-			relay.Ports = ports
-			relay.Password = password
-			relay.Socks5 = socks5
-			relay.Connect = connect
 			relays[index] = relay
 		}
 
@@ -205,8 +188,8 @@ func createRelaySelector(a fyne.App, w fyne.Window,
 		}
 
 		// Обновляем UI
-		updateRelaySelector()
 		setRelayName(a, name)
+		updateRelaySelector()
 		nameEntry.SetText("")
 		NewToast(w, "Ok").Show()
 	}
@@ -283,5 +266,36 @@ func createRelaySelector(a fyne.App, w fyne.Window,
 		addRelayBtn,
 		nameEntry,
 	)
+	return
+}
+
+func getRelayByAddress(a fyne.App, targetAddress string) (relay Relay) {
+	relays := getRelays(a)
+
+	// Внутренняя функция для очистки адреса от порта
+	cleanAddress := func(addr string) string {
+		if idx := strings.LastIndex(addr, ":"); idx != -1 {
+			portPart := addr[idx+1:]
+			if _, err := strconv.Atoi(portPart); err == nil {
+				return addr[:idx]
+			}
+		}
+		return addr
+	}
+
+	// Очищаем targetAddress от порта
+	cleanTargetAddress := cleanAddress(targetAddress)
+
+	// Ищем посредника
+	for _, relay := range relays {
+		// Очищаем адрес посредника для сравнения
+		cleanRelayAddress := cleanAddress(relay.Address)
+
+		// Сравниваем очищенные адреса
+		if cleanRelayAddress == cleanTargetAddress {
+			return relay
+		}
+	}
+
 	return
 }

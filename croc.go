@@ -213,12 +213,8 @@ func makePorts(port, transfers int) (ports []string) {
 	return
 }
 
-func relayRun(w fyne.Window, debug bool, pass, host, CSVports string) (err error) {
-	log.Infof("starting croc relay %s@%s:%s", pass, host, CSVports)
-	debugString := "info"
-	if debug {
-		debugString = "debug"
-	}
+func relayRun(w fyne.Window, pass, host, CSVports string) (err error) {
+	log.Tracef("starting croc relay %s@%s:%s", pass, host, CSVports)
 	var ports []string
 
 	if CSVports == "" {
@@ -229,6 +225,8 @@ func relayRun(w fyne.Window, debug bool, pass, host, CSVports string) (err error
 	if len(ports) < 2 {
 		ports = strings.Split(ports0, ",")
 	}
+	level := log.GetLevel()
+	debugString := "info"
 	for _, port := range ports[1:] {
 		go func(portStr string) {
 			err := tcp.Run(debugString, host, portStr, pass)
@@ -240,7 +238,10 @@ func relayRun(w fyne.Window, debug bool, pass, host, CSVports string) (err error
 		}(port)
 	}
 	tcpPorts := strings.Join(ports[1:], ",")
-	return tcp.Run(debugString, host, ports[0], pass, tcpPorts)
+	err = tcp.Run(debugString, host, ports[0], pass, tcpPorts)
+	log.SetLevel(level)
+
+	return
 }
 
 func determinePass(s string) (pass string) {

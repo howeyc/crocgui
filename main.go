@@ -238,7 +238,7 @@ func main() {
 	appTheme.fontName = a.Preferences().String("font")
 
 	a.Settings().SetTheme(appTheme)
-
+	atSI = a.Preferences().Int("tab")
 	refreshWindow(a, w)
 	w.Resize(size)
 
@@ -264,6 +264,7 @@ func refreshWindow(a fyne.App, w fyne.Window) {
 	at.SelectIndex(atSI)
 	at.OnSelected = func(tab *container.TabItem) {
 		atSI = at.SelectedIndex()
+		a.Preferences().SetInt("tab", atSI)
 		if f, ok := OnSelectedReload[atSI]; ok && f != nil {
 			f()
 		}
