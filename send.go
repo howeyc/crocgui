@@ -837,6 +837,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 	if isAndroid {
 		a.Lifecycle().SetOnExitedForeground(func() {
 			log.Trace("ExitedForeground")
+			saveAccordionState()
 			if !notFinish {
 				excludeFromRecents()
 			}

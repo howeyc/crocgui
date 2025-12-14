@@ -680,6 +680,5 @@ func startActivity() {
 func start() {
 	excludeFromRecents()
 	startActivity()
-	// time.Sleep(time.Millisecond * 100)
-	sendNotification(nil, "CrocGUI", "Application closed. Tap to start it.")
+	sendNotification(nil, "Croc", AppClosed)
 }

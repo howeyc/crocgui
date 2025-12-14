@@ -81,13 +81,14 @@ var (
 	// CROC_CD_LOCK=1 crocgui
 	longCdLock = os.Getenv("CROC_CD_LOCK") != ""
 
-	pass    = os.Getenv("CROC_PASS")
-	relay4  = os.Getenv("CROC_RELAY")
-	relay6  = os.Getenv("CROC_RELAY6")
-	ports0  = strings.Join(makePorts(0, 0), ",")
-	socks5  = os.Getenv("SOCKS5_PROXY")
-	connect = os.Getenv("HTTP_PROXY")
-	code    = os.Getenv("CROC_SECRET")
+	pass      = os.Getenv("CROC_PASS")
+	relay4    = os.Getenv("CROC_RELAY")
+	relay6    = os.Getenv("CROC_RELAY6")
+	ports0    = strings.Join(makePorts(0, 0), ",")
+	socks5    = os.Getenv("SOCKS5_PROXY")
+	connect   = os.Getenv("HTTP_PROXY")
+	code      = os.Getenv("CROC_SECRET")
+	AppClosed string
 )
 
 const (
@@ -241,6 +242,7 @@ func main() {
 	atSI = a.Preferences().Int("tab")
 	refreshWindow(a, w)
 	w.Resize(size)
+	AppClosed = lp("App closed. Tap to start.")
 
 	w.ShowAndRun()
 }

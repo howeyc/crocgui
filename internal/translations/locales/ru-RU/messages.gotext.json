@@ -20,6 +20,12 @@
             "position": "crocgui/log.go:272:7"
         },
         {
+            "id": "App closed. Tap to start.",
+            "message": "App closed. Tap to start.",
+            "translation": "Приложение закрыто. Нажми чтоб запустить.",
+            "position": "crocgui/main.go:245:16"
+        },
+        {
             "id": "Cancel",
             "message": "Cancel",
             "translation": "Отменить",
@@ -125,157 +131,151 @@
             "id": "Hide",
             "message": "Hide",
             "translation": "Скрыть",
-            "position": "crocgui/settings.go:119:34"
+            "position": "crocgui/settings.go:120:34"
         },
         {
-            "id": "Sender not listen",
-            "message": "Sender not listen",
-            "translation": "Отправитель не слушает",
-            "position": "crocgui/settings.go:158:49"
+            "id": "Send only via relay",
+            "message": "Send only via relay",
+            "translation": "Не давать локально",
+            "position": "crocgui/settings.go:159:49"
         },
         {
-            "id": "Search sender in LAN",
-            "message": "Search sender in LAN",
-            "translation": "Искать отправителя локально",
-            "position": "crocgui/settings.go:161:46"
+            "id": "Connect to local senders only",
+            "message": "Connect to local senders only",
+            "translation": "Получать только локально",
+            "position": "crocgui/settings.go:162:46"
         },
         {
             "id": "Overwrite",
             "message": "Overwrite",
             "translation": "Перезаписать",
-            "position": "crocgui/settings.go:167:46"
+            "position": "crocgui/settings.go:168:46"
         },
         {
             "id": "Restore",
             "message": "Restore",
             "translation": "Восстановить",
-            "position": "crocgui/settings.go:274:44"
+            "position": "crocgui/settings.go:284:44"
         },
         {
             "id": "Language",
             "message": "Language",
             "translation": "Язык",
-            "position": "crocgui/settings.go:293:24"
+            "position": "crocgui/settings.go:303:24"
         },
         {
             "id": "Theme",
             "message": "Theme",
             "translation": "Тема",
-            "position": "crocgui/settings.go:294:24"
+            "position": "crocgui/settings.go:304:24"
         },
         {
             "id": "Font",
             "message": "Font",
             "translation": "Шрифт",
-            "position": "crocgui/settings.go:295:24"
+            "position": "crocgui/settings.go:305:24"
         },
         {
             "id": "Logo",
             "message": "Logo",
             "translation": "Логотип",
-            "position": "crocgui/settings.go:296:24"
+            "position": "crocgui/settings.go:306:24"
         },
         {
             "id": "Configs",
             "message": "Configs",
             "translation": "Конфиги",
-            "position": "crocgui/settings.go:301:24"
+            "position": "crocgui/settings.go:311:24"
         },
         {
             "id": "Config",
             "message": "Config",
             "translation": "Конфиг",
-            "position": "crocgui/settings.go:306:24"
+            "position": "crocgui/settings.go:316:24"
         },
         {
             "id": "Value may be file with value",
             "message": "Value may be file with value",
             "translation": "Значение может быть файлом",
-            "position": "crocgui/settings.go:317:21"
+            "position": "crocgui/settings.go:327:21"
         },
         {
             "id": "If value like 0IP then it used as --ip IP",
             "message": "If value like 0IP then it used as --ip IP",
             "translation": "Значение типа 0IP значит --ip IP",
-            "position": "crocgui/settings.go:327:24"
+            "position": "crocgui/settings.go:337:24"
         },
         {
             "id": "Name",
             "message": "Name",
             "translation": "Имя",
-            "position": "crocgui/settings.go:331:24"
-        },
-        {
-            "id": "Connect to sender",
-            "message": "Connect to sender",
-            "translation": "Подключится к отправителю",
-            "position": "crocgui/settings.go:363:18"
+            "position": "crocgui/settings.go:341:24"
         },
         {
             "id": "UnZip files",
             "message": "UnZip files",
             "translation": "UnZip Файлы",
-            "position": "crocgui/settings.go:385:8"
+            "position": "crocgui/settings.go:394:8"
         },
         {
             "id": "Zip folders",
             "message": "Zip folders",
             "translation": "Zip каталоги",
-            "position": "crocgui/settings.go:387:5"
+            "position": "crocgui/settings.go:396:9"
         },
         {
             "id": "File path CSV parts",
             "message": "File path CSV parts",
             "translation": "CSV части путей файлов",
-            "position": "crocgui/settings.go:397:16"
+            "position": "crocgui/settings.go:406:16"
         },
         {
             "id": "Disable Multiplexing",
             "message": "Disable Multiplexing",
             "translation": "Без мультиплексирования",
-            "position": "crocgui/settings.go:405:60"
+            "position": "crocgui/settings.go:414:60"
         },
         {
             "id": "Disable Compression",
             "message": "Disable Compression",
             "translation": "Без сжатия",
-            "position": "crocgui/settings.go:406:63"
+            "position": "crocgui/settings.go:415:63"
         },
         {
             "id": "speed e.g. 500k",
             "message": "speed e.g. 500k",
-            "translation": "скорость например 500k",
-            "position": "crocgui/settings.go:411:16"
+            "translation": "скорость передачи (например 500k)",
+            "position": "crocgui/settings.go:420:16"
         },
         {
             "id": "Appearance",
             "message": "Appearance",
             "translation": "Вид",
-            "position": "crocgui/settings.go:417:29"
+            "position": "crocgui/settings.go:426:29"
         },
         {
             "id": "Relay",
             "message": "Relay",
             "translation": "Посредник",
-            "position": "crocgui/settings.go:419:29"
+            "position": "crocgui/settings.go:428:29"
         },
         {
             "id": "Network Local",
             "message": "Network Local",
             "translation": "Локальная сеть",
-            "position": "crocgui/settings.go:420:29"
+            "position": "crocgui/settings.go:429:29"
         },
         {
             "id": "Storage Options",
             "message": "Storage Options",
             "translation": "Хранилище",
-            "position": "crocgui/settings.go:421:29"
+            "position": "crocgui/settings.go:430:29"
         },
         {
             "id": "Transfer Options",
             "message": "Transfer Options",
             "translation": "Обмен",
-            "position": "crocgui/settings.go:422:29"
+            "position": "crocgui/settings.go:431:29"
         }
     ]
 }

@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"reflect"
+	"strconv"
 	"strings"
 
 	"github.com/schollz/croc/v10/src/croc"
@@ -155,10 +156,10 @@ func settingsTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 	relayConnectEntry := widget.NewEntryWithData(relayConnectBinding)
 
 	disableLocalBinding := binding.BindPreferenceBool("disable-local", a.Preferences())
-	disableLocalCheck := widget.NewCheckWithData(lp("Sender not listen"), disableLocalBinding)
+	disableLocalCheck := widget.NewCheckWithData(lp("Send only via relay"), disableLocalBinding)
 
 	onlyLocalBinding := binding.BindPreferenceBool("force-local", a.Preferences())
-	onlyLocalCheck := widget.NewCheckWithData(lp("Search sender in LAN"), onlyLocalBinding)
+	onlyLocalCheck := widget.NewCheckWithData(lp("Connect to local senders only"), onlyLocalBinding)
 
 	gitIgnoreBinding := binding.BindPreferenceBool("git", a.Preferences())
 	gitIgnoreCheck := widget.NewCheckWithData(".gitignore", gitIgnoreBinding)
@@ -182,15 +183,19 @@ func settingsTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 
 	off := "..."
 	all := "0.0.0.0"
+
 	// Функция для обновления опций селекта
 	hostSelectOptions := func() []string {
 		ips, err := localIPs()
+		if err != nil {
+			log.Errorf("%v", err)
+		}
 		options := []string{off}
 
 		if err == nil && len(ips) > 0 {
 			options = append(options, ips...)
 		}
-		if len(options) > 1 {
+		if len(options) > 2 {
 			options = append(options, all)
 		}
 
@@ -199,7 +204,7 @@ func settingsTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 	hostBinding := binding.BindPreferenceString("host", a.Preferences())
 	bind := off
 
-	hostSelect := widget.NewSelect(hostSelectOptions(), func(s string) {
+	hostSelect := NewSelect(hostSelectOptions(), func(s string) {
 		hostBinding.Set(s)
 
 		if s == off {
@@ -245,6 +250,10 @@ func settingsTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 			})
 		}()
 	})
+	hostSelect.BeforePopup = func() {
+		hostSelect.Options = hostSelectOptions()
+		log.Tracef("Options %v", hostSelect.Options)
+	}
 	s, _ := hostBinding.Get()
 	if s == "" {
 		s = off
@@ -360,7 +369,6 @@ func settingsTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 		text := "relay"
 		if strings.HasPrefix(ra, "0") {
 			text = "ip"
-			NewToast(w, lp("Connect to sender")+" "+strings.TrimPrefix(ra, "0")).Show()
 		}
 		if text != ip.Text {
 			ip.Text = text
@@ -384,7 +392,7 @@ func settingsTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 	// 5. Секция Storage Options
 	s = lp("UnZip files")
 	if isMobile || asMobile {
-		lp("Zip folders")
+		s = lp("Zip folders")
 	}
 
 	storageForm := widget.NewForm(
@@ -588,6 +596,9 @@ func saveAccordionState() {
 	for i, item := range accordion.Items {
 		if item.Open {
 			openIndices = append(openIndices, i)
+			if !accordion.MultiOpen {
+				break
+			}
 		}
 	}
 	// Сохраняем как список интов
@@ -606,6 +617,9 @@ func restoreAccordionState() {
 	for _, idx := range openIndices {
 		if idx >= 0 && idx < len(accordion.Items) {
 			accordion.Open(idx)
+			if !accordion.MultiOpen {
+				break
+			}
 		}
 	}
 }
@@ -616,7 +630,15 @@ func localIPs() ([]string, error) {
 
 	interfaces, err := net.Interfaces()
 	if err != nil {
-		return nil, err
+		log.Errorf("interfaces %v", err)
+		conn, err := net.Dial("udp4", net.JoinHostPort(DEFAULT_RELAY, strconv.Itoa(DEFAULT_PORT)))
+		if err != nil {
+			return ips, err
+		}
+		defer conn.Close()
+		localAddr := conn.LocalAddr().(*net.UDPAddr)
+		ips = append(ips, localAddr.IP.String())
+		return ips, nil
 	}
 
 	for _, iface := range interfaces {
@@ -627,6 +649,7 @@ func localIPs() ([]string, error) {
 
 		addrs, err := iface.Addrs()
 		if err != nil {
+			log.Errorf("Addrs %v", err)
 			continue
 		}
 
@@ -653,31 +676,4 @@ func localIPs() ([]string, error) {
 	}
 
 	return ips, nil
-}
-
-// Функция для получения списка локальных IP-адресов, пересекающихся с адресами релеев
-func GetLocalRelayIPs(relays []Relay) ([]string, error) {
-	// Получаем все локальные IP
-	localIPs, err := localIPs()
-	if err != nil {
-		return nil, err
-	}
-
-	// Собираем уникальные адреса из релеев
-	relayAddresses := make(map[string]bool)
-	for _, relay := range relays {
-		if relay.Address != "" {
-			relayAddresses[relay.Address] = true
-		}
-	}
-
-	// Находим пересечение
-	var result []string
-	for _, ip := range localIPs {
-		if relayAddresses[ip] {
-			result = append(result, ip)
-		}
-	}
-
-	return result, nil
 }

@@ -3,7 +3,7 @@
   Name = "crocgui"
   ID = "com.github.howeyc.crocgui"
   Version = "1.11.29"
-  Build = 1108
+  Build = 1137
 
 [LinuxAndBSD]
   GenericName = "GUI for croc"

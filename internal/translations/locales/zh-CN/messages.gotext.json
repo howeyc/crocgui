@@ -20,256 +20,262 @@
             "position": "crocgui/log.go:272:7"
         },
         {
-            "id": "Enable Debug Log",
-            "message": "Enable Debug Log",
-            "translation": "启用调试日志",
-            "position": "crocgui/log.go:288:34"
+            "id": "App closed. Tap to start.",
+            "message": "App closed. Tap to start.",
+            "translation": "应用已关闭。点击启动。",
+            "position": "crocgui/main.go:245:16"
         },
         {
             "id": "Cancel",
             "message": "Cancel",
             "translation": "取消",
-            "position": "crocgui/recv.go:63:44"
+            "position": "crocgui/recv.go:64:44"
         },
         {
             "id": "Wait for them before pressing Download",
             "message": "Wait for them before pressing Download",
             "translation": "在按\"下载\"之前等待他们",
-            "position": "crocgui/recv.go:82:31"
+            "position": "crocgui/recv.go:83:31"
         },
         {
             "id": "Download",
             "message": "Download",
             "translation": "下载",
-            "position": "crocgui/recv.go:527:42"
+            "position": "crocgui/recv.go:528:42"
         },
         {
             "id": "Secret must be longer than 5 characters",
             "message": "Secret must be longer than 5 characters",
             "translation": "密码必须长于5个字符",
-            "position": "crocgui/recv.go:530:18"
+            "position": "crocgui/recv.go:531:18"
         },
         {
             "id": "Send",
             "message": "Send",
             "translation": "发送",
-            "position": "crocgui/recv.go:535:35"
+            "position": "crocgui/recv.go:536:35"
         },
         {
             "id": "Receive cancelled.",
             "message": "Receive cancelled.",
             "translation": "接收已取消。",
-            "position": "crocgui/recv.go:625:34"
+            "position": "crocgui/recv.go:640:34"
         },
         {
             "id": "Receiving file",
             "message": "Receiving file",
             "translation": "正在接收文件",
-            "position": "crocgui/recv.go:644:27"
+            "position": "crocgui/recv.go:659:27"
         },
         {
             "id": "Send cancelled.",
             "message": "Send cancelled.",
             "translation": "发送已取消。",
-            "position": "crocgui/recv.go:718:32"
+            "position": "crocgui/recv.go:733:32"
         },
         {
             "id": "Received",
             "message": "Received",
             "translation": "已接收",
-            "position": "crocgui/recv.go:726:46"
+            "position": "crocgui/recv.go:741:46"
         },
         {
             "id": "Receive",
             "message": "Receive",
             "translation": "接收",
-            "position": "crocgui/recv.go:1003:38"
-        },
-        {
-            "id": "Name already exists",
-            "message": "Name already exists",
-            "translation": "名称已存在",
-            "position": "crocgui/relays.go:155:11"
+            "position": "crocgui/recv.go:1018:38"
         },
         {
             "id": "Empty name",
             "message": "Empty name",
             "translation": "名称为空",
-            "position": "crocgui/relays.go:166:18"
+            "position": "crocgui/relays.go:164:18"
         },
         {
             "id": "Last item of list",
             "message": "Last item of list",
             "translation": "列表最后一项",
-            "position": "crocgui/relays.go:225:18"
+            "position": "crocgui/relays.go:234:18"
         },
         {
             "id": "Pick a file to send",
             "message": "Pick a file to send",
             "translation": "选择要发送的文件",
-            "position": "crocgui/send.go:100:31"
+            "position": "crocgui/send.go:101:31"
         },
         {
             "id": "Have them not press the Download yet",
             "message": "Have them not press the Download yet",
             "translation": "让他们先不要按\"下载\"",
-            "position": "crocgui/send.go:699:24"
+            "position": "crocgui/send.go:690:24"
         },
         {
             "id": "Have them press the Download now",
             "message": "Have them press the Download now",
             "translation": "现在让他们按\"下载\"",
-            "position": "crocgui/send.go:760:28"
+            "position": "crocgui/send.go:751:28"
         },
         {
             "id": "Sending file",
             "message": "Sending file",
             "translation": "正在发送文件",
-            "position": "crocgui/send.go:771:57"
+            "position": "crocgui/send.go:762:57"
         },
         {
             "id": "Sent file",
             "message": "Sent file",
             "translation": "已发送文件",
-            "position": "crocgui/send.go:821:47"
+            "position": "crocgui/send.go:812:47"
         },
         {
-            "id": "Show / Hide",
-            "message": "Show / Hide",
-            "translation": "显示/隐藏",
-            "position": "crocgui/settings.go:93:35"
+            "id": "Hide",
+            "message": "Hide",
+            "translation": "隐藏",
+            "position": "crocgui/settings.go:120:34"
         },
         {
-            "id": "Zip folders",
-            "message": "Zip folders",
-            "translation": "Zip 文件夹",
-            "position": "crocgui/settings.go:99:9"
+            "id": "Send only via relay",
+            "message": "Send only via relay",
+            "translation": "仅通过中继发送",
+            "position": "crocgui/settings.go:159:49"
         },
         {
-            "id": "UnZip files",
-            "message": "UnZip files",
-            "translation": "UnZip 文件",
-            "position": "crocgui/settings.go:101:18"
+            "id": "Connect to local senders only",
+            "message": "Connect to local senders only",
+            "translation": "仅连接本地发送者",
+            "position": "crocgui/settings.go:162:46"
         },
         {
-            "id": "Appearance",
-            "message": "Appearance",
-            "translation": "外观",
-            "position": "crocgui/settings.go:111:30"
+            "id": "Overwrite",
+            "message": "Overwrite",
+            "translation": "覆盖",
+            "position": "crocgui/settings.go:168:46"
+        },
+        {
+            "id": "Restore",
+            "message": "Restore",
+            "translation": "恢复",
+            "position": "crocgui/settings.go:284:44"
         },
         {
             "id": "Language",
             "message": "Language",
             "translation": "语言",
-            "position": "crocgui/settings.go:113:25"
+            "position": "crocgui/settings.go:303:24"
         },
         {
             "id": "Theme",
             "message": "Theme",
             "translation": "主题",
-            "position": "crocgui/settings.go:114:25"
+            "position": "crocgui/settings.go:304:24"
         },
         {
             "id": "Font",
             "message": "Font",
             "translation": "字体",
-            "position": "crocgui/settings.go:115:25"
+            "position": "crocgui/settings.go:305:24"
         },
         {
             "id": "Logo",
             "message": "Logo",
             "translation": "徽标",
-            "position": "crocgui/settings.go:116:25"
+            "position": "crocgui/settings.go:306:24"
         },
         {
-            "id": "Relay",
-            "message": "Relay",
-            "translation": "中继",
-            "position": "crocgui/settings.go:119:30"
+            "id": "Configs",
+            "message": "Configs",
+            "translation": "配置集",
+            "position": "crocgui/settings.go:311:24"
+        },
+        {
+            "id": "Config",
+            "message": "Config",
+            "translation": "配置",
+            "position": "crocgui/settings.go:316:24"
+        },
+        {
+            "id": "Value may be file with value",
+            "message": "Value may be file with value",
+            "translation": "值可能包含文件路径",
+            "position": "crocgui/settings.go:327:21"
+        },
+        {
+            "id": "If value like 0IP then it used as --ip IP",
+            "message": "If value like 0IP then it used as --ip IP",
+            "translation": "如果值为 0IP 则用作 --ip IP",
+            "position": "crocgui/settings.go:337:24"
         },
         {
             "id": "Name",
             "message": "Name",
             "translation": "名称",
-            "position": "crocgui/settings.go:121:25"
+            "position": "crocgui/settings.go:341:24"
         },
         {
-            "id": "Address",
-            "message": "Address",
-            "translation": "地址",
-            "position": "crocgui/settings.go:122:25"
+            "id": "UnZip files",
+            "message": "UnZip files",
+            "translation": "UnZip 文件",
+            "position": "crocgui/settings.go:394:8"
         },
         {
-            "id": "Ports",
-            "message": "Ports",
-            "translation": "端口",
-            "position": "crocgui/settings.go:123:25"
+            "id": "Zip folders",
+            "message": "Zip folders",
+            "translation": "Zip 文件夹",
+            "position": "crocgui/settings.go:396:9"
         },
         {
-            "id": "Password",
-            "message": "Password",
-            "translation": "密码",
-            "position": "crocgui/settings.go:124:25"
-        },
-        {
-            "id": "Network Local",
-            "message": "Network Local",
-            "translation": "本地网络",
-            "position": "crocgui/settings.go:127:30"
-        },
-        {
-            "id": "Disable Local",
-            "message": "Disable Local",
-            "translation": "禁用本地网络",
-            "position": "crocgui/settings.go:129:25"
-        },
-        {
-            "id": "Force Local Only",
-            "message": "Force Local Only",
-            "translation": "强制仅本地网络",
-            "position": "crocgui/settings.go:130:25"
-        },
-        {
-            "id": "Multicast Address",
-            "message": "Multicast Address",
-            "translation": "组播地址",
-            "position": "crocgui/settings.go:131:25"
-        },
-        {
-            "id": "Transfer Options",
-            "message": "Transfer Options",
-            "translation": "传输选项",
-            "position": "crocgui/settings.go:134:30"
-        },
-        {
-            "id": "PAKE Curve",
-            "message": "PAKE Curve",
-            "translation": "PAKE曲线",
-            "position": "crocgui/settings.go:136:25"
-        },
-        {
-            "id": "Hash Algorithm",
-            "message": "Hash Algorithm",
-            "translation": "哈希算法",
-            "position": "crocgui/settings.go:137:25"
+            "id": "File path CSV parts",
+            "message": "File path CSV parts",
+            "translation": "文件路径 CSV 部分",
+            "position": "crocgui/settings.go:406:16"
         },
         {
             "id": "Disable Multiplexing",
             "message": "Disable Multiplexing",
             "translation": "禁用多路复用",
-            "position": "crocgui/settings.go:138:25"
+            "position": "crocgui/settings.go:414:60"
         },
         {
             "id": "Disable Compression",
             "message": "Disable Compression",
             "translation": "禁用压缩",
-            "position": "crocgui/settings.go:139:25"
+            "position": "crocgui/settings.go:415:63"
         },
         {
-            "id": "Upload Speed Throttle",
-            "message": "Upload Speed Throttle",
-            "translation": "上传速度限制",
-            "position": "crocgui/settings.go:141:25"
+            "id": "speed e.g. 500k",
+            "message": "speed e.g. 500k",
+            "translation": "速度 (例如: 500k)",
+            "position": "crocgui/settings.go:420:16"
+        },
+        {
+            "id": "Appearance",
+            "message": "Appearance",
+            "translation": "外观",
+            "position": "crocgui/settings.go:426:29"
+        },
+        {
+            "id": "Relay",
+            "message": "Relay",
+            "translation": "中继",
+            "position": "crocgui/settings.go:428:29"
+        },
+        {
+            "id": "Network Local",
+            "message": "Network Local",
+            "translation": "本地网络",
+            "position": "crocgui/settings.go:429:29"
+        },
+        {
+            "id": "Storage Options",
+            "message": "Storage Options",
+            "translation": "存储选项",
+            "position": "crocgui/settings.go:430:29"
+        },
+        {
+            "id": "Transfer Options",
+            "message": "Transfer Options",
+            "translation": "传输选项",
+            "position": "crocgui/settings.go:431:29"
         }
     ]
 }
