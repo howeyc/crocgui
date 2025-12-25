@@ -405,7 +405,7 @@ func apiLevel() int {
 }
 
 func showCrocNotification(title, content string) {
-	log.Trace("Showing notification: ", title)
+	log.Debug("Showing notification: ", title)
 
 	driver.RunNative(func(ctx interface{}) error {
 		ac := ctx.(*driver.AndroidContext)

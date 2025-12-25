@@ -362,7 +362,7 @@ type BufferedDocumentReader struct {
 func reader(uri fyne.URI) (fyne.URIReadCloser, error) {
 	var streamPtr C.jlong
 
-	// log.Tracef("reader: Attempting to open document stream for: %s", uri.String())
+	// log.Debugf("reader: Attempting to open document stream for: %s", uri.String())
 
 	err := driver.RunNative(func(ctx interface{}) error {
 		ac := ctx.(*driver.AndroidContext)
@@ -372,23 +372,23 @@ func reader(uri fyne.URI) (fyne.URIReadCloser, error) {
 		uriStr := C.CString(uri.String())
 		defer C.free(unsafe.Pointer(uriStr))
 
-		// log.Trace("reader: Calling native openDocumentStream")
+		// log.Debug("reader: Calling native openDocumentStream")
 		streamPtr = C.openDocumentStream(env, activity, uriStr)
 		if streamPtr == 0 {
-			// log.Trace("reader: Native openDocumentStream returned 0")
+			// log.Debug("reader: Native openDocumentStream returned 0")
 			return errors.New("failed to open document stream")
 		}
 
-		// log.Trace("reader: Native openDocumentStream succeeded")
+		// log.Debug("reader: Native openDocumentStream succeeded")
 		return nil
 	})
 
 	if err != nil {
-		log.Tracef("reader: Error opening document stream: %v", err)
+		log.Debugf("reader: Error opening document stream: %v", err)
 		return nil, err
 	}
 
-	// log.Trace("reader: Successfully created BufferedDocumentReader")
+	// log.Debug("reader: Successfully created BufferedDocumentReader")
 	return &BufferedDocumentReader{
 		uri:    uri,
 		stream: streamPtr,
@@ -445,29 +445,29 @@ func (b *BufferedDocumentReader) fillBuffer() error {
 // Read читает данные из документа
 func (b *BufferedDocumentReader) Read(p []byte) (n int, err error) {
 	if b.closed {
-		// log.Trace("Read: Reader is closed")
+		// log.Debug("Read: Reader is closed")
 		return 0, errors.New("reader is closed")
 	}
 
 	if len(p) == 0 {
-		log.Trace("Read: Zero-length buffer provided")
+		log.Debug("Read: Zero-length buffer provided")
 		return 0, nil
 	}
 
-	// log.Tracef("Read: Requested %d bytes, current bufPos: %d, bufLen: %d", len(p), b.bufPos, b.bufLen)
+	// log.Debugf("Read: Requested %d bytes, current bufPos: %d, bufLen: %d", len(p), b.bufPos, b.bufLen)
 
 	// Если в буфере нет данных, читаем новную порцию
 	if b.bufPos >= b.bufLen {
-		// log.Trace("Read: Buffer empty, calling fillBuffer")
+		// log.Debug("Read: Buffer empty, calling fillBuffer")
 		err = b.fillBuffer()
 		if err != nil {
-			// log.Tracef("Read: fillBuffer error: %v", err)
+			// log.Debugf("Read: fillBuffer error: %v", err)
 			return 0, err
 		}
 
 		// Если после заполнения буфера все еще нет данных - EOF
 		if b.bufLen == 0 {
-			// log.Trace("Read: EOF reached")
+			// log.Debug("Read: EOF reached")
 			return 0, io.EOF
 		}
 	}
@@ -478,38 +478,38 @@ func (b *BufferedDocumentReader) Read(p []byte) (n int, err error) {
 		copyLen = len(p)
 	}
 
-	// log.Tracef("Read: Copying %d bytes from internal buffer", copyLen)
+	// log.Debugf("Read: Copying %d bytes from internal buffer", copyLen)
 	copy(p[:copyLen], b.buffer[b.bufPos:b.bufPos+copyLen])
 	b.bufPos += copyLen
 
-	// log.Tracef("Read: Successfully read %d bytes, new bufPos: %d", copyLen, b.bufPos)
+	// log.Debugf("Read: Successfully read %d bytes, new bufPos: %d", copyLen, b.bufPos)
 	return copyLen, nil
 }
 
 // Close закрывает поток и освобождает ресурсы
 func (b *BufferedDocumentReader) Close() error {
 	if b.closed {
-		log.Trace("Close: Reader already closed")
+		log.Debug("Close: Reader already closed")
 		return errors.New("already closed")
 	}
 
 	b.closed = true
-	log.Trace("Close: Starting stream closure")
+	log.Debug("Close: Starting stream closure")
 
 	var closeError error
 	err := driver.RunNative(func(ctx interface{}) error {
 		ac := ctx.(*driver.AndroidContext)
 		env := (*C.JNIEnv)(unsafe.Pointer(ac.Env))
 
-		log.Trace("Close: Calling native closeDocumentStream")
+		log.Debug("Close: Calling native closeDocumentStream")
 		C.closeDocumentStream(env, b.stream)
 
 		// Проверяем исключения после закрытия
 		if C.CheckException(env, C.CString("closeDocumentStream")) != 0 {
-			log.Trace("Close: Exception during native stream closure")
+			log.Debug("Close: Exception during native stream closure")
 			closeError = errors.New("exception during stream closure")
 		} else {
-			log.Trace("Close: Native stream closed successfully")
+			log.Debug("Close: Native stream closed successfully")
 		}
 
 		b.stream = 0
@@ -517,16 +517,16 @@ func (b *BufferedDocumentReader) Close() error {
 	})
 
 	if err != nil {
-		log.Tracef("Close: Error running native function: %v", err)
+		log.Debugf("Close: Error running native function: %v", err)
 		return err
 	}
 
 	if closeError != nil {
-		log.Tracef("Close: Stream closure completed with error: %v", closeError)
+		log.Debugf("Close: Stream closure completed with error: %v", closeError)
 		return closeError
 	}
 
-	log.Trace("Close: Stream closed successfully")
+	log.Debug("Close: Stream closed successfully")
 	return nil
 }
 

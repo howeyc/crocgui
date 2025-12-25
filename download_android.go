@@ -673,7 +673,7 @@ import (
 
 // CreateFileInDownloads создает файл в папке Downloads с поддержкой всех версий Android
 func CreateFileInDownloads(fileName, mimeType string) (string, error) {
-	log.Trace("Creating file in Downloads: ", fileName)
+	log.Debug("Creating file in Downloads: ", fileName)
 
 	var result string
 	var err error

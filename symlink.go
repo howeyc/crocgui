@@ -43,39 +43,39 @@ func Symlink(oldname string, newname string) error {
 
 func Readlink(name string) (string, error) {
 	if isMobile {
-		log.Tracef("Readlink: mobile device, skipping %s", name)
+		log.Debugf("Readlink: mobile device, skipping %s", name)
 		return "", fmt.Errorf("isMobile")
 	}
 
 	fileInfo, err := os.Lstat(name)
 	if err != nil {
-		// log.Tracef("Readlink: Lstat failed for %s: %v", name, err)
+		// log.Debugf("Readlink: Lstat failed for %s: %v", name, err)
 		return "", err
 	}
 
 	if fileInfo.Mode()&os.ModeSymlink != 0 {
-		// log.Tracef("Readlink: %s is real symlink", name)
+		// log.Debugf("Readlink: %s is real symlink", name)
 		return os.Readlink(name)
 	}
 
 	// Псевдосимлинки проверяем ТОЛЬКО в каталоге SEND
 	parentDir := filepath.Base(filepath.Dir(name))
 	if parentDir != SEND {
-		// log.Tracef("Readlink: %s not in SEND directory (parent: %s), skipping pseudosymlink check", name, parentDir)
+		// log.Debugf("Readlink: %s not in SEND directory (parent: %s), skipping pseudosymlink check", name, parentDir)
 		return "", os.ErrInvalid
 	}
 
-	// log.Tracef("Readlink: %s is in SEND directory (parent: %s), checking as pseudosymlink (size: %d bytes)", name, parentDir, fileInfo.Size())
+	// log.Debugf("Readlink: %s is in SEND directory (parent: %s), checking as pseudosymlink (size: %d bytes)", name, parentDir, fileInfo.Size())
 
 	maxRead := len(PSL) + 4096 + 100
 	if fileInfo.Size() > int64(maxRead) {
-		// log.Tracef("Readlink: %s too large (%d > %d), not a pseudosymlink", name, fileInfo.Size(), maxRead)
+		// log.Debugf("Readlink: %s too large (%d > %d), not a pseudosymlink", name, fileInfo.Size(), maxRead)
 		return "", os.ErrInvalid
 	}
 
 	file, err := os.Open(name)
 	if err != nil {
-		log.Tracef("Readlink: failed to open %s: %v", name, err)
+		log.Debugf("Readlink: failed to open %s: %v", name, err)
 		return "", err
 	}
 	defer file.Close()
@@ -83,52 +83,52 @@ func Readlink(name string) (string, error) {
 	prefixBuffer := make([]byte, len(PSL))
 	n, err := file.Read(prefixBuffer)
 	if err != nil && err != io.EOF {
-		log.Tracef("Readlink: failed to read prefix from %s: %v", name, err)
+		log.Debugf("Readlink: failed to read prefix from %s: %v", name, err)
 		return "", err
 	}
 
 	if n < len(PSL) || string(prefixBuffer) != PSL {
-		// log.Tracef("Readlink: prefix mismatch or too short: got %q (%d bytes), expected %q", string(prefixBuffer), n, PSL)
+		// log.Debugf("Readlink: prefix mismatch or too short: got %q (%d bytes), expected %q", string(prefixBuffer), n, PSL)
 		return "", os.ErrInvalid
 	}
 
-	// log.Tracef("Readlink: PSL prefix found in %s, reading target path", name)
+	// log.Debugf("Readlink: PSL prefix found in %s, reading target path", name)
 
 	pathBuffer := make([]byte, maxRead-len(PSL))
 	n, err = file.Read(pathBuffer)
 	if err != nil && err != io.EOF {
-		// log.Tracef("Readlink: failed to read target from %s: %v", name, err)
+		// log.Debugf("Readlink: failed to read target from %s: %v", name, err)
 		return "", err
 	}
 
 	target := strings.TrimSpace(string(pathBuffer[:n]))
 	if target == "" {
-		// log.Tracef("Readlink: empty target after PSL prefix")
+		// log.Debugf("Readlink: empty target after PSL prefix")
 		return "", os.ErrInvalid
 	}
 
-	// log.Tracef("Readlink: found target %q in %s", target, name)
+	// log.Debugf("Readlink: found target %q in %s", target, name)
 
 	target = filepath.FromSlash(target)
-	// log.Tracef("Readlink: normalized target path: %q", target)
+	// log.Debugf("Readlink: normalized target path: %q", target)
 
 	if _, err := os.Stat(target); err != nil {
-		log.Tracef("Readlink: target %q does not exist: %v", target, err)
+		log.Debugf("Readlink: target %q does not exist: %v", target, err)
 
 		// if !filepath.IsAbs(target) {
 		// 	absTarget := filepath.Join(filepath.Dir(name), target)
-		// 	log.Tracef("Readlink: trying relative path %q", absTarget)
+		// 	log.Debugf("Readlink: trying relative path %q", absTarget)
 
 		// 	if _, err := os.Stat(absTarget); err == nil {
-		// 		log.Tracef("Readlink: relative target %q exists", absTarget)
+		// 		log.Debugf("Readlink: relative target %q exists", absTarget)
 		// 		return target, nil
 		// 	}
-		// 	log.Tracef("Readlink: relative target %q also does not exist: %v", absTarget, err)
+		// 	log.Debugf("Readlink: relative target %q also does not exist: %v", absTarget, err)
 		// }
 		return "", os.ErrNotExist
 	}
 
-	// log.Tracef("Readlink: successfully resolved %s -> %s", name, target)
+	// log.Debugf("Readlink: successfully resolved %s -> %s", name, target)
 	return target, nil
 }
 
@@ -137,7 +137,7 @@ func isLinkDir(path string) (ok bool) {
 		return true
 	}
 	if target, err := Readlink(path); err == nil {
-		log.Tracef("is symlink %s to %s", path, target)
+		log.Debugf("is symlink %s to %s", path, target)
 		if fi, err := os.Stat(target); err == nil && fi.IsDir() {
 			return true
 		}

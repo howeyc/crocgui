@@ -170,7 +170,7 @@ func CreateBookmarkFromURLDownload() (string, error) {
 
 // CreateFileInDownloads создает файл в папке Downloads
 func CreateFileInDownloads(fileName, mimeType string) (string, error) {
-	log.Trace("Creating file in iOS Downloads: ", fileName)
+	log.Debug("Creating file in iOS Downloads: ", fileName)
 
 	var result string
 	var err error

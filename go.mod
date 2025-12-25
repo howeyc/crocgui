@@ -4,7 +4,7 @@ go 1.24.3
 
 toolchain go1.24.6
 
-// replace github.com/schollz/croc/v10 => ../croc
+replace github.com/schollz/croc/v10 => ../croc
 
 require (
 	fyne.io/fyne/v2 v2.6.1
@@ -12,8 +12,9 @@ require (
 	github.com/adrg/xdg v0.5.3
 	github.com/schollz/croc/v10 v10.3.1-0.20251120031407-82cdeb19a87f
 	github.com/schollz/logger v1.2.0
+	github.com/schollz/pake/v3 v3.1.0
 	github.com/ulikunitz/xz v0.5.12
-	golang.org/x/text v0.31.0
+	golang.org/x/text v0.32.0
 )
 
 require (
@@ -48,7 +49,6 @@ require (
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/rymdport/portal v0.4.1 // indirect
 	github.com/sabhiram/go-gitignore v0.0.0-20210923224102-525f6e181f06 // indirect
-	github.com/schollz/pake/v3 v3.1.0 // indirect
 	github.com/schollz/peerdiscovery v1.7.6 // indirect
 	github.com/schollz/progressbar/v3 v3.18.0 // indirect
 	github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e // indirect
@@ -58,11 +58,11 @@ require (
 	github.com/tscholl2/siec v0.0.0-20240310163802-c2c6f6198406 // indirect
 	github.com/twmb/murmur3 v1.1.8 // indirect
 	github.com/yuin/goldmark v1.7.8 // indirect
-	golang.org/x/crypto v0.45.0 // indirect
+	golang.org/x/crypto v0.46.0 // indirect
 	golang.org/x/image v0.24.0 // indirect
-	golang.org/x/net v0.47.0 // indirect
-	golang.org/x/sys v0.38.0 // indirect
-	golang.org/x/term v0.37.0 // indirect
+	golang.org/x/net v0.48.0 // indirect
+	golang.org/x/sys v0.39.0 // indirect
+	golang.org/x/term v0.38.0 // indirect
 	golang.org/x/time v0.14.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

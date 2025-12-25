@@ -12,21 +12,21 @@ import (
 )
 
 func showCrocNotification(title, content string) {
-	log.Trace("showCrocNotification")
+	log.Debug("showCrocNotification")
 	driver.RunNative(func(ctx interface{}) error {
 		ac := ctx.(*driver.AndroidContext)
 		env := jnigi.WrapEnv(unsafe.Pointer(ac.Env))
 		context := jnigi.WrapJObject(uintptr(unsafe.Pointer(ac.Ctx)), "android/content/Context", false)
 
 		if err := showAndroidNotification(env, context, title, content); err != nil {
-			log.Trace("Error showing notification: " + err.Error())
+			log.Debug("Error showing notification: " + err.Error())
 		}
 		return nil
 	})
 }
 
 func showAndroidNotification(env *jnigi.Env, context *jnigi.ObjectRef, title, content string) error {
-	log.Trace("=== showAndroidNotification STARTED ===")
+	log.Debug("=== showAndroidNotification STARTED ===")
 
 	if apiLevel() >= 26 {
 		if err := createNotificationChannel(env, context); err != nil {
@@ -66,12 +66,12 @@ func showAndroidNotification(env *jnigi.Env, context *jnigi.ObjectRef, title, co
 		return err
 	}
 
-	log.Trace("=== showAndroidNotification COMPLETED ===")
+	log.Debug("=== showAndroidNotification COMPLETED ===")
 	return nil
 }
 
 func createNotificationChannel(env *jnigi.Env, context *jnigi.ObjectRef) error {
-	log.Trace("Creating notification channel")
+	log.Debug("Creating notification channel")
 
 	serviceName, err := env.NewObject("java/lang/String", []byte("notification"))
 	if err != nil {
@@ -122,7 +122,7 @@ func createNotificationChannel(env *jnigi.Env, context *jnigi.ObjectRef) error {
 		return err
 	}
 
-	log.Trace("Notification channel created")
+	log.Debug("Notification channel created")
 	return nil
 }
 
@@ -185,7 +185,7 @@ func createLaunchIntent(env *jnigi.Env) (*jnigi.ObjectRef, error) {
 		return nil, err
 	}
 
-	log.Trace("Launch intent created")
+	log.Debug("Launch intent created")
 	return intent, nil
 }
 
@@ -199,7 +199,7 @@ func createPendingIntent(env *jnigi.Env, context *jnigi.ObjectRef, intent *jnigi
 		return nil, err
 	}
 
-	log.Trace("PendingIntent created")
+	log.Debug("PendingIntent created")
 	return pendingIntent, nil
 }
 
@@ -279,7 +279,7 @@ func setupNotification(env *jnigi.Env, builder *jnigi.ObjectRef, title, content 
 		return err
 	}
 
-	log.Trace("Notification setup completed")
+	log.Debug("Notification setup completed")
 	return nil
 }
 
@@ -296,11 +296,11 @@ func buildAndShowNotification(env *jnigi.Env, builder *jnigi.ObjectRef, notifica
 		return err
 	}
 
-	log.Trace("Notification shown successfully")
+	log.Debug("Notification shown successfully")
 	return nil
 }
 
 func sendNotification(a fyne.App, title, content string) {
-	log.Trace("sendNotification")
+	log.Debug("sendNotification")
 	showCrocNotification(title, content)
 }

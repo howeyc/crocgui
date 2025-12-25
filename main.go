@@ -3,6 +3,7 @@
 package main
 
 import (
+	"context"
 	_ "embed"
 	"errors"
 	"io"
@@ -13,6 +14,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/schollz/croc/v10/src/croc"
+	"github.com/schollz/croc/v10/src/tcp"
 	"github.com/schollz/croc/v10/src/utils"
 	log "github.com/schollz/logger"
 	"golang.org/x/text/language"
@@ -110,8 +113,13 @@ const (
 	DEFAULT_RELAY          = "croc.schollz.com"
 	DEFAULT_RELAY6         = "croc6.schollz.com"
 	DEFAULT_PORT           = 9009
-	TRANSFERS              = 4
+	TRANSFERS              = 5
 	DEFAULT_PASSPHRASE     = "pass123"
+	REFUSING               = "refusing files"
+
+	// cmd/c "set LOGGER=trace&crocgui.exe"
+	// LOGGER=trace crocgui
+	LEVEL = "debug"
 )
 
 const (
@@ -168,7 +176,7 @@ func main() {
 	w := a.NewWindow("croc")
 
 	w.SetCloseIntercept(func() {
-		log.Trace("CloseIntercept")
+		log.Debug("CloseIntercept")
 		cleanup(w)
 	})
 
@@ -181,8 +189,11 @@ func main() {
 	// 	a.Preferences().StringWithFallback("relay-password", DEFAULT_PASSPHRASE))
 	a.Preferences().SetString("relay-ports",
 		a.Preferences().StringWithFallback("relay-ports", strings.Join(makePorts(0, 8), ",")))
-	// a.Preferences().SetBool("disable-local",
-	// 	a.Preferences().BoolWithFallback("disable-local", false))
+	// Лучше использовать testing или ip или явно host чем флудить локалку
+	a.Preferences().SetBool("disable-local",
+		a.Preferences().BoolWithFallback("disable-local", true))
+	a.Preferences().SetBool("testing",
+		a.Preferences().BoolWithFallback("testing", true))
 	// a.Preferences().SetBool("force-local",
 	// 	a.Preferences().BoolWithFallback("force-local", false))
 	// a.Preferences().SetBool("disable-multiplexing",
@@ -300,7 +311,7 @@ func cleanup(w fyne.Window) {
 	saveAccordionState()
 	close(done)
 	if err := os.Chdir(join()); err == nil {
-		log.Tracef("RemoveMarkedFiles: %v", utils.RemoveMarkedFiles())
+		utils.RemoveMarkedFiles()
 	}
 	w.Close()
 }
@@ -312,4 +323,20 @@ func defs(ss ...string) string {
 		}
 	}
 	return ""
+}
+
+func crocNew(NoRestart bool, ctx context.Context, opt croc.Options) (client *croc.Client, err error) {
+	if !NoRestart {
+		return croc.New(opt)
+	}
+	return croc.NewCtx(ctx, opt)
+	return croc.New(opt)
+}
+
+func tcpRun(NoRestart bool, ctx context.Context, debugLevel, host, port, password string, banner ...string) (err error) {
+	if !NoRestart {
+		return tcp.Run(debugLevel, host, port, password, banner...)
+	}
+	return tcp.RunCtx(ctx, debugLevel, host, port, password, banner...)
+	return tcp.Run(debugLevel, host, port, password, banner...)
 }

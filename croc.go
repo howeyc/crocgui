@@ -1,11 +1,14 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"fyne.io/fyne/v2"
 	"github.com/schollz/croc/v10/src/croc"
@@ -214,7 +217,7 @@ func makePorts(port, transfers int) (ports []string) {
 }
 
 func relayRun(w fyne.Window, pass, host, CSVports string) (err error) {
-	log.Tracef("starting croc relay %s@%s:%s", pass, host, CSVports)
+	log.Debugf("starting croc relay %s@%s:%s", pass, host, CSVports)
 	var ports []string
 
 	if CSVports == "" {
@@ -230,16 +233,69 @@ func relayRun(w fyne.Window, pass, host, CSVports string) (err error) {
 	for _, port := range ports[1:] {
 		go func(portStr string) {
 			err := tcp.Run(debugString, host, portStr, pass)
+			s := fmt.Sprintf("done %s: %v", port, err)
+			log.Debug(s)
 			if err != nil {
 				fyne.Do(func() {
-					NewToast(w, err.Error()).Show()
+					NewToast(w, s).Show()
 				})
 			}
 		}(port)
 	}
 	tcpPorts := strings.Join(ports[1:], ",")
 	err = tcp.Run(debugString, host, ports[0], pass, tcpPorts)
+	s := fmt.Sprintf("done %s: %v", ports[0], err)
+	log.Debug(s)
+	if err != nil {
+		NewToast(w, s).Show()
+	}
 	log.SetLevel(level)
+
+	return
+}
+
+func relayRunCtx(ctx context.Context, w fyne.Window, pass, host, CSVports string) (err error) {
+	var ports []string
+
+	if CSVports == "" {
+		CSVports = ports0
+	}
+	ports = strings.Split(CSVports, ",")
+
+	if len(ports) < 2 {
+		ports = strings.Split(ports0, ",")
+	}
+	log.Debugf("starting croc relay %s@%s:%v", pass, host, ports)
+
+	level := log.GetLevel()
+	defer log.SetLevel(level)
+
+	errChan := make(chan error, len(ports))
+
+	for _, port := range ports[1:] {
+		go func(portStr string) {
+			err := tcpRun(noRestart, ctx, LEVEL, host, portStr, pass)
+			errChan <- err
+			log.Debugf("done %s: %v", port, err)
+		}(port)
+		select {
+		case err := <-errChan:
+			if err != nil {
+				fyne.Do(func() {
+					NewToast(w, err.Error()).Show()
+				})
+			}
+			return err
+		case <-time.After(time.Millisecond * 10):
+		}
+	}
+	tcpPorts := strings.Join(ports[1:], ",")
+	err = tcpRun(noRestart, ctx, LEVEL, host, ports[0], pass, tcpPorts)
+	s := fmt.Sprintf("done %s: %v", ports[0], err)
+	log.Debug(s)
+	if err != nil {
+		NewToast(w, s).Show()
+	}
 
 	return
 }

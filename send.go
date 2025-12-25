@@ -2,6 +2,7 @@
 package main
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"errors"
@@ -32,6 +33,7 @@ import (
 	xw "fyne.io/x/fyne/widget"
 	"github.com/schollz/croc/v10/src/comm"
 	"github.com/schollz/croc/v10/src/croc"
+	"github.com/schollz/croc/v10/src/message"
 	"github.com/schollz/croc/v10/src/utils"
 )
 
@@ -198,9 +200,9 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 			if !cached {
 				// ссылка
 				link, err := linkByTarget(path, join)
-				log.Tracef("link %v, err %v", link, err)
+				log.Debugf("link %v, err %v", link, err)
 				if err != nil {
-					log.Tracef("%v", err)
+					log.Debugf("%v", err)
 					boxout()
 					return
 				}
@@ -217,19 +219,19 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 					remove = os.RemoveAll
 					de = "dir"
 					l = append(l, lsr2(path)...)
-					log.Tracef("remove dirs %v", l)
+					log.Debugf("remove dirs %v", l)
 				}
 
 				if err := remove(path); err != nil {
 					log.Errorf("remove %s %s: %v", de, path, err)
 					return
 				} else {
-					log.Tracef("remove %s %s", de, path)
+					log.Debugf("remove %s %s", de, path)
 					if isDir {
 						fyne.Do(func() {
 							forEachFileEntry(&fileentries, func(sub string, fe *fyne.Container) {
 								if slices.Contains(l, sub) {
-									log.Tracef("remove %s", sub)
+									log.Debugf("remove %s", sub)
 									fileentries.Delete(sub)
 									boxholder.Remove(fe)
 								}
@@ -252,9 +254,9 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 
 		l *widget.Label)) (newentry *fyne.Container) {
 		dst = filepath.FromSlash(dst)
-		// log.Tracef("addEntry %s", dst)
+		// log.Debugf("addEntry %s", dst)
 		if _, ok := load(&fileentries, dst); ok {
-			log.Tracef("exists %s", dst)
+			log.Debugf("exists %s", dst)
 			return nil
 		}
 		base := filepath.Base(dst)
@@ -325,13 +327,13 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 		}
 
 		if _, err := os.Stat(dst); err == nil {
-			log.Tracef("recached %s: %v", base, os.RemoveAll(dst))
+			log.Debugf("recached %s: %v", base, os.RemoveAll(dst))
 			NewToast(w, "recached "+base).Show()
 		}
 
 		wga.Add(1)
 		err = Symlink(src, dst)
-		log.Tracef("symlink %s %s: %v", src, dst, err)
+		log.Debugf("symlink %s %s: %v", src, dst, err)
 		if err == nil {
 			// Сортирую
 			// removeEntrys(false)
@@ -343,7 +345,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 		go func() {
 			// addPath
 			var wg sync.WaitGroup
-			log.Tracef("copyFiles: %v",
+			log.Debugf("copyFiles: %v",
 				copyFiles(storage.NewFileURI(src), dst, func(u fyne.URI, dstPath string) error {
 					// feCopy := fe
 					src := u.Path()
@@ -374,7 +376,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 							log.Errorf("stat %s: %v", dstPath, err)
 						} else {
 							// закэшировал
-							log.Tracef("copy %s %s", src, dstPath)
+							log.Debugf("copy %s %s", src, dstPath)
 						}
 						// if feCopy != fe {
 						// 	// Удалю временный прогрессбар без удаления файла
@@ -388,7 +390,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 			case <-done:
 			default:
 				wg.Wait()
-				log.Tracef("copyFiles done")
+				log.Debugf("copyFiles done")
 				// Сортирую
 				// removeEntrys(false)
 				// reload()
@@ -428,7 +430,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 		}
 
 		total, err := getSize(source.URI())
-		log.Tracef("getSize %s %d: %v", source.URI(), total, err)
+		log.Debugf("getSize %s %d: %v", source.URI(), total, err)
 		if err != nil {
 			total = 1 << 30
 		}
@@ -440,7 +442,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 			clode()
 			if err == nil {
 				if t, err := ModTime(source.URI()); err == nil && !t.IsZero() {
-					log.Tracef("Chtimes %s %v: %v", destination.Name(), t,
+					log.Debugf("Chtimes %s %v: %v", destination.Name(), t,
 						os.Chtimes(destination.Name(), time.Time{}, t))
 				}
 			}
@@ -454,7 +456,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 	reload = func() {
 		prefixs := []string{}
 		p, n := lsr(join())
-		// log.Tracef("lsr %v", n)
+		// log.Debugf("lsr %v", n)
 		for _, path := range p {
 			ext := filepath.Ext(path)
 			if strings.ToLower(ext) == DOTZIP {
@@ -462,7 +464,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 				prefixs = append(prefixs, dir+slash)
 			}
 		}
-		// log.Tracef("prefixs %v", prefixs)
+		// log.Debugf("prefixs %v", prefixs)
 	loop:
 		for i, path := range p {
 			name := n[i]
@@ -473,7 +475,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 			}
 			for _, prefix := range prefixs {
 				if strings.HasPrefix(path, prefix) {
-					log.Tracef("continue %s %s", path, prefix)
+					log.Debugf("continue %s %s", path, prefix)
 					continue loop
 				}
 			}
@@ -492,7 +494,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 
 		forEachFileEntry(&fileentries, func(path string, fe *fyne.Container) {
 			if _, err := os.Stat(path); err != nil {
-				log.Tracef("removeEntry %s", path)
+				log.Debugf("removeEntry %s", path)
 				removeEntry(path, fe, false)
 			}
 		})
@@ -535,8 +537,8 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 
 			return true
 		})
-		log.Tracef("filepaths %v", filepaths)
-		log.Tracef("allowed %v", allowed)
+		log.Debugf("filepaths %v", filepaths)
+		log.Debugf("allowed %v", allowed)
 
 		// Посылаем если есть файлы
 		if len(filepaths) < 1 {
@@ -550,13 +552,13 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 		// Пути посылаемых файлов абсолютны. Переходим в каталог только если zipfolder
 		cdLocked := false
 		if hasFolder(join()) && ZipFolder {
-			log.Trace("hasFolders(join()) && zipfolder")
+			log.Debug("hasFolders(join()) && zipfolder")
 			if cdLock.CompareAndSwap(0, 1) {
 				cdLocked = true
-				log.Trace("cdLocked = true")
+				log.Debug("cdLocked = true")
 				if wd, _ := os.Getwd(); wd != join() {
 					err := os.Chdir(join())
-					log.Tracef("change to %s: %v", join(), err)
+					log.Debugf("change to %s: %v", join(), err)
 					if err != nil {
 						NewToast(w, err.Error()).Show()
 						cdLock.Store(0)
@@ -589,10 +591,10 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 				return
 			}
 
-			// log.Tracef("filesInfo %+v %v %d: %v", filesInfo, emptyfolders, totalNumberFolders, err)
+			// log.Debugf("filesInfo %+v %v %d: %v", filesInfo, emptyfolders, totalNumberFolders, err)
 
 			filesInfo, emptyfolders, totalNumberFolders = filter(filesInfo, emptyfolders, totalNumberFolders, Exclude, allowed...)
-			// log.Tracef("filtered filesInfo %+v %v %d", filesInfo, emptyfolders, totalNumberFolders)
+			// log.Debugf("filtered filesInfo %+v %v %d", filesInfo, emptyfolders, totalNumberFolders)
 			if len(filesInfo) < 1 {
 				fyne.Do(NewToast(w, lp("Pick a file to send")).Show)
 				return
@@ -613,14 +615,16 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 				DisableLocal:     a.Preferences().Bool("disable-local"),
 				NoMultiplexing:   a.Preferences().Bool("disable-multiplexing"),
 				NoCompress:       a.Preferences().Bool("disable-compression"),
+				OnlyLocal:        a.Preferences().Bool("force-local"),
 				Curve:            a.Preferences().String("pake-curve"),
-				HashAlgorithm:    a.Preferences().String("croc-hash"),
-				ThrottleUpload:   a.Preferences().String("upload-throttle"),
 				MulticastAddress: a.Preferences().String("multicast-address"),
-				Exclude:          Exclude,
-				ZipFolder:        ZipFolder,
-				Overwrite:        a.Preferences().Bool("overwrite"),
-				GitIgnore:        GitIgnore,
+
+				HashAlgorithm:  a.Preferences().String("croc-hash"),
+				ThrottleUpload: a.Preferences().String("upload-throttle"),
+				Exclude:        Exclude,
+				ZipFolder:      ZipFolder,
+				// Overwrite:        a.Preferences().Bool("overwrite"),
+				GitIgnore: GitIgnore,
 			}
 			RelayPorts := ""
 			opt.RelayPassword, opt.RelayAddress, opt.RelayAddress6, RelayPorts,
@@ -628,7 +632,11 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 			opt.RelayPorts = strings.Split(RelayPorts, ",")
 			opt.OnlyLocal = a.Preferences().Bool("force-local") || opt.RelayAddress == "" && opt.RelayAddress6 == ""
 
-			client, err := croc.New(opt)
+			var sendErr error
+
+			log.Warnf("------------------------------------------Restart %v", !noRestart)
+			ctx, ctc := context.WithCancel(context.Background())
+			client, err := crocNew(noRestart, ctx, opt)
 			if err != nil {
 				log.Errorf("croc: %v", err)
 				fyne.Do(NewToast(w, err.Error()).Show)
@@ -636,7 +644,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 				return
 			}
 			log.SetLevel(debugString(a))
-			log.Trace("croc client created")
+			log.Debug("croc client created")
 
 			if a.Preferences().Bool("remember") {
 				p := NewPreferences(a.Preferences())
@@ -677,8 +685,9 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 						if totpCheck.Checked {
 							totpProg.Show()
 						}
-
+						removeEntrys(false)
 						reload()
+						showPage()
 					})
 				}()
 
@@ -695,10 +704,10 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 					case <-done:
 						return
 					case <-doneChan:
-						if !swap {
+						if !swap && sendErr == nil {
 							os.RemoveAll(join())
 						}
-						log.Tracef("A restart is better than leaving 12 goroutines leaking")
+						log.Debugf("A restart is better than leaving 12 goroutines leaking")
 						fyne.Do(func() {
 							restart(w)
 						})
@@ -710,10 +719,14 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 							topline.SetText(s)
 						})
 
-						Stop(client)
-						fyne.Do(func() {
-							restart(w)
-						})
+						if noRestart {
+							ctc()
+						} else {
+							Stop(client)
+							fyne.Do(func() {
+								restart(w)
+							})
+						}
 						return
 					case <-ticker.C:
 						if client == nil {
@@ -723,7 +736,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 							// Начало передачи
 							once = false
 							for _, fi := range client.FilesToTransfer {
-								log.Tracef("fi %+v", fi)
+								log.Debugf("fi %+v", fi)
 								path := filepath.Join(fi.FolderSource, fi.Name)
 
 								if fe, ok := load(&fileentries, path); ok {
@@ -746,7 +759,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 
 								totalMax += fi.Size
 							}
-							log.Tracef("totalMax %d", totalMax)
+							log.Debugf("totalMax %d", totalMax)
 							fyne.Do(func() {
 								toplineW.SetText(lp("Have them press the Download now"))
 								NewToast(w, lp("Have them press the Download now")).Show()
@@ -770,7 +783,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 									}
 									oldPath = path
 								}
-								log.Trace(path)
+								log.Debug(path)
 								if fe, ok := load(&fileentries, path); ok {
 									fepw = NewProgressWrapper(fe.Objects[feBar].(*widget.ProgressBar))
 								} else {
@@ -786,9 +799,8 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 
 			// Send
 			go func() {
-				var err error
 				if EMULATE == 0 {
-					err = client.Send(filesInfo, emptyfolders, totalNumberFolders)
+					sendErr = client.Send(filesInfo, emptyfolders, totalNumberFolders)
 				} else {
 					log.Warnf("Send %v %v %d", filesInfo, emptyfolders, totalNumberFolders)
 					time.Sleep(EMULATE)
@@ -799,11 +811,12 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 				}
 
 				fyne.Do(func() {
-					if err != nil {
-						if errors.Is(err, io.EOF) {
-							err = fmt.Errorf("%s", lp("Receive cancelled."))
+					if sendErr != nil {
+						if errors.Is(sendErr, io.EOF) ||
+							errors.Is(sendErr, context.Canceled) {
+							sendErr = fmt.Errorf("%s", lp("Receive cancelled."))
 						}
-						s := fmt.Sprintf("send: %v", err)
+						s := fmt.Sprintf("send: %v", sendErr)
 						log.Error(s)
 						topline.SetText(s)
 						//
@@ -814,6 +827,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 
 				})
 				close(doneChan)
+				log.Warnf("NumGoroutine %d", runtime.NumGoroutine())
 			}() // Send
 		}() //go
 		// +12 go routines
@@ -827,7 +841,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 		if ft != nil {
 			ft.OnSelected = func(uid widget.TreeNodeID) {
 				selected(uid, func(err error) {
-					log.Tracef("selected %v: %v", uid, err)
+					log.Debugf("selected %v: %v", uid, err)
 				})
 			}
 		}
@@ -836,21 +850,21 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 
 	if isAndroid {
 		a.Lifecycle().SetOnExitedForeground(func() {
-			log.Trace("ExitedForeground")
+			log.Debug("ExitedForeground")
 			saveAccordionState()
 			if !notFinish {
 				excludeFromRecents()
 			}
 		})
 		a.Lifecycle().SetOnStopped(func() {
-			log.Trace("Stopped")
+			log.Debug("Stopped")
 		})
 		a.Lifecycle().SetOnStarted(func() {
-			log.Trace("Started")
+			log.Debug("Started")
 		})
 		a.Lifecycle().SetOnEnteredForeground(func() {
 			notFinish = false
-			log.Trace("EnteredForeground")
+			log.Debug("EnteredForeground")
 			close(uriFromIntent)
 			uriFromIntent = make(chan string, 100)
 
@@ -860,19 +874,19 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 				for {
 					select {
 					case <-done:
-						log.Trace("done")
+						log.Debug("done")
 						return
 					case text := <-textFromIntent:
 						if text == "" {
-							log.Trace("doneProcessIntent notFinish")
+							log.Debug("doneProcessIntent notFinish")
 							notFinish = true
 							return
 						}
 						if entry.Disabled() {
-							log.Trace("doneProcessIntent Sending")
+							log.Debug("doneProcessIntent Sending")
 							return
 						}
-						log.Tracef(`text "%s"`, text)
+						log.Debugf(`text "%s"`, text)
 						src := join("text" + hashToFilename(text))
 						if fe := addEntry(src, nil); fe == nil {
 							continue
@@ -897,12 +911,12 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 
 					case uriString := <-uriFromIntent:
 						if uriString == "" {
-							log.Trace("doneProcessIntent")
+							log.Debug("doneProcessIntent")
 							return
 						}
 						if entry.Disabled() {
-							log.Trace("Sending")
-							log.Trace("doneProcessIntent")
+							log.Debug("Sending")
+							log.Debug("doneProcessIntent")
 							return
 						}
 						u, err := storage.ParseURI(uriString)
@@ -910,8 +924,8 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 							log.Errorf("parse %s: %v", u, err)
 							continue
 						}
-						log.Tracef("uri %s", u)
-						log.Tracef("apiLevel %d", apiLevel())
+						log.Debugf("uri %s", u)
+						log.Debugf("apiLevel %d", apiLevel())
 
 						if IsDirectory(u) {
 							continue
@@ -973,7 +987,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 				case <-done:
 				default:
 					wga.Wait()
-					log.Tracef("done %v", fnames)
+					log.Debugf("done %v", fnames)
 					removeEntrys(false)
 					reload()
 					showPage()
@@ -998,7 +1012,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 				case <-done:
 				default:
 					wga.Wait()
-					log.Tracef("done %v", os.Args[1:])
+					log.Debugf("done %v", os.Args[1:])
 					removeEntrys(false)
 					reload()
 					showPage()
@@ -1011,7 +1025,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 				return
 			}
 			if entry.Disabled() {
-				log.Trace("Sending")
+				log.Debug("Sending")
 				return
 			}
 			// reload()
@@ -1026,7 +1040,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 				case <-done:
 				default:
 					wga.Wait()
-					log.Tracef("done %v", uris)
+					log.Debugf("done %v", uris)
 					removeEntrys(false)
 					reload()
 					showPage() //SetOnDropped
@@ -1039,7 +1053,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 		if supported, err := IsFilePickerSupported(); err != nil {
 			log.Errorf("file picker support: %v", err)
 		} else if !supported {
-			log.Tracef("File picker not supported. %s", INSTALL)
+			log.Debugf("File picker not supported. %s", INSTALL)
 			a.Clipboard().SetContent(filePicker)
 			dialog.ShowInformation(
 				lp("Pick a file to send"),
@@ -1048,7 +1062,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 			)
 			return
 		} else {
-			log.Trace("File picker is supported")
+			log.Debug("File picker is supported")
 		}
 		ShowFileOpen(func(source fyne.URIReadCloser, e error) {
 			if source == nil {
@@ -1069,7 +1083,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 			src := u.String()
 
 			err := Symlink(u.Path(), dst)
-			log.Tracef("symlink %s %s: %v", u.Path(), dst, err)
+			log.Debugf("symlink %s %s: %v", u.Path(), dst, err)
 			if err == nil {
 				addEntry(u.Path(), nil)
 				// button(fe, feDel, func(b *widget.Button) {
@@ -1104,7 +1118,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 					log.Errorf("stat %s:  %v", dst, err)
 					removeEntry(dst, fe, false)
 				} else {
-					log.Tracef("copy %s %s", src, dst)
+					log.Debugf("copy %s %s", src, dst)
 				}
 			})
 		}, w)
@@ -1114,7 +1128,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 	addFolderButton := widget.NewButtonWithIcon("", theme.FolderNewIcon(), func() {
 		folderOpen := func(u fyne.ListableURI, e error) {
 			if u == nil {
-				log.Trace("folder selection canceled")
+				log.Debug("folder selection canceled")
 				return
 			}
 			if e != nil {
@@ -1132,7 +1146,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 			}
 
 			err := Symlink(u.Path(), dst)
-			log.Tracef("symlink %s %s: %v", u.Path(), dst, err)
+			log.Debugf("symlink %s %s: %v", u.Path(), dst, err)
 			if err == nil {
 				// Десктоп
 				removeEntrys(false)
@@ -1142,7 +1156,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 
 			go func() {
 				var wg sync.WaitGroup
-				log.Tracef("copyFiles: %v",
+				log.Debugf("copyFiles: %v",
 					copyFiles(u, dst, func(src fyne.URI, dstPath string) error {
 						// fyne.Do(func() {})
 						// Покажем временный прогрессбар
@@ -1172,7 +1186,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 							if _, err := os.Stat(dstPath); err != nil {
 								log.Errorf("stat %s: %v", dstPath, err)
 							} else {
-								log.Tracef("copy %s %s", src, dstPath)
+								log.Debugf("copy %s %s", src, dstPath)
 							}
 							// Скроем временный прогрессбар без удаления файла
 							// removeEntry(dstPath, feCopy, false)
@@ -1183,7 +1197,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 				case <-done:
 				default:
 					wg.Wait()
-					log.Tracef("copyFiles done")
+					log.Debugf("copyFiles done")
 					// Сортирую
 					removeEntrys(false)
 					reload()
@@ -1289,57 +1303,7 @@ func restart(w fyne.Window) {
 	os.Exit(0)
 }
 
-// type clientShadow struct {
-// 	Options                         croc.Options
-// 	Pake                            *pake.Pake
-// 	Key                             []byte
-// 	ExternalIP, ExternalIPConnected string
-
-// 	// steps involved in forming relationship
-// 	Step1ChannelSecured       bool
-// 	Step2FileInfoTransferred  bool
-// 	Step3RecipientRequestFile bool
-// 	Step4FileTransferred      bool
-// 	Step5CloseChannels        bool
-// 	SuccessfulTransfer        bool
-
-// 	// send / receive information of all files
-// 	FilesToTransfer           []croc.FileInfo
-// 	EmptyFoldersToTransfer    []croc.FileInfo
-// 	TotalNumberOfContents     int
-// 	TotalNumberFolders        int
-// 	FilesToTransferCurrentNum int
-// 	FilesHasFinished          map[int]struct{}
-// 	TotalFilesIgnored         int
-
-// 	// send / receive information of current file
-// 	CurrentFile            *os.File
-// 	CurrentFileChunkRanges []int64
-// 	CurrentFileChunks      []int64
-// 	CurrentFileIsClosed    bool
-// 	LastFolder             string
-
-// 	TotalSent              int64
-// 	TotalChunksTransferred int
-// 	chunkMap               map[uint64]struct{}
-// 	limiter                *rate.Limiter
-
-// 	// tcp connections
-// 	conn []*comm.Comm
-
-// 	bar             *progressbar.ProgressBar
-// 	longestFilename int
-// 	firstSend       bool
-
-// 	mutex                    *sync.Mutex
-// 	fread                    *os.File
-// 	numfinished              int
-// 	quit                     chan bool
-// 	finishedNum              int
-// 	numberOfTransferredFiles int
-// }
-
-func Conns(client interface{}) ([]*comm.Comm, error) {
+func Conns(client any) ([]*comm.Comm, error) {
 	defer func() { recover() }()
 
 	v := reflect.ValueOf(client)
@@ -1355,16 +1319,27 @@ func Conns(client interface{}) ([]*comm.Comm, error) {
 	return field.Interface().([]*comm.Comm), nil
 }
 
-func Stop(client interface{}) {
-	conns, err := Conns(client)
-	if err == nil {
-		if len(conns) > 0 {
-			conns[0].Close()
-			time.Sleep(time.Millisecond * 333)
-		}
-	} else {
-		log.Errorf("stop: %v", err)
+// func Stop(c any) {
+func Stop(c *croc.Client) {
+	conns, err := Conns(c)
+	if err != nil {
+		log.Errorf("Stop: %v", err)
+		return
 	}
+	if len(conns) < 1 || conns[0] == nil {
+		log.Errorf("Stop: not open")
+		return
+	}
+	err = message.Send(conns[0], c.Key, message.Message{
+		Type:    message.TypeError,
+		Message: REFUSING,
+	})
+	log.Debug("Stop %s: %v", REFUSING, err)
+
+	time.Sleep(time.Millisecond * 33)
+	conns[0].Close()
+	log.Debug("Stop close %s", conns[0].Connection().RemoteAddr())
+	time.Sleep(time.Millisecond * 333)
 }
 
 func totp(secret string) string {
@@ -1613,7 +1588,7 @@ func selected(uid widget.TreeNodeID, cb func(err error)) {
 	root := ftw.Title()
 	switch ext := strings.ToLower(u.Extension()); ext {
 	case DOTZIP:
-		log.Tracef("unZip %v %s", u.Path(), root)
+		log.Debugf("unZip %v %s", u.Path(), root)
 		cb(nil)
 		return
 	}
@@ -1622,14 +1597,14 @@ func selected(uid widget.TreeNodeID, cb func(err error)) {
 
 func linkByTarget(target string, join func(elem ...string) string) (link string, err error) {
 	l := ls(join())
-	log.Tracef("ls %v", l)
+	log.Debugf("ls %v", l)
 	for _, name := range l {
 		link = join(name)
-		log.Tracef("link %s", link)
+		log.Debugf("link %s", link)
 		if parent, e := Readlink(link); e == nil {
-			log.Tracef("parent %s target %s", parent, target)
+			log.Debugf("parent %s target %s", parent, target)
 			if isCached(parent, target) {
-				log.Tracef("return %s ", link)
+				log.Debugf("return %s ", link)
 				return
 			}
 		}

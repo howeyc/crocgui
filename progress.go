@@ -341,7 +341,7 @@ func CopyFileProgress(src, dst string, c *fyne.Container, onComplete func(err er
 		clode()
 		if err == nil {
 			if t, err := fileModTime(source.Name()); err == nil && !t.IsZero() {
-				log.Tracef("Chtimes %s %v: %v", destination.Name(), t,
+				log.Debugf("Chtimes %s %v: %v", destination.Name(), t,
 					os.Chtimes(destination.Name(), time.Time{}, t))
 			}
 		}
@@ -467,10 +467,10 @@ func copyToUWCProgress(destination fyne.URIWriteCloser, src string, c *fyne.Cont
 		close()
 		// if err == nil {
 		// 	if t, err := fileModTime(source.Name()); err == nil {
-		// 		log.Tracef("source ModTime %s %v:%v", source.Name(), t, err)
+		// 		log.Debugf("source ModTime %s %v:%v", source.Name(), t, err)
 		// 		setModTime(destination.URI(), t)
 		// 		t, err = ModTime(destination.URI())
-		// 		log.Tracef("destination ModTime %s %v:%v", destination.URI(), t, err)
+		// 		log.Debugf("destination ModTime %s %v:%v", destination.URI(), t, err)
 		// 	}
 		// }
 		restore()

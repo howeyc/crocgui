@@ -2,6 +2,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -186,19 +187,19 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 					remove = os.RemoveAll
 					de = "dir"
 					l = append(l, lsr2(path)...)
-					log.Tracef("remove dirs %v", l)
+					log.Debugf("remove dirs %v", l)
 				}
 
 				if err := remove(path); err != nil {
 					log.Errorf("remove %s %s: %v", de, path, err)
 					return
 				} else {
-					log.Tracef("remove %s %s", de, path)
+					log.Debugf("remove %s %s", de, path)
 					if isDir {
 						fyne.Do(func() {
 							forEachFileEntry(&fileentries, func(sub string, fe *fyne.Container) {
 								if slices.Contains(l, sub) {
-									log.Tracef("remove %s", sub)
+									log.Debugf("remove %s", sub)
 									fileentries.Delete(sub)
 									boxholder.Remove(fe)
 								}
@@ -221,9 +222,9 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 		s *widget.Button,
 		l *widget.Label)) (newentry *fyne.Container) {
 		dst = filepath.FromSlash(dst)
-		// log.Tracef("addEntry %s", dst)
+		// log.Debugf("addEntry %s", dst)
 		if fe, ok := load(&fileentries, dst); ok {
-			log.Tracef("exists %s", dst)
+			log.Debugf("exists %s", dst)
 			deleteButton := fe.Objects[feDel]
 			progFile := fe.Objects[feBar]
 			saveButton := fe.Objects[feSave]
@@ -270,7 +271,7 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 								removeEntry(pathZip, fe, true)
 								return
 							}
-							log.Tracef("zip %s %s", dst, pathZip)
+							log.Debugf("zip %s %s", dst, pathZip)
 
 							if _, err := os.Stat(pathZip); err != nil {
 								log.Errorf("stat %s: %v", pathZip, err)
@@ -343,7 +344,7 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 					topline.SetText(lp("Saved all files to") + " Download")
 				})
 			} else if destination == nil {
-				log.Trace("folder selection canceled")
+				log.Debug("folder selection canceled")
 				return
 			}
 
@@ -370,7 +371,7 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 					if err != nil {
 						log.Errorf("copy %s %s: %v", src, dst, err)
 					} else {
-						log.Tracef("copy %s %s", src, dst)
+						log.Debugf("copy %s %s", src, dst)
 						removeEntry(src, fe, true)
 					}
 				})
@@ -387,10 +388,10 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 			}
 			err = Rename(src, dst)
 			if err == nil {
-				log.Tracef("move %s %s", src, dst)
+				log.Debugf("move %s %s", src, dst)
 				removeEntry(src, fe, false)
 				fyne.Do(func() {
-					log.Tracef("fileTreeShow %s", u)
+					log.Debugf("fileTreeShow %s", u)
 					fileTreeShow(u, a)
 				})
 				return
@@ -399,7 +400,7 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 			// fileSave
 			root := src
 			go func() {
-				log.Tracef("copyFiles: %v",
+				log.Debugf("copyFiles: %v",
 					copyFiles(storage.NewFileURI(src), dst, func(u fyne.URI, dstPath string) error {
 						feCopy := fe
 						src := u.Path()
@@ -425,7 +426,7 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 								log.Errorf("stat %s: %v", dstPath, err)
 							} else {
 								// сохранилось, удаляем
-								log.Tracef("copy %s %s", src, dstPath)
+								log.Debugf("copy %s %s", src, dstPath)
 								removeEntry(src, feCopy, true)
 								if feCopy != fe {
 									if os.Remove(filepath.Dir(src)) == nil {
@@ -438,7 +439,7 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 											}
 											fyne.Do(func() {
 												u := storage.NewFileURI(filepath.Dir(dstPath))
-												log.Tracef("fileTreeShow %s", u)
+												log.Debugf("fileTreeShow %s", u)
 												fileTreeShow(u, a)
 											})
 										}
@@ -458,7 +459,7 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 		}
 		if !supported {
 			fileSave(nil, fmt.Errorf("file picker not supported"))
-			log.Trace("File picker not supported. ", INSTALL)
+			log.Debug("File picker not supported. ", INSTALL)
 			a.Clipboard().SetContent(filePicker)
 			dialog.ShowInformation(
 				lp("Saved all files to")+" Download",
@@ -479,9 +480,17 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 	os.MkdirAll(join(), 0700)
 
 	reload = func() {
+		if fi, err := os.Stat(fpath); err == nil && !fi.IsDir() {
+			err := os.Remove(fpath)
+			log.Debugf("Removed partially received %s: %v", fpath, err)
+			if err == nil || os.IsNotExist(err) {
+				fpath = ""
+				a.Preferences().SetString("DeleteFile", "")
+			}
+		}
 		prefixs := []string{}
 		p, n := lsr(join())
-		// log.Tracef("lsr %v", n)
+		// log.Debugf("lsr %v", n)
 		for _, path := range p {
 			ext := filepath.Ext(path)
 			if strings.ToLower(ext) == DOTZIP {
@@ -489,18 +498,18 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 				prefixs = append(prefixs, dir+slash)
 			}
 		}
-		// log.Tracef("prefixs %v", prefixs)
+		// log.Debugf("prefixs %v", prefixs)
 	loop:
 		for i, path := range p {
 			name := n[i]
 			if name == "" ||
-				path == fpath ||
+				path == fpath || // если не удалось удалить то не показываю
 				name == crocRemovalFile {
 				continue
 			}
 			for _, prefix := range prefixs {
 				if strings.HasPrefix(path, prefix) {
-					log.Tracef("continue %s %s", path, prefix)
+					log.Debugf("continue %s %s", path, prefix)
 					continue loop
 				}
 			}
@@ -519,7 +528,7 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 
 		forEachFileEntry(&fileentries, func(path string, fe *fyne.Container) {
 			if _, err := os.Stat(path); err != nil {
-				log.Tracef("removeEntry %s", path)
+				log.Debugf("removeEntry %s", path)
 				removeEntry(path, fe, false)
 			}
 		})
@@ -539,7 +548,7 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 		// cdLocked
 		if wd, _ := os.Getwd(); wd != join() {
 			err := os.Chdir(join())
-			log.Tracef("change to %s: %v", join(), err)
+			log.Debugf("change to %s: %v", join(), err)
 			if err != nil {
 				log.Errorf("croc: %v", err)
 				NewToast(w, err.Error()).Show()
@@ -558,10 +567,14 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 			SharedSecret:     secret,
 			Debug:            debugBool(a),
 			NoPrompt:         true,
+			DisableLocal:     a.Preferences().Bool("disable-local"),
+			NoMultiplexing:   a.Preferences().Bool("disable-multiplexing"),
+			NoCompress:       a.Preferences().Bool("disable-compression"),
 			OnlyLocal:        a.Preferences().Bool("force-local"),
 			Curve:            a.Preferences().String("pake-curve"),
 			Overwrite:        a.Preferences().Bool("overwrite"),
 			MulticastAddress: a.Preferences().String("multicast-address"),
+			TestFlag:         a.Preferences().Bool("testing"),
 		}
 		opt.RelayPassword, opt.RelayAddress, opt.RelayAddress6, _,
 			comm.Socks5Proxy, comm.HttpProxy = def(a)
@@ -571,7 +584,9 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 			// --ip
 			opt.IP = opt.RelayAddress
 		}
-		client, err := croc.New(opt)
+
+		ctx, ctc := context.WithCancel(context.Background())
+		client, err := crocNew(noRestart, ctx, opt)
 		if err != nil {
 			log.Errorf("croc: %v", err)
 			NewToast(w, err.Error()).Show()
@@ -579,7 +594,7 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 			return
 		}
 		log.SetLevel(debugString(a))
-		log.Trace("croc client created")
+		log.Debug("croc client created")
 
 		if a.Preferences().Bool("remember") {
 			p := NewPreferences(a.Preferences())
@@ -606,6 +621,7 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 				// Конец
 				ticker.Stop()
 				if longCdLock {
+					log.Debugf("CROC_CD_LOCK %v", longCdLock)
 					time.Sleep(time.Second * 30)
 				}
 				cdLock.Store(0)
@@ -643,10 +659,14 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 						topline.SetText(s)
 					})
 					a.Preferences().SetString("DeleteFile", join(filename))
-					Stop(client)
-					fyne.Do(func() {
-						restart(w)
-					})
+					if noRestart {
+						ctc()
+					} else {
+						Stop(client)
+						fyne.Do(func() {
+							restart(w)
+						})
+					}
 					return
 				case <-ticker.C:
 					if client == nil {
@@ -676,7 +696,7 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 								totalMax += fi.Size
 							}
 							progW.SetMax(totalMax)
-							log.Tracef("totalMax %d", totalMax)
+							log.Debugf("totalMax %d", totalMax)
 						}
 						cnum := client.FilesToTransferCurrentNum
 						if old < cnum+1 {
@@ -699,7 +719,7 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 								}
 								oldPath = path
 							}
-							log.Trace(path)
+							log.Debug(path)
 							if fe, ok := load(&fileentries, path); ok {
 								fepw = NewProgressWrapper(fe.Objects[feBar].(*widget.ProgressBar))
 							} else {
@@ -715,9 +735,9 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 
 		// Receive
 		go func() {
-			var err error
+			var recvErr error
 			if EMULATE == 0 {
-				err = client.Receive()
+				recvErr = client.Receive()
 			} else {
 				log.Warnf("Receive")
 				time.Sleep(EMULATE)
@@ -728,21 +748,22 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 			}
 
 			fyne.Do(func() {
-				if err != nil {
-					if errors.Is(err, io.EOF) {
-						err = fmt.Errorf("%s", lp("Send cancelled."))
+				if recvErr != nil {
+					if errors.Is(recvErr, io.EOF) ||
+						errors.Is(recvErr, context.Canceled) {
+						recvErr = fmt.Errorf("%s", lp("Send cancelled."))
 					}
-					s := fmt.Sprintf("receive: %s", err)
+					s := fmt.Sprintf("receive: %s", recvErr)
 					log.Error(s)
 					topline.SetText(s)
 					fpath = join(filename)
-					removeEntrys(true)
 				} else {
 					topline.SetText(fmt.Sprintf("%s: %s", lp("Received"), filename))
 				}
 				a.Preferences().SetString("DeleteFile", fpath)
 			})
 			close(doneChan)
+			log.Warnf("NumGoroutine %d", runtime.NumGoroutine())
 		}() // Receive
 		//  +2 go routines
 		log.Warnf("NumGoroutine %d", runtime.NumGoroutine())
@@ -754,7 +775,7 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 		if ft != nil {
 			ft.OnSelected = func(uid widget.TreeNodeID) {
 				selected(uid, func(err error) {
-					log.Tracef("selected %v: %v", uid, err)
+					log.Debugf("selected %v: %v", uid, err)
 				})
 			}
 		}
@@ -776,20 +797,20 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 	})
 	cosED = append(cosED, downloadButton)
 
-	for _, name := range ls(join()) {
-		path := filepath.Join(join(), name)
-		if name == "" {
-			continue
-		}
-		if fpath == path {
-			err := os.Remove(fpath)
-			log.Tracef("Removed partially received %s: %v", fpath, err)
-			if err != nil {
-				continue
-			}
-			a.Preferences().SetString("DeleteFile", "")
-		}
-	}
+	// for _, name := range ls(join()) {
+	// 	path := filepath.Join(join(), name)
+	// 	if name == "" {
+	// 		continue
+	// 	}
+	// 	if fpath == path {
+	// 		err := os.Remove(fpath)
+	// 		log.Debugf("Removed partially received %s: %v", fpath, err)
+	// 		if err != nil {
+	// 			continue
+	// 		}
+	// 		a.Preferences().SetString("DeleteFile", "")
+	// 	}
+	// }
 
 	filesSave = func(lu fyne.ListableURI, err error) {
 		var (
@@ -800,7 +821,7 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 		if err != nil {
 			log.Errorf("folder selection: %v", err)
 		} else if lu == nil {
-			log.Trace("folder selection canceled")
+			log.Debug("folder selection canceled")
 			return
 		}
 
@@ -842,13 +863,13 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 				}
 				err = Rename(src, dst)
 				if err == nil {
-					log.Tracef("move %s %s", src, dst)
+					log.Debugf("move %s %s", src, dst)
 					removeEntry(src, fe, true)
 					fyne.Do(func() {
 						if mapEmpty(&fileentries) {
 							// dir := filepath.Dir(dst)
 							topline.SetText(fmt.Sprintf("%s %s", lp("Saved all files to"), lu.Path()))
-							log.Tracef("fileTreeShow %s", u)
+							log.Debugf("fileTreeShow %s", u)
 							fileTreeShow(u, a)
 						}
 					})
@@ -857,7 +878,7 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 				log.Warnf("move %s %s: %v", src, dst, err)
 				root := src
 				go func() {
-					log.Tracef("copyFiles: %v",
+					log.Debugf("copyFiles: %v",
 						copyFiles(storage.NewFileURI(root), dst, func(u fyne.URI, dstPath string) error {
 							// fyne.Do(func() {})
 							feCopy := fe
@@ -884,7 +905,7 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 									log.Errorf("stat %s: %v", dstPath, err)
 								} else {
 									// сохранилось, удаляем
-									log.Tracef("copy %s %s", src, dstPath)
+									log.Debugf("copy %s %s", src, dstPath)
 									removeEntry(src, feCopy, true)
 									if feCopy != fe {
 										if os.Remove(filepath.Dir(src)) == nil {
@@ -897,7 +918,7 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 											}
 											fyne.Do(func() {
 												u := storage.NewFileURI(filepath.Dir(dstPath))
-												log.Tracef("fileTreeShow %s", u)
+												log.Debugf("fileTreeShow %s", u)
 												fileTreeShow(u, a)
 											})
 										}
@@ -927,7 +948,7 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 						})
 						return
 					}
-					log.Tracef("copy %s %s", src, destination.URI())
+					log.Debugf("copy %s %s", src, destination.URI())
 					removeEntry(src, fe, true)
 
 					if mapEmpty(&fileentries) {
@@ -959,7 +980,7 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 						log.Errorf("stat %s: %v", pathZip, err)
 						return
 					}
-					log.Tracef("zip %s %s", src, pathZip)
+					log.Debugf("zip %s %s", src, pathZip)
 
 					if feDir, ok := load(&fileentries, src); ok {
 						removeEntry(src, feDir, true)

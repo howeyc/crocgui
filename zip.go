@@ -91,7 +91,7 @@ func zipDirectoryWithOverallProgress(destination string, source string, c *fyne.
 				log.Error(err)
 			} else {
 				addedDirs[header.Name] = true
-				log.Tracef("Adding %s", header.Name)
+				log.Debugf("Adding %s", header.Name)
 			}
 		}
 	}
@@ -139,8 +139,8 @@ func zipDirectoryWithOverallProgress(destination string, source string, c *fyne.
 			}
 
 			addedDirs[zipPath] = true
-			log.Tracef("Adding %s", zipPath+"/")
-			log.Tracef("Added directory to archive: %s (mod time: %v)", zipPath, info.ModTime())
+			log.Debugf("Adding %s", zipPath+"/")
+			log.Debugf("Added directory to archive: %s (mod time: %v)", zipPath, info.ModTime())
 			return nil
 		}
 
@@ -179,7 +179,7 @@ func zipDirectoryWithOverallProgress(destination string, source string, c *fyne.
 					}
 					addedDirs[parentDir] = true
 
-					log.Tracef("Adding %s", parentDir+"/")
+					log.Debugf("Adding %s", parentDir+"/")
 				}
 			}
 
@@ -225,7 +225,7 @@ func zipDirectoryWithOverallProgress(destination string, source string, c *fyne.
 				return copyErr
 			}
 
-			log.Tracef("Added file to archive: %s (mod time: %v)", zipPath, info.ModTime())
+			log.Debugf("Added file to archive: %s (mod time: %v)", zipPath, info.ModTime())
 		}
 		return nil
 	})
@@ -237,7 +237,7 @@ func zipDirectoryWithOverallProgress(destination string, source string, c *fyne.
 
 	// 6. Восстанавливаем GUI (скрываем прогресс-бар)
 	restore()
-	log.Tracef("Zip creation completed")
+	log.Debugf("Zip creation completed")
 	return nil
 }
 
@@ -304,7 +304,7 @@ func unzipDirectoryWithCustomCopy(destination string, source string, c *fyne.Con
 		_, restore := NewProgressWriter(io.Discard, 1, c)
 		fyne.Do(func() {})
 		restore()
-		log.Tracef("No files to extract")
+		log.Debugf("No files to extract")
 		return nil
 	}
 
@@ -315,7 +315,7 @@ func unzipDirectoryWithCustomCopy(destination string, source string, c *fyne.Con
 	// 3. Итерируемся по файлам в архиве и извлекаем их
 	for _, f := range archive.File {
 		filePath := filepath.Join(destination, f.Name)
-		log.Tracef("Unzipping file %s", filePath)
+		log.Debugf("Unzipping file %s", filePath)
 
 		sanitizedPath := filepath.Clean(filePath)
 		if strings.Contains(sanitizedPath, "..") {
@@ -390,18 +390,18 @@ func unzipDirectoryWithCustomCopy(destination string, source string, c *fyne.Con
 	}
 
 	// Второй проход: восстанавливаем времена модификации для ВСЕХ файлов и директорий
-	log.Tracef("Restoring modification times...")
+	log.Debugf("Restoring modification times...")
 	for path, modTime := range modTimes {
 		if err := os.Chtimes(path, time.Time{}, modTime); err != nil {
 			log.Warnf("Failed to set modification time for %s: %v", path, err)
 		} else {
-			log.Tracef("Restored modification time for %s: %v", path, modTime)
+			log.Debugf("Restored modification time for %s: %v", path, modTime)
 		}
 	}
 
 	// 4. Восстанавливаем GUI (скрываем прогресс-бар)
 	restore()
-	log.Tracef("Extraction completed")
+	log.Debugf("Extraction completed")
 	return nil
 }
 

@@ -253,7 +253,7 @@ import (
 
 // OpenFileInDefaultApp запускает приложение по умолчанию для открытия файла по URI.
 func OpenFileInDefaultApp(uriString, mimeType string) error {
-	log.Tracef("Opening file in default app: URI=%s, MIME=%s", uriString, mimeType)
+	log.Debugf("Opening file in default app: URI=%s, MIME=%s", uriString, mimeType)
 
 	var resultErr error
 

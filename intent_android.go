@@ -594,14 +594,14 @@ func receiveTextFromIntent(text *C.char) {
 func processIntent() {
 	driver.RunNative(func(ctx interface{}) error {
 		ac := ctx.(*driver.AndroidContext)
-		log.Trace("Calling C.processIntent")
+		log.Debug("Calling C.processIntent")
 
 		C.processIntent(
 			(*C.JNIEnv)(unsafe.Pointer(ac.Env)),
 			(C.jobject)(unsafe.Pointer(ac.Ctx)),
 		)
 
-		log.Trace("C.processIntent completed")
+		log.Debug("C.processIntent completed")
 		return nil
 	})
 }
@@ -617,7 +617,7 @@ func setResult(ok bool) {
 			resultCode = 0 // RESULT_CANCELED
 		}
 
-		log.Tracef("Calling C.setResult with code: %d", resultCode)
+		log.Debugf("Calling C.setResult with code: %d", resultCode)
 
 		C.setResult(
 			(*C.JNIEnv)(unsafe.Pointer(ac.Env)),
@@ -625,7 +625,7 @@ func setResult(ok bool) {
 			resultCode,
 		)
 
-		log.Trace("C.setResult completed")
+		log.Debug("C.setResult completed")
 		return nil
 	})
 }
@@ -633,14 +633,14 @@ func setResult(ok bool) {
 func finish() {
 	driver.RunNative(func(ctx interface{}) error {
 		ac := ctx.(*driver.AndroidContext)
-		log.Trace("Calling C.finish")
+		log.Debug("Calling C.finish")
 
 		C.finish(
 			(*C.JNIEnv)(unsafe.Pointer(ac.Env)),
 			(C.jobject)(unsafe.Pointer(ac.Ctx)),
 		)
 
-		log.Trace("C.finish completed")
+		log.Debug("C.finish completed")
 		return nil
 	})
 }
@@ -649,14 +649,14 @@ func finish() {
 func excludeFromRecents() {
 	driver.RunNative(func(ctx interface{}) error {
 		ac := ctx.(*driver.AndroidContext)
-		log.Trace("Calling C.excludeFromRecents")
+		log.Debug("Calling C.excludeFromRecents")
 
 		C.excludeFromRecents(
 			(*C.JNIEnv)(unsafe.Pointer(ac.Env)),
 			(C.jobject)(unsafe.Pointer(ac.Ctx)),
 		)
 
-		log.Trace("C.excludeFromRecents completed")
+		log.Debug("C.excludeFromRecents completed")
 		return nil
 	})
 }
@@ -664,7 +664,7 @@ func startActivity() {
 	driver.RunNative(func(ctx interface{}) error {
 		ac := ctx.(*driver.AndroidContext)
 
-		log.Trace("Calling C.startActivity")
+		log.Debug("Calling C.startActivity")
 
 		// Используем упрощенную версию
 		C.startActivitySimple(
@@ -672,7 +672,7 @@ func startActivity() {
 			(C.jobject)(unsafe.Pointer(ac.Ctx)),
 		)
 
-		log.Trace("C.startActivity completed")
+		log.Debug("C.startActivity completed")
 		return nil
 	})
 }

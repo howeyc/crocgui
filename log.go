@@ -217,7 +217,7 @@ func logTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 	// logGUI.Wrapping = fyne.TextWrapWord
 
 	exportButton := widget.NewButtonWithIcon(lp("Export full log"), theme.ContentCopyIcon(), func() {
-		log.Trace("Log copied to clipboard")
+		log.Debug("Log copied to clipboard")
 		s := logOutput.buf.String()
 		a.Clipboard().SetContent(s)
 
@@ -230,7 +230,7 @@ func logTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 			if err != nil {
 				log.Errorf("folder selection: %v", err)
 			} else if destination == nil {
-				log.Trace("folder selection canceled")
+				log.Debug("folder selection canceled")
 				return
 			}
 
@@ -256,7 +256,7 @@ func logTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 				log.Errorf("log saved %s: %v", u, err)
 				return
 			}
-			log.Tracef("log saved %s", u)
+			log.Debugf("log saved %s", u)
 		}
 
 		supported, err := IsSaveDialogSupported()
@@ -266,7 +266,7 @@ func logTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 		}
 		if !supported {
 			fileSave(nil, fmt.Errorf("file picker not supported"))
-			log.Trace("File picker not supported. ", INSTALL)
+			log.Debug("File picker not supported. ", INSTALL)
 			a.Clipboard().SetContent(filePicker)
 			dialog.ShowInformation(
 				lp("Saved all files to")+" Download",
@@ -287,8 +287,8 @@ func logTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 	debugLevelBinding := binding.BindPreferenceString("debug-level", a.Preferences())
 	debugCheck := widget.NewCheck("debug", func(debug bool) {
 		if debug {
-			log.SetLevel("trace")
-			debugLevelBinding.Set("trace")
+			log.SetLevel(LEVEL)
+			debugLevelBinding.Set(LEVEL)
 		} else {
 			log.SetLevel("error")
 			debugLevelBinding.Set("error")

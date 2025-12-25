@@ -77,7 +77,7 @@ func copyFiles(srcURI fyne.URI, dstDir string, copyFile CopyFile) error {
 			dstPath = filepath.Join(dstDir, finalRelPath)
 		}
 
-		// log.Tracef("walk:\ncurrent\t%s\ndstDir\t%s\nrelPath\t%s\ndstPath\t%s\ndeep\t%v", current, dstDir, currentRelPath, dstPath, deep)
+		// log.Debugf("walk:\ncurrent\t%s\ndstDir\t%s\nrelPath\t%s\ndstPath\t%s\ndeep\t%v", current, dstDir, currentRelPath, dstPath, deep)
 		deep++
 		defer func() { deep-- }()
 
@@ -98,7 +98,7 @@ func copyFiles(srcURI fyne.URI, dstDir string, copyFile CopyFile) error {
 			if count == 0 {
 				return fmt.Errorf("count == 0")
 			}
-			log.Tracef("walk list %s: %d", current, count)
+			log.Debugf("walk list %s: %d", current, count)
 
 			// Вычисляем relPath для дочерних элементов относительно dstDir
 			relPathForChildDir, errRel := filepath.Rel(dstDir, dstPath)
@@ -108,7 +108,7 @@ func copyFiles(srcURI fyne.URI, dstDir string, copyFile CopyFile) error {
 
 			for _, child := range children {
 				if child.String() == current.String() {
-					log.Tracef("walk skipping %s", child)
+					log.Debugf("walk skipping %s", child)
 					continue
 				}
 				if err := walk(child, relPathForChildDir); err != nil {
@@ -129,7 +129,7 @@ func copyFiles(srcURI fyne.URI, dstDir string, copyFile CopyFile) error {
 		if err := copyFile(current, dstPath); err != nil {
 			return fmt.Errorf("walk copyFile %s %s: %w", current, dstPath, err)
 		} else {
-			log.Tracef("walk copyFile %s %s", current, dstPath)
+			log.Debugf("walk copyFile %s %s", current, dstPath)
 		}
 
 		return nil
@@ -143,7 +143,7 @@ func copyFiles(srcURI fyne.URI, dstDir string, copyFile CopyFile) error {
 		return walk(srcURI, "")
 	}
 
-	log.Tracef("copyFile %s %s", srcURI, dstDir)
+	log.Debugf("copyFile %s %s", srcURI, dstDir)
 	return copyFile(srcURI, dstDir)
 }
 
@@ -157,14 +157,14 @@ func copyFiles(srcURI fyne.URI, dstDir string, copyFile CopyFile) error {
 // 		return false
 // 	}
 
-// 	log.Trace("CanList")
+// 	log.Debug("CanList")
 // 	items, err := storage.List(u)
 // 	if err != nil {
 // 		log.Errorf("List error: %v", err)
 // 		return false
 // 	}
 
-// 	log.Tracef("List %d", len(items))
+// 	log.Debugf("List %d", len(items))
 // 	return true
 // }
 

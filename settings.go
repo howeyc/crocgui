@@ -2,6 +2,7 @@
 package main
 
 import (
+	"context"
 	"embed"
 	"encoding/json"
 	"net"
@@ -158,6 +159,9 @@ func settingsTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 	disableLocalBinding := binding.BindPreferenceBool("disable-local", a.Preferences())
 	disableLocalCheck := widget.NewCheckWithData(lp("Send only via relay"), disableLocalBinding)
 
+	testingBinding := binding.BindPreferenceBool("testing", a.Preferences())
+	testingCheck := widget.NewCheckWithData(lp("Ask the sender for their address"), testingBinding)
+
 	onlyLocalBinding := binding.BindPreferenceBool("force-local", a.Preferences())
 	onlyLocalCheck := widget.NewCheckWithData(lp("Connect to local senders only"), onlyLocalBinding)
 
@@ -202,29 +206,51 @@ func settingsTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 		return options
 	}
 	hostBinding := binding.BindPreferenceString("host", a.Preferences())
-	bind := off
+	prev := off
 
-	hostSelect := NewSelect(hostSelectOptions(), func(s string) {
-		hostBinding.Set(s)
-
-		if s == off {
-			disableLocalBinding.Set(false)
-			if bind != off {
-				restart(w)
-			}
+	ctx, ctc := context.WithCancel(context.Background())
+	var hostSelect *Select
+	hostSelect = NewSelect(hostSelectOptions(), func(next string) {
+		if next == prev {
 			return
 		}
-		if bind != off {
-			if s != bind {
-				restart(w)
+		hostBinding.Set(next)
+		if noRestart {
+			if next == off {
+				//Лучше использовать testing или ip или явно host чем флудить локалку
+				// disableLocalBinding.Set(false)
+				// disableLocalCheck.Refresh()
+				prev = off
+				ctc()
+				return
 			}
-			return
+			if prev != off {
+				// 192.168.0.1->0.0.0.0 не позволяем а опускаем 192.168.0.1
+				hostSelect.SetSelected(off) // рекурсия
+				return
+			}
+			ctx, ctc = context.WithCancel(context.Background())
+		} else {
+			if next == off {
+				// disableLocalBinding.Set(false)
+				// disableLocalCheck.Refresh()
+				if prev != off {
+					restart(w)
+				}
+				return
+			}
+			if prev != off {
+				if next != prev {
+					restart(w)
+				}
+				return
+			}
 		}
 		var pass, host, ports string
-		relay := getRelayByAddress(a, s)
+		relay := getRelayByAddress(a, next)
 		if relay.Name == "" {
 			pass = DEFAULT_PASSPHRASE
-			host = s
+			host = next
 			ports = ports0
 		} else {
 			setRelayName(a, relay.Name)
@@ -233,17 +259,23 @@ func settingsTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 			host = relay.Address
 			ports = relay.Ports
 		}
-		bind = host
+		prev = host
 		disableLocalBinding.Set(true)
+		disableLocalCheck.Refresh()
 		go func() {
-			err := relayRun(w, pass, host, ports)
+			var err error
+			if noRestart {
+				err = relayRunCtx(ctx, w, pass, host, ports)
+			} else {
+				err = relayRun(w, pass, host, ports)
+			}
+			log.Debugf("relayRun: %v", err)
 			// netstat -tlnp|grep crocgui
 			// ss -tlnp|grep crocgui
 			// netstat -a -n -p tcp |find ":90"
 			fyne.Do(func() {
-				bind = off
-				hostBinding.Set(off)
-				disableLocalBinding.Set(false)
+				hostSelect.SetSelected(off) // рекурсия
+				// hostSelect.Refresh()
 				if err != nil {
 					NewToast(w, err.Error()).Show()
 				}
@@ -252,7 +284,7 @@ func settingsTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 	})
 	hostSelect.BeforePopup = func() {
 		hostSelect.Options = hostSelectOptions()
-		log.Tracef("Options %v", hostSelect.Options)
+		log.Debugf("Options %v", hostSelect.Options)
 	}
 	s, _ := hostBinding.Get()
 	if s == "" {
@@ -385,6 +417,7 @@ func settingsTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 	networkForm := widget.NewForm(
 		widget.NewFormItem("host", hostSelect),
 		widget.NewFormItem("no-local", disableLocalCheck),
+		widget.NewFormItem("testing", testingCheck),
 		widget.NewFormItem("local", onlyLocalCheck),
 		widget.NewFormItem("multicast", widget.NewEntryWithData(binding.BindPreferenceString("multicast-address", a.Preferences()))),
 	)
@@ -603,7 +636,7 @@ func saveAccordionState() {
 	}
 	// Сохраняем как список интов
 	fyne.CurrentApp().Preferences().SetIntList("accordion", openIndices)
-	// log.Tracef("saveAccordionState %v", openIndices)
+	// log.Debugf("saveAccordionState %v", openIndices)
 }
 
 // Восстанавливаем открытые секции
@@ -612,7 +645,7 @@ func restoreAccordionState() {
 		return
 	}
 	openIndices := fyne.CurrentApp().Preferences().IntList("accordion")
-	// log.Tracef("restoreAccordionState %v", openIndices)
+	// log.Debugf("restoreAccordionState %v", openIndices)
 
 	for _, idx := range openIndices {
 		if idx >= 0 && idx < len(accordion.Items) {

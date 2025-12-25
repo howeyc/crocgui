@@ -68,14 +68,14 @@ func (dm *DoMonitor) executeAll(pending map[uintptr]func()) {
 
 	fyne.Do(func() {
 		for _, fn := range pending {
-			log.Tracef("executeAll %v", fn)
+			log.Debugf("executeAll %v", fn)
 			fn()
 		}
 	})
 }
 
 func (dm *DoMonitor) DoRequest(fn func()) {
-	// log.Tracef("DoRequest %v", fn)
+	// log.Debugf("DoRequest %v", fn)
 	select {
 	case dm.requests <- fn:
 	default:

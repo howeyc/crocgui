@@ -2730,7 +2730,7 @@ func countChild(uri fyne.URI) (count int, err error) {
 			count = 0
 		} else {
 			// Успешное выполнение
-			log.Tracef("countChildren: successfully counted %d children for URI: %s", count, uri.String())
+			log.Debugf("countChildren: successfully counted %d children for URI: %s", count, uri.String())
 		}
 
 		return nil
@@ -2741,19 +2741,19 @@ func countChild(uri fyne.URI) (count int, err error) {
 
 // IsDirectory проверяет, является ли URI каталогом
 func IsDirectory(uri fyne.URI) bool {
-	// log.Tracef("-------------IsDirectory %s", uri)
+	// log.Debugf("-------------IsDirectory %s", uri)
 	if uri == nil {
 		return false
 	}
 	switch MimeType(uri) {
 	case MIME_TYPE_DIR:
-		// log.Trace("-------------MIME_TYPE_DIR true")
+		// log.Debug("-------------MIME_TYPE_DIR true")
 		return true
 	case MIME_TYPE_OCTET_STREAM:
 		if strings.HasPrefix(uri.String(), ZhangHai) {
 			size, sizeErr := getSize(uri)
 			if sizeErr == nil && size == 4096 {
-				// log.Trace("-------------ZhangHai true")
+				// log.Debug("-------------ZhangHai true")
 				return true
 			}
 		}
@@ -2761,10 +2761,10 @@ func IsDirectory(uri fyne.URI) bool {
 	case "":
 		// отсутствуют права
 		_, err := countChild(uri)
-		// log.Tracef("-------------countChild %d error: %v %v", c, err, err == nil)
+		// log.Debugf("-------------countChild %d error: %v %v", c, err, err == nil)
 		return err == nil
 	default:
-		// log.Trace("-------------false")
+		// log.Debug("-------------false")
 		return false
 	}
 }
@@ -2772,23 +2772,23 @@ func IsDirectory(uri fyne.URI) bool {
 // printFlags печатает подробную информацию о флагах документа
 func printFlags(uri fyne.URI) {
 	if uri == nil {
-		log.Tracef("printFlags: URI is nil")
+		log.Debugf("printFlags: URI is nil")
 		return
 	}
 
 	flags, err := getFlags(uri)
 	if err != nil {
-		log.Tracef("printFlags: Failed to get flags for %s: %v", uri, err)
+		log.Debugf("printFlags: Failed to get flags for %s: %v", uri, err)
 		return
 	}
 
 	if flags == 0 {
-		log.Tracef("printFlags: No flags available for %s", uri)
+		log.Debugf("printFlags: No flags available for %s", uri)
 		return
 	}
 
-	log.Tracef("printFlags: Raw flags value: %d (0x%08X)", flags, flags)
-	log.Tracef("printFlags: Detailed flags for %s:", uri)
+	log.Debugf("printFlags: Raw flags value: %d (0x%08X)", flags, flags)
+	log.Debugf("printFlags: Detailed flags for %s:", uri)
 
 	// Основные флаги
 	flagDefinitions := []struct {
@@ -2841,12 +2841,12 @@ func printFlags(uri fyne.URI) {
 	}
 
 	if len(setFlags) > 0 {
-		log.Tracef("printFlags: Set flags (%d):", len(setFlags))
+		log.Debugf("printFlags: Set flags (%d):", len(setFlags))
 		for i, flag := range setFlags {
-			log.Tracef("printFlags:   [%2d] %s", i+1, flag)
+			log.Debugf("printFlags:   [%2d] %s", i+1, flag)
 		}
 	} else {
-		log.Tracef("printFlags: No flags set")
+		log.Debugf("printFlags: No flags set")
 	}
 
 	// Проверяем сумму установленных флагов
@@ -2856,10 +2856,10 @@ func printFlags(uri fyne.URI) {
 			sum |= val
 		}
 		if sum == flags {
-			log.Tracef("printFlags: Flag sum verification: OK (0x%08X)", sum)
+			log.Debugf("printFlags: Flag sum verification: OK (0x%08X)", sum)
 		} else {
-			log.Tracef("printFlags: Flag sum verification: MISMATCH! Calculated: 0x%08X, Actual: 0x%08X", sum, flags)
-			log.Tracef("printFlags: There might be unknown flags set: 0x%08X", flags^sum)
+			log.Debugf("printFlags: Flag sum verification: MISMATCH! Calculated: 0x%08X, Actual: 0x%08X", sum, flags)
+			log.Debugf("printFlags: There might be unknown flags set: 0x%08X", flags^sum)
 		}
 	}
 
@@ -2868,7 +2868,7 @@ func printFlags(uri fyne.URI) {
 	deleteAccess := flags&0x00000001 != 0
 	readAccess := flags&0x00000002 != 0 // Обычно WRITE подразумевает и READ
 
-	log.Tracef("printFlags: Access - Read: %v, Write: %v, Delete: %v",
+	log.Debugf("printFlags: Access - Read: %v, Write: %v, Delete: %v",
 		readAccess, writeAccess, deleteAccess)
 }
 
@@ -2901,7 +2901,7 @@ func getChildrenList(uri fyne.URI) (children []string, err error) {
 		if childrenStr == "" {
 			err = fmt.Errorf("no children found or empty directory")
 		} else {
-			log.Tracef("getChildrenList: successfully got children string for URI: %s", uri.String())
+			log.Debugf("getChildrenList: successfully got children string for URI: %s", uri.String())
 		}
 
 		return nil
@@ -2920,7 +2920,7 @@ func getChildrenList(uri fyne.URI) (children []string, err error) {
 	// Разбиваем строку по разделителю | на слайс строк
 	children = strings.Split(childrenStr, "|")
 
-	log.Tracef("getChildrenList: parsed %d children for URI: %s", len(children), uri.String())
+	log.Debugf("getChildrenList: parsed %d children for URI: %s", len(children), uri.String())
 
 	return children, nil
 }
@@ -2955,7 +2955,7 @@ func list(uri fyne.URI) (children []fyne.URI, err error) {
 			// Пустой каталог - не ошибка, возвращаем пустой слайс
 			children = []fyne.URI{}
 		} else {
-			log.Tracef("getChildrenURI: successfully got children URI string for URI: %s", uri.String())
+			log.Debugf("getChildrenURI: successfully got children URI string for URI: %s", uri.String())
 		}
 
 		return nil
@@ -2983,7 +2983,7 @@ func list(uri fyne.URI) (children []fyne.URI, err error) {
 		}
 	}
 
-	log.Tracef("getChildrenURI: parsed %d children URIs for parent URI: %s", len(children), uri.String())
+	log.Debugf("getChildrenURI: parsed %d children URIs for parent URI: %s", len(children), uri.String())
 
 	return children, nil
 }
@@ -3038,7 +3038,7 @@ func canRead(uri fyne.URI) bool {
 		return false
 	}
 	if false {
-		log.Trace("CanRead %s", uri)
+		log.Debug("CanRead %s", uri)
 
 		r, err := storage.Reader(uri)
 		if err != nil {
@@ -3161,9 +3161,9 @@ func SetModTime(uri fyne.URI, mtime time.Time) error {
 
 	if !success {
 		// Это не ошибка - многие провайдеры просто не поддерживают эту операцию
-		log.Tracef("Setting modification time not supported for URI: %s", uri)
+		log.Debugf("Setting modification time not supported for URI: %s", uri)
 	} else {
-		log.Tracef("Successfully set modification time for URI: %s", uri)
+		log.Debugf("Successfully set modification time for URI: %s", uri)
 	}
 
 	return nil

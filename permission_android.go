@@ -236,7 +236,7 @@ func HasStoragePermission() bool {
 
 // RequestStoragePermission запрашивает разрешения на чтение и запись хранилища
 func RequestStoragePermission() {
-	log.Trace("Requesting storage permissions")
+	log.Debug("Requesting storage permissions")
 
 	driver.RunNative(func(ctx interface{}) error {
 		ac := ctx.(*driver.AndroidContext)
@@ -262,7 +262,7 @@ func RequestStoragePermission() {
 
 // OpenAppSettings открывает настройки приложения
 func OpenAppSettings() {
-	log.Trace("Opening app settings")
+	log.Debug("Opening app settings")
 
 	driver.RunNative(func(ctx interface{}) error {
 		ac := ctx.(*driver.AndroidContext)
