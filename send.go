@@ -634,7 +634,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 
 			var sendErr error
 
-			log.Warnf("------------------------------------------Restart %v", !noRestart)
+			log.Warnf("Restart %v", !noRestart)
 			ctx, ctc := context.WithCancel(context.Background())
 			client, err := crocNew(noRestart, ctx, opt)
 			if err != nil {
@@ -707,7 +707,6 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 						if !swap && sendErr == nil {
 							os.RemoveAll(join())
 						}
-						log.Debugf("A restart is better than leaving 12 goroutines leaking")
 						fyne.Do(func() {
 							restart(w)
 						})
@@ -1274,6 +1273,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 				parent.Select(ti)
 			})
 		}
+		fyne.Do(parent.Selected().Content.Refresh)
 	}
 
 	return
@@ -1298,6 +1298,7 @@ func restart(w fyne.Window) {
 	if noRestart {
 		return
 	}
+	log.Debugf("A restart is better than leaving goroutines leaking")
 	start()
 	cleanup(w)
 	os.Exit(0)

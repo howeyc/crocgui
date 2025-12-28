@@ -69,10 +69,10 @@ var (
 	// CROC_NO_DIALOGS=1 crocgui
 	noDialogs = os.Getenv("CROC_NO_DIALOGS") != ""
 
-	// Чтоб не перезапускать приложение при завершении передачи - почитать протокол передачи
-	// cmd/c "set CROC_NO_RESTART=1&crocgui.exe"
-	// CROC_NO_RESTART=1 crocgui
-	noRestart = os.Getenv("CROC_NO_RESTART") != ""
+	// Чтоб перезапускать приложение при завершении передачи
+	// cmd/c "set CROC_RESTART=1&crocgui.exe"
+	// CROC_RESTART=1 crocgui
+	noRestart = os.Getenv("CROC_RESTART") == ""
 
 	// Чтоб на десктопе отладить копирование вместо переноса из кэша приёма
 	// cmd/c "set CROC_NO_RENAME=1&crocgui.exe"

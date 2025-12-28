@@ -1045,6 +1045,8 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 				parent.Select(ti)
 			})
 		}
+		fyne.Do(parent.Selected().Content.Refresh)
+
 	}
 	return
 }
