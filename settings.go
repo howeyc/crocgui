@@ -8,10 +8,10 @@ import (
 	"net"
 	"os"
 	"reflect"
-	"strconv"
 	"strings"
 
 	"github.com/schollz/croc/v10/src/croc"
+	"github.com/schollz/croc/v10/src/utils"
 	log "github.com/schollz/logger"
 	"github.com/schollz/pake/v3"
 	"golang.org/x/text/language"
@@ -663,15 +663,19 @@ func localIPs() ([]string, error) {
 
 	interfaces, err := net.Interfaces()
 	if err != nil {
-		log.Errorf("interfaces %v", err)
-		conn, err := net.Dial("udp4", net.JoinHostPort(DEFAULT_RELAY, strconv.Itoa(DEFAULT_PORT)))
-		if err != nil {
-			return ips, err
+		if ip := utils.LocalIP(); ip != "" {
+			return []string{ip}, nil
 		}
-		defer conn.Close()
-		localAddr := conn.LocalAddr().(*net.UDPAddr)
-		ips = append(ips, localAddr.IP.String())
-		return ips, nil
+		// log.Errorf("interfaces %v", err)
+		// conn, err := net.Dial("udp4", net.JoinHostPort(DEFAULT_RELAY, strconv.Itoa(DEFAULT_PORT)))
+		// if err != nil {
+		// 	return ips, err
+		// }
+		// defer conn.Close()
+		// localAddr := conn.LocalAddr().(*net.UDPAddr)
+		// ips = append(ips, localAddr.IP.String())
+		// return ips, nil
+		return ips, err
 	}
 
 	for _, iface := range interfaces {
