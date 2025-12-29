@@ -6,10 +6,12 @@ import (
 	"context"
 	_ "embed"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"runtime"
+	"runtime/debug"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -84,6 +86,11 @@ var (
 	// CROC_CD_LOCK=1 crocgui
 	longCdLock = os.Getenv("CROC_CD_LOCK") != ""
 
+	// Чтоб отладить GUI
+	// cmd/c "set CROC_DEBUG=1&crocgui.exe"
+	// CROC_DEBUG=1 crocgui
+	crocDebug = os.Getenv("CROC_DEBUG") != ""
+
 	pass      = os.Getenv("CROC_PASS")
 	relay4    = os.Getenv("CROC_RELAY")
 	relay6    = os.Getenv("CROC_RELAY6")
@@ -116,6 +123,7 @@ const (
 	TRANSFERS              = 5
 	DEFAULT_PASSPHRASE     = "pass123"
 	REFUSING               = "refusing files"
+	CROCDEBUGLOG           = "crocdebuglog.txt"
 
 	// cmd/c "set LOGGER=trace&crocgui.exe"
 	// LOGGER=trace crocgui
@@ -131,6 +139,26 @@ const (
 func main() {
 	wd, _ = os.Getwd()
 	tempDir = os.TempDir()
+	var (
+		crocdebuglog *os.File
+		err          error
+	)
+	if crocDebug {
+		crocdebuglog, err = os.Create(filepath.Join(tempDir, CROCDEBUGLOG))
+		if err == nil {
+			defer func() {
+				if r := recover(); r != nil {
+					crocdebuglog.WriteString("PANIC: " + fmt.Sprintf("%v\n", r))
+					crocdebuglog.WriteString("Stack: " + string(debug.Stack()))
+					crocdebuglog.Close()
+					os.Exit(1)
+					return
+				}
+				crocdebuglog.Close()
+			}()
+		}
+	}
+
 	join = func(elem ...string) string {
 		return filepath.FromSlash(filepath.Join(append([]string{tempDir, SEND}, elem...)...))
 	}
@@ -147,12 +175,24 @@ func main() {
 
 	a := app.NewWithID(ID)
 
+	setOut := func(gui bool) {
+		if crocdebuglog == nil {
+			if gui {
+				log.SetOutput(&logOutput)
+				return
+			}
+			log.SetOutput(io.MultiWriter(os.Stdout, &logOutput))
+		} else {
+			log.SetOutput(io.MultiWriter(crocdebuglog, &logOutput))
+		}
+	}
+
 	switch runtime.GOOS {
 	case "android":
 		isAndroid = true
 		fallthrough
 	case "ios":
-		log.SetOutput(&logOutput)
+		setOut(true)
 		isMobile = true
 	case "linux":
 		replacer = strings.NewReplacer(
@@ -170,7 +210,7 @@ func main() {
 		}
 		fallthrough
 	default:
-		log.SetOutput(io.MultiWriter(os.Stdout, &logOutput))
+		setOut(isGUIApplication())
 	}
 
 	w := a.NewWindow("croc")
@@ -251,6 +291,10 @@ func main() {
 
 	a.Settings().SetTheme(appTheme)
 	atSI = a.Preferences().Int("tab")
+	if atSI < 0 || atSI > 4 {
+		atSI = 0
+		a.Preferences().SetInt("tab", 0)
+	}
 	refreshWindow(a, w)
 	w.Resize(size)
 	AppClosed = lp("App closed. Tap to start.")
@@ -265,14 +309,14 @@ func refreshWindow(a fyne.App, w fyne.Window) {
 	textlogo.SetMinSize(fyne.NewSize(205, 100))
 	top := container.NewHBox(layout.NewSpacer(), textlogo, layout.NewSpacer())
 
-	at := container.NewAppTabs()
-	at.Items = []*container.TabItem{
+	var at *container.AppTabs
+	at = container.NewAppTabs(
 		sendTabItem(a, w, at),
 		recvTabItem(a, w, at),
 		logTabItem(a, w),
 		settingsTabItem(a, w),
 		aboutTabItem(a, w),
-	}
+	)
 
 	at.SelectIndex(atSI)
 	at.OnSelected = func(tab *container.TabItem) {

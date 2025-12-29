@@ -962,8 +962,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 			processIntent()
 		})
 	} else {
-		stat, _ := os.Stdin.Stat()
-		if (stat.Mode() & os.ModeCharDevice) == 0 {
+		if stat, err := os.Stdin.Stat(); err == nil && ((stat.Mode() & os.ModeCharDevice) == 0) {
 			// cat file|crocgui
 			go func() {
 				fnames, err := getStdin()

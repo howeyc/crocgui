@@ -2,7 +2,7 @@ VSCODE_DIR := .vscode
 SETTINGS_FILE := $(VSCODE_DIR)/settings.json
 WSL_HOST_IP := $(shell ip route list default | awk '{print $$3}')
 
-.PHONY: all clean arm arm64 386 amd64 linux window wsl darwin ios install darm emulator adb wsladb logcat atags tags wtags t
+.PHONY: all clean arm arm64 386 amd64 linux window wsl darwin ios install darm emulator adb wsladb logcat atags tags wtags t windowsgui
 
 atags:	
 	@mkdir -p $(VSCODE_DIR)
@@ -70,24 +70,27 @@ wlogcat:
 wsladb:
 	export ADB_SERVER_SOCKET=tcp:$(WSL_HOST_IP):5037
 
-linux: main.go send.go recv.go settings.go theme.go about.go
+linux:
 	fyne package -os linux --release
 
-windows: main.go send.go recv.go settings.go theme.go about.go
+windows: 
 	#sudo apt-get install gcc-mingw-w64-x86-64
 	CC=x86_64-w64-mingw32-gcc fyne package -os windows --release -tags=opengl
 
-wsl: main.go send.go recv.go settings.go theme.go about.go
-	GOOS=windows GOARCH=amd64 CGO_ENABLED=1 CC=x86_64-w64-mingw32-gcc GOFLAGS=-ldflags=-s go build -tags=opengl
+windowsgui:
+	GOOS=windows GOARCH=amd64 CGO_ENABLED=1 CC=x86_64-w64-mingw32-gcc go build -ldflags="-s -H windowsgui" -tags=opengl
 
-darwin: main.go send.go recv.go settings.go theme.go about.go
+wsl:
+	GOOS=windows GOARCH=amd64 CGO_ENABLED=1 CC=x86_64-w64-mingw32-gcc go build -ldflags=-s -tags=opengl
+
+darwin: 
 	fyne package -os darwin --release
 	cp -r crocgui.app /Applications/
 	cp crocgui.app/Contents/Info.plist darm/crocgui.app/Contents/
 	cp crocgui.app/Contents/Resources/* darm/crocgui.app/Contents/Resources/
 	mkdir -p darm/crocgui.app/Contents/MacOS
 
-ios: main.go send.go recv.go settings.go theme.go about.go AndroidManifest.xml
+ios: 
 	fyne package -os ios --release
 
 install:

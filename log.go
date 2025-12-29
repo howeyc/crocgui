@@ -221,7 +221,7 @@ func logTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 		s := logOutput.buf.String()
 		a.Clipboard().SetContent(s)
 
-		child := "crocdebuglog.txt"
+		child := CROCDEBUGLOG
 		fileSave := func(destination fyne.URIWriteCloser, err error) {
 			var (
 				u  fyne.URI
