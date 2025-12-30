@@ -116,7 +116,7 @@ jobs:
       - name: Install Fyne CLI
         run: |
           # Install the Fyne CLI tool
-          go install fyne.io/fyne/v2/cmd/fyne@latest
+          go install fyne.io/tools/cmd/fyne@latest
 
       # Step 6: Install glfw dependency (required for CGO builds if using glfw)
       - name: Install glfw dependency
@@ -340,7 +340,7 @@ jobs:
             ### Included Platforms:
             - macOS (Apple Silicon - arm64)
             - macOS (Intel - amd64)
-                       
+
             ### Notes:
             - macOS: `.dmg` files are provided for both Apple Silicon (`crocgui-darwin_arm64.dmg`) and Intel (`crocgui-darwin_amd64.dmg`).
             - To install, double-click the `.dmg` file, and drag the app to the Applications folder.

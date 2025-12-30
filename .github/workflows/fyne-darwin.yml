@@ -89,7 +89,7 @@ jobs:
       - name: Install Fyne CLI
         run: |
           # Install the Fyne CLI tool
-          go install fyne.io/fyne/v2/cmd/fyne@latest
+          go install fyne.io/tools/cmd/fyne@latest
 
       # Step 6: Install glfw dependency (required for CGO builds if using glfw)
       - name: Install glfw dependency
@@ -138,6 +138,28 @@ jobs:
           # List the output directory to confirm build success
           echo "Contents of current directory after build:"
           ls -la .
+          
+          # --- Check the architecture of the executables inside the .app bundles ---
+          echo "Checking architecture of executables..."
+          
+          AMD64_EXECUTABLE_PATH="crocgui-amd64.app/Contents/MacOS/crocgui"
+          ARM64_EXECUTABLE_PATH="crocgui-arm64.app/Contents/MacOS/crocgui"
+          
+          if [ -f "$AMD64_EXECUTABLE_PATH" ]; then
+              echo "Architecture of $AMD64_EXECUTABLE_PATH:"
+              file "$AMD64_EXECUTABLE_PATH"
+          else
+              echo "ERROR: Executable not found at $AMD64_EXECUTABLE_PATH"
+              exit 1
+          fi
+          
+          if [ -f "$ARM64_EXECUTABLE_PATH" ]; then
+              echo "Architecture of $ARM64_EXECUTABLE_PATH:"
+              file "$ARM64_EXECUTABLE_PATH"
+          else
+              echo "ERROR: Executable not found at $ARM64_EXECUTABLE_PATH"
+              exit 1
+          fi
 
       # Step 8: Upload the built .app bundles as artifacts
       - name: Upload macOS artifacts
