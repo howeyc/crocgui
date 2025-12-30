@@ -232,7 +232,7 @@ jobs:
         if: success() || failure()
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.artifact_name }}-build
+          name: ${{ matrix.artifact_name }}-build  # Using the pre-prepared name without '/'
           # Path to the built .app bundles
           path: |
             ${{ github.workspace }}/workspace/crocgui/*.app
@@ -261,7 +261,13 @@ jobs:
           mkdir -p release-assets # Create a directory for release files
           
           # Copy all files from downloaded artifacts into the release directory
-          find artifacts -type f -name "*.app" -exec cp -r {} release-assets/ \; # Copy .app bundles recursively
+          # Loop through each subdirectory in 'artifacts' and copy its contents
+          for artifact_dir in artifacts/*/; do
+            if [ -d "$artifact_dir" ]; then
+              echo "Copying contents from $artifact_dir to release-assets/"
+              cp -r "$artifact_dir"* release-assets/
+            fi
+          done
           
           # Create a build information file
           echo "Build Information" > release-assets/BUILD_INFO.txt
@@ -269,7 +275,9 @@ jobs:
           echo "Project: crocgui (from FyneApp.toml)" >> release-assets/BUILD_INFO.txt
           echo "Version: ${{ github.event.inputs.release_version || 'manual_run' }}" >> release-assets/BUILD_INFO.txt
           echo "Build Type: ${{ github.event.inputs.build_type || 'manual' }}" >> release-assets/BUILD_INFO.txt
-          echo "Build Date: $(date -u)" >> release-assets/BUILD_INFO.txt
+          # Use bash command substitution to execute 'date -u' and capture its output
+          BUILD_DATE=$(date -u)
+          echo "Build Date: $BUILD_DATE" >> release-assets/BUILD_INFO.txt
           echo "GitHub Run: https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" >> release-assets/BUILD_INFO.txt
           echo "" >> release-assets/BUILD_INFO.txt
           
