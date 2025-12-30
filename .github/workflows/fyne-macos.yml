@@ -232,7 +232,7 @@ jobs:
         if: success() || failure()
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.target }}-build # Name the artifact based on the target (e.g., darwin/amd64-build)
+          name: ${{ replace(matrix.target, '/', '-') }}-build
           # Path to the built .app bundles
           path: |
             ${{ github.workspace }}/workspace/crocgui/*.app
