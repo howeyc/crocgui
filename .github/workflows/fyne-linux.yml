@@ -113,13 +113,11 @@ jobs:
           export GOARCH=amd64
           
           # Use fyne package to build the Linux executable and package it
-          # The -tags opengl flag is passed via --
           fyne package --os linux --release
           
-          # Verify the executable file was created (fyne package creates a directory with the app)
-          # The executable is typically inside the directory named after the app
-          if [ ! -f "${APP_NAME}" ] && [ ! -d "${APP_NAME}.AppDir" ]; then
-              echo "ERROR: fyne package did not create expected output (either ${APP_NAME} binary or ${APP_NAME}.AppDir folder)"
+          # Verify the .tar.xz archive file was created
+          if [ ! -f "crocgui.tar.xz" ]; then
+              echo "ERROR: fyne package did not create crocgui.tar.xz"
               ls -la .
               exit 1
           fi
@@ -127,12 +125,6 @@ jobs:
           # List the output directory to confirm build success
           echo "Contents of current directory after build:"
           ls -la .
-          
-          # If an AppDir was created, list its contents
-          if [ -d "${APP_NAME}.AppDir" ]; then
-             echo "Contents of ${APP_NAME}.AppDir:"
-             ls -la "${APP_NAME}.AppDir/"
-          fi
 
       # Step 8: Upload the built Linux app as an artifact
       - name: Upload Linux artifact
@@ -141,12 +133,10 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: linux-amd64-build
-          # Path to the built Linux executable or AppDir folder
-          path: |
-            ${{ github.workspace }}/workspace/crocgui/${{ env.APP_NAME }}
-            ${{ github.workspace }}/workspace/crocgui/${{ env.APP_NAME }}.AppDir/
+          # Path to the built Linux .tar.xz archive
+          path: ${{ github.workspace }}/workspace/crocgui/crocgui.tar.xz
           retention-days: 7 # Keep artifacts for 7 days
-          if-no-files-found: error # Fail if neither the binary nor AppDir is found
+          if-no-files-found: error # Fail if the .tar.xz is not found
 
   # Job to create a GitHub Release and upload artifacts
   create-release:
@@ -187,7 +177,7 @@ jobs:
           # Use bash command substitution to execute 'date -u' and capture its output
           BUILD_DATE=$(date -u)
           echo "Build Date: $BUILD_DATE" >> release-assets/BUILD_INFO.txt
-          echo "GitHub Run: https://github.com/  $GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" >> release-assets/BUILD_INFO.txt
+          echo "GitHub Run: https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" >> release-assets/BUILD_INFO.txt
           echo "" >> release-assets/BUILD_INFO.txt
           
           # List the generated files
@@ -208,7 +198,7 @@ jobs:
           name: Release ${{ github.event.inputs.release_version && format('v{0}', github.event.inputs.release_version) }}
           draft: false # Make it a public release
           prerelease: ${{ github.event.inputs.build_type == 'snapshot' }} # Mark as pre-release if type is 'snapshot'
-          # Upload all files from the prepared release-assets directory (includes executable/AppDir and BUILD_INFO.txt)
+          # Upload all files from the prepared release-assets directory (includes .tar.xz and BUILD_INFO.txt)
           files: release-assets/*
           # Body text for the release description
           body: |
@@ -221,7 +211,7 @@ jobs:
             - Linux (Intel/AMD - amd64)
             
             ### Notes:
-            - Linux: The application is packaged as an AppImage or a simple executable. Check the release assets.
+            - Linux: The application is packaged as a .tar.xz archive (crocgui.tar.xz). Extract and run the contained executable.
             - To run, ensure you have necessary runtime libraries installed (e.g., Mesa OpenGL libraries).
         env:
           # Token required to create the release
