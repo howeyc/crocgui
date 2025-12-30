@@ -54,7 +54,11 @@ jobs:
       fail-fast: false  # Continue building other targets if one fails
       matrix:
         # Create a matrix job for each macOS target (darwin/amd64, darwin/arm64)
-        target: ${{ fromJSON(needs.setup.outputs.filtered_targets) }}
+        include:
+          - target: darwin/amd64
+            artifact_name: darwin-amd64
+          - target: darwin/arm64
+            artifact_name: darwin-arm64
     
     steps:
       # Step 1: Checkout the main repository (your Fyne app)
@@ -228,7 +232,7 @@ jobs:
         if: success() || failure()
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ replace(matrix.target, '/', '-') }}-build
+          name: ${{ matrix.artifact_name }}-build
           # Path to the built .app bundles
           path: |
             ${{ github.workspace }}/workspace/crocgui/*.app
