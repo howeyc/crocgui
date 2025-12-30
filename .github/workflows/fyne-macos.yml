@@ -1,14 +1,10 @@
 # GitHub Actions workflow file for building and releasing a Fyne app for macOS (Darwin) only on macOS runner
 # Includes installation of glfw dependency
+# Manual trigger only
 name: Fyne package macOS and Release
 
 # Define triggers for the workflow
 on:
-  # Automatic trigger on version tags (e.g., v1.0.0)
-  push:
-    tags:
-      - 'v*'
-  
   # Manual trigger from GitHub interface with configurable inputs
   workflow_dispatch:
     inputs:
@@ -244,8 +240,8 @@ jobs:
     # This job waits for all 'build-all-platforms' jobs to finish
     needs: build-all-platforms
     runs-on: macos-latest # Consistent with main build runner
-    # Only run this job if the workflow was triggered by a tag push or a manual dispatch with build_type 'release'
-    if: ${{ (github.event_name == 'push' && github.ref_type == 'tag') || (github.event.inputs.build_type == 'release') }}
+    # Only run this job if workflow was triggered manually with build_type 'release' or 'snapshot'
+    if: ${{ github.event_name == 'workflow_dispatch' && (github.event.inputs.build_type == 'release' || github.event.inputs.build_type == 'snapshot') }}
     
     steps:
       # Step 1: Download all artifacts from previous jobs
@@ -267,8 +263,8 @@ jobs:
           echo "Build Information" > release-assets/BUILD_INFO.txt
           echo "=================" >> release-assets/BUILD_INFO.txt
           echo "Project: crocgui (from FyneApp.toml)" >> release-assets/BUILD_INFO.txt
-          echo "Version: ${{ github.event.inputs.release_version || github.ref_name }}" >> release-assets/BUILD_INFO.txt
-          echo "Build Type: ${{ github.event.inputs.build_type || 'release' }}" >> release-assets/BUILD_INFO.txt
+          echo "Version: ${{ github.event.inputs.release_version || 'manual_run' }}" >> release-assets/BUILD_INFO.txt
+          echo "Build Type: ${{ github.event.inputs.build_type || 'manual' }}" >> release-assets/BUILD_INFO.txt
           echo "Build Date: $(date -u)" >> release-assets/BUILD_INFO.txt
           echo "GitHub Run: https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" >> release-assets/BUILD_INFO.txt
           echo "" >> release-assets/BUILD_INFO.txt
@@ -285,17 +281,17 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2 # Use the latest version of the release action
         with:
-          # Use the input version or the tag name for the release
-          tag_name: ${{ github.event.inputs.release_version && format('v{0}', github.event.inputs.release_version) || github.ref_name }}
+          # Use the input version for the release
+          tag_name: ${{ github.event.inputs.release_version && format('v{0}', github.event.inputs.release_version) }}
           # Name the release
-          name: Release ${{ github.event.inputs.release_version && format('v{0}', github.event.inputs.release_version) || github.ref_name }}
+          name: Release ${{ github.event.inputs.release_version && format('v{0}', github.event.inputs.release_version) }}
           draft: false # Make it a public release
           prerelease: ${{ github.event.inputs.build_type == 'snapshot' }} # Mark as pre-release if type is 'snapshot'
           # Upload all files from the prepared release-assets directory
           files: release-assets/*
           # Body text for the release description
           body: |
-            ## crocgui ${{ github.event.inputs.release_version && format('v{0}', github.event.inputs.release_version) || github.ref_name }}
+            ## crocgui ${{ github.event.inputs.release_version && format('v{0}', github.event.inputs.release_version) }}
             
             macOS release built automatically via GitHub Actions on macOS runner.
             App details (Name, ID, Icon, Version) read from `FyneApp.toml`.
@@ -305,7 +301,7 @@ jobs:
             - macOS (Intel - amd64)
             
             ### Build Information:
-            - **Build Type**: ${{ github.event.inputs.build_type || 'release' }}
+            - **Build Type**: ${{ github.event.inputs.build_type || 'manual' }}
             - **Build Date**: $(date -u)
             
             ### Notes:
