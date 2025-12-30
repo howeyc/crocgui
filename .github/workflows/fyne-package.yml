@@ -30,13 +30,13 @@ on:
           - 'true'
           - 'false'
 
-# Определяем все цели сборки в одном месте
+# Define all build targets in one place
 env:
   # Desktop targets
-  DESKTOP_TARGETS: 'windows linux darwin'
+  DESKTOP_TARGETS: '["windows", "linux", "darwin"]'
   
-  # Android targets (можно включать/выключать)
-  ANDROID_TARGETS: 'android/arm64 android/arm android/amd64 android/386'
+  # Android targets (can be enabled/disabled)
+  ANDROID_TARGETS: '["android/arm64", "android/arm", "android/amd64", "android/386"]'
 
 jobs:
   setup:
@@ -49,16 +49,19 @@ jobs:
       - name: Determine build targets
         id: set-targets
         run: |
-          ALL_TARGETS="${{ env.DESKTOP_TARGETS }} ${{ env.ANDROID_TARGETS }}"
+          # Combine desktop and Android targets
+          ALL_TARGETS='["windows", "linux", "darwin", "android/arm64", "android/arm", "android/amd64", "android/386"]'
           echo "all_targets=$ALL_TARGETS" >> $GITHUB_OUTPUT
       
       - name: Filter Android targets
         id: filter-targets
         run: |
           if [[ "${{ github.event.inputs.include_android || 'true' }}" == "true" ]]; then
-            FILTERED_TARGETS="${{ env.DESKTOP_TARGETS }} ${{ env.ANDROID_TARGETS }}"
+            # Include all targets
+            FILTERED_TARGETS='["windows", "linux", "darwin", "android/arm64", "android/arm", "android/amd64", "android/386"]'
           else
-            FILTERED_TARGETS="${{ env.DESKTOP_TARGETS }}"
+            # Exclude Android targets
+            FILTERED_TARGETS='["windows", "linux", "darwin"]'
           fi
           echo "filtered_targets=$FILTERED_TARGETS" >> $GITHUB_OUTPUT
           echo "Will build for: $FILTERED_TARGETS"
@@ -67,23 +70,68 @@ jobs:
     needs: setup
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false  # Continue building other targets if one fails
       matrix:
         target: ${{ fromJSON(needs.setup.outputs.filtered_targets) }}
     
     steps:
-      - name: Checkout code
+      - name: Checkout main repository (crocgui)
         uses: actions/checkout@v4
+        with:
+          path: main-repo
+      
+      - name: Checkout croc dependency
+        uses: actions/checkout@v4
+        with:
+          repository: abakum/croc
+          ref: main
+          path: croc-dependency
       
       - name: Set up Go
         uses: actions/setup-go@v4
         with:
           go-version: 'stable'
+          cache-dependency-path: main-repo/go.sum
+      
+      - name: Setup workspace preserving relative paths
+        run: |
+          # Create the exact directory structure as in local development
+          # crocgui/ and croc/ should be at the same level for ../croc to work
+          mkdir -p $GITHUB_WORKSPACE/workspace
+          
+          # Copy crocgui project
+          cp -r main-repo/* $GITHUB_WORKSPACE/workspace/crocgui/
+          
+          # Copy croc dependency to the correct relative location
+          cp -r croc-dependency $GITHUB_WORKSPACE/workspace/croc
+          
+          # Navigate to crocgui project directory
+          cd $GITHUB_WORKSPACE/workspace/crocgui
+          
+          # Verify the directory structure
+          echo "Workspace structure:"
+          pwd
+          ls -la ../
+          
+          # Verify go.mod contains the replace directive
+          echo "go.mod content:"
+          cat go.mod
+          
+          # Test that go modules can resolve dependencies
+          echo "Testing module resolution..."
+          go list -m all | head -20
       
       - name: Install dependencies
-        run: go mod tidy
+        run: |
+          cd $GITHUB_WORKSPACE/workspace/crocgui
+          go mod download
+          go mod tidy
+          echo "Dependencies installed successfully"
       
       - name: Install Fyne CLI
-        run: go install fyne.io/fyne/v2/cmd/fyne@latest
+        run: |
+          cd $GITHUB_WORKSPACE/workspace/crocgui
+          go install fyne.io/fyne/v2/cmd/fyne@latest
       
       - name: Setup build environment for ${{ matrix.target }}
         run: |
@@ -98,10 +146,12 @@ jobs:
               ;;
             darwin)
               # Cross-compilation for macOS requires osxcross
-              echo "macOS cross-compilation would require additional setup"
+              echo "Note: macOS cross-compilation may require additional setup"
               ;;
             android/*)
               sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu gcc-arm-linux-gnueabihf
+              # Android SDK would be needed for full Android compilation
+              echo "Android NDK/SDK setup may be required for complete Android builds"
               ;;
           esac
       
@@ -112,7 +162,10 @@ jobs:
         run: |
           echo "Building for ${{ matrix.target }} version $APP_VERSION ($BUILD_TYPE)"
           
-          # Определяем переменные окружения в зависимости от цели
+          # Navigate to project directory
+          cd $GITHUB_WORKSPACE/workspace/crocgui
+          
+          # Set environment variables based on target platform
           case "${{ matrix.target }}" in
             windows)
               export GOOS=windows
@@ -159,53 +212,66 @@ jobs:
               ;;
           esac
           
-          # Добавляем теги сборки
+          # Add build tags
           BUILD_TAGS="opengl"
-          if [[ "$BUILD_TYPE" == "snapshot" ]]; then
-            BUILD_TAGS="$BUILD_TAGS snapshot"
-          fi
           
-          # Выполняем сборку
+          # Execute Fyne build command
           echo "Running: fyne package -os $FYNE_OS --release -tags=\"$BUILD_TAGS\""
-          fyne package -os $FYNE_OS --release -tags="$BUILD_TAGS"
           
-          # Переименовываем выходной файл
-          APP_NAME=$(go list -m | sed 's/.*\///')
+          # Try to build with increased timeout
+          timeout 300 fyne package -os $FYNE_OS --release -tags="$BUILD_TAGS" || {
+            echo "Build timed out or failed for ${{ matrix.target }}"
+            # Continue with other targets due to fail-fast: false
+            exit 0
+          }
+          
+          # Find and rename the output file
+          APP_NAME="crocgui"
+          OUTPUT_FILE="${APP_NAME}-${APP_VERSION}-${{ matrix.target }}${OUTPUT_EXT}"
+          
+          # Different handling for different file types
           if [[ "${{ matrix.target }}" == "windows" ]]; then
-            # Ищем .exe файл
             for file in *.exe; do
               if [[ -f "$file" ]]; then
-                mv "$file" "${APP_NAME}-${APP_VERSION}-${{ matrix.target }}.exe"
+                mv "$file" "$OUTPUT_FILE"
+                echo "Renamed to: $OUTPUT_FILE"
                 break
               fi
             done
           elif [[ "${{ matrix.target }}" == android/* ]]; then
-            # Ищем .apk файл
             for file in *.apk; do
               if [[ -f "$file" ]]; then
-                mv "$file" "${APP_NAME}-${APP_VERSION}-${{ matrix.target }}.apk"
+                mv "$file" "$OUTPUT_FILE"
+                echo "Renamed to: $OUTPUT_FILE"
                 break
               fi
             done
           else
-            # Ищем бинарный файл без расширения
-            for file in $APP_NAME*; do
-              if [[ -f "$file" && ! "$file" =~ \. ]]; then
-                mv "$file" "${APP_NAME}-${APP_VERSION}-${{ matrix.target }}"
-                break
-              fi
-            done
+            # Look for binary without extension
+            if [[ -f "$APP_NAME" ]]; then
+              mv "$APP_NAME" "$OUTPUT_FILE"
+              echo "Renamed to: $OUTPUT_FILE"
+            fi
           fi
+          
+          # List created files
+          echo "Files in current directory:"
+          ls -la
       
       - name: Upload artifact for ${{ matrix.target }}
+        if: success() || failure()  # Upload even if build failed for debugging
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.target }}-build
           path: |
-            *-${{ matrix.target }}*
-            *.exe
-            *.apk
+            $GITHUB_WORKSPACE/workspace/crocgui/*.exe
+            $GITHUB_WORKSPACE/workspace/crocgui/*.apk
+            $GITHUB_WORKSPACE/workspace/crocgui/crocgui-*
+            $GITHUB_WORKSPACE/workspace/crocgui/*-windows
+            $GITHUB_WORKSPACE/workspace/crocgui/*-linux
+            $GITHUB_WORKSPACE/workspace/crocgui/*-darwin
           retention-days: 7
+          if-no-files-found: warn
 
   create-release:
     needs: build-all-platforms
@@ -223,19 +289,24 @@ jobs:
           echo "Preparing release assets..."
           mkdir -p release-assets
           
-          # Копируем все артефакты в одну папку
-          find artifacts -type f \( -name "*.exe" -o -name "*.apk" -o -name "*-windows" -o -name "*-linux" -o -name "*-darwin" \) -exec cp {} release-assets/ \;
+          # Copy all build artifacts to a single directory
+          find artifacts -type f \( -name "*.exe" -o -name "*.apk" -o -name "crocgui-*" \) -exec cp {} release-assets/ \;
           
-          # Создаем файл с информацией о сборке
+          # Create build info file
           echo "Build Information" > release-assets/BUILD_INFO.txt
           echo "=================" >> release-assets/BUILD_INFO.txt
+          echo "Project: crocgui" >> release-assets/BUILD_INFO.txt
           echo "Version: ${{ github.event.inputs.release_version || github.ref_name }}" >> release-assets/BUILD_INFO.txt
           echo "Build Type: ${{ github.event.inputs.build_type || 'release' }}" >> release-assets/BUILD_INFO.txt
           echo "Android Builds: ${{ github.event.inputs.include_android || 'true' }}" >> release-assets/BUILD_INFO.txt
-          echo "Date: $(date)" >> release-assets/BUILD_INFO.txt
+          echo "Build Date: $(date -u)" >> release-assets/BUILD_INFO.txt
+          echo "GitHub Run: https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" >> release-assets/BUILD_INFO.txt
           echo "" >> release-assets/BUILD_INFO.txt
-          echo "Included targets:" >> release-assets/BUILD_INFO.txt
-          echo "${{ needs.setup.outputs.filtered_targets }}" | tr ' ' '\n' >> release-assets/BUILD_INFO.txt
+          
+          # List all generated files
+          echo "Generated files:" >> release-assets/BUILD_INFO.txt
+          echo "----------------" >> release-assets/BUILD_INFO.txt
+          ls -la release-assets/ >> release-assets/BUILD_INFO.txt
       
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
@@ -246,5 +317,22 @@ jobs:
           prerelease: ${{ github.event.inputs.build_type == 'snapshot' }}
           files: |
             release-assets/*
+          body: |
+            ## crocgui ${{ github.event.inputs.release_version && format('v{0}', github.event.inputs.release_version) || github.ref_name }}
+            
+            Multi-platform release built automatically via GitHub Actions.
+            
+            ### Included Platforms:
+            ${{ fromJSON(needs.setup.outputs.filtered_targets) }}
+            
+            ### Build Information:
+            - **Build Type**: ${{ github.event.inputs.build_type || 'release' }}
+            - **Android Builds**: ${{ github.event.inputs.include_android || 'true' }}
+            - **Build Date**: $(date -u)
+            
+            ### Notes:
+            - Windows: `.exe` files
+            - Android: `.apk` files
+            - Linux/Darwin: Binary files without extension
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

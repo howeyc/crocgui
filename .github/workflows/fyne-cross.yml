@@ -1,0 +1,174 @@
+name: Build and Release (Windows, Linux, Android)
+
+on:
+  push:
+    tags:
+      - 'v*'
+  
+  workflow_dispatch:
+    inputs:
+      release_version:
+        description: 'Release version (e.g., 1.2.3)'
+        required: true
+        default: '1.0.0'
+      build_type:
+        description: 'Build type'
+        required: false
+        default: 'release'
+        type: choice
+        options:
+          - release
+          - snapshot
+      include_android:
+        description: 'Include Android builds'
+        required: false
+        default: 'true'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      filtered_targets: ${{ steps.filter-targets.outputs.filtered_targets }}
+    
+    steps:
+      - name: Filter Android targets
+        id: filter-targets
+        run: |
+          if [[ "${{ github.event.inputs.include_android || 'true' }}" == "true" ]]; then
+            FILTERED_TARGETS='["windows", "linux", "android"]'
+          else
+            FILTERED_TARGETS='["windows", "linux"]'
+          fi
+          echo "filtered_targets=$FILTERED_TARGETS" >> $GITHUB_OUTPUT
+
+  build-platforms:
+    needs: setup
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: ${{ fromJSON(needs.setup.outputs.filtered_targets) }}
+    
+    steps:
+      - name: Checkout main repository
+        uses: actions/checkout@v4
+        with:
+          path: main-repo
+      
+      - name: Checkout croc dependency
+        uses: actions/checkout@v4
+        with:
+          repository: abakum/croc
+          ref: main
+          path: croc-dependency
+      
+      - name: Setup workspace
+        run: |
+          mkdir -p $GITHUB_WORKSPACE/workspace
+          cp -r main-repo/* $GITHUB_WORKSPACE/workspace/crocgui/
+          cp -r croc-dependency $GITHUB_WORKSPACE/workspace/croc
+          cd $GITHUB_WORKSPACE/workspace/crocgui
+          
+          echo "Workspace structure:"
+          pwd
+          ls -la ../
+      
+      - name: Install fyne-cross
+        run: |
+          cd $GITHUB_WORKSPACE/workspace/crocgui
+          go install github.com/fyne-io/fyne-cross@latest
+      
+      - name: Build for ${{ matrix.platform }}
+        run: |
+          cd $GITHUB_WORKSPACE/workspace/crocgui
+          
+          BUILD_OPTIONS="--release"
+          if [[ "${{ github.event.inputs.build_type || 'release' }}" == "snapshot" ]]; then
+            BUILD_OPTIONS="$BUILD_OPTIONS --tags snapshot"
+          fi
+          BUILD_OPTIONS="$BUILD_OPTIONS --tags opengl"
+          
+          case "${{ matrix.platform }}" in
+            windows|linux)
+              echo "Building ${{ matrix.platform }} (amd64)..."
+              fyne-cross ${{ matrix.platform }} -arch=amd64 $BUILD_OPTIONS
+              
+              APP_NAME="crocgui"
+              VERSION="${{ github.event.inputs.release_version || '1.0.0' }}"
+              
+              if [[ "${{ matrix.platform }}" == "windows" ]]; then
+                for file in fyne-cross/dist/${{ matrix.platform }}-amd64/*.exe; do
+                  if [[ -f "$file" ]]; then
+                    DIR=$(dirname "$file")
+                    mv "$file" "$DIR/$APP_NAME-$VERSION-${{ matrix.platform }}-amd64.exe"
+                  fi
+                done
+              else
+                for file in fyne-cross/dist/${{ matrix.platform }}-amd64/*; do
+                  if [[ -f "$file" && ! "$file" =~ \. ]]; then
+                    DIR=$(dirname "$file")
+                    mv "$file" "$DIR/$APP_NAME-$VERSION-${{ matrix.platform }}-amd64"
+                  fi
+                done
+              fi
+              ;;
+            
+            android)
+              echo "Building Android (all architectures)..."
+              fyne-cross android -arch="*" $BUILD_OPTIONS
+              
+              APP_NAME="crocgui"
+              VERSION="${{ github.event.inputs.release_version || '1.0.0' }}"
+              
+              for file in fyne-cross/dist/android-*/*.apk; do
+                if [[ -f "$file" ]]; then
+                  DIR=$(dirname "$file")
+                  ARCH=$(echo "$DIR" | grep -o 'android-[^/]*' | sed 's/android-//')
+                  mv "$file" "$DIR/$APP_NAME-$VERSION-android-$ARCH.apk"
+                fi
+              done
+              ;;
+          esac
+      
+      - name: Upload artifact for ${{ matrix.platform }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.platform }}-builds
+          path: $GITHUB_WORKSPACE/workspace/crocgui/fyne-cross/dist/
+          retention-days: 7
+
+  create-release:
+    needs: build-platforms
+    runs-on: ubuntu-latest
+    if: ${{ (github.event_name == 'push' && github.ref_type == 'tag') || (github.event_name == 'workflow_dispatch' && github.event.inputs.build_type == 'release') }}
+    
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      
+      - name: Prepare release assets
+        run: |
+          mkdir -p release-assets
+          find artifacts -type f \( -name "*.exe" -o -name "*.apk" -o -name "crocgui-*" \) -exec cp {} release-assets/ \;
+          
+          echo "Build Information" > release-assets/BUILD_INFO.txt
+          echo "=================" >> release-assets/BUILD_INFO.txt
+          echo "Project: crocgui" >> release-assets/BUILD_INFO.txt
+          echo "Version: ${{ github.event.inputs.release_version || github.ref_name }}" >> release-assets/BUILD_INFO.txt
+          echo "Platforms: Windows, Linux, Android" >> release-assets/BUILD_INFO.txt
+          echo "Build Date: $(date -u)" >> release-assets/BUILD_INFO.txt
+      
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.event.inputs.release_version && format('v{0}', github.event.inputs.release_version) || github.ref_name }}
+          name: Release ${{ github.event.inputs.release_version && format('v{0}', github.event.inputs.release_version) || github.ref_name }}
+          files: release-assets/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,144 @@
+name: Build and Release (macOS only)
+
+on:
+  push:
+    tags:
+      - 'v*'
+  
+  workflow_dispatch:
+    inputs:
+      release_version:
+        description: 'Release version (e.g., 1.2.3)'
+        required: true
+        default: '1.0.0'
+      build_type:
+        description: 'Build type'
+        required: false
+        default: 'release'
+        type: choice
+        options:
+          - release
+          - snapshot
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+    
+    steps:
+      - name: Checkout main repository
+        uses: actions/checkout@v4
+        with:
+          path: main-repo
+      
+      - name: Checkout croc dependency
+        uses: actions/checkout@v4
+        with:
+          repository: abakum/croc
+          ref: main
+          path: croc-dependency
+      
+      - name: Setup workspace
+        run: |
+          mkdir -p $GITHUB_WORKSPACE/workspace
+          cp -r main-repo/* $GITHUB_WORKSPACE/workspace/crocgui/
+          cp -r croc-dependency $GITHUB_WORKSPACE/workspace/croc
+          cd $GITHUB_WORKSPACE/workspace/crocgui
+          
+          echo "Workspace ready for macOS build"
+      
+      - name: Install fyne-cross
+        run: |
+          cd $GITHUB_WORKSPACE/workspace/crocgui
+          go install github.com/fyne-io/fyne-cross@latest
+      
+      - name: Build for macOS
+        run: |
+          cd $GITHUB_WORKSPACE/workspace/crocgui
+          
+          BUILD_OPTIONS="--release"
+          if [[ "${{ github.event.inputs.build_type || 'release' }}" == "snapshot" ]]; then
+            BUILD_OPTIONS="$BUILD_OPTIONS --tags snapshot"
+          fi
+          BUILD_OPTIONS="$BUILD_OPTIONS --tags opengl"
+          
+          echo "Building macOS (amd64/arm64)..."
+          
+          # Try universal build first (for Apple Silicon + Intel)
+          fyne-cross darwin -arch=amd64,arm64 $BUILD_OPTIONS || {
+            echo "Universal build failed, trying amd64 only..."
+            fyne-cross darwin -arch=amd64 $BUILD_OPTIONS
+          }
+          
+          # Rename output files
+          APP_NAME="crocgui"
+          VERSION="${{ github.event.inputs.release_version || '1.0.0' }}"
+          
+          # Look for .app bundles first
+          for file in fyne-cross/dist/darwin-*/*.app; do
+            if [[ -d "$file" ]]; then
+              DIR=$(dirname "$file")
+              BASENAME=$(basename "$file" .app)
+              mv "$file" "$DIR/$APP_NAME-$VERSION-macos-$BASENAME.app"
+            fi
+          done
+          
+          # Look for DMG files
+          for file in fyne-cross/dist/darwin-*/*.dmg; do
+            if [[ -f "$file" ]]; then
+              DIR=$(dirname "$file")
+              BASENAME=$(basename "$file" .dmg)
+              mv "$file" "$DIR/$APP_NAME-$VERSION-macos-$BASENAME.dmg"
+            fi
+          done
+          
+          # Look for binaries
+          for file in fyne-cross/dist/darwin-*/*; do
+            if [[ -f "$file" && ! "$file" =~ \. && ! "$file" =~ \.app && ! "$file" =~ \.dmg ]]; then
+              DIR=$(dirname "$file")
+              mv "$file" "$DIR/$APP_NAME-$VERSION-macos"
+            fi
+          done
+      
+      - name: Upload macOS artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-builds
+          path: $GITHUB_WORKSPACE/workspace/crocgui/fyne-cross/dist/
+          retention-days: 7
+  
+  create-macos-release:
+    needs: build-macos
+    runs-on: ubuntu-latest
+    if: ${{ (github.event_name == 'push' && github.ref_type == 'tag') || (github.event_name == 'workflow_dispatch' && github.event.inputs.build_type == 'release') }}
+    
+    steps:
+      - name: Download macOS artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: macos-artifacts
+      
+      - name: Prepare macOS assets
+        run: |
+          mkdir -p macos-release-assets
+          find macos-artifacts -type f -o -type d -name "*.app" | while read -r item; do
+            cp -r "$item" macos-release-assets/
+          done
+          find macos-artifacts -type f \( -name "*.dmg" -o -name "crocgui-*" \) -exec cp {} macos-release-assets/ \;
+          
+          echo "macOS Build Information" > macos-release-assets/MACOS_BUILD_INFO.txt
+          echo "======================" >> macos-release-assets/MACOS_BUILD_INFO.txt
+          echo "Project: crocgui" >> macos-release-assets/MACOS_BUILD_INFO.txt
+          echo "Version: ${{ github.event.inputs.release_version || github.ref_name }}" >> macos-release-assets/MACOS_BUILD_INFO.txt
+          echo "Platform: macOS" >> macos-release-assets/MACOS_BUILD_INFO.txt
+          echo "Build Type: ${{ github.event.inputs.build_type || 'release' }}" >> macos-release-assets/MACOS_BUILD_INFO.txt
+          echo "Build Date: $(date -u)" >> macos-release-assets/MACOS_BUILD_INFO.txt
+      
+      - name: Create or Update Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.event.inputs.release_version && format('v{0}', github.event.inputs.release_version) || github.ref_name }}
+          name: Release ${{ github.event.inputs.release_version && format('v{0}', github.event.inputs.release_version) || github.ref_name }}
+          files: macos-release-assets/*
+          # This will add macOS files to the existing release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
