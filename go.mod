@@ -2,8 +2,6 @@ module crocgui
 
 go 1.24.3
 
-toolchain go1.24.6
-
 replace github.com/schollz/croc/v10 => ../croc
 
 require (

@@ -39,3 +39,4 @@ debug
 *.tmp
 *.temp
 /tmp/
+/fyne-cross/

@@ -157,7 +157,8 @@ jobs:
           cd $GITHUB_WORKSPACE/workspace/crocgui
           
           # Extract OS and ARCH from the matrix.target variable
-          TARGET_OS="${{ matrix.target }}"
+          MATRIX_TARGET="${{ matrix.target }}"
+          TARGET_OS="$MATRIX_TARGET"
           ARCH="amd64" # Default architecture
           
           # Check if the target is an Android one
@@ -165,21 +166,27 @@ jobs:
               # For Android, fyne-cross expects the format: fyne-cross android --arch ...
               # Extract the architecture part (e.g., arm64 from android/arm64)
               ARCH="${TARGET_OS#android/}"
-              TARGET_OS="android" # Set OS to 'android' for the fyne-cross command
+              # For fyne-cross, the target for Android is just "android"
+              TARGET_OS="android"
           fi
           
           echo "Building for OS: $TARGET_OS, ARCH: $ARCH using FyneApp.toml"
           
+          # Determine the full target string for --targets
+          if [[ "$TARGET_OS" == "android" ]]; then
+              # For Android, fyne-cross uses just "android" as the target string
+              FULL_TARGET="$TARGET_OS"
+          else
+              # For others (linux, windows), use OS/ARCH format
+              FULL_TARGET="$TARGET_OS/$ARCH"
+          fi
+          
           # Execute fyne-cross command
           # It will automatically read Name, ID, Icon, etc. from FyneApp.toml
-          # --release: enables release build flags (optimization, no debug info)
-          # --arch: specifies the target architecture (if not amd64)
+          # --targets: specifies the target platform (e.g., linux/amd64, windows/amd64, android)
           # --: everything after -- is passed to the underlying 'go build' command
-          fyne-cross $TARGET_OS \
-            --arch $ARCH \
-            --release \
-            -- \
-            -ldflags="-s -w" # Optional ldflags to reduce binary size
+          # -ldflags="-s -w": flags passed to the Go linker to strip debug info and reduce size
+          fyne-cross --targets=$FULL_TARGET -- -ldflags="-s -w"
           
           # List the output directory to confirm build success
           echo "Contents of fyne-cross/dist/:"
