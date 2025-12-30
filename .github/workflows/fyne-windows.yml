@@ -115,7 +115,7 @@ jobs:
           
           # Use fyne package to build the Windows executable and package it
           # The -tags opengl flag is passed via --
-          fyne package --os windows --release -tags=opengl -- --ldflags="-s -w"
+          fyne package --os windows --release
           
           # Verify the .exe file was created
           if [ ! -f "${APP_NAME}.exe" ]; then

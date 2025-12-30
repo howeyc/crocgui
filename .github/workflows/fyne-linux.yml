@@ -91,7 +91,7 @@ jobs:
           # Update package list and install Mesa libraries required by Fyne for OpenGL support
           # and X11 libraries required by GLFW
           sudo apt-get update
-          sudo apt-get install -y libgl1-mesa-dev libegl1-mesa-dev libgles2-mesa-dev libxrandr-dev libxcursor-dev libxinerama-dev libxi-dev libxss-dev
+          sudo apt-get install -y libgl1-mesa-dev libegl1-mesa-dev libgles2-mesa-dev libxrandr-dev libxcursor-dev libxinerama-dev libxi-dev libxss-dev libxxf86vm-dev
 
       # Step 6: Install Fyne CLI
       - name: Install Fyne CLI
@@ -114,7 +114,7 @@ jobs:
           
           # Use fyne package to build the Linux executable and package it
           # The -tags opengl flag is passed via --
-          fyne package --os linux --release -- --ldflags="-s -w"
+          fyne package --os linux --release
           
           # Verify the executable file was created (fyne package creates a directory with the app)
           # The executable is typically inside the directory named after the app
