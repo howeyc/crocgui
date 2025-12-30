@@ -114,7 +114,7 @@ jobs:
           
           # Use fyne package to build the Linux executable and package it
           # The -tags opengl flag is passed via --
-          fyne package --os linux --release -tags=opengl -- --ldflags="-s -w"
+          fyne package --os linux --release -- --ldflags="-s -w"
           
           # Verify the executable file was created (fyne package creates a directory with the app)
           # The executable is typically inside the directory named after the app
