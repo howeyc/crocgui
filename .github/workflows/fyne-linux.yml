@@ -1,5 +1,5 @@
 # GitHub Actions workflow file for building and releasing a Fyne app for Linux (amd64) only on Ubuntu runner
-# Includes installation of dependencies like libgl1-mesa-dev, libegl1-mesa-dev, libgles2-mesa-dev
+# Includes installation of dependencies like libgl1-mesa-dev, libegl1-mesa-dev, libgles2-mesa-dev, libxrandr-dev, etc.
 # Manual trigger only
 name: Fyne package Linux and Release
 
@@ -85,12 +85,13 @@ jobs:
           # Cache dependencies based on go.sum file in the main-repo path
           cache-dependency-path: ${{ github.workspace }}/main-repo/go.sum
 
-      # Step 5: Install Linux dependencies required by Fyne (OpenGL, EGL, GLES)
-      - name: Install Linux dependencies (Mesa OpenGL libraries)
+      # Step 5: Install Linux dependencies required by Fyne (OpenGL, EGL, GLES, X11)
+      - name: Install Linux dependencies (Mesa OpenGL and X11 libraries)
         run: |
           # Update package list and install Mesa libraries required by Fyne for OpenGL support
+          # and X11 libraries required by GLFW
           sudo apt-get update
-          sudo apt-get install -y libgl1-mesa-dev libegl1-mesa-dev libgles2-mesa-dev
+          sudo apt-get install -y libgl1-mesa-dev libegl1-mesa-dev libgles2-mesa-dev libxrandr-dev libxcursor-dev libxinerama-dev libxi-dev libxss-dev
 
       # Step 6: Install Fyne CLI
       - name: Install Fyne CLI
