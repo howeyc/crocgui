@@ -1,4 +1,4 @@
-name: Build and Release (Windows, Linux, Android)
+name: Fyne cross and Release (Windows, Linux, Android)
 
 on:
   push:
@@ -68,11 +68,25 @@ jobs:
       
       - name: Setup workspace
         run: |
-          mkdir -p $GITHUB_WORKSPACE/workspace
+          # Create the exact directory structure as in local development
+          # crocgui/ and croc/ should be at the same level for ../croc to work
+          
+          # 1. Create main project directory
+          mkdir -p $GITHUB_WORKSPACE/workspace/crocgui
+          
+          # 2. Create croc dependency directory (same level as crocgui)
+          mkdir -p $GITHUB_WORKSPACE/workspace/croc
+          
+          # 3. Copy main project
           cp -r main-repo/* $GITHUB_WORKSPACE/workspace/crocgui/
-          cp -r croc-dependency $GITHUB_WORKSPACE/workspace/croc
+          
+          # 4. Copy croc dependency to the correct relative location
+          cp -r croc-dependency/* $GITHUB_WORKSPACE/workspace/croc/
+          
+          # 5. Navigate to project directory
           cd $GITHUB_WORKSPACE/workspace/crocgui
           
+          # 6. Verify the directory structure
           echo "Workspace structure:"
           pwd
           ls -la ../
