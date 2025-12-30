@@ -1,0 +1,738 @@
+# GitHub Actions workflow file for building and releasing a Fyne app for all platforms (Windows, Linux, macOS, Android)
+# Includes installation of dependencies like MinGW-w64 cross-compiler, Mesa OpenGL, GLFW, Android NDK, etc.
+# Manual trigger only
+name: Fyne package All Platforms and Release
+
+# Define triggers for the workflow
+on:
+  # Manual trigger from GitHub interface with configurable inputs
+  workflow_dispatch:
+    inputs:
+      release_version:
+        description: 'Release version (e.g., 1.2.3)'
+        required: true
+        default: '1.0.0'
+      build_type:
+        description: 'Build type'
+        required: false
+        default: 'release'
+        type: choice
+        options:
+          - release
+          - snapshot
+
+# Define environment variables used across jobs
+env:
+  # Name of your application (used for naming output files and directories)
+  APP_NAME: crocgui # This name comes from FyneApp.toml
+
+# Define the jobs for the workflow
+jobs:
+  # Job to build the application for Windows target
+  build-windows:
+    runs-on: ubuntu-latest # Runs on Ubuntu to use MinGW cross-compiler
+    steps:
+      # Step 1: Checkout the main repository (your Fyne app)
+      - name: Checkout main repository (crocgui)
+        uses: actions/checkout@v4
+        with:
+          path: main-repo # Checkout into a subdirectory named 'main-repo'
+
+      # Step 2: Checkout the croc dependency repository
+      - name: Checkout croc dependency
+        uses: actions/checkout@v4
+        with:
+          repository: abakum/croc
+          ref: main
+          path: croc-dependency # Checkout into a subdirectory named 'croc-dependency'
+
+      # Step 3: Setup workspace and verify FyneApp.toml
+      - name: Setup workspace for fyne build
+        run: |
+          # Create the directory structure expected by your Go module setup
+          # where 'crocgui' and 'croc' folders are at the same level
+          # Also ensure FyneApp.toml and Icon.png are in the main-repo root
+          mkdir -p $GITHUB_WORKSPACE/workspace/crocgui
+          mkdir -p $GITHUB_WORKSPACE/workspace/croc
+          
+          # Copy the contents of the checked-out repositories
+          cp -r main-repo/* $GITHUB_WORKSPACE/workspace/crocgui/
+          cp -r croc-dependency/* $GITHUB_WORKSPACE/workspace/croc/
+          
+          # Print the structure for debugging, check for FyneApp.toml and Icon.png
+          echo "Workspace structure (crocgui):"
+          ls -la $GITHUB_WORKSPACE/workspace/crocgui/
+          if [ -f "$GITHUB_WORKSPACE/workspace/crocgui/FyneApp.toml" ]; then
+            echo "FyneApp.toml found:"
+            cat $GITHUB_WORKSPACE/workspace/crocgui/FyneApp.toml
+          else
+            echo "ERROR: FyneApp.toml not found in $GITHUB_WORKSPACE/workspace/crocgui/"
+            exit 1
+          fi
+          if [ -f "$GITHUB_WORKSPACE/workspace/crocgui/Icon.png" ]; then
+            echo "Icon.png found."
+          else
+            echo "WARNING: Icon.png not found in $GITHUB_WORKSPACE/workspace/crocgui/"
+          fi
+
+      # Step 4: Install Go
+      - name: Set up Go
+        uses: actions/setup-go@v5 # Use the latest version of the Go setup action
+        with:
+          go-version: '1.21' # Specify your Go version
+          # Cache dependencies based on go.sum file in the main-repo path
+          cache-dependency-path: ${{ github.workspace }}/main-repo/go.sum
+
+      # Step 5: Install MinGW-w64 cross-compiler
+      - name: Install MinGW-w64 cross-compiler
+        run: |
+          # Update package list and install MinGW-w64 GCC for x86_64
+          sudo apt-get update
+          sudo apt-get install -y gcc-mingw-w64-x86-64
+
+      # Step 6: Install Fyne CLI
+      - name: Install Fyne CLI
+        run: |
+          # Install the Fyne CLI tool
+          go install fyne.io/tools/cmd/fyne@latest
+
+      # Step 7: Build the application using fyne package for Windows
+      - name: Build with fyne for Windows
+        run: |
+          # Change directory to the project root inside the workspace
+          cd $GITHUB_WORKSPACE/workspace/crocgui
+          
+          echo "Building for Windows amd64 using MinGW-w64..."
+          
+          # Set environment variables for cross-compilation
+          export CGO_ENABLED=1
+          export GOOS=windows
+          export GOARCH=amd64
+          # Set the C compiler to the MinGW-w64 cross-compiler
+          export CC=x86_64-w64-mingw32-gcc
+          
+          # Use fyne package to build the Windows executable and package it
+          # The -tags opengl flag is passed via --
+          fyne package --os windows --release
+          
+          # Verify the .exe file was created
+          if [ ! -f "${APP_NAME}.exe" ]; then
+              echo "ERROR: fyne package did not create ${APP_NAME}.exe"
+              ls -la .
+              exit 1
+          fi
+          
+          # List the output directory to confirm build success
+          echo "Contents of current directory after build:"
+          ls -la .
+
+      # Step 8: Upload the built .exe as an artifact
+      - name: Upload Windows artifact
+        # Upload even if the build step failed, to help with debugging
+        if: success() || failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-amd64-build
+          # Path to the built .exe file
+          path: ${{ github.workspace }}/workspace/crocgui/${{ env.APP_NAME }}.exe
+          retention-days: 7 # Keep artifacts for 7 days
+          if-no-files-found: error # Fail if the .exe is not found
+
+  # Job to build the application for Linux target
+  build-linux:
+    runs-on: ubuntu-latest # Runs on Ubuntu to build natively for Linux
+    steps:
+      # Step 1: Checkout the main repository (your Fyne app)
+      - name: Checkout main repository (crocgui)
+        uses: actions/checkout@v4
+        with:
+          path: main-repo # Checkout into a subdirectory named 'main-repo'
+
+      # Step 2: Checkout the croc dependency repository
+      - name: Checkout croc dependency
+        uses: actions/checkout@v4
+        with:
+          repository: abakum/croc
+          ref: main
+          path: croc-dependency # Checkout into a subdirectory named 'croc-dependency'
+
+      # Step 3: Setup workspace and verify FyneApp.toml
+      - name: Setup workspace for fyne build
+        run: |
+          # Create the directory structure expected by your Go module setup
+          # where 'crocgui' and 'croc' folders are at the same level
+          # Also ensure FyneApp.toml and Icon.png are in the main-repo root
+          mkdir -p $GITHUB_WORKSPACE/workspace/crocgui
+          mkdir -p $GITHUB_WORKSPACE/workspace/croc
+          
+          # Copy the contents of the checked-out repositories
+          cp -r main-repo/* $GITHUB_WORKSPACE/workspace/crocgui/
+          cp -r croc-dependency/* $GITHUB_WORKSPACE/workspace/croc/
+          
+          # Print the structure for debugging, check for FyneApp.toml and Icon.png
+          echo "Workspace structure (crocgui):"
+          ls -la $GITHUB_WORKSPACE/workspace/crocgui/
+          if [ -f "$GITHUB_WORKSPACE/workspace/crocgui/FyneApp.toml" ]; then
+            echo "FyneApp.toml found:"
+            cat $GITHUB_WORKSPACE/workspace/crocgui/FyneApp.toml
+          else
+            echo "ERROR: FyneApp.toml not found in $GITHUB_WORKSPACE/workspace/crocgui/"
+            exit 1
+          fi
+          if [ -f "$GITHUB_WORKSPACE/workspace/crocgui/Icon.png" ]; then
+            echo "Icon.png found."
+          else
+            echo "WARNING: Icon.png not found in $GITHUB_WORKSPACE/workspace/crocgui/"
+          fi
+
+      # Step 4: Install Go
+      - name: Set up Go
+        uses: actions/setup-go@v5 # Use the latest version of the Go setup action
+        with:
+          go-version: '1.21' # Specify your Go version
+          # Cache dependencies based on go.sum file in the main-repo path
+          cache-dependency-path: ${{ github.workspace }}/main-repo/go.sum
+
+      # Step 5: Install Linux dependencies required by Fyne (OpenGL, EGL, GLES, X11)
+      - name: Install Linux dependencies (Mesa OpenGL and X11 libraries)
+        run: |
+          # Update package list and install Mesa libraries required by Fyne for OpenGL support
+          # and X11 libraries required by GLFW
+          sudo apt-get update
+          sudo apt-get install -y libgl1-mesa-dev libegl1-mesa-dev libgles2-mesa-dev libxrandr-dev libxcursor-dev libxinerama-dev libxi-dev libxss-dev libxxf86vm-dev
+
+      # Step 6: Install Fyne CLI
+      - name: Install Fyne CLI
+        run: |
+          # Install the Fyne CLI tool
+          go install fyne.io/tools/cmd/fyne@latest
+
+      # Step 7: Build the application using fyne package for Linux
+      - name: Build with fyne for Linux
+        run: |
+          # Change directory to the project root inside the workspace
+          cd $GITHUB_WORKSPACE/workspace/crocgui
+          
+          echo "Building for Linux amd64..."
+          
+          # Set environment variables for native compilation (CGO is enabled by default)
+          export CGO_ENABLED=1
+          export GOOS=linux
+          export GOARCH=amd64
+          
+          # Use fyne package to build the Linux executable and package it
+          fyne package --os linux --release
+          
+          # Verify the .tar.xz archive file was created
+          if [ ! -f "crocgui.tar.xz" ]; then
+              echo "ERROR: fyne package did not create crocgui.tar.xz"
+              ls -la .
+              exit 1
+          fi
+          
+          # List the output directory to confirm build success
+          echo "Contents of current directory after build:"
+          ls -la .
+
+      # Step 8: Upload the built Linux app as an artifact
+      - name: Upload Linux artifact
+        # Upload even if the build step failed, to help with debugging
+        if: success() || failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-amd64-build
+          # Path to the built Linux .tar.xz archive
+          path: ${{ github.workspace }}/workspace/crocgui/crocgui.tar.xz
+          retention-days: 7 # Keep artifacts for 7 days
+          if-no-files-found: error # Fail if the .tar.xz is not found
+
+  # Job to build the application for both macOS architectures
+  build-macos:
+    runs-on: macos-latest # Runs on a macOS runner
+    steps:
+      # Step 1: Checkout the main repository (your Fyne app)
+      - name: Checkout main repository (crocgui)
+        uses: actions/checkout@v4
+        with:
+          path: main-repo # Checkout into a subdirectory named 'main-repo'
+
+      # Step 2: Checkout the croc dependency repository
+      - name: Checkout croc dependency
+        uses: actions/checkout@v4
+        with:
+          repository: abakum/croc
+          ref: main
+          path: croc-dependency # Checkout into a subdirectory named 'croc-dependency'
+
+      # Step 3: Setup workspace and verify FyneApp.toml
+      - name: Setup workspace for fyne build
+        run: |
+          # Create the directory structure expected by your Go module setup
+          # where 'crocgui' and 'croc' folders are at the same level
+          # Also ensure FyneApp.toml and Icon.png are in the main-repo root
+          mkdir -p $GITHUB_WORKSPACE/workspace/crocgui
+          mkdir -p $GITHUB_WORKSPACE/workspace/croc
+          
+          # Copy the contents of the checked-out repositories
+          cp -r main-repo/* $GITHUB_WORKSPACE/workspace/crocgui/
+          cp -r croc-dependency/* $GITHUB_WORKSPACE/workspace/croc/
+          
+          # Print the structure for debugging, check for FyneApp.toml and Icon.png
+          echo "Workspace structure (crocgui):"
+          ls -la $GITHUB_WORKSPACE/workspace/crocgui/
+          if [ -f "$GITHUB_WORKSPACE/workspace/crocgui/FyneApp.toml" ]; then
+            echo "FyneApp.toml found:"
+            cat $GITHUB_WORKSPACE/workspace/crocgui/FyneApp.toml
+          else
+            echo "ERROR: FyneApp.toml not found in $GITHUB_WORKSPACE/workspace/crocgui/"
+            exit 1
+          fi
+          if [ -f "$GITHUB_WORKSPACE/workspace/crocgui/Icon.png" ]; then
+            echo "Icon.png found."
+          else
+            echo "WARNING: Icon.png not found in $GITHUB_WORKSPACE/workspace/crocgui/"
+          fi
+
+      # Step 4: Install Go
+      - name: Set up Go
+        uses: actions/setup-go@v5 # Use the latest version of the Go setup action
+        with:
+          go-version: '1.21' # Specify your Go version
+          # Cache dependencies based on go.sum file in the main-repo path
+          cache-dependency-path: ${{ github.workspace }}/main-repo/go.sum
+
+      # Step 5: Install Fyne CLI
+      - name: Install Fyne CLI
+        run: |
+          # Install the Fyne CLI tool
+          go install fyne.io/tools/cmd/fyne@latest
+
+      # Step 6: Install glfw dependency (required for CGO builds if using glfw)
+      - name: Install glfw dependency
+        run: |
+          # Use Homebrew to install glfw (required for CGO-enabled builds using glfw)
+          brew install glfw
+
+      # Step 7: Build the application for both macOS architectures (amd64 and arm64)
+      - name: Build for macOS amd64 and arm64
+        run: |
+          # Change directory to the project root inside the workspace
+          cd $GITHUB_WORKSPACE/workspace/crocgui
+          
+          echo "Building for macOS amd64 and arm64..."
+          
+          # --- Build for amd64 using fyne package ---
+          echo "Building for amd64..."
+          export CGO_ENABLED=1
+          export GOOS=darwin
+          export GOARCH=amd64
+          # Use fyne package to create the .app bundle for amd64
+          fyne package --os darwin --release --name "crocgui-amd64"
+          
+          # Verify the .app bundle was created
+          if [ ! -d "crocgui-amd64.app" ]; then
+              echo "ERROR: fyne package did not create crocgui-amd64.app for amd64"
+              ls -la .
+              exit 1
+          fi
+          
+          # --- Build for arm64 using fyne package ---
+          echo "Building for arm64..."
+          export CGO_ENABLED=1
+          export GOOS=darwin
+          export GOARCH=arm64
+          # Use fyne package to create the .app bundle for arm64
+          fyne package --os darwin --release --name "crocgui-arm64"
+          
+          # Verify the .app bundle was created
+          if [ ! -d "crocgui-arm64.app" ]; then
+              echo "ERROR: fyne package did not create crocgui-arm64.app for arm64"
+              ls -la .
+              exit 1
+          fi
+          
+          # List the output directory to confirm build success
+          echo "Contents of current directory after build:"
+          ls -la .
+          
+          # --- Check the architecture of the executables inside the .app bundles ---
+          echo "Checking architecture of executables..."
+          
+          AMD64_EXECUTABLE_PATH="crocgui-amd64.app/Contents/MacOS/crocgui"
+          ARM64_EXECUTABLE_PATH="crocgui-arm64.app/Contents/MacOS/crocgui"
+          
+          if [ -f "$AMD64_EXECUTABLE_PATH" ]; then
+              echo "Architecture of $AMD64_EXECUTABLE_PATH:"
+              file "$AMD64_EXECUTABLE_PATH"
+          else
+              echo "ERROR: Executable not found at $AMD64_EXECUTABLE_PATH"
+              exit 1
+          fi
+          
+          if [ -f "$ARM64_EXECUTABLE_PATH" ]; then
+              echo "Architecture of $ARM64_EXECUTABLE_PATH:"
+              file "$ARM64_EXECUTABLE_PATH"
+          else
+              echo "ERROR: Executable not found at $ARM64_EXECUTABLE_PATH"
+              exit 1
+          fi
+
+      # Step 8: Upload the built .app bundles as artifacts
+      - name: Upload macOS artifacts
+        # Upload even if the build step failed, to help with debugging
+        if: success() || failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-builds
+          # Path to the built .app bundles
+          path: |
+            ${{ github.workspace }}/workspace/crocgui/crocgui-amd64.app
+            ${{ github.workspace }}/workspace/crocgui/crocgui-arm64.app
+          retention-days: 7 # Keep artifacts for 7 days
+          if-no-files-found: error # Fail if the expected .app bundles are not found
+
+  # Job to build the application for Android targets
+  build-android:
+    runs-on: ubuntu-latest # Runs on Ubuntu to use fyne package with Android NDK
+    steps:
+      # Step 1: Checkout the main repository (your Fyne app)
+      - name: Checkout main repository (crocgui)
+        uses: actions/checkout@v4
+        with:
+          path: main-repo # Checkout into a subdirectory named 'main-repo'
+
+      # Step 2: Checkout the croc dependency repository
+      - name: Checkout croc dependency
+        uses: actions/checkout@v4
+        with:
+          repository: abakum/croc
+          ref: main
+          path: croc-dependency # Checkout into a subdirectory named 'croc-dependency'
+
+      # Step 3: Setup workspace and verify FyneApp.toml and AndroidManifest.xml
+      - name: Setup workspace for fyne build
+        run: |
+          # Create the directory structure expected by your Go module setup
+          # where 'crocgui' and 'croc' folders are at the same level
+          # Also ensure FyneApp.toml and AndroidManifest.xml are in the main-repo root
+          mkdir -p $GITHUB_WORKSPACE/workspace/crocgui
+          mkdir -p $GITHUB_WORKSPACE/workspace/croc
+          
+          # Copy the contents of the checked-out repositories
+          cp -r main-repo/* $GITHUB_WORKSPACE/workspace/crocgui/
+          cp -r croc-dependency/* $GITHUB_WORKSPACE/workspace/croc/
+          
+          # Print the structure for debugging, check for FyneApp.toml and AndroidManifest.xml
+          echo "Workspace structure (crocgui):"
+          ls -la $GITHUB_WORKSPACE/workspace/crocgui/
+          if [ -f "$GITHUB_WORKSPACE/workspace/crocgui/FyneApp.toml" ]; then
+            echo "FyneApp.toml found:"
+            cat $GITHUB_WORKSPACE/workspace/crocgui/FyneApp.toml
+          else
+            echo "ERROR: FyneApp.toml not found in $GITHUB_WORKSPACE/workspace/crocgui/"
+            exit 1
+          fi
+          if [ -f "$GITHUB_WORKSPACE/workspace/crocgui/AndroidManifest.xml" ]; then
+            echo "AndroidManifest.xml found."
+          else
+            echo "ERROR: AndroidManifest.xml not found in $GITHUB_WORKSPACE/workspace/crocgui/"
+            exit 1
+          fi
+
+      # Step 4: Install Go
+      - name: Set up Go
+        uses: actions/setup-go@v5 # Use the latest version of the Go setup action
+        with:
+          go-version: '1.21' # Specify your Go version
+          # Cache dependencies based on go.sum file in the main-repo path
+          cache-dependency-path: ${{ github.workspace }}/main-repo/go.sum
+
+      # Step 5: Check Android SDK environment and install NDK
+      - name: Check Android SDK and Install NDK
+        run: |
+          # Check if ANDROID_HOME is set
+          echo "ANDROID_HOME is set to: $ANDROID_HOME"
+          if [ -z "$ANDROID_HOME" ]; then
+              echo "WARNING: ANDROID_HOME is not set. Looking for Android SDK manually..."
+              # Try to find it in common locations
+              # This is less reliable, but sometimes necessary
+              # Common paths might be /usr/local/lib/android/sdk or similar
+              # Let's check if it's available via which or whereis
+              # which sdkmanager
+              # whereis android
+              # Often, on ubuntu-latest, ANDROID_HOME is set by default.
+              # If it's not, the standard installation might be missing.
+              # Let's try to find the path where sdkmanager might be.
+              # The path is often added to PATH automatically.
+              # Check if sdkmanager is available anywhere in PATH
+              SDKMANAGER_PATH=$(which sdkmanager 2>/dev/null)
+              if [ -n "$SDKMANAGER_PATH" ]; then
+                  echo "sdkmanager found at: $SDKMANAGER_PATH"
+                  # Extract ANDROID_HOME from the path of sdkmanager
+                  # Assuming sdkmanager is at $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager
+                  # or $ANDROID_HOME/tools/bin/sdkmanager
+                  # This is a bit heuristic.
+                  # Let's see the full path and try to deduce ANDROID_HOME
+                  # Example: /opt/.../android-sdk/cmdline-tools/latest/bin/sdkmanager
+                  # ANDROID_HOME would be /opt/.../android-sdk
+                  # Let's get the directory containing sdkmanager and go up two levels for common structures
+                  # Or find the parent directory containing 'cmdline-tools' or 'tools'
+                  # A safer bet might be to rely on the default setup.
+                  # Let's assume ANDROID_HOME is set correctly if sdkmanager is found via which.
+                  # If not, we might need to install the SDK ourselves, which is complex.
+                  # For now, let's rely on the standard setup and just run sdkmanager.
+                  # If ANDROID_HOME is not set, sdkmanager might still work if run with --sdk_root.
+                  # Let's first check if sdkmanager runs without ANDROID_HOME.
+                  # If it works, proceed.
+                  # If not, we have a problem.
+                  echo "Testing sdkmanager..."
+                  sdkmanager --version || echo "sdkmanager --version failed"
+                  # If it works, proceed.
+                  # If not, we have a problem.
+              else
+                  echo "ERROR: sdkmanager not found in PATH. Android SDK might not be pre-installed or ANDROID_HOME is not set correctly."
+                  echo "Available directories in /usr/local/lib/android/:"
+                  ls -la /usr/local/lib/android/ 2>/dev/null || echo "Directory does not exist or is not accessible."
+                  echo "Available directories in /opt/:"
+                  ls -la /opt/ | grep -i android || echo "No obvious android directory found in /opt/."
+                  exit 1
+              fi
+          else
+              echo "ANDROID_HOME is set, checking for sdkmanager..."
+              # Check if sdkmanager is available via the standard path
+              SDKMANAGER_PATH="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+              if [ -f "$SDKMANAGER_PATH" ]; then
+                  echo "sdkmanager found at standard path: $SDKMANAGER_PATH"
+                  export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin
+              else
+                  echo "sdkmanager not found at standard path. Checking tools/bin..."
+                  SDKMANAGER_PATH="$ANDROID_HOME/tools/bin/sdkmanager"
+                  if [ -f "$SDKMANAGER_PATH" ]; then
+                      echo "sdkmanager found at legacy path: $SDKMANAGER_PATH"
+                      export PATH=$PATH:$ANDROID_HOME/tools/bin
+                  else
+                      echo "ERROR: sdkmanager not found in standard locations under ANDROID_HOME ($ANDROID_HOME)."
+                      echo "Contents of $ANDROID_HOME:"
+                      ls -la $ANDROID_HOME/
+                      exit 1
+                  fi
+              fi
+          fi
+          
+          # Now, attempt to install NDK
+          # Use a specific NDK version (e.g., latest LTS r27d: 27.3.13750724)
+          NDK_VERSION="27.3.13750724"
+          echo "Installing NDK version: $NDK_VERSION"
+          
+          # If ANDROID_HOME was not set, we might need to specify it explicitly to sdkmanager
+          # However, if PATH was updated correctly, it should work.
+          # Let's try running sdkmanager to install the NDK
+          # Ensure sdkmanager is in PATH
+          if command -v sdkmanager &> /dev/null; then
+              echo "sdkmanager is available in PATH, proceeding to install NDK."
+              # Install the NDK
+              sdkmanager --install "ndk;$NDK_VERSION"
+              
+              # Verify installation and set ANDROID_NDK_HOME
+              NDK_PATH="$ANDROID_HOME/ndk/$NDK_VERSION"
+              if [ -d "$NDK_PATH" ]; then
+                  echo "NDK installation verified at: $NDK_PATH"
+                  export ANDROID_NDK_HOME=$NDK_PATH
+                  echo "ANDROID_NDK_HOME set to: $ANDROID_NDK_HOME"
+              else
+                  echo "ERROR: NDK directory $NDK_PATH does not exist after installation."
+                  ls -la $ANDROID_HOME/
+                  ls -la $ANDROID_HOME/ndk/ # Check if any NDK versions were installed
+                  exit 1
+              fi
+          else
+              echo "ERROR: sdkmanager is not available in PATH after checking/setting PATH."
+              exit 1
+          fi
+
+      # Step 6: Install Fyne CLI
+      - name: Install Fyne CLI
+        run: |
+          # Install the Fyne CLI tool
+          go install fyne.io/tools/cmd/fyne@latest
+
+      # Step 7: Build the application using fyne package for Android targets
+      # We will loop through the targets to build each one
+      - name: Build with fyne package for Android targets
+        run: |
+          # Change directory to the project root inside the workspace
+          cd $GITHUB_WORKSPACE/workspace/crocgui
+          
+          echo "Building for Android targets: android/arm, android/arm64, android/386, android/amd64"
+          
+          # Define the targets as a bash array
+          TARGETS=("android/arm" "android/arm64" "android/386" "android/amd64")
+          
+          # Loop through each target
+          for target in "${TARGETS[@]}"; do
+            echo "Building for target: $target"
+            
+            # Extract OS and ARCH from target (format: os/arch)
+            GOOS=${target%/*}
+            GOARCH=${target#*/} # This gets the part after the last '/'
+            
+            # Set environment variables for cross-compilation
+            export CGO_ENABLED=1
+            export GOOS=$GOOS
+            export GOARCH=$GOARCH
+            # ANDROID_NDK_HOME should already be set from the previous step
+            
+            echo "Environment: GOOS=$GOOS, GOARCH=$GOARCH, ANDROID_NDK_HOME=$ANDROID_NDK_HOME"
+            
+            # Use fyne package to build the Android APK for the target
+            # The command from your Makefile: fyne package -os android/<arch> --release
+            fyne package -os $target --release
+            
+            # Verify the APK file was created
+            # fyne package typically creates an APK named after the app in the current directory
+            APK_NAME="${APP_NAME}.apk"
+            if [ -f "$APK_NAME" ]; then
+                echo "Successfully built APK for $target: $APK_NAME"
+                # Rename the APK to include the architecture for clarity when uploading artifacts
+                mv "$APK_NAME" "${APP_NAME}-${GOARCH}.apk"
+                echo "Renamed APK to: ${APP_NAME}-${GOARCH}.apk"
+            else
+                echo "ERROR: fyne package did not create ${APP_NAME}.apk for $target"
+                ls -la .
+                exit 1
+            fi
+          done
+          
+          # List the output directory to confirm all APKs were built
+          echo "Contents of current directory after all builds:"
+          ls -la *.apk
+
+      # Step 8: Upload the built APK files as artifacts
+      - name: Upload Android artifacts
+        # Upload even if the build step failed, to help with debugging
+        if: success() || failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-apks
+          # Path to the built APK files generated by fyne package
+          path: ${{ github.workspace }}/workspace/crocgui/*.apk
+          retention-days: 7 # Keep artifacts for 7 days
+          if-no-files-found: error # Fail if no .apk files are found
+
+  # Job to create a GitHub Release and upload artifacts
+  create-release:
+    # This job waits for all build jobs to finish
+    needs: [build-windows, build-linux, build-macos, build-android] # Added build-android
+    runs-on: macos-latest # Consistent with main build runner, needed for hdiutil
+    # Only run this job if workflow was triggered manually with build_type 'release' or 'snapshot'
+    if: ${{ github.event_name == 'workflow_dispatch' && (github.event.inputs.build_type == 'release' || github.event.inputs.build_type == 'snapshot') }}
+    
+    steps:
+      # Step 1: Download all artifacts from previous jobs
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts # Download into a directory named 'artifacts'
+
+      # Step 2: Prepare the release assets (optional: add build info)
+      - name: Prepare release assets
+        run: |
+          echo "Preparing release assets..."
+          mkdir -p release-assets # Create a directory for release files
+          
+          # Copy all files from downloaded artifacts into the release directory
+          # Loop through each subdirectory in 'artifacts' and copy its contents
+          for artifact_dir in artifacts/*/; do
+            if [ -d "$artifact_dir" ]; then
+              echo "Copying contents from $artifact_dir to release-assets/"
+              cp -r "$artifact_dir"* release-assets/
+            fi
+          done
+          
+          # Find and create .dmg images for all .app bundles in release-assets
+          # This ensures they are uploaded as .dmg files in the release
+          find release-assets -type d -name "*.app" -print0 | while IFS= read -r -d '' app_bundle; do
+            # Get the parent directory and the .app name
+            parent_dir=$(dirname "$app_bundle")
+            app_name=$(basename "$app_bundle")
+            # Remove the .app extension for the dmg name
+            dmg_name="${app_name%.app}.dmg"
+            dmg_path="$parent_dir/$dmg_name"
+            
+            echo "Creating DMG for $app_bundle at $dmg_path"
+            
+            # Create the DMG using hdiutil
+            # -srcfolder: Source folder to include in the DMG
+            # -volname: Volume name shown when the DMG is mounted
+            # -ov: Overwrite existing DMG if present
+            # -format: Use UDZO (compressed) format
+            hdiutil create -srcfolder "$app_bundle" -volname "$app_name" -ov -format UDZO "$dmg_path"
+            
+            if [ $? -eq 0 ]; then
+              echo "Successfully created DMG: $dmg_name"
+              # Optionally, remove the original .app folder after creating the DMG
+              # rm -rf "$app_bundle"
+            else
+              echo "Error: Failed to create DMG for $app_bundle"
+              exit 1
+            fi
+          done
+          
+          # Create a build information file
+          echo "Build Information" > release-assets/BUILD_INFO.txt
+          echo "=================" >> release-assets/BUILD_INFO.txt
+          echo "Project: crocgui (from FyneApp.toml)" >> release-assets/BUILD_INFO.txt
+          echo "Version: ${{ github.event.inputs.release_version || 'manual_run' }}" >> release-assets/BUILD_INFO.txt
+          echo "Build Type: ${{ github.event.inputs.build_type || 'manual' }}" >> release-assets/BUILD_INFO.txt
+          # Use bash command substitution to execute 'date -u' and capture its output
+          BUILD_DATE=$(date -u)
+          echo "Build Date: $BUILD_DATE" >> release-assets/BUILD_INFO.txt
+          echo "GitHub Run: https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" >> release-assets/BUILD_INFO.txt
+          echo "" >> release-assets/BUILD_INFO.txt
+          
+          # List the generated files
+          echo "Generated files:" >> release-assets/BUILD_INFO.txt
+          echo "----------------" >> release-assets/BUILD_INFO.txt
+          ls -la release-assets/ >> release-assets/BUILD_INFO.txt
+          
+          # Print the file content for verification
+          cat release-assets/BUILD_INFO.txt
+          
+          # Export the BUILD_DATE to the environment so it's available in the next step
+          echo "BUILD_DATE=$BUILD_DATE" >> $GITHUB_ENV
+
+      # Step 3: Create the GitHub Release and upload assets
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2 # Use the latest version of the release action
+        with:
+          # Use the input version for the release
+          tag_name: ${{ github.event.inputs.release_version && format('v{0}', github.event.inputs.release_version) }}
+          # Name the release
+          name: Release ${{ github.event.inputs.release_version && format('v{0}', github.event.inputs.release_version) }}
+          draft: false # Make it a public release
+          prerelease: ${{ github.event.inputs.build_type == 'snapshot' }} # Mark as pre-release if type is 'snapshot'
+          # Upload all files from the prepared release-assets directory (now includes .dmg files, .tar.xz, .exe, .apk)
+          files: release-assets/*
+          # Body text for the release description
+          body: |
+            ## crocgui ${{ github.event.inputs.release_version && format('v{0}', github.event.inputs.release_version) }}
+            
+            Release built automatically via GitHub Actions for multiple platforms.
+            App details (Name, ID, Icon, Version) read from `FyneApp.toml`.
+            
+            ### Included Platforms:
+            - Windows (Intel/AMD - amd64)
+            - Linux (Intel/AMD - amd64)
+            - macOS (Apple Silicon - arm64)
+            - macOS (Intel - amd64)
+            - Android (ARM, ARM64, x86, x86_64)
+                        
+            ### Notes:
+            - Windows: Executable file (`crocgui.exe`) is provided.
+            - Linux: The application is packaged as a .tar.xz archive (crocgui.tar.xz). Extract and run the contained executable.
+            - macOS: `.dmg` files are provided for both Apple Silicon (`crocgui-arm64.dmg`) and Intel (`crocgui-amd64.dmg`).
+            - Android: APK files are provided for multiple architectures (`crocgui-arm.apk`, `crocgui-arm64.apk`, `crocgui-386.apk`, `crocgui-amd64.apk`).
+            - To install, follow the instructions for your platform. Ensure you have necessary runtime libraries installed (e.g., Mesa OpenGL libraries on Linux).
+        env:
+          # Token required to create the release
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
