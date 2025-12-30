@@ -1,0 +1,223 @@
+# GitHub Actions workflow file for building and releasing a Fyne app for Windows (amd64) only on Ubuntu runner
+# Includes installation of MinGW-w64 cross-compiler
+# Manual trigger only
+name: Fyne package Windows and Release
+
+# Define triggers for the workflow
+on:
+  # Manual trigger from GitHub interface with configurable inputs
+  workflow_dispatch:
+    inputs:
+      release_version:
+        description: 'Release version (e.g., 1.2.3)'
+        required: true
+        default: '1.0.0'
+      build_type:
+        description: 'Build type'
+        required: false
+        default: 'release'
+        type: choice
+        options:
+          - release
+          - snapshot
+
+# Define environment variables used across jobs
+env:
+  # Name of your application (used for naming output files and directories)
+  APP_NAME: crocgui # This name comes from FyneApp.toml
+  # Define Windows target (cross-compile for amd64 on Ubuntu runner)
+  WINDOWS_TARGET: 'windows/amd64' # Specific target for Windows x64
+
+# Define the jobs for the workflow
+jobs:
+  # Job to build the application for Windows target
+  build-windows:
+    runs-on: ubuntu-latest # Runs on Ubuntu to use MinGW cross-compiler
+    steps:
+      # Step 1: Checkout the main repository (your Fyne app)
+      - name: Checkout main repository (crocgui)
+        uses: actions/checkout@v4
+        with:
+          path: main-repo # Checkout into a subdirectory named 'main-repo'
+
+      # Step 2: Checkout the croc dependency repository
+      - name: Checkout croc dependency
+        uses: actions/checkout@v4
+        with:
+          repository: abakum/croc
+          ref: main
+          path: croc-dependency # Checkout into a subdirectory named 'croc-dependency'
+
+      # Step 3: Setup workspace and verify FyneApp.toml
+      - name: Setup workspace for fyne build
+        run: |
+          # Create the directory structure expected by your Go module setup
+          # where 'crocgui' and 'croc' folders are at the same level
+          # Also ensure FyneApp.toml and Icon.png are in the main-repo root
+          mkdir -p $GITHUB_WORKSPACE/workspace/crocgui
+          mkdir -p $GITHUB_WORKSPACE/workspace/croc
+          
+          # Copy the contents of the checked-out repositories
+          cp -r main-repo/* $GITHUB_WORKSPACE/workspace/crocgui/
+          cp -r croc-dependency/* $GITHUB_WORKSPACE/workspace/croc/
+          
+          # Print the structure for debugging, check for FyneApp.toml and Icon.png
+          echo "Workspace structure (crocgui):"
+          ls -la $GITHUB_WORKSPACE/workspace/crocgui/
+          if [ -f "$GITHUB_WORKSPACE/workspace/crocgui/FyneApp.toml" ]; then
+            echo "FyneApp.toml found:"
+            cat $GITHUB_WORKSPACE/workspace/crocgui/FyneApp.toml
+          else
+            echo "ERROR: FyneApp.toml not found in $GITHUB_WORKSPACE/workspace/crocgui/"
+            exit 1
+          fi
+          if [ -f "$GITHUB_WORKSPACE/workspace/crocgui/Icon.png" ]; then
+            echo "Icon.png found."
+          else
+            echo "WARNING: Icon.png not found in $GITHUB_WORKSPACE/workspace/crocgui/"
+          fi
+
+      # Step 4: Install Go
+      - name: Set up Go
+        uses: actions/setup-go@v5 # Use the latest version of the Go setup action
+        with:
+          go-version: '1.21' # Specify your Go version
+          # Cache dependencies based on go.sum file in the main-repo path
+          cache-dependency-path: ${{ github.workspace }}/main-repo/go.sum
+
+      # Step 5: Install MinGW-w64 cross-compiler
+      - name: Install MinGW-w64 cross-compiler
+        run: |
+          # Update package list and install MinGW-w64 GCC for x86_64
+          sudo apt-get update
+          sudo apt-get install -y gcc-mingw-w64-x86-64
+
+      # Step 6: Install Fyne CLI
+      - name: Install Fyne CLI
+        run: |
+          # Install the Fyne CLI tool
+          go install fyne.io/fyne/v2/cmd/fyne@latest
+
+      # Step 7: Build the application using fyne package for Windows
+      - name: Build with fyne for Windows
+        run: |
+          # Change directory to the project root inside the workspace
+          cd $GITHUB_WORKSPACE/workspace/crocgui
+          
+          echo "Building for Windows amd64 using MinGW-w64..."
+          
+          # Set environment variables for cross-compilation
+          export CGO_ENABLED=1
+          export GOOS=windows
+          export GOARCH=amd64
+          # Set the C compiler to the MinGW-w64 cross-compiler
+          export CC=x86_64-w64-mingw32-gcc
+          
+          # Use fyne package to build the Windows executable and package it
+          # The -tags opengl flag is passed via --
+          fyne package --os windows --release -tags=opengl -- --ldflags="-s -w"
+          
+          # Verify the .exe file was created
+          if [ ! -f "${APP_NAME}.exe" ]; then
+              echo "ERROR: fyne package did not create ${APP_NAME}.exe"
+              ls -la .
+              exit 1
+          fi
+          
+          # List the output directory to confirm build success
+          echo "Contents of current directory after build:"
+          ls -la .
+
+      # Step 8: Upload the built .exe as an artifact
+      - name: Upload Windows artifact
+        # Upload even if the build step failed, to help with debugging
+        if: success() || failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-amd64-build
+          # Path to the built .exe file
+          path: ${{ github.workspace }}/workspace/crocgui/${{ env.APP_NAME }}.exe
+          retention-days: 7 # Keep artifacts for 7 days
+          if-no-files-found: error # Fail if the .exe is not found
+
+  # Job to create a GitHub Release and upload artifacts
+  create-release:
+    # This job waits for the 'build-windows' job to finish
+    needs: build-windows
+    runs-on: ubuntu-latest # Consistent with main build runner
+    # Only run this job if workflow was triggered manually with build_type 'release' or 'snapshot'
+    if: ${{ github.event_name == 'workflow_dispatch' && (github.event.inputs.build_type == 'release' || github.event.inputs.build_type == 'snapshot') }}
+    
+    steps:
+      # Step 1: Download all artifacts from previous jobs
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts # Download into a directory named 'artifacts'
+
+      # Step 2: Prepare the release assets (optional: add build info)
+      - name: Prepare release assets
+        run: |
+          echo "Preparing release assets..."
+          mkdir -p release-assets # Create a directory for release files
+          
+          # Copy all files from downloaded artifacts into the release directory
+          # Loop through each subdirectory in 'artifacts' and copy its contents
+          for artifact_dir in artifacts/*/; do
+            if [ -d "$artifact_dir" ]; then
+              echo "Copying contents from $artifact_dir to release-assets/"
+              cp -r "$artifact_dir"* release-assets/
+            fi
+          done
+          
+          # Create a build information file
+          echo "Build Information" > release-assets/BUILD_INFO.txt
+          echo "=================" >> release-assets/BUILD_INFO.txt
+          echo "Project: crocgui (from FyneApp.toml)" >> release-assets/BUILD_INFO.txt
+          echo "Version: ${{ github.event.inputs.release_version || 'manual_run' }}" >> release-assets/BUILD_INFO.txt
+          echo "Build Type: ${{ github.event.inputs.build_type || 'manual' }}" >> release-assets/BUILD_INFO.txt
+          # Use bash command substitution to execute 'date -u' and capture its output
+          BUILD_DATE=$(date -u)
+          echo "Build Date: $BUILD_DATE" >> release-assets/BUILD_INFO.txt
+          echo "GitHub Run: https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" >> release-assets/BUILD_INFO.txt
+          echo "" >> release-assets/BUILD_INFO.txt
+          
+          # List the generated files
+          echo "Generated files:" >> release-assets/BUILD_INFO.txt
+          echo "----------------" >> release-assets/BUILD_INFO.txt
+          ls -la release-assets/ >> release-assets/BUILD_INFO.txt
+          
+          # Print the file content for verification
+          cat release-assets/BUILD_INFO.txt
+          
+          # Export the BUILD_DATE to the environment so it's available in the next step
+          echo "BUILD_DATE=$BUILD_DATE" >> $GITHUB_ENV
+
+      # Step 3: Create the GitHub Release and upload assets
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2 # Use the latest version of the release action
+        with:
+          # Use the input version for the release
+          tag_name: ${{ github.event.inputs.release_version && format('v{0}', github.event.inputs.release_version) }}
+          # Name the release
+          name: Release ${{ github.event.inputs.release_version && format('v{0}', github.event.inputs.release_version) }}
+          draft: false # Make it a public release
+          prerelease: ${{ github.event.inputs.build_type == 'snapshot' }} # Mark as pre-release if type is 'snapshot'
+          # Upload all files from the prepared release-assets directory (includes .exe and BUILD_INFO.txt)
+          files: release-assets/*
+          # Body text for the release description
+          body: |
+            ## crocgui ${{ github.event.inputs.release_version && format('v{0}', github.event.inputs.release_version) }}
+            
+            Windows release built automatically via GitHub Actions using cross-compilation on Ubuntu runner.
+            App details (Name, ID, Icon, Version) read from `FyneApp.toml`.
+            
+            ### Included Platforms:
+            - Windows (Intel/AMD - amd64)
+            
+            ### Notes:
+            - Windows: Executable file (`crocgui.exe`) is provided.
+            - To install, simply run the `.exe` file. Ensure you have necessary runtime libraries if not statically linked.
+        env:
+          # Token required to create the release
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
