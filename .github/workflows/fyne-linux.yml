@@ -1,7 +1,7 @@
-# GitHub Actions workflow file for building and releasing a Fyne app for Windows (amd64) only on Ubuntu runner
-# Includes installation of MinGW-w64 cross-compiler
+# GitHub Actions workflow file for building and releasing a Fyne app for Linux (amd64) only on Ubuntu runner
+# Includes installation of dependencies like libgl1-mesa-dev, libegl1-mesa-dev, libgles2-mesa-dev
 # Manual trigger only
-name: Fyne package Windows and Release
+name: Fyne package Linux and Release
 
 # Define triggers for the workflow
 on:
@@ -25,14 +25,14 @@ on:
 env:
   # Name of your application (used for naming output files and directories)
   APP_NAME: crocgui # This name comes from FyneApp.toml
-  # Define Windows target (cross-compile for amd64 on Ubuntu runner)
-  WINDOWS_TARGET: 'windows/amd64' # Specific target for Windows x64
+  # Define Linux target (build for amd64 on Ubuntu runner)
+  LINUX_TARGET: 'linux/amd64' # Specific target for Linux x64
 
 # Define the jobs for the workflow
 jobs:
-  # Job to build the application for Windows target
-  build-windows:
-    runs-on: ubuntu-latest # Runs on Ubuntu to use MinGW cross-compiler
+  # Job to build the application for Linux target
+  build-linux:
+    runs-on: ubuntu-latest # Runs on Ubuntu to build natively for Linux
     steps:
       # Step 1: Checkout the main repository (your Fyne app)
       - name: Checkout main repository (crocgui)
@@ -85,12 +85,12 @@ jobs:
           # Cache dependencies based on go.sum file in the main-repo path
           cache-dependency-path: ${{ github.workspace }}/main-repo/go.sum
 
-      # Step 5: Install MinGW-w64 cross-compiler
-      - name: Install MinGW-w64 cross-compiler
+      # Step 5: Install Linux dependencies required by Fyne (OpenGL, EGL, GLES)
+      - name: Install Linux dependencies (Mesa OpenGL libraries)
         run: |
-          # Update package list and install MinGW-w64 GCC for x86_64
+          # Update package list and install Mesa libraries required by Fyne for OpenGL support
           sudo apt-get update
-          sudo apt-get install -y gcc-mingw-w64-x86-64
+          sudo apt-get install -y libgl1-mesa-dev libegl1-mesa-dev libgles2-mesa-dev
 
       # Step 6: Install Fyne CLI
       - name: Install Fyne CLI
@@ -98,28 +98,27 @@ jobs:
           # Install the Fyne CLI tool
           go install fyne.io/tools/cmd/fyne@latest
 
-      # Step 7: Build the application using fyne package for Windows
-      - name: Build with fyne for Windows
+      # Step 7: Build the application using fyne package for Linux
+      - name: Build with fyne for Linux
         run: |
           # Change directory to the project root inside the workspace
           cd $GITHUB_WORKSPACE/workspace/crocgui
           
-          echo "Building for Windows amd64 using MinGW-w64..."
+          echo "Building for Linux amd64..."
           
-          # Set environment variables for cross-compilation
+          # Set environment variables for native compilation (CGO is enabled by default)
           export CGO_ENABLED=1
-          export GOOS=windows
+          export GOOS=linux
           export GOARCH=amd64
-          # Set the C compiler to the MinGW-w64 cross-compiler
-          export CC=x86_64-w64-mingw32-gcc
           
-          # Use fyne package to build the Windows executable and package it
+          # Use fyne package to build the Linux executable and package it
           # The -tags opengl flag is passed via --
-          fyne package --os windows --release -tags=opengl -- --ldflags="-s -w"
+          fyne package --os linux --release -tags=opengl -- --ldflags="-s -w"
           
-          # Verify the .exe file was created
-          if [ ! -f "${APP_NAME}.exe" ]; then
-              echo "ERROR: fyne package did not create ${APP_NAME}.exe"
+          # Verify the executable file was created (fyne package creates a directory with the app)
+          # The executable is typically inside the directory named after the app
+          if [ ! -f "${APP_NAME}" ] && [ ! -d "${APP_NAME}.AppDir" ]; then
+              echo "ERROR: fyne package did not create expected output (either ${APP_NAME} binary or ${APP_NAME}.AppDir folder)"
               ls -la .
               exit 1
           fi
@@ -127,23 +126,31 @@ jobs:
           # List the output directory to confirm build success
           echo "Contents of current directory after build:"
           ls -la .
+          
+          # If an AppDir was created, list its contents
+          if [ -d "${APP_NAME}.AppDir" ]; then
+             echo "Contents of ${APP_NAME}.AppDir:"
+             ls -la "${APP_NAME}.AppDir/"
+          fi
 
-      # Step 8: Upload the built .exe as an artifact
-      - name: Upload Windows artifact
+      # Step 8: Upload the built Linux app as an artifact
+      - name: Upload Linux artifact
         # Upload even if the build step failed, to help with debugging
         if: success() || failure()
         uses: actions/upload-artifact@v4
         with:
-          name: windows-amd64-build
-          # Path to the built .exe file
-          path: ${{ github.workspace }}/workspace/crocgui/${{ env.APP_NAME }}.exe
+          name: linux-amd64-build
+          # Path to the built Linux executable or AppDir folder
+          path: |
+            ${{ github.workspace }}/workspace/crocgui/${{ env.APP_NAME }}
+            ${{ github.workspace }}/workspace/crocgui/${{ env.APP_NAME }}.AppDir/
           retention-days: 7 # Keep artifacts for 7 days
-          if-no-files-found: error # Fail if the .exe is not found
+          if-no-files-found: error # Fail if neither the binary nor AppDir is found
 
   # Job to create a GitHub Release and upload artifacts
   create-release:
-    # This job waits for the 'build-windows' job to finish
-    needs: build-windows
+    # This job waits for the 'build-linux' job to finish
+    needs: build-linux
     runs-on: ubuntu-latest # Consistent with main build runner
     # Only run this job if workflow was triggered manually with build_type 'release' or 'snapshot'
     if: ${{ github.event_name == 'workflow_dispatch' && (github.event.inputs.build_type == 'release' || github.event.inputs.build_type == 'snapshot') }}
@@ -179,7 +186,7 @@ jobs:
           # Use bash command substitution to execute 'date -u' and capture its output
           BUILD_DATE=$(date -u)
           echo "Build Date: $BUILD_DATE" >> release-assets/BUILD_INFO.txt
-          echo "GitHub Run: https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" >> release-assets/BUILD_INFO.txt
+          echo "GitHub Run: https://github.com/  $GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" >> release-assets/BUILD_INFO.txt
           echo "" >> release-assets/BUILD_INFO.txt
           
           # List the generated files
@@ -200,21 +207,21 @@ jobs:
           name: Release ${{ github.event.inputs.release_version && format('v{0}', github.event.inputs.release_version) }}
           draft: false # Make it a public release
           prerelease: ${{ github.event.inputs.build_type == 'snapshot' }} # Mark as pre-release if type is 'snapshot'
-          # Upload all files from the prepared release-assets directory (includes .exe and BUILD_INFO.txt)
+          # Upload all files from the prepared release-assets directory (includes executable/AppDir and BUILD_INFO.txt)
           files: release-assets/*
           # Body text for the release description
           body: |
             ## crocgui ${{ github.event.inputs.release_version && format('v{0}', github.event.inputs.release_version) }}
             
-            Windows release built automatically via GitHub Actions using cross-compilation on Ubuntu runner.
+            Linux release built automatically via GitHub Actions on Ubuntu runner.
             App details (Name, ID, Icon, Version) read from `FyneApp.toml`.
             
             ### Included Platforms:
-            - Windows (Intel/AMD - amd64)
+            - Linux (Intel/AMD - amd64)
             
             ### Notes:
-            - Windows: Executable file (`crocgui.exe`) is provided.
-            - To install, simply run the `.exe` file. Ensure you have necessary runtime libraries if not statically linked.
+            - Linux: The application is packaged as an AppImage or a simple executable. Check the release assets.
+            - To run, ensure you have necessary runtime libraries installed (e.g., Mesa OpenGL libraries).
         env:
           # Token required to create the release
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -75,6 +75,7 @@ linux:
 
 windows: 
 	#sudo apt-get install gcc-mingw-w64-x86-64
+	#go install fyne.io/tools/cmd/fyne@latest
 	CC=x86_64-w64-mingw32-gcc fyne package -os windows --release -tags=opengl
 
 windowsgui:
