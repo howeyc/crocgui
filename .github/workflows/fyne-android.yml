@@ -86,39 +86,107 @@ jobs:
           # Cache dependencies based on go.sum file in the main-repo path
           cache-dependency-path: ${{ github.workspace }}/main-repo/go.sum
 
-      # Step 5: Install Android NDK
-      - name: Install Android NDK
+      # Step 5: Check Android SDK environment and install NDK
+      - name: Check Android SDK and Install NDK
         run: |
-          # The Android SDK (including sdkmanager) is usually pre-installed on ubuntu-latest
-          # Check if sdkmanager is available
-          if command -v sdkmanager &> /dev/null; then
-              echo "sdkmanager found, proceeding to install NDK."
+          # Check if ANDROID_HOME is set
+          echo "ANDROID_HOME is set to: $ANDROID_HOME"
+          if [ -z "$ANDROID_HOME" ]; then
+              echo "WARNING: ANDROID_HOME is not set. Looking for Android SDK manually..."
+              # Try to find it in common locations
+              # This is less reliable, but sometimes necessary
+              # Common paths might be /usr/local/lib/android/sdk or similar
+              # Let's check if it's available via which or whereis
+              # which sdkmanager
+              # whereis android
+              # Often, on ubuntu-latest, ANDROID_HOME is set by default.
+              # If it's not, the standard installation might be missing.
+              # Let's try to find the path where sdkmanager might be.
+              # The path is often added to PATH automatically.
+              echo "PATH is set to: $PATH"
+              # Check if sdkmanager is available anywhere in PATH
+              SDKMANAGER_PATH=$(which sdkmanager 2>/dev/null)
+              if [ -n "$SDKMANAGER_PATH" ]; then
+                  echo "sdkmanager found at: $SDKMANAGER_PATH"
+                  # Extract ANDROID_HOME from the path of sdkmanager
+                  # Assuming sdkmanager is at $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager
+                  # or $ANDROID_HOME/tools/bin/sdkmanager
+                  # This is a bit heuristic.
+                  # Let's see the full path and try to deduce ANDROID_HOME
+                  # Example: /opt/.../android-sdk/cmdline-tools/latest/bin/sdkmanager
+                  # ANDROID_HOME would be /opt/.../android-sdk
+                  # Let's get the directory containing sdkmanager and go up two levels for common structures
+                  # Or find the parent directory containing 'cmdline-tools' or 'tools'
+                  # A safer bet might be to rely on the default setup.
+                  # Let's assume ANDROID_HOME is set correctly if sdkmanager is found via which.
+                  # If not, we might need to install the SDK ourselves, which is complex.
+                  # For now, let's rely on the standard setup and just run sdkmanager.
+                  # If ANDROID_HOME is not set, sdkmanager might still work if run with --sdk_root.
+                  # Let's first check if sdkmanager runs without ANDROID_HOME.
+                  # If it fails, we'll need to install SDK or set ANDROID_HOME.
+                  # Let's try to run sdkmanager list or help to see if it works.
+                  echo "Testing sdkmanager..."
+                  sdkmanager --version || echo "sdkmanager --version failed"
+                  # If it works, proceed.
+                  # If not, we have a problem.
+              else
+                  echo "ERROR: sdkmanager not found in PATH. Android SDK might not be pre-installed or ANDROID_HOME is not set correctly."
+                  echo "Available directories in /usr/local/lib/android/:"
+                  ls -la /usr/local/lib/android/ 2>/dev/null || echo "Directory does not exist or is not accessible."
+                  echo "Available directories in /opt/:"
+                  ls -la /opt/ | grep -i android || echo "No obvious android directory found in /opt/."
+                  exit 1
+              fi
           else
-              echo "ERROR: sdkmanager not found in PATH. Android SDK might not be available."
-              exit 1
+              echo "ANDROID_HOME is set, checking for sdkmanager..."
+              # Check if sdkmanager is available via the standard path
+              SDKMANAGER_PATH="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+              if [ -f "$SDKMANAGER_PATH" ]; then
+                  echo "sdkmanager found at standard path: $SDKMANAGER_PATH"
+                  export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin
+              else
+                  echo "sdkmanager not found at standard path. Checking tools/bin..."
+                  SDKMANAGER_PATH="$ANDROID_HOME/tools/bin/sdkmanager"
+                  if [ -f "$SDKMANAGER_PATH" ]; then
+                      echo "sdkmanager found at legacy path: $SDKMANAGER_PATH"
+                      export PATH=$PATH:$ANDROID_HOME/tools/bin
+                  else
+                      echo "ERROR: sdkmanager not found in standard locations under ANDROID_HOME ($ANDROID_HOME)."
+                      echo "Contents of $ANDROID_HOME:"
+                      ls -la $ANDROID_HOME/
+                      exit 1
+                  fi
+              fi
           fi
           
-          # Install a specific NDK version (e.g., latest LTS r27d: 27.3.13750724)
-          # Using a specific version is more reliable than 'latest'
+          # Now, attempt to install NDK
+          # Use a specific NDK version (e.g., latest LTS r27d: 27.3.13750724)
           NDK_VERSION="27.3.13750724"
           echo "Installing NDK version: $NDK_VERSION"
-          # Use sdkmanager to install the NDK
-          # The NDK will be installed in $ANDROID_HOME/ndk/<version>
-          sdkmanager --install "ndk;$NDK_VERSION"
           
-          # Find the installed NDK path and set ANDROID_NDK_HOME
-          # The NDK is typically installed in $ANDROID_HOME/ndk/<version>
-          NDK_PATH="$ANDROID_HOME/ndk/$NDK_VERSION"
-          
-          # Verify NDK installation
-          if [ -d "$NDK_PATH" ]; then
-              echo "NDK installation verified at: $NDK_PATH"
-              export ANDROID_NDK_HOME=$NDK_PATH
-              echo "ANDROID_NDK_HOME set to: $ANDROID_NDK_HOME"
+          # If ANDROID_HOME was not set, we might need to specify it explicitly to sdkmanager
+          # However, if PATH was updated correctly, it should work.
+          # Let's try running sdkmanager to install the NDK
+          # Ensure sdkmanager is in PATH
+          if command -v sdkmanager &> /dev/null; then
+              echo "sdkmanager is available in PATH, proceeding to install NDK."
+              # Install the NDK
+              sdkmanager --install "ndk;$NDK_VERSION"
+              
+              # Verify installation and set ANDROID_NDK_HOME
+              NDK_PATH="$ANDROID_HOME/ndk/$NDK_VERSION"
+              if [ -d "$NDK_PATH" ]; then
+                  echo "NDK installation verified at: $NDK_PATH"
+                  export ANDROID_NDK_HOME=$NDK_PATH
+                  echo "ANDROID_NDK_HOME set to: $ANDROID_NDK_HOME"
+              else
+                  echo "ERROR: NDK directory $NDK_PATH does not exist after installation."
+                  ls -la $ANDROID_HOME/
+                  ls -la $ANDROID_HOME/ndk/ # Check if any NDK versions were installed
+                  exit 1
+              fi
           else
-              echo "ERROR: NDK directory $NDK_PATH does not exist after installation."
-              ls -la $ANDROID_HOME/
-              ls -la $ANDROID_HOME/ndk/ # Check if any NDK versions were installed
+              echo "ERROR: sdkmanager is not available in PATH after checking/setting PATH."
               exit 1
           fi
 
@@ -158,7 +226,7 @@ jobs:
             
             # Use fyne package to build the Android APK for the target
             # The command from your Makefile: fyne package -os android/<arch> --release
-            fyne package -os $target --release
+            fyne package -os $target --release -- --ldflags="-s -w"
             
             # Verify the APK file was created
             # fyne package typically creates an APK named after the app in the current directory
