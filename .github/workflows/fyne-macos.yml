@@ -269,6 +269,35 @@ jobs:
             fi
           done
           
+          # Find and create .dmg images for all .app bundles in release-assets
+          # This ensures they are uploaded as .dmg files in the release
+          find release-assets -type d -name "*.app" -print0 | while IFS= read -r -d '' app_bundle; do
+            # Get the parent directory and the .app name
+            parent_dir=$(dirname "$app_bundle")
+            app_name=$(basename "$app_bundle")
+            # Remove the .app extension for the dmg name
+            dmg_name="${app_name%.app}.dmg"
+            dmg_path="$parent_dir/$dmg_name"
+            
+            echo "Creating DMG for $app_bundle at $dmg_path"
+            
+            # Create the DMG using hdiutil
+            # -srcfolder: Source folder to include in the DMG
+            # -volname: Volume name shown when the DMG is mounted
+            # -ov: Overwrite existing DMG if present
+            # -format: Use UDZO (compressed) format
+            hdiutil create -srcfolder "$app_bundle" -volname "$app_name" -ov -format UDZO "$dmg_path"
+            
+            if [ $? -eq 0 ]; then
+              echo "Successfully created DMG: $dmg_name"
+              # Optionally, remove the original .app folder after creating the DMG
+              # rm -rf "$app_bundle"
+            else
+              echo "Error: Failed to create DMG for $app_bundle"
+              exit 1
+            fi
+          done
+          
           # Create a build information file
           echo "Build Information" > release-assets/BUILD_INFO.txt
           echo "=================" >> release-assets/BUILD_INFO.txt
@@ -299,7 +328,7 @@ jobs:
           name: Release ${{ github.event.inputs.release_version && format('v{0}', github.event.inputs.release_version) }}
           draft: false # Make it a public release
           prerelease: ${{ github.event.inputs.build_type == 'snapshot' }} # Mark as pre-release if type is 'snapshot'
-          # Upload all files from the prepared release-assets directory
+          # Upload all files from the prepared release-assets directory (now includes .dmg files)
           files: release-assets/*
           # Body text for the release description
           body: |
@@ -311,14 +340,10 @@ jobs:
             ### Included Platforms:
             - macOS (Apple Silicon - arm64)
             - macOS (Intel - amd64)
-            
-            ### Build Information:
-            - **Build Type**: ${{ github.event.inputs.build_type || 'manual' }}
-            - **Build Date**: $(date -u)
-            
+                       
             ### Notes:
-            - macOS: `.app` bundles are provided for both Apple Silicon (`crocgui-darwin_arm64.app`) and Intel (`crocgui-darwin_amd64.app`).
-            - To install, copy the desired `.app` bundle to `/Applications`.
+            - macOS: `.dmg` files are provided for both Apple Silicon (`crocgui-darwin_arm64.dmg`) and Intel (`crocgui-darwin_amd64.dmg`).
+            - To install, double-click the `.dmg` file, and drag the app to the Applications folder.
         env:
           # Token required to create the release
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
