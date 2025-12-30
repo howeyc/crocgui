@@ -89,57 +89,36 @@ jobs:
       # Step 5: Install Android NDK
       - name: Install Android NDK
         run: |
-          # Install Android SDK Command Line Tools (contains sdkmanager)
-          # This is often needed to install NDK via command line
-          # The Android SDK is usually pre-installed, but NDK is not.
-          # We'll use the pre-installed SDK manager if available, otherwise install tools first.
+          # The Android SDK (including sdkmanager) is usually pre-installed on ubuntu-latest
           # Check if sdkmanager is available
           if command -v sdkmanager &> /dev/null; then
               echo "sdkmanager found, proceeding to install NDK."
           else
-              echo "sdkmanager not found in PATH. Installing command line tools..."
-              # Download command line tools (example path, might need adjustment)
-              # This part can be complex, often it's easier to rely on pre-installed SDK.
-              # Let's assume sdkmanager is available in the standard Android setup on GitHub Actions.
-              # If not, this step needs to be expanded.
-              # For now, let's try installing NDK directly if sdkmanager is there.
-              # Update PATH to include cmdline-tools/bin if not already there
-              export PATH=$ANDROID_HOME/cmdline-tools/latest/bin:$PATH
+              echo "ERROR: sdkmanager not found in PATH. Android SDK might not be available."
+              exit 1
           fi
           
-          # Install the latest NDK (or a specific version if needed)
+          # Install a specific NDK version (e.g., latest LTS r27d: 27.3.13750724)
+          # Using a specific version is more reliable than 'latest'
+          NDK_VERSION="27.3.13750724"
+          echo "Installing NDK version: $NDK_VERSION"
           # Use sdkmanager to install the NDK
           # The NDK will be installed in $ANDROID_HOME/ndk/<version>
-          # Example: sdkmanager --install "ndk;25.1.8937393" (use a specific version if required)
-          # Using 'ndk;latest' might not work reliably, so specifying a version is safer.
-          # Check https://developer.android.com/ndk/downloads for latest stable version.
-          # As of late 2023 / early 2024, 25.1.8937393 was common.
-          # Let's try installing a recent stable version.
-          # You might need to update this version periodically.
-          # List available packages: sdkmanager --list | grep ndk
-          # Install a specific version, e.g., 25.1.8937393
-          # Adjust the version as needed.
-          # This command also accepts --sdk_root if ANDROID_HOME is not set correctly, but it usually is.
-          # Example:
-          # sdkmanager "ndk;25.1.8937393"
-          # Or use the latest available stable version:
-          sdkmanager --install "ndk;latest"
+          sdkmanager --install "ndk;$NDK_VERSION"
           
           # Find the installed NDK path and set ANDROID_NDK_HOME
           # The NDK is typically installed in $ANDROID_HOME/ndk/<version>
-          # List installed NDK versions
-          echo "Installed NDK versions:"
-          ls -la $ANDROID_HOME/ndk/
-          # Set ANDROID_NDK_HOME to the path of the installed NDK
-          # Assuming the latest installed version is the one we want.
-          # If multiple versions are installed, you might need to pick a specific one.
-          export ANDROID_NDK_HOME=$(find $ANDROID_HOME/ndk -maxdepth 1 -mindepth 1 -type d | sort -V | tail -n 1)
-          echo "ANDROID_NDK_HOME set to: $ANDROID_NDK_HOME"
+          NDK_PATH="$ANDROID_HOME/ndk/$NDK_VERSION"
           
           # Verify NDK installation
-          if [ ! -d "$ANDROID_NDK_HOME" ]; then
-              echo "ERROR: ANDROID_NDK_HOME directory $ANDROID_NDK_HOME does not exist after installation."
+          if [ -d "$NDK_PATH" ]; then
+              echo "NDK installation verified at: $NDK_PATH"
+              export ANDROID_NDK_HOME=$NDK_PATH
+              echo "ANDROID_NDK_HOME set to: $ANDROID_NDK_HOME"
+          else
+              echo "ERROR: NDK directory $NDK_PATH does not exist after installation."
               ls -la $ANDROID_HOME/
+              ls -la $ANDROID_HOME/ndk/ # Check if any NDK versions were installed
               exit 1
           fi
 
