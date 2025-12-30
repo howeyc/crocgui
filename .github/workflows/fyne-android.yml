@@ -1,0 +1,217 @@
+# GitHub Actions workflow file for building a Fyne app for Android (arm, arm64, 386, amd64)
+# Uses fyne package with ANDROID_NDK_HOME set up
+# Manual trigger only
+name: Fyne package Android and Release
+
+# Define triggers for the workflow
+on:
+  # Manual trigger from GitHub interface with configurable inputs
+  workflow_dispatch:
+    inputs:
+      release_version:
+        description: 'Release version (e.g., 1.2.3)'
+        required: true
+        default: '1.0.0'
+      build_type:
+        description: 'Build type'
+        required: false
+        default: 'release'
+        type: choice
+        options:
+          - release
+          - snapshot
+
+# Define environment variables used across jobs
+env:
+  # Name of your application (used for naming output files and directories)
+  APP_NAME: crocgui # This name comes from FyneApp.toml
+  # Define Android targets
+  ANDROID_TARGETS: '["android/arm", "android/arm64", "android/386", "android/amd64"]' # Specific targets for Android
+
+# Define the jobs for the workflow
+jobs:
+  # Job to build the application for Android targets
+  build-android:
+    runs-on: ubuntu-latest # Runs on Ubuntu to use fyne package with Android NDK
+    steps:
+      # Step 1: Checkout the main repository (your Fyne app)
+      - name: Checkout main repository (crocgui)
+        uses: actions/checkout@v4
+        with:
+          path: main-repo # Checkout into a subdirectory named 'main-repo'
+
+      # Step 2: Checkout the croc dependency repository
+      - name: Checkout croc dependency
+        uses: actions/checkout@v4
+        with:
+          repository: abakum/croc
+          ref: main
+          path: croc-dependency # Checkout into a subdirectory named 'croc-dependency'
+
+      # Step 3: Setup workspace and verify FyneApp.toml and AndroidManifest.xml
+      - name: Setup workspace for fyne build
+        run: |
+          # Create the directory structure expected by your Go module setup
+          # where 'crocgui' and 'croc' folders are at the same level
+          # Also ensure FyneApp.toml and AndroidManifest.xml are in the main-repo root
+          mkdir -p $GITHUB_WORKSPACE/workspace/crocgui
+          mkdir -p $GITHUB_WORKSPACE/workspace/croc
+          
+          # Copy the contents of the checked-out repositories
+          cp -r main-repo/* $GITHUB_WORKSPACE/workspace/crocgui/
+          cp -r croc-dependency/* $GITHUB_WORKSPACE/workspace/croc/
+          
+          # Print the structure for debugging, check for FyneApp.toml and AndroidManifest.xml
+          echo "Workspace structure (crocgui):"
+          ls -la $GITHUB_WORKSPACE/workspace/crocgui/
+          if [ -f "$GITHUB_WORKSPACE/workspace/crocgui/FyneApp.toml" ]; then
+            echo "FyneApp.toml found:"
+            cat $GITHUB_WORKSPACE/workspace/crocgui/FyneApp.toml
+          else
+            echo "ERROR: FyneApp.toml not found in $GITHUB_WORKSPACE/workspace/crocgui/"
+            exit 1
+          fi
+          if [ -f "$GITHUB_WORKSPACE/workspace/crocgui/AndroidManifest.xml" ]; then
+            echo "AndroidManifest.xml found."
+          else
+            echo "ERROR: AndroidManifest.xml not found in $GITHUB_WORKSPACE/workspace/crocgui/"
+            exit 1
+          fi
+
+      # Step 4: Install Go
+      - name: Set up Go
+        uses: actions/setup-go@v5 # Use the latest version of the Go setup action
+        with:
+          go-version: '1.21' # Specify your Go version
+          # Cache dependencies based on go.sum file in the main-repo path
+          cache-dependency-path: ${{ github.workspace }}/main-repo/go.sum
+
+      # Step 5: Install Android NDK
+      - name: Install Android NDK
+        run: |
+          # Install Android SDK Command Line Tools (contains sdkmanager)
+          # This is often needed to install NDK via command line
+          # The Android SDK is usually pre-installed, but NDK is not.
+          # We'll use the pre-installed SDK manager if available, otherwise install tools first.
+          # Check if sdkmanager is available
+          if command -v sdkmanager &> /dev/null; then
+              echo "sdkmanager found, proceeding to install NDK."
+          else
+              echo "sdkmanager not found in PATH. Installing command line tools..."
+              # Download command line tools (example path, might need adjustment)
+              # This part can be complex, often it's easier to rely on pre-installed SDK.
+              # Let's assume sdkmanager is available in the standard Android setup on GitHub Actions.
+              # If not, this step needs to be expanded.
+              # For now, let's try installing NDK directly if sdkmanager is there.
+              # Update PATH to include cmdline-tools/bin if not already there
+              export PATH=$ANDROID_HOME/cmdline-tools/latest/bin:$PATH
+          fi
+          
+          # Install the latest NDK (or a specific version if needed)
+          # Use sdkmanager to install the NDK
+          # The NDK will be installed in $ANDROID_HOME/ndk/<version>
+          # Example: sdkmanager --install "ndk;25.1.8937393" (use a specific version if required)
+          # Using 'ndk;latest' might not work reliably, so specifying a version is safer.
+          # Check https://developer.android.com/ndk/downloads for latest stable version.
+          # As of late 2023 / early 2024, 25.1.8937393 was common.
+          # Let's try installing a recent stable version.
+          # You might need to update this version periodically.
+          # List available packages: sdkmanager --list | grep ndk
+          # Install a specific version, e.g., 25.1.8937393
+          # Adjust the version as needed.
+          # This command also accepts --sdk_root if ANDROID_HOME is not set correctly, but it usually is.
+          # Example:
+          # sdkmanager "ndk;25.1.8937393"
+          # Or use the latest available stable version:
+          sdkmanager --install "ndk;latest"
+          
+          # Find the installed NDK path and set ANDROID_NDK_HOME
+          # The NDK is typically installed in $ANDROID_HOME/ndk/<version>
+          # List installed NDK versions
+          echo "Installed NDK versions:"
+          ls -la $ANDROID_HOME/ndk/
+          # Set ANDROID_NDK_HOME to the path of the installed NDK
+          # Assuming the latest installed version is the one we want.
+          # If multiple versions are installed, you might need to pick a specific one.
+          export ANDROID_NDK_HOME=$(find $ANDROID_HOME/ndk -maxdepth 1 -mindepth 1 -type d | sort -V | tail -n 1)
+          echo "ANDROID_NDK_HOME set to: $ANDROID_NDK_HOME"
+          
+          # Verify NDK installation
+          if [ ! -d "$ANDROID_NDK_HOME" ]; then
+              echo "ERROR: ANDROID_NDK_HOME directory $ANDROID_NDK_HOME does not exist after installation."
+              ls -la $ANDROID_HOME/
+              exit 1
+          fi
+
+      # Step 6: Install Fyne CLI
+      - name: Install Fyne CLI
+        run: |
+          # Install the Fyne CLI tool
+          go install fyne.io/tools/cmd/fyne@latest
+
+      # Step 7: Build the application using fyne package for Android targets
+      # We will loop through the targets to build each one
+      - name: Build with fyne package for Android targets
+        run: |
+          # Change directory to the project root inside the workspace
+          cd $GITHUB_WORKSPACE/workspace/crocgui
+          
+          echo "Building for Android targets: ${{ env.ANDROID_TARGETS }}"
+          
+          # Define the targets as a bash array
+          TARGETS=("android/arm" "android/arm64" "android/386" "android/amd64")
+          
+          # Loop through each target
+          for target in "${TARGETS[@]}"; do
+            echo "Building for target: $target"
+            
+            # Extract OS and ARCH from target (format: os/arch)
+            GOOS=${target%/*}
+            GOARCH=${target#*/} # This gets the part after the last '/'
+            
+            # Set environment variables for cross-compilation
+            export CGO_ENABLED=1
+            export GOOS=$GOOS
+            export GOARCH=$GOARCH
+            # ANDROID_NDK_HOME should already be set from the previous step
+            
+            echo "Environment: GOOS=$GOOS, GOARCH=$GOARCH, ANDROID_NDK_HOME=$ANDROID_NDK_HOME"
+            
+            # Use fyne package to build the Android APK for the target
+            # The command from your Makefile: fyne package -os android/<arch> --release
+            fyne package -os $target --release
+            
+            # Verify the APK file was created
+            # fyne package typically creates an APK named after the app in the current directory
+            APK_NAME="${APP_NAME}.apk"
+            if [ -f "$APK_NAME" ]; then
+                echo "Successfully built APK for $target: $APK_NAME"
+                # Rename the APK to include the architecture for clarity when uploading artifacts
+                mv "$APK_NAME" "${APP_NAME}-${GOARCH}.apk"
+                echo "Renamed APK to: ${APP_NAME}-${GOARCH}.apk"
+            else
+                echo "ERROR: fyne package did not create ${APP_NAME}.apk for $target"
+                ls -la .
+                exit 1
+            fi
+          done
+          
+          # List the output directory to confirm all APKs were built
+          echo "Contents of current directory after all builds:"
+          ls -la *.apk
+
+      # Step 8: Upload the built APK files as artifacts
+      - name: Upload Android artifacts
+        # Upload even if the build step failed, to help with debugging
+        if: success() || failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-apks
+          # Path to the built APK files generated by fyne package
+          path: ${{ github.workspace }}/workspace/crocgui/*.apk
+          retention-days: 7 # Keep artifacts for 7 days
+          if-no-files-found: error # Fail if no .apk files are found
+
+  # Job to create a GitHub Release and upload artifacts (optional for this separate file)
+  # We'll add this later when integrating into the main workflow
+  # For now, we just build and upload APKs as artifacts
