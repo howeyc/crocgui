@@ -129,82 +129,102 @@ jobs:
       - name: Build with fyne and go for ${{ matrix.target }}
         run: |
           bash -c '
-# Change directory to the project root inside the workspace
-cd $GITHUB_WORKSPACE/workspace/crocgui
-
-# Extract ARCH from the matrix.target variable (format: darwin/arch)
-MATRIX_TARGET="$1"
-TARGET_ARCH="${MATRIX_TARGET#darwin/}"
-
-echo "Building for macOS ARCH: $TARGET_ARCH"
-
-# Determine the primary and secondary architectures
-if [[ "$TARGET_ARCH" == "arm64" ]]; then
-    PRIMARY_ARCH="arm64"
-    SECONDARY_ARCH="amd64"
-elif [[ "$TARGET_ARCH" == "amd64" ]]; then
-    PRIMARY_ARCH="amd64"
-    SECONDARY_ARCH="arm64"
-else
-    echo "Unsupported macOS ARCH: $TARGET_ARCH"
-    exit 1
-fi
-
-echo "Primary ARCH (fyne package): $PRIMARY_ARCH"
-echo "Secondary ARCH (go build): $SECONDARY_ARCH"
-
-# --- Build for PRIMARY ARCH using fyne package ---
-echo "Building primary arch ($PRIMARY_ARCH) with fyne package..."
-export CGO_ENABLED=1
-export GOOS=darwin
-export GOARCH=$PRIMARY_ARCH
-fyne package --os darwin --release -- --ldflags="-s -w"
-
-# Verify the .app bundle was created
-if [ ! -d "crocgui.app" ]; then
-    echo "ERROR: fyne package did not create crocgui.app for $PRIMARY_ARCH"
-    ls -la .
-    exit 1
-fi
-
-# Rename the initial bundle
-mv "crocgui.app" "crocgui-$PRIMARY_ARCH.app"
-
-# --- Build for SECONDARY ARCH using go build ---
-echo "Building secondary arch ($SECONDARY_ARCH) with go build..."
-export CGO_ENABLED=1
-export GOOS=darwin
-export GOARCH=$SECONDARY_ARCH
-mkdir -p "crocgui-$PRIMARY_ARCH.app/Contents/MacOS"
-go build -ldflags="-s -w" -o "crocgui-$PRIMARY_ARCH.app/Contents/MacOS/crocgui"
-
-# Verify the secondary arch binary was created
-if [ ! -f "crocgui-$PRIMARY_ARCH.app/Contents/MacOS/crocgui" ]; then
-    echo "ERROR: go build did not create binary for $SECONDARY_ARCH"
-    ls -la "crocgui-$PRIMARY_ARCH.app/Contents/MacOS/"
-    exit 1
-fi
-
-# Create the secondary arch bundle directory
-cp -r "crocgui-$PRIMARY_ARCH.app" "crocgui-$SECONDARY_ARCH.app"
-
-# Build the executable for the PRIMARY_ARCH for the secondary bundle
-export CGO_ENABLED=1
-export GOOS=darwin
-export GOARCH=$PRIMARY_ARCH
-go build -ldflags="-s -w" -o "crocgui-$SECONDARY_ARCH.app/Contents/MacOS/crocgui"
-
-# Verify the primary arch binary was created inside the secondary bundle
-if [ ! -f "crocgui-$SECONDARY_ARCH.app/Contents/MacOS/crocgui" ]; then
-    echo "ERROR: go build did not create primary arch binary for secondary bundle ($SECONDARY_ARCH bundle)"
-    ls -la "crocgui-$SECONDARY_ARCH.app/Contents/MacOS/"
-    exit 1
-fi
-
-# List the output directory to confirm build success
-echo "Contents of current directory after build:"
-ls -la .
-' -- "darwin/amd64"
+          # Change directory to the project root inside the workspace
+          cd $GITHUB_WORKSPACE/workspace/crocgui
+          
+          # Extract ARCH from the matrix.target variable (format: darwin/arch)
+          # We already know OS is darwin
+          MATRIX_TARGET="$1"
+          TARGET_ARCH="${MATRIX_TARGET#darwin/}"
+          
+          echo "Building for macOS ARCH: $TARGET_ARCH"
+          
+          # Determine the primary and secondary architectures
+          # Primary: Use fyne package to create the .app bundle structure
+          # Secondary: Use go build to compile the binary for the other arch
+          if [[ "$TARGET_ARCH" == "arm64" ]]; then
+              PRIMARY_ARCH="arm64"
+              SECONDARY_ARCH="amd64"
+          elif [[ "$TARGET_ARCH" == "amd64" ]]; then
+              PRIMARY_ARCH="amd64"
+              SECONDARY_ARCH="arm64"
+          else
+              echo "Unsupported macOS ARCH: $TARGET_ARCH"
+              exit 1
+          fi
+          
+          echo "Primary ARCH (fyne package): $PRIMARY_ARCH"
+          echo "Secondary ARCH (go build): $SECONDARY_ARCH"
+          
+          # --- Build for PRIMARY ARCH using fyne package ---
+          echo "Building primary arch ($PRIMARY_ARCH) with fyne package..."
+          # Use fyne package to generate the .app bundle structure for the primary arch
+          # We need to ensure CGO is enabled if needed (glfw)
+          export CGO_ENABLED=1
+          export GOOS=darwin
+          export GOARCH=$PRIMARY_ARCH
+          # Use fyne package to create the initial .app structure
+          fyne package --os darwin --release -- --ldflags="-s -w"
+          
+          # Verify the .app bundle was created
+          if [ ! -d "crocgui.app" ]; then
+              echo "ERROR: fyne package did not create crocgui.app for $PRIMARY_ARCH"
+              ls -la .
+              exit 1
+          fi
+          
+          # Rename the initial bundle to be specific to the primary arch.
+          mv "crocgui.app" "crocgui-$PRIMARY_ARCH.app"
+          
+          # --- Build for SECONDARY ARCH using go build ---
+          echo "Building secondary arch ($SECONDARY_ARCH) with go build..."
+          # Set environment for cross-compilation
+          export CGO_ENABLED=1
+          export GOOS=darwin
+          export GOARCH=$SECONDARY_ARCH
+          
+          # Create the directory structure for the secondary arch binary inside the renamed bundle
+          mkdir -p "crocgui-$PRIMARY_ARCH.app/Contents/MacOS"
+          
+          # Build the Go application for the secondary architecture
+          # Use ldflags to strip debug symbols
+          go build -ldflags="-s -w" -o "crocgui-$PRIMARY_ARCH.app/Contents/MacOS/crocgui"
+          
+          # Verify the secondary arch binary was created
+          if [ ! -f "crocgui-$PRIMARY_ARCH.app/Contents/MacOS/crocgui" ]; then
+              echo "ERROR: go build did not create binary for $SECONDARY_ARCH"
+              ls -la "crocgui-$PRIMARY_ARCH.app/Contents/MacOS/"
+              exit 1
+          fi
+          
+          
+          # Create the secondary arch bundle directory
+          cp -r "crocgui-$PRIMARY_ARCH.app" "crocgui-$SECONDARY_ARCH.app"
+          
+          export CGO_ENABLED=1
+          export GOOS=darwin
+          export GOARCH=$PRIMARY_ARCH
+          go build -ldflags="-s -w" -o "crocgui-$SECONDARY_ARCH.app/Contents/MacOS/crocgui"
+          
+          # Verify the primary arch binary was created inside the secondary bundle
+          if [ ! -f "crocgui-$SECONDARY_ARCH.app/Contents/MacOS/crocgui" ]; then
+              echo "ERROR: go build did not create primary arch binary for secondary bundle ($SECONDARY_ARCH bundle)"
+              ls -la "crocgui-$SECONDARY_ARCH.app/Contents/MacOS/"
+              exit 1
+          fi
+          
+          # Now we have two bundles:
+          # - crocgui-$PRIMARY_ARCH.app with executable for $PRIMARY_ARCH
+          # - crocgui-$SECONDARY_ARCH.app with executable for $SECONDARY_ARCH
+          
+          # List the output directory to confirm build success
+          echo "Contents of current directory after build:"
+          ls -la .
+          
+          # Optional: Create a Universal Binary using lipo (if desired, instead of two separate apps)
+          # This would involve creating a single .app bundle with a universal executable inside Contents/MacOS
+          # For now, we stick with separate bundles per architecture as per your local makefile structure.
+          ' -- "${{ matrix.target }}"
 
       # Step 8: Upload the built .app bundles as artifacts
       - name: Upload artifact for ${{ matrix.target }}
