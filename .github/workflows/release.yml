@@ -1,0 +1,250 @@
+name: Multi-Platform Build and Release
+
+on:
+  # Automatic trigger on version tags
+  push:
+    tags:
+      - 'v*'
+  
+  # Manual trigger from GitHub interface
+  workflow_dispatch:
+    inputs:
+      release_version:
+        description: 'Release version (e.g., 1.2.3)'
+        required: true
+        default: '1.0.0'
+      build_type:
+        description: 'Build type'
+        required: false
+        default: 'release'
+        type: choice
+        options:
+          - release
+          - snapshot
+      include_android:
+        description: 'Include Android builds'
+        required: false
+        default: 'true'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+
+# Определяем все цели сборки в одном месте
+env:
+  # Desktop targets
+  DESKTOP_TARGETS: 'windows linux darwin'
+  
+  # Android targets (можно включать/выключать)
+  ANDROID_TARGETS: 'android/arm64 android/arm android/amd64 android/386'
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      all_targets: ${{ steps.set-targets.outputs.all_targets }}
+      filtered_targets: ${{ steps.filter-targets.outputs.filtered_targets }}
+    
+    steps:
+      - name: Determine build targets
+        id: set-targets
+        run: |
+          ALL_TARGETS="${{ env.DESKTOP_TARGETS }} ${{ env.ANDROID_TARGETS }}"
+          echo "all_targets=$ALL_TARGETS" >> $GITHUB_OUTPUT
+      
+      - name: Filter Android targets
+        id: filter-targets
+        run: |
+          if [[ "${{ github.event.inputs.include_android || 'true' }}" == "true" ]]; then
+            FILTERED_TARGETS="${{ env.DESKTOP_TARGETS }} ${{ env.ANDROID_TARGETS }}"
+          else
+            FILTERED_TARGETS="${{ env.DESKTOP_TARGETS }}"
+          fi
+          echo "filtered_targets=$FILTERED_TARGETS" >> $GITHUB_OUTPUT
+          echo "Will build for: $FILTERED_TARGETS"
+
+  build-all-platforms:
+    needs: setup
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target: ${{ fromJSON(needs.setup.outputs.filtered_targets) }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: 'stable'
+      
+      - name: Install dependencies
+        run: go mod tidy
+      
+      - name: Install Fyne CLI
+        run: go install fyne.io/fyne/v2/cmd/fyne@latest
+      
+      - name: Setup build environment for ${{ matrix.target }}
+        run: |
+          echo "Setting up environment for ${{ matrix.target }}"
+          
+          case "${{ matrix.target }}" in
+            windows)
+              sudo apt-get update && sudo apt-get install -y gcc-mingw-w64-x86-64
+              ;;
+            linux)
+              sudo apt-get update && sudo apt-get install -y gcc g++ libgl1-mesa-dev xorg-dev
+              ;;
+            darwin)
+              # Cross-compilation for macOS requires osxcross
+              echo "macOS cross-compilation would require additional setup"
+              ;;
+            android/*)
+              sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu gcc-arm-linux-gnueabihf
+              ;;
+          esac
+      
+      - name: Build for ${{ matrix.target }}
+        env:
+          APP_VERSION: ${{ github.event.inputs.release_version || '1.0.0' }}
+          BUILD_TYPE: ${{ github.event.inputs.build_type || 'release' }}
+        run: |
+          echo "Building for ${{ matrix.target }} version $APP_VERSION ($BUILD_TYPE)"
+          
+          # Определяем переменные окружения в зависимости от цели
+          case "${{ matrix.target }}" in
+            windows)
+              export GOOS=windows
+              export GOARCH=amd64
+              export CC=x86_64-w64-mingw32-gcc
+              OUTPUT_EXT=".exe"
+              FYNE_OS="windows"
+              ;;
+            linux)
+              export GOOS=linux
+              export GOARCH=amd64
+              OUTPUT_EXT=""
+              FYNE_OS="linux"
+              ;;
+            darwin)
+              export GOOS=darwin
+              export GOARCH=amd64
+              OUTPUT_EXT=""
+              FYNE_OS="darwin"
+              ;;
+            android/arm64)
+              export GOOS=android
+              export GOARCH=arm64
+              OUTPUT_EXT=".apk"
+              FYNE_OS="android/arm64"
+              ;;
+            android/arm)
+              export GOOS=android
+              export GOARCH=arm
+              OUTPUT_EXT=".apk"
+              FYNE_OS="android/arm"
+              ;;
+            android/amd64)
+              export GOOS=android
+              export GOARCH=amd64
+              OUTPUT_EXT=".apk"
+              FYNE_OS="android/amd64"
+              ;;
+            android/386)
+              export GOOS=android
+              export GOARCH=386
+              OUTPUT_EXT=".apk"
+              FYNE_OS="android/386"
+              ;;
+          esac
+          
+          # Добавляем теги сборки
+          BUILD_TAGS="opengl"
+          if [[ "$BUILD_TYPE" == "snapshot" ]]; then
+            BUILD_TAGS="$BUILD_TAGS snapshot"
+          fi
+          
+          # Выполняем сборку
+          echo "Running: fyne package -os $FYNE_OS --release -tags=\"$BUILD_TAGS\""
+          fyne package -os $FYNE_OS --release -tags="$BUILD_TAGS"
+          
+          # Переименовываем выходной файл
+          APP_NAME=$(go list -m | sed 's/.*\///')
+          if [[ "${{ matrix.target }}" == "windows" ]]; then
+            # Ищем .exe файл
+            for file in *.exe; do
+              if [[ -f "$file" ]]; then
+                mv "$file" "${APP_NAME}-${APP_VERSION}-${{ matrix.target }}.exe"
+                break
+              fi
+            done
+          elif [[ "${{ matrix.target }}" == android/* ]]; then
+            # Ищем .apk файл
+            for file in *.apk; do
+              if [[ -f "$file" ]]; then
+                mv "$file" "${APP_NAME}-${APP_VERSION}-${{ matrix.target }}.apk"
+                break
+              fi
+            done
+          else
+            # Ищем бинарный файл без расширения
+            for file in $APP_NAME*; do
+              if [[ -f "$file" && ! "$file" =~ \. ]]; then
+                mv "$file" "${APP_NAME}-${APP_VERSION}-${{ matrix.target }}"
+                break
+              fi
+            done
+          fi
+      
+      - name: Upload artifact for ${{ matrix.target }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.target }}-build
+          path: |
+            *-${{ matrix.target }}*
+            *.exe
+            *.apk
+          retention-days: 7
+
+  create-release:
+    needs: build-all-platforms
+    runs-on: ubuntu-latest
+    if: ${{ (github.event_name == 'push' && github.ref_type == 'tag') || (github.event_name == 'workflow_dispatch' && github.event.inputs.build_type == 'release') }}
+    
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      
+      - name: Prepare release assets
+        run: |
+          echo "Preparing release assets..."
+          mkdir -p release-assets
+          
+          # Копируем все артефакты в одну папку
+          find artifacts -type f \( -name "*.exe" -o -name "*.apk" -o -name "*-windows" -o -name "*-linux" -o -name "*-darwin" \) -exec cp {} release-assets/ \;
+          
+          # Создаем файл с информацией о сборке
+          echo "Build Information" > release-assets/BUILD_INFO.txt
+          echo "=================" >> release-assets/BUILD_INFO.txt
+          echo "Version: ${{ github.event.inputs.release_version || github.ref_name }}" >> release-assets/BUILD_INFO.txt
+          echo "Build Type: ${{ github.event.inputs.build_type || 'release' }}" >> release-assets/BUILD_INFO.txt
+          echo "Android Builds: ${{ github.event.inputs.include_android || 'true' }}" >> release-assets/BUILD_INFO.txt
+          echo "Date: $(date)" >> release-assets/BUILD_INFO.txt
+          echo "" >> release-assets/BUILD_INFO.txt
+          echo "Included targets:" >> release-assets/BUILD_INFO.txt
+          echo "${{ needs.setup.outputs.filtered_targets }}" | tr ' ' '\n' >> release-assets/BUILD_INFO.txt
+      
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.event.inputs.release_version && format('v{0}', github.event.inputs.release_version) || github.ref_name }}
+          name: Release ${{ github.event.inputs.release_version && format('v{0}', github.event.inputs.release_version) || github.ref_name }}
+          draft: false
+          prerelease: ${{ github.event.inputs.build_type == 'snapshot' }}
+          files: |
+            release-assets/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
