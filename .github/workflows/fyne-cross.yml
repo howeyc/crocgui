@@ -1,10 +1,16 @@
-name: Fyne cross and Release (Windows, Linux, Android)
+# GitHub Actions workflow file for cross-platform building and releasing a Fyne app using fyne-cross
+# WITHOUT darwin/macOS target
+# Uses FyneApp.toml for app details (Name, ID, Icon, etc.)
+name: Fyne cross and Release
 
+# Define triggers for the workflow
 on:
+  # Automatic trigger on version tags (e.g., v1.0.0)
   push:
     tags:
       - 'v*'
   
+  # Manual trigger from GitHub interface with configurable inputs
   workflow_dispatch:
     inputs:
       release_version:
@@ -28,161 +34,244 @@ on:
           - 'true'
           - 'false'
 
+# Define environment variables used across jobs
+env:
+  # Define desktop targets for fyne-cross (excluding darwin)
+  DESKTOP_TARGETS: '["linux", "windows"]' # fyne-cross uses "windows", not "windows/amd64"
+  
+  # Define Android targets (fyne-cross format: android/{arch})
+  ANDROID_TARGETS: '["android/arm64", "android/arm", "android/amd64", "android/386"]'
+  # Use the name from FyneApp.toml
+  # APP_NAME: crocgui # This variable is no longer needed if relying on FyneApp.toml
+
+# Define the jobs for the workflow
 jobs:
+  # Job to determine which targets to build based on inputs
   setup:
     runs-on: ubuntu-latest
     outputs:
+      # Output the list of all targets
+      all_targets: ${{ steps.set-targets.outputs.all_targets }}
+      # Output the list of targets after filtering (e.g., exclude Android)
       filtered_targets: ${{ steps.filter-targets.outputs.filtered_targets }}
     
     steps:
+      # Step to define the list of all possible targets
+      - name: Determine build targets
+        id: set-targets
+        run: |
+          # Combine desktop (excluding darwin) and Android targets into a single JSON array
+          ALL_TARGETS='["linux", "windows", "android/arm64", "android/arm", "android/amd64", "android/386"]'
+          echo "all_targets=$ALL_TARGETS" >> $GITHUB_OUTPUT
+      
+      # Step to filter targets based on user input (e.g., exclude Android builds)
       - name: Filter Android targets
         id: filter-targets
         run: |
+          # Check the user input for including Android builds
           if [[ "${{ github.event.inputs.include_android || 'true' }}" == "true" ]]; then
-            FILTERED_TARGETS='["windows", "linux", "android"]'
+            # If true, include desktop (no darwin) + Android targets
+            FILTERED_TARGETS='["linux", "windows", "android/arm64", "android/arm", "android/amd64", "android/386"]'
           else
-            FILTERED_TARGETS='["windows", "linux"]'
+            # If false, exclude Android targets, keep only desktop (no darwin)
+            FILTERED_TARGETS='["linux", "windows"]'
           fi
+          # Store the final list of targets to build
           echo "filtered_targets=$FILTERED_TARGETS" >> $GITHUB_OUTPUT
+          echo "Will build for: $FILTERED_TARGETS"
 
-  build-platforms:
-    needs: setup
-    runs-on: ubuntu-latest
+  # Job to build the application for each target platform
+  build-all-platforms:
+    needs: setup # This job depends on the 'setup' job to finish first
+    runs-on: ubuntu-latest # Runs on a Linux runner
     strategy:
-      fail-fast: false
+      fail-fast: false  # Continue building other targets if one fails
       matrix:
-        platform: ${{ fromJSON(needs.setup.outputs.filtered_targets) }}
+        # Create a matrix job for each target in the filtered list
+        target: ${{ fromJSON(needs.setup.outputs.filtered_targets) }}
     
     steps:
-      - name: Checkout main repository
+      # Step 1: Checkout the main repository (your Fyne app)
+      - name: Checkout main repository (crocgui)
         uses: actions/checkout@v4
         with:
-          path: main-repo
-      
+          path: main-repo # Checkout into a subdirectory named 'main-repo'
+
+      # Step 2: Checkout the croc dependency repository
       - name: Checkout croc dependency
         uses: actions/checkout@v4
         with:
           repository: abakum/croc
           ref: main
-          path: croc-dependency
-      
-      - name: Setup workspace
+          path: croc-dependency # Checkout into a subdirectory named 'croc-dependency'
+
+      # Step 3: Set up the Go environment
+      - name: Setup workspace for fyne-cross
         run: |
-          # Create the exact directory structure as in local development
-          # crocgui/ and croc/ should be at the same level for ../croc to work
-          
-          # 1. Create main project directory
+          # Create the directory structure expected by your Go module setup
+          # where 'crocgui' and 'croc' folders are at the same level
+          # Also ensure FyneApp.toml and Icon.png are in the main-repo root
           mkdir -p $GITHUB_WORKSPACE/workspace/crocgui
-          
-          # 2. Create croc dependency directory (same level as crocgui)
           mkdir -p $GITHUB_WORKSPACE/workspace/croc
           
-          # 3. Copy main project
+          # Copy the contents of the checked-out repositories
           cp -r main-repo/* $GITHUB_WORKSPACE/workspace/crocgui/
-          
-          # 4. Copy croc dependency to the correct relative location
           cp -r croc-dependency/* $GITHUB_WORKSPACE/workspace/croc/
           
-          # 5. Navigate to project directory
-          cd $GITHUB_WORKSPACE/workspace/crocgui
-          
-          # 6. Verify the directory structure
-          echo "Workspace structure:"
-          pwd
-          ls -la ../
-      
+          # Print the structure for debugging, check for FyneApp.toml and Icon.png
+          echo "Workspace structure (crocgui):"
+          ls -la $GITHUB_WORKSPACE/workspace/crocgui/
+          if [ -f "$GITHUB_WORKSPACE/workspace/crocgui/FyneApp.toml" ]; then
+            echo "FyneApp.toml found:"
+            cat $GITHUB_WORKSPACE/workspace/crocgui/FyneApp.toml
+          else
+            echo "ERROR: FyneApp.toml not found in $GITHUB_WORKSPACE/workspace/crocgui/"
+            exit 1
+          fi
+          if [ -f "$GITHUB_WORKSPACE/workspace/crocgui/Icon.png" ]; then
+            echo "Icon.png found."
+          else
+            echo "WARNING: Icon.png not found in $GITHUB_WORKSPACE/workspace/crocgui/"
+          fi
+
+      # Step 4: Install Go
+      - name: Set up Go
+        uses: actions/setup-go@v5 # Use the latest version of the Go setup action
+        with:
+          go-version: '1.21' # Specify your Go version
+          # Cache dependencies based on go.sum file in the main-repo path
+          cache-dependency-path: ${{ github.workspace }}/main-repo/go.sum
+
+      # Step 5: Install fyne-cross tool
       - name: Install fyne-cross
         run: |
-          cd $GITHUB_WORKSPACE/workspace/crocgui
-          go install github.com/fyne-io/fyne-cross@latest
-      
-      - name: Build for ${{ matrix.platform }}
+          # Install fyne-cross using Go install
+          go install github.com/lucor/fyne-cross@latest
+
+      # Step 6: Build the application using fyne-cross (reads FyneApp.toml)
+      - name: Build with fyne-cross for ${{ matrix.target }}
+        # No need to set FYNE_CROSS_APP_ID or other app-specific env vars here,
+        # as fyne-cross will read them from FyneApp.toml
         run: |
+          # Change directory to the project root inside the workspace
           cd $GITHUB_WORKSPACE/workspace/crocgui
           
-          BUILD_OPTIONS="--release"
-          if [[ "${{ github.event.inputs.build_type || 'release' }}" == "snapshot" ]]; then
-            BUILD_OPTIONS="$BUILD_OPTIONS --tags snapshot"
-          fi
-          BUILD_OPTIONS="$BUILD_OPTIONS --tags opengl"
+          # Extract OS and ARCH from the matrix.target variable
+          TARGET_OS="${{ matrix.target }}"
+          ARCH="amd64" # Default architecture
           
-          case "${{ matrix.platform }}" in
-            windows|linux)
-              echo "Building ${{ matrix.platform }} (amd64)..."
-              fyne-cross ${{ matrix.platform }} -arch=amd64 $BUILD_OPTIONS
-              
-              APP_NAME="crocgui"
-              VERSION="${{ github.event.inputs.release_version || '1.0.0' }}"
-              
-              if [[ "${{ matrix.platform }}" == "windows" ]]; then
-                for file in fyne-cross/dist/${{ matrix.platform }}-amd64/*.exe; do
-                  if [[ -f "$file" ]]; then
-                    DIR=$(dirname "$file")
-                    mv "$file" "$DIR/$APP_NAME-$VERSION-${{ matrix.platform }}-amd64.exe"
-                  fi
-                done
-              else
-                for file in fyne-cross/dist/${{ matrix.platform }}-amd64/*; do
-                  if [[ -f "$file" && ! "$file" =~ \. ]]; then
-                    DIR=$(dirname "$file")
-                    mv "$file" "$DIR/$APP_NAME-$VERSION-${{ matrix.platform }}-amd64"
-                  fi
-                done
-              fi
-              ;;
-            
-            android)
-              echo "Building Android (all architectures)..."
-              fyne-cross android -arch="*" $BUILD_OPTIONS
-              
-              APP_NAME="crocgui"
-              VERSION="${{ github.event.inputs.release_version || '1.0.0' }}"
-              
-              for file in fyne-cross/dist/android-*/*.apk; do
-                if [[ -f "$file" ]]; then
-                  DIR=$(dirname "$file")
-                  ARCH=$(echo "$DIR" | grep -o 'android-[^/]*' | sed 's/android-//')
-                  mv "$file" "$DIR/$APP_NAME-$VERSION-android-$ARCH.apk"
-                fi
-              done
-              ;;
-          esac
-      
-      - name: Upload artifact for ${{ matrix.platform }}
+          # Check if the target is an Android one
+          if [[ "$TARGET_OS" == android/* ]]; then
+              # For Android, fyne-cross expects the format: fyne-cross android --arch ...
+              # Extract the architecture part (e.g., arm64 from android/arm64)
+              ARCH="${TARGET_OS#android/}"
+              TARGET_OS="android" # Set OS to 'android' for the fyne-cross command
+          fi
+          
+          echo "Building for OS: $TARGET_OS, ARCH: $ARCH using FyneApp.toml"
+          
+          # Execute fyne-cross command
+          # It will automatically read Name, ID, Icon, etc. from FyneApp.toml
+          # --release: enables release build flags (optimization, no debug info)
+          # --arch: specifies the target architecture (if not amd64)
+          # --: everything after -- is passed to the underlying 'go build' command
+          fyne-cross $TARGET_OS \
+            --arch $ARCH \
+            --release \
+            -- \
+            -ldflags="-s -w" # Optional ldflags to reduce binary size
+          
+          # List the output directory to confirm build success
+          echo "Contents of fyne-cross/dist/:"
+          ls -la fyne-cross/dist/
+
+      # Step 7: Upload the built binary as an artifact
+      - name: Upload artifact for ${{ matrix.target }}
+        # Upload even if the build step failed, to help with debugging
+        if: success() || failure()
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.platform }}-builds
-          path: $GITHUB_WORKSPACE/workspace/crocgui/fyne-cross/dist/
-          retention-days: 7
+          name: ${{ matrix.target }}-build # Name the artifact based on the target
+          # Path to the built binary inside the fyne-cross output directory
+          path: ${{ github.workspace }}/workspace/crocgui/fyne-cross/dist/${{ matrix.target }}/*
+          retention-days: 7 # Keep artifacts for 7 days
+          if-no-files-found: warn # Warn if no files are found to upload
 
+  # Job to create a GitHub Release and upload artifacts
   create-release:
-    needs: build-platforms
+    # This job waits for all 'build-all-platforms' jobs to finish
+    needs: build-all-platforms
     runs-on: ubuntu-latest
+    # Only run this job if the workflow was triggered by a tag push or a manual dispatch with build_type 'release'
     if: ${{ (github.event_name == 'push' && github.ref_type == 'tag') || (github.event_name == 'workflow_dispatch' && github.event.inputs.build_type == 'release') }}
     
     steps:
-      - name: Download artifacts
+      # Step 1: Download all artifacts from previous jobs
+      - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
-          path: artifacts
-      
+          path: artifacts # Download into a directory named 'artifacts'
+
+      # Step 2: Prepare the release assets (optional: add build info)
       - name: Prepare release assets
         run: |
-          mkdir -p release-assets
-          find artifacts -type f \( -name "*.exe" -o -name "*.apk" -o -name "crocgui-*" \) -exec cp {} release-assets/ \;
+          echo "Preparing release assets..."
+          mkdir -p release-assets # Create a directory for release files
           
+          # Copy all files from downloaded artifacts into the release directory
+          find artifacts -type f -exec cp {} release-assets/ \;
+          
+          # Create a build information file
           echo "Build Information" > release-assets/BUILD_INFO.txt
           echo "=================" >> release-assets/BUILD_INFO.txt
-          echo "Project: crocgui" >> release-assets/BUILD_INFO.txt
+          echo "Project: crocgui (from FyneApp.toml)" >> release-assets/BUILD_INFO.txt
           echo "Version: ${{ github.event.inputs.release_version || github.ref_name }}" >> release-assets/BUILD_INFO.txt
-          echo "Platforms: Windows, Linux, Android" >> release-assets/BUILD_INFO.txt
+          echo "Build Type: ${{ github.event.inputs.build_type || 'release' }}" >> release-assets/BUILD_INFO.txt
+          echo "Android Builds: ${{ github.event.inputs.include_android || 'true' }}" >> release-assets/BUILD_INFO.txt
           echo "Build Date: $(date -u)" >> release-assets/BUILD_INFO.txt
-      
-      - name: Create Release
-        uses: softprops/action-gh-release@v1
+          echo "GitHub Run: https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" >> release-assets/BUILD_INFO.txt
+          echo "" >> release-assets/BUILD_INFO.txt
+          
+          # List the generated files
+          echo "Generated files:" >> release-assets/BUILD_INFO.txt
+          echo "----------------" >> release-assets/BUILD_INFO.txt
+          ls -la release-assets/ >> release-assets/BUILD_INFO.txt
+          
+          # Print the file content for verification
+          cat release-assets/BUILD_INFO.txt
+
+      # Step 3: Create the GitHub Release and upload assets
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2 # Use the latest version of the release action
         with:
+          # Use the input version or the tag name for the release
           tag_name: ${{ github.event.inputs.release_version && format('v{0}', github.event.inputs.release_version) || github.ref_name }}
+          # Name the release
           name: Release ${{ github.event.inputs.release_version && format('v{0}', github.event.inputs.release_version) || github.ref_name }}
+          draft: false # Make it a public release
+          prerelease: ${{ github.event.inputs.build_type == 'snapshot' }} # Mark as pre-release if type is 'snapshot'
+          # Upload all files from the prepared release-assets directory
           files: release-assets/*
+          # Body text for the release description
+          body: |
+            ## crocgui ${{ github.event.inputs.release_version && format('v{0}', github.event.inputs.release_version) || github.ref_name }}
+            
+            Multi-platform release built automatically via GitHub Actions using `fyne-cross`.
+            App details (Name, ID, Icon, Version) read from `FyneApp.toml`.
+            (Note: Darwin/macOS builds were excluded from this release.)
+            
+            ### Included Platforms:
+            ${{ join(fromJSON(needs.setup.outputs.filtered_targets), ', ') }} # Join platform list with commas
+            
+            ### Build Information:
+            - **Build Type**: ${{ github.event.inputs.build_type || 'release' }}
+            - **Android Builds**: ${{ github.event.inputs.include_android || 'true' }}
+            - **Build Date**: $(date -u)
+            
+            ### Notes:
+            - Windows: `.exe` files
+            - Android: `.apk` files
+            - Linux: Binary files (or AppImage if configured by fyne-cross)
         env:
+          # Token required to create the release
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

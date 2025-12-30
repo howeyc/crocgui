@@ -1,10 +1,15 @@
-name: Fyne cross and Release (macOS)
+# GitHub Actions workflow file for building and releasing a Fyne app for macOS (Darwin) only on macOS runner
+# Includes installation of glfw dependency
+name: Fyne package macOS and Release
 
+# Define triggers for the workflow
 on:
+  # Automatic trigger on version tags (e.g., v1.0.0)
   push:
     tags:
       - 'v*'
   
+  # Manual trigger from GitHub interface with configurable inputs
   workflow_dispatch:
     inputs:
       release_version:
@@ -20,141 +25,294 @@ on:
           - release
           - snapshot
 
+# Define environment variables used across jobs
+env:
+  # Name of your application (used for naming output files and directories)
+  APP_NAME: crocgui # This name comes from FyneApp.toml
+  # Define macOS targets
+  MACOS_TARGETS: '["darwin/amd64", "darwin/arm64"]' # Specific targets for macOS runner
+
+# Define the jobs for the workflow
 jobs:
-  build-macos:
-    runs-on: macos-latest
+  # Job to determine which targets to build (fixed to macOS)
+  setup:
+    runs-on: macos-latest # Runs on macOS to match the main build job
+    outputs:
+      filtered_targets: ${{ steps.set-targets.outputs.filtered_targets }}
     
     steps:
-      - name: Checkout main repository
+      # Step to define the list of macOS targets (fixed)
+      - name: Determine macOS build targets
+        id: set-targets
+        run: |
+          # Fixed list for macOS Intel and Apple Silicon
+          FILTERED_TARGETS='["darwin/amd64", "darwin/arm64"]'
+          echo "filtered_targets=$FILTERED_TARGETS" >> $GITHUB_OUTPUT
+          echo "Will build for: $FILTERED_TARGETS"
+
+  # Job to build the application for each macOS target platform
+  build-all-platforms:
+    needs: setup # This job depends on the 'setup' job to finish first
+    runs-on: macos-latest # Runs on a macOS runner
+    strategy:
+      fail-fast: false  # Continue building other targets if one fails
+      matrix:
+        # Create a matrix job for each macOS target (darwin/amd64, darwin/arm64)
+        target: ${{ fromJSON(needs.setup.outputs.filtered_targets) }}
+    
+    steps:
+      # Step 1: Checkout the main repository (your Fyne app)
+      - name: Checkout main repository (crocgui)
         uses: actions/checkout@v4
         with:
-          path: main-repo
-      
+          path: main-repo # Checkout into a subdirectory named 'main-repo'
+
+      # Step 2: Checkout the croc dependency repository
       - name: Checkout croc dependency
         uses: actions/checkout@v4
         with:
           repository: abakum/croc
           ref: main
-          path: croc-dependency
-      
-      - name: Setup workspace
+          path: croc-dependency # Checkout into a subdirectory named 'croc-dependency'
+
+      # Step 3: Setup workspace and verify FyneApp.toml
+      - name: Setup workspace for fyne build
         run: |
-          # Create the exact directory structure as in local development
-          # crocgui/ and croc/ should be at the same level for ../croc to work
-          
-          # 1. Create main project directory
+          # Create the directory structure expected by your Go module setup
+          # where 'crocgui' and 'croc' folders are at the same level
+          # Also ensure FyneApp.toml and Icon.png are in the main-repo root
           mkdir -p $GITHUB_WORKSPACE/workspace/crocgui
-          
-          # 2. Create croc dependency directory (same level as crocgui)
           mkdir -p $GITHUB_WORKSPACE/workspace/croc
           
-          # 3. Copy main project
+          # Copy the contents of the checked-out repositories
           cp -r main-repo/* $GITHUB_WORKSPACE/workspace/crocgui/
-          
-          # 4. Copy croc dependency to the correct relative location
           cp -r croc-dependency/* $GITHUB_WORKSPACE/workspace/croc/
           
-          # 5. Navigate to project directory
-          cd $GITHUB_WORKSPACE/workspace/crocgui
-          
-          # 6. Verify the directory structure
-          echo "Workspace structure:"
-          pwd
-          ls -la ../
-      
-      - name: Install fyne-cross
-        run: |
-          cd $GITHUB_WORKSPACE/workspace/crocgui
-          go install github.com/fyne-io/fyne-cross@latest
-      
-      - name: Build for macOS
-        run: |
-          cd $GITHUB_WORKSPACE/workspace/crocgui
-          
-          BUILD_OPTIONS="--release"
-          if [[ "${{ github.event.inputs.build_type || 'release' }}" == "snapshot" ]]; then
-            BUILD_OPTIONS="$BUILD_OPTIONS --tags snapshot"
+          # Print the structure for debugging, check for FyneApp.toml and Icon.png
+          echo "Workspace structure (crocgui):"
+          ls -la $GITHUB_WORKSPACE/workspace/crocgui/
+          if [ -f "$GITHUB_WORKSPACE/workspace/crocgui/FyneApp.toml" ]; then
+            echo "FyneApp.toml found:"
+            cat $GITHUB_WORKSPACE/workspace/crocgui/FyneApp.toml
+          else
+            echo "ERROR: FyneApp.toml not found in $GITHUB_WORKSPACE/workspace/crocgui/"
+            exit 1
           fi
-          BUILD_OPTIONS="$BUILD_OPTIONS --tags opengl"
+          if [ -f "$GITHUB_WORKSPACE/workspace/crocgui/Icon.png" ]; then
+            echo "Icon.png found."
+          else
+            echo "WARNING: Icon.png not found in $GITHUB_WORKSPACE/workspace/crocgui/"
+          fi
+
+      # Step 4: Install Go
+      - name: Set up Go
+        uses: actions/setup-go@v5 # Use the latest version of the Go setup action
+        with:
+          go-version: '1.21' # Specify your Go version
+          # Cache dependencies based on go.sum file in the main-repo path
+          cache-dependency-path: ${{ github.workspace }}/main-repo/go.sum
+
+      # Step 5: Install Fyne CLI
+      - name: Install Fyne CLI
+        run: |
+          # Install the Fyne CLI tool
+          go install fyne.io/fyne/v2/cmd/fyne@latest
+
+      # Step 6: Install glfw dependency (required for CGO builds if using glfw)
+      - name: Install glfw dependency
+        run: |
+          # Use Homebrew to install glfw (required for CGO-enabled builds using glfw)
+          brew install glfw
+
+      # Step 7: Build the application using fyne package for the primary architecture
+      # and then go build for the secondary architecture, mirroring your local process
+      - name: Build with fyne and go for ${{ matrix.target }}
+        run: |
+          # Change directory to the project root inside the workspace
+          cd $GITHUB_WORKSPACE/workspace/crocgui
           
-          echo "Building macOS (amd64/arm64)..."
+          # Extract ARCH from the matrix.target variable (format: darwin/arch)
+          # We already know OS is darwin
+          TARGET_ARCH="${matrix.target#darwin/}"
           
-          # Try universal build first (for Apple Silicon + Intel)
-          fyne-cross darwin -arch=amd64,arm64 $BUILD_OPTIONS || {
-            echo "Universal build failed, trying amd64 only..."
-            fyne-cross darwin -arch=amd64 $BUILD_OPTIONS
-          }
+          echo "Building for macOS ARCH: $TARGET_ARCH"
           
-          # Rename output files
-          APP_NAME="crocgui"
-          VERSION="${{ github.event.inputs.release_version || '1.0.0' }}"
+          # Determine the primary and secondary architectures
+          # Primary: Use fyne package to create the .app bundle structure
+          # Secondary: Use go build to compile the binary for the other arch
+          if [[ "$TARGET_ARCH" == "arm64" ]]; then
+              PRIMARY_ARCH="arm64"
+              SECONDARY_ARCH="amd64"
+          elif [[ "$TARGET_ARCH" == "amd64" ]]; then
+              PRIMARY_ARCH="amd64"
+              SECONDARY_ARCH="arm64"
+          else
+              echo "Unsupported macOS ARCH: $TARGET_ARCH"
+              exit 1
+          fi
           
-          # Look for .app bundles first
-          for file in fyne-cross/dist/darwin-*/*.app; do
-            if [[ -d "$file" ]]; then
-              DIR=$(dirname "$file")
-              BASENAME=$(basename "$file" .app)
-              mv "$file" "$DIR/$APP_NAME-$VERSION-macos-$BASENAME.app"
-            fi
-          done
+          echo "Primary ARCH (fyne package): $PRIMARY_ARCH"
+          echo "Secondary ARCH (go build): $SECONDARY_ARCH"
           
-          # Look for DMG files
-          for file in fyne-cross/dist/darwin-*/*.dmg; do
-            if [[ -f "$file" ]]; then
-              DIR=$(dirname "$file")
-              BASENAME=$(basename "$file" .dmg)
-              mv "$file" "$DIR/$APP_NAME-$VERSION-macos-$BASENAME.dmg"
-            fi
-          done
+          # --- Build for PRIMARY ARCH using fyne package ---
+          echo "Building primary arch ($PRIMARY_ARCH) with fyne package..."
+          # Use fyne package to generate the .app bundle structure for the primary arch
+          # We need to ensure CGO is enabled if needed (glfw)
+          export CGO_ENABLED=1
+          export GOOS=darwin
+          export GOARCH=$PRIMARY_ARCH
+          # Use fyne package to create the initial .app structure
+          fyne package --os darwin --release -- --ldflags="-s -w"
           
-          # Look for binaries
-          for file in fyne-cross/dist/darwin-*/*; do
-            if [[ -f "$file" && ! "$file" =~ \. && ! "$file" =~ \.app && ! "$file" =~ \.dmg ]]; then
-              DIR=$(dirname "$file")
-              mv "$file" "$DIR/$APP_NAME-$VERSION-macos"
-            fi
-          done
-      
-      - name: Upload macOS artifacts
+          # Verify the .app bundle was created
+          if [ ! -d "${{ env.APP_NAME }}.app" ]; then
+              echo "ERROR: fyne package did not create ${{ env.APP_NAME }}.app for $PRIMARY_ARCH"
+              ls -la .
+              exit 1
+          fi
+          
+          # Rename the initial bundle to be specific to the primary arch.
+          mv "${{ env.APP_NAME }}.app" "${{ env.APP_NAME }}-$PRIMARY_ARCH.app"
+          
+          # --- Build for SECONDARY ARCH using go build ---
+          echo "Building secondary arch ($SECONDARY_ARCH) with go build..."
+          # Set environment for cross-compilation
+          export CGO_ENABLED=1
+          export GOOS=darwin
+          export GOARCH=$SECONDARY_ARCH
+          
+          # Create the directory structure for the secondary arch binary inside the renamed bundle
+          mkdir -p "${{ env.APP_NAME }}-$PRIMARY_ARCH.app/Contents/MacOS"
+          
+          # Build the Go application for the secondary architecture
+          # Use ldflags to strip debug symbols
+          go build -ldflags="-s -w" -o "${{ env.APP_NAME }}-$PRIMARY_ARCH.app/Contents/MacOS/${{ env.APP_NAME }}"
+          
+          # Verify the secondary arch binary was created
+          if [ ! -f "${{ env.APP_NAME }}-$PRIMARY_ARCH.app/Contents/MacOS/${{ env.APP_NAME }}" ]; then
+              echo "ERROR: go build did not create binary for $SECONDARY_ARCH"
+              ls -la "${{ env.APP_NAME }}-$PRIMARY_ARCH.app/Contents/MacOS/"
+              exit 1
+          fi
+          
+          # Now we have a .app bundle named after the PRIMARY_ARCH, but containing the executable for SECONDARY_ARCH
+          # We need to create a separate bundle for the SECONDARY_ARCH.
+          # We'll copy the structure from the PRIMARY_ARCH bundle (which has correct Info.plist and Resources)
+          # and then replace its executable with the one built for SECONDARY_ARCH.
+          
+          # Create the secondary arch bundle directory
+          cp -r "${{ env.APP_NAME }}-$PRIMARY_ARCH.app" "${{ env.APP_NAME }}-$SECONDARY_ARCH.app"
+          
+          # Build the executable for the PRIMARY_ARCH (the one we haven't built inside the secondary bundle yet)
+          export CGO_ENABLED=1
+          export GOOS=darwin
+          export GOARCH=$PRIMARY_ARCH
+          go build -ldflags="-s -w" -o "${{ env.APP_NAME }}-$SECONDARY_ARCH.app/Contents/MacOS/${{ env.APP_NAME }}"
+          
+          # Verify the primary arch binary was created inside the secondary bundle
+          if [ ! -f "${{ env.APP_NAME }}-$SECONDARY_ARCH.app/Contents/MacOS/${{ env.APP_NAME }}" ]; then
+              echo "ERROR: go build did not create primary arch binary for secondary bundle ($SECONDARY_ARCH bundle)"
+              ls -la "${{ env.APP_NAME }}-$SECONDARY_ARCH.app/Contents/MacOS/"
+              exit 1
+          fi
+          
+          # Now we have two bundles:
+          # - ${{ env.APP_NAME }}-$PRIMARY_ARCH.app with executable for $PRIMARY_ARCH
+          # - ${{ env.APP_NAME }}-$SECONDARY_ARCH.app with executable for $SECONDARY_ARCH
+          
+          # List the output directory to confirm build success
+          echo "Contents of current directory after build:"
+          ls -la .
+          
+          # Optional: Create a Universal Binary using lipo (if desired, instead of two separate apps)
+          # This would involve creating a single .app bundle with a universal executable inside Contents/MacOS
+          # For now, we stick with separate bundles per architecture as per your local makefile structure.
+
+      # Step 8: Upload the built .app bundles as artifacts
+      - name: Upload artifact for ${{ matrix.target }}
+        # Upload even if the build step failed, to help with debugging
+        if: success() || failure()
         uses: actions/upload-artifact@v4
         with:
-          name: macos-builds
-          path: $GITHUB_WORKSPACE/workspace/crocgui/fyne-cross/dist/
-          retention-days: 7
-  
-  create-macos-release:
-    needs: build-macos
-    runs-on: ubuntu-latest
-    if: ${{ (github.event_name == 'push' && github.ref_type == 'tag') || (github.event_name == 'workflow_dispatch' && github.event.inputs.build_type == 'release') }}
+          name: ${{ matrix.target }}-build # Name the artifact based on the target (e.g., darwin/amd64-build)
+          # Path to the built .app bundles
+          path: |
+            ${{ github.workspace }}/workspace/crocgui/*.app
+          retention-days: 7 # Keep artifacts for 7 days
+          if-no-files-found: warn # Warn if no files are found to upload
+
+  # Job to create a GitHub Release and upload artifacts
+  create-release:
+    # This job waits for all 'build-all-platforms' jobs to finish
+    needs: build-all-platforms
+    runs-on: macos-latest # Consistent with main build runner
+    # Only run this job if the workflow was triggered by a tag push or a manual dispatch with build_type 'release'
+    if: ${{ (github.event_name == 'push' && github.ref_type == 'tag') || (github.event.inputs.build_type == 'release') }}
     
     steps:
-      - name: Download macOS artifacts
+      # Step 1: Download all artifacts from previous jobs
+      - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
-          path: macos-artifacts
-      
-      - name: Prepare macOS assets
+          path: artifacts # Download into a directory named 'artifacts'
+
+      # Step 2: Prepare the release assets (optional: add build info)
+      - name: Prepare release assets
         run: |
-          mkdir -p macos-release-assets
-          find macos-artifacts -type f -o -type d -name "*.app" | while read -r item; do
-            cp -r "$item" macos-release-assets/
-          done
-          find macos-artifacts -type f \( -name "*.dmg" -o -name "crocgui-*" \) -exec cp {} macos-release-assets/ \;
+          echo "Preparing release assets..."
+          mkdir -p release-assets # Create a directory for release files
           
-          echo "macOS Build Information" > macos-release-assets/MACOS_BUILD_INFO.txt
-          echo "======================" >> macos-release-assets/MACOS_BUILD_INFO.txt
-          echo "Project: crocgui" >> macos-release-assets/MACOS_BUILD_INFO.txt
-          echo "Version: ${{ github.event.inputs.release_version || github.ref_name }}" >> macos-release-assets/MACOS_BUILD_INFO.txt
-          echo "Platform: macOS" >> macos-release-assets/MACOS_BUILD_INFO.txt
-          echo "Build Type: ${{ github.event.inputs.build_type || 'release' }}" >> macos-release-assets/MACOS_BUILD_INFO.txt
-          echo "Build Date: $(date -u)" >> macos-release-assets/MACOS_BUILD_INFO.txt
-      
-      - name: Create or Update Release
-        uses: softprops/action-gh-release@v1
+          # Copy all files from downloaded artifacts into the release directory
+          find artifacts -type f -name "*.app" -exec cp -r {} release-assets/ \; # Copy .app bundles recursively
+          
+          # Create a build information file
+          echo "Build Information" > release-assets/BUILD_INFO.txt
+          echo "=================" >> release-assets/BUILD_INFO.txt
+          echo "Project: crocgui (from FyneApp.toml)" >> release-assets/BUILD_INFO.txt
+          echo "Version: ${{ github.event.inputs.release_version || github.ref_name }}" >> release-assets/BUILD_INFO.txt
+          echo "Build Type: ${{ github.event.inputs.build_type || 'release' }}" >> release-assets/BUILD_INFO.txt
+          echo "Build Date: $(date -u)" >> release-assets/BUILD_INFO.txt
+          echo "GitHub Run: https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" >> release-assets/BUILD_INFO.txt
+          echo "" >> release-assets/BUILD_INFO.txt
+          
+          # List the generated files
+          echo "Generated files:" >> release-assets/BUILD_INFO.txt
+          echo "----------------" >> release-assets/BUILD_INFO.txt
+          ls -la release-assets/ >> release-assets/BUILD_INFO.txt
+          
+          # Print the file content for verification
+          cat release-assets/BUILD_INFO.txt
+
+      # Step 3: Create the GitHub Release and upload assets
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2 # Use the latest version of the release action
         with:
+          # Use the input version or the tag name for the release
           tag_name: ${{ github.event.inputs.release_version && format('v{0}', github.event.inputs.release_version) || github.ref_name }}
+          # Name the release
           name: Release ${{ github.event.inputs.release_version && format('v{0}', github.event.inputs.release_version) || github.ref_name }}
-          files: macos-release-assets/*
-          # This will add macOS files to the existing release
+          draft: false # Make it a public release
+          prerelease: ${{ github.event.inputs.build_type == 'snapshot' }} # Mark as pre-release if type is 'snapshot'
+          # Upload all files from the prepared release-assets directory
+          files: release-assets/*
+          # Body text for the release description
+          body: |
+            ## crocgui ${{ github.event.inputs.release_version && format('v{0}', github.event.inputs.release_version) || github.ref_name }}
+            
+            macOS release built automatically via GitHub Actions on macOS runner.
+            App details (Name, ID, Icon, Version) read from `FyneApp.toml`.
+            
+            ### Included Platforms:
+            - macOS (Apple Silicon - arm64)
+            - macOS (Intel - amd64)
+            
+            ### Build Information:
+            - **Build Type**: ${{ github.event.inputs.build_type || 'release' }}
+            - **Build Date**: $(date -u)
+            
+            ### Notes:
+            - macOS: `.app` bundles are provided for both Apple Silicon (`crocgui-darwin_arm64.app`) and Intel (`crocgui-darwin_amd64.app`).
+            - To install, copy the desired `.app` bundle to `/Applications`.
         env:
+          # Token required to create the release
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
