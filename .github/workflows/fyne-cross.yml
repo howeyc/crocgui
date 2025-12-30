@@ -146,7 +146,7 @@ jobs:
       - name: Install fyne-cross
         run: |
           # Install fyne-cross using Go install
-          go install github.com/lucor/fyne-cross@latest
+          go install github.com/lucor/fyne-cross/cmd/fyne-cross@latest
 
       # Step 6: Build the application using fyne-cross (reads FyneApp.toml)
       - name: Build with fyne-cross for ${{ matrix.target }}
