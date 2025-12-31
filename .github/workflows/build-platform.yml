@@ -27,8 +27,6 @@ jobs:
     steps:
       - name: Checkout repository (to access local actions)
         uses: actions/checkout@v4
-        with:
-            path: .
 
       - name: Setup and Checkout
         uses: ./.github/actions/setup-and-checkout

@@ -17,12 +17,22 @@ runs:
         ref: 'main'
         path: croc-dependency
 
+    - name: Checkout peerdiscovery dependency
+      uses: actions/checkout@v4
+      with:
+        repository: abakum/peerdiscovery
+        ref: 'main'
+        path: peerdiscovery-dependency
+
     - name: Setup workspace for fyne build
       run: |
         mkdir -p $GITHUB_WORKSPACE/workspace/crocgui
         mkdir -p $GITHUB_WORKSPACE/workspace/croc
+        mkdir -p $GITHUB_WORKSPACE/workspace/peerdiscovery
+        
         cp -r main-repo/* $GITHUB_WORKSPACE/workspace/crocgui/
         cp -r croc-dependency/* $GITHUB_WORKSPACE/workspace/croc/
+        cp -r peerdiscovery-dependency/* $GITHUB_WORKSPACE/workspace/peerdiscovery/
         
         if [ ! -f "$GITHUB_WORKSPACE/workspace/crocgui/FyneApp.toml" ]; then
             echo "ERROR: FyneApp.toml not found in $GITHUB_WORKSPACE/workspace/crocgui/"
