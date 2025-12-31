@@ -9,9 +9,9 @@ on:
   workflow_dispatch:
     inputs:
       release_version:
-        description: 'Release version (e.g., 1.2.3)'
-        required: true
-        default: '1.0.0'
+        description: 'Release version (e.g., 1.2.3) - leave empty to auto-detect from FyneApp.toml'
+        required: false
+        default: ''
       build_type:
         description: 'Build type'
         required: false
@@ -207,6 +207,39 @@ jobs:
     if: ${{ github.event_name == 'workflow_dispatch' && (github.event.inputs.build_type == 'release' || github.event.inputs.build_type == 'snapshot') }}
     
     steps:
+      # Step 0: Determine the release version from input or FyneApp.toml
+      - name: Determine Release Version
+        id: get_version
+        run: |
+          # Get the version from the workflow input
+          INPUT_VERSION="${{ github.event.inputs.release_version }}"
+          
+          # If input version is empty, try to read it from FyneApp.toml
+          if [ -z "$INPUT_VERSION" ]; then
+              echo "Input version is empty, attempting to auto-detect from FyneApp.toml..."
+              # Assuming FyneApp.toml is in the workspace after checkout/setup
+              # Use grep and sed to extract the Version line
+              # This regex looks for Version = "..." and captures the version string
+              # It assumes the format is exactly Version = "version_string"
+              AUTO_VERSION=$(grep -E '^\s*Version\s*=' $GITHUB_WORKSPACE/workspace/crocgui/FyneApp.toml | sed -E 's/^\s*Version\s*=\s*"([^"]+)".*/\1/')
+              if [ -n "$AUTO_VERSION" ]; then
+                  echo "Auto-detected version: $AUTO_VERSION"
+                  RELEASE_VERSION="$AUTO_VERSION"
+              else
+                  echo "ERROR: Could not auto-detect version from FyneApp.toml and no input version provided."
+                  echo "Contents of FyneApp.toml:"
+                  cat $GITHUB_WORKSPACE/workspace/crocgui/FyneApp.toml
+                  exit 1
+              fi
+          else
+              echo "Using provided input version: $INPUT_VERSION"
+              RELEASE_VERSION="$INPUT_VERSION"
+          fi
+          
+          # Set the determined version as an output for later use
+          echo "release_version=$RELEASE_VERSION" >> $GITHUB_OUTPUT
+          echo "Determined release version for this run: $RELEASE_VERSION"
+
       # Step 1: Download all artifacts from previous jobs
       - name: Download all artifacts
         uses: actions/download-artifact@v4
@@ -243,12 +276,13 @@ jobs:
           echo "Build Information" > release-assets/BUILD_INFO.txt
           echo "=================" >> release-assets/BUILD_INFO.txt
           echo "Project: crocgui (from FyneApp.toml)" >> release-assets/BUILD_INFO.txt
-          echo "Version: ${{ github.event.inputs.release_version || 'manual_run' }}" >> release-assets/BUILD_INFO.txt
+          # Use the version determined in the previous step
+          echo "Version: ${{ steps.get_version.outputs.release_version || 'manual_run' }}" >> release-assets/BUILD_INFO.txt
           echo "Build Type: ${{ github.event.inputs.build_type || 'manual' }}" >> release-assets/BUILD_INFO.txt
           # Use bash command substitution to execute 'date -u' and capture its output
           BUILD_DATE=$(date -u)
           echo "Build Date: $BUILD_DATE" >> release-assets/BUILD_INFO.txt
-          echo "GitHub Run: https://github.com/  $GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" >> release-assets/BUILD_INFO.txt
+          echo "GitHub Run: https://github.com/    $GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" >> release-assets/BUILD_INFO.txt
           echo "" >> release-assets/BUILD_INFO.txt
           # List the generated files
           echo "Generated files:" >> release-assets/BUILD_INFO.txt
@@ -263,13 +297,15 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.event.inputs.release_version && format('v{0}', github.event.inputs.release_version) }}
-          name: Release ${{ github.event.inputs.release_version && format('v{0}', github.event.inputs.release_version) }}
+          # Use the version determined in the 'get_version' step
+          tag_name: ${{ steps.get_version.outputs.release_version && format('v{0}', steps.get_version.outputs.release_version) }}
+          # Use the determined version for the release name as well
+          name: Release ${{ steps.get_version.outputs.release_version && format('v{0}', steps.get_version.outputs.release_version) }}
           draft: false
           prerelease: ${{ github.event.inputs.build_type == 'snapshot' }}
           files: release-assets/*
           body: |
-            ## crocgui ${{ github.event.inputs.release_version && format('v{0}', github.event.inputs.release_version) }}
+            ## crocgui ${{ steps.get_version.outputs.release_version && format('v{0}', steps.get_version.outputs.release_version) }}
             
             Release built automatically via GitHub Actions for multiple platforms.
             App details (Name, ID, Icon, Version) read from `FyneApp.toml`.
