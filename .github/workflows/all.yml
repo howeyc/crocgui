@@ -21,11 +21,6 @@ on:
           - release
           - snapshot
 
-# Define environment variables used across jobs
-env:
-  # Name of your application (used for naming output files and directories)
-  APP_NAME: crocgui # This name comes from FyneApp.toml
-
 # Define the jobs for the workflow
 jobs:
   # Job to build the application for Windows target
@@ -34,9 +29,6 @@ jobs:
     with:
       platform_name: "Windows"
       runs_on: "ubuntu-latest" # Specify the runner
-      go_version: '1.21'
-      croc_ref: 'main'
-      app_name: ${{ env.APP_NAME }} # <-- Передаём APP_NAME как input
       build_script: |
         cd $GITHUB_WORKSPACE/workspace/crocgui
         echo "Building for Windows amd64 using MinGW-w64..."
@@ -47,15 +39,15 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y gcc-mingw-w64-x86-64
         fyne package --os windows --release -- --ldflags="-s -w"
-        if [ ! -f "${{ inputs.app_name }}.exe" ]; then
-            echo "ERROR: fyne package did not create ${{ inputs.app_name }}.exe"
+        if [ ! -f "crocgui.exe" ]; then
+            echo "ERROR: fyne package did not create crocgui.exe"
             ls -la .
             exit 1
         fi
         echo "Contents of current directory after build:"
         ls -la .
       artifact_name: windows-amd64-build
-      artifact_path: ${{ github.workspace }}/workspace/crocgui/${{ inputs.app_name }}.exe # <-- Используем input.app_name
+      artifact_path: ${{ github.workspace }}/workspace/crocgui/crocgui.exe
 
   # Job to build the application for Linux target
   build-linux:
@@ -63,9 +55,6 @@ jobs:
     with:
       platform_name: "Linux"
       runs_on: "ubuntu-latest" # Specify the runner
-      go_version: '1.21'
-      croc_ref: 'main'
-      app_name: ${{ env.APP_NAME }} # <-- Передаём APP_NAME как input
       build_script: |
         cd $GITHUB_WORKSPACE/workspace/crocgui
         echo "Building for Linux amd64..."
@@ -75,15 +64,15 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y libgl1-mesa-dev libegl1-mesa-dev libgles2-mesa-dev libxrandr-dev libxcursor-dev libxinerama-dev libxi-dev libxss-dev libxxf86vm-dev
         fyne package --os linux --release -- --ldflags="-s -w"
-        if [ ! -f "${{ inputs.app_name }}.tar.xz" ]; then
-            echo "ERROR: fyne package did not create ${{ inputs.app_name }}.tar.xz"
+        if [ ! -f "crocgui.tar.xz" ]; then
+            echo "ERROR: fyne package did not create crocgui.tar.xz"
             ls -la .
             exit 1
         fi
         echo "Contents of current directory after build:"
         ls -la .
       artifact_name: linux-amd64-build
-      artifact_path: ${{ github.workspace }}/workspace/crocgui/${{ inputs.app_name }}.tar.xz # <-- Используем input.app_name
+      artifact_path: ${{ github.workspace }}/workspace/crocgui/crocgui.tar.xz
 
   # Job to build the application for macOS target
   build-macos:
@@ -91,9 +80,6 @@ jobs:
     with:
       platform_name: "macOS"
       runs_on: "macos-latest" # Specify the runner
-      go_version: '1.21'
-      croc_ref: 'main'
-      app_name: ${{ env.APP_NAME }} # <-- Передаём APP_NAME как input
       build_script: |
         cd $GITHUB_WORKSPACE/workspace/crocgui
         echo "Building for macOS amd64 and arm64..."
@@ -101,23 +87,23 @@ jobs:
         export GOOS=darwin
         # Build for amd64
         export GOARCH=amd64
-        fyne package --os darwin --release --name "${{ inputs.app_name }}-amd64" -- --ldflags="-s -w"
-        if [ ! -d "${{ inputs.app_name }}-amd64.app" ]; then
-            echo "ERROR: fyne package did not create ${{ inputs.app_name }}-amd64.app for amd64"
+        fyne package --os darwin --release --name "crocgui-amd64" -- --ldflags="-s -w"
+        if [ ! -d "crocgui-amd64.app" ]; then
+            echo "ERROR: fyne package did not create crocgui-amd64.app for amd64"
             ls -la .
             exit 1
         fi
         # Build for arm64
         export GOARCH=arm64
-        fyne package --os darwin --release --name "${{ inputs.app_name }}-arm64" -- --ldflags="-s -w"
-        if [ ! -d "${{ inputs.app_name }}-arm64.app" ]; then
-            echo "ERROR: fyne package did not create ${{ inputs.app_name }}-arm64.app for arm64"
+        fyne package --os darwin --release --name "crocgui-arm64" -- --ldflags="-s -w"
+        if [ ! -d "crocgui-arm64.app" ]; then
+            echo "ERROR: fyne package did not create crocgui-arm64.app for arm64"
             ls -la .
             exit 1
         fi
         # Check architecture
-        AMD64_EXECUTABLE_PATH="${{ inputs.app_name }}-amd64.app/Contents/MacOS/${{ inputs.app_name }}"
-        ARM64_EXECUTABLE_PATH="${{ inputs.app_name }}-arm64.app/Contents/MacOS/${{ inputs.app_name }}"
+        AMD64_EXECUTABLE_PATH="crocgui-amd64.app/Contents/MacOS/crocgui"
+        ARM64_EXECUTABLE_PATH="crocgui-arm64.app/Contents/MacOS/crocgui"
         if [ -f "$AMD64_EXECUTABLE_PATH" ]; then
             echo "Architecture of $AMD64_EXECUTABLE_PATH:"
             file "$AMD64_EXECUTABLE_PATH"
@@ -136,8 +122,8 @@ jobs:
         ls -la .
       artifact_name: macos-builds
       artifact_path: |
-        ${{ github.workspace }}/workspace/crocgui/${{ inputs.app_name }}-amd64.app
-        ${{ github.workspace }}/workspace/crocgui/${{ inputs.app_name }}-arm64.app
+        ${{ github.workspace }}/workspace/crocgui/crocgui-amd64.app
+        ${{ github.workspace }}/workspace/crocgui/crocgui-arm64.app
 
   # Job to build the application for Android target
   build-android:
@@ -145,9 +131,6 @@ jobs:
     with:
       platform_name: "Android"
       runs_on: "ubuntu-latest" # Specify the runner
-      go_version: '1.21'
-      croc_ref: 'main'
-      app_name: ${{ env.APP_NAME }} # <-- Передаём APP_NAME как input
       build_script: |
         cd $GITHUB_WORKSPACE/workspace/crocgui
         echo "Building for Android targets: android/arm, android/arm64, android/386, android/amd64"
@@ -184,18 +167,18 @@ jobs:
           export GOOS=$GOOS
           export GOARCH=$GOARCH
           fyne package -os $target --release -- --ldflags="-s -w"
-          APK_NAME="${{ inputs.app_name }}.apk"
+          APK_NAME="crocgui.apk"
           if [ -f "$APK_NAME" ]; then
-              mv "$APK_NAME" "${{ inputs.app_name }}-${GOARCH}.apk"
-              echo "Renamed APK to: ${{ inputs.app_name }}-${GOARCH}.apk"
+              mv "$APK_NAME" "crocgui-${GOARCH}.apk"
+              echo "Renamed APK to: crocgui-${GOARCH}.apk"
           else
-              echo "ERROR: fyne package did not create ${{ inputs.app_name }}.apk for $target"
+              echo "ERROR: fyne package did not create crocgui.apk for $target"
               exit 1
           fi
         done
         ls -la *.apk
       artifact_name: android-apks
-      artifact_path: ${{ github.workspace }}/workspace/crocgui/${{ inputs.app_name }}-*.apk # <-- Используем input.app_name
+      artifact_path: ${{ github.workspace }}/workspace/crocgui/crocgui-*.apk
 
   # Job to create a GitHub Release and upload artifacts
   create-release:
@@ -265,4 +248,26 @@ jobs:
           tag_name: ${{ github.event.inputs.release_version && format('v{0}', github.event.inputs.release_version) }}
           name: Release ${{ github.event.inputs.release_version && format('v{0}', github.event.inputs.release_version) }}
           draft: false
-          prerelease: $
+          prerelease: ${{ github.event.inputs.build_type == 'snapshot' }}
+          files: release-assets/*
+          body: |
+            ## crocgui ${{ github.event.inputs.release_version && format('v{0}', github.event.inputs.release_version) }}
+            
+            Release built automatically via GitHub Actions for multiple platforms.
+            App details (Name, ID, Icon, Version) read from `FyneApp.toml`.
+            
+            ### Included Platforms:
+            - Windows (Intel/AMD - amd64)
+            - Linux (Intel/AMD - amd64)
+            - macOS (Apple Silicon - arm64)
+            - macOS (Intel - amd64)
+            - Android (ARM, ARM64, x86, x86_64)
+                       
+            ### Notes:
+            - Windows: Executable file (`crocgui.exe`) is provided.
+            - Linux: The application is packaged as a .tar.xz archive (crocgui.tar.xz). Extract and run the contained executable.
+            - macOS: `.dmg` files are provided for both Apple Silicon (`crocgui-arm64.dmg`) and Intel (`crocgui-amd64.dmg`).
+            - Android: APK files are provided for multiple architectures (`crocgui-arm.apk`, `crocgui-arm64.apk`, `crocgui-386.apk`, `crocgui-amd64.apk`).
+            - To install, follow the instructions for your platform. Ensure you have necessary runtime libraries installed (e.g., Mesa OpenGL libraries on Linux).
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

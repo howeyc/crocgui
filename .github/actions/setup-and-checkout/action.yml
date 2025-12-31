@@ -1,15 +1,6 @@
 # .github/actions/setup-and-checkout/action.yml
 name: 'Setup and Checkout'
 description: 'Checkout repos and install Go/Fyne'
-inputs:
-  croc_ref:
-    description: 'Ref for the croc dependency repo'
-    required: false
-    default: 'main'
-  go_version:
-    description: 'Go version to install'
-    required: false
-    default: '1.21'
 
 runs:
   using: "composite"
@@ -23,7 +14,7 @@ runs:
       uses: actions/checkout@v4
       with:
         repository: abakum/croc
-        ref: ${{ inputs.croc_ref }}
+        ref: 'main'
         path: croc-dependency
 
     - name: Setup workspace for fyne build
@@ -45,7 +36,7 @@ runs:
     - name: Set up Go
       uses: actions/setup-go@v5
       with:
-        go-version: ${{ inputs.go_version }}
+        go-version: '1.21'
         cache-dependency-path: ${{ github.workspace }}/main-repo/go.sum
 
     - name: Install Fyne CLI

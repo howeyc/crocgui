@@ -19,17 +19,6 @@ on:
       artifact_path:
         required: true
         type: string
-      go_version:
-        required: false
-        type: string
-        default: '1.21'
-      croc_ref:
-        required: false
-        type: string
-        default: 'main'
-      app_name: 
-        required: true
-        type: string
 
 jobs:
   build:
@@ -37,9 +26,6 @@ jobs:
     steps:
       - name: Setup and Checkout
         uses: ./.github/actions/setup-and-checkout@v1
-        with:
-          go_version: ${{ inputs.go_version }}
-          croc_ref: ${{ inputs.croc_ref }}
 
       - name: Execute build script
         run: ${{ inputs.build_script }}
