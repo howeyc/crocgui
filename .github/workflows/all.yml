@@ -175,6 +175,31 @@ jobs:
             echo "ERROR: sdkmanager is not available in PATH."
             exit 1
         fi
+        
+        # Read version and build number from FyneApp.toml
+        echo "Reading version and build number from FyneApp.toml..."
+        VERSION_NAME=$(grep -E '^\s*Version\s*=' FyneApp.toml | sed -E 's/^\s*Version\s*=\s*"([^"]+)".*/\1/')
+        BUILD_NUMBER=$(grep -E '^\s*Build\s*=' FyneApp.toml | sed -E 's/^\s*Build\s*=\s*([0-9]+).*/\1/')
+        
+        if [ -z "$VERSION_NAME" ] || [ -z "$BUILD_NUMBER" ]; then
+            echo "ERROR: Could not extract Version or Build number from FyneApp.toml."
+            cat FyneApp.toml
+            exit 1
+        fi
+        
+        echo "Extracted Version Name: $VERSION_NAME"
+        echo "Extracted Build Number: $BUILD_NUMBER"
+        
+        # Update AndroidManifest.xml with the extracted values
+        echo "Updating AndroidManifest.xml with versionName=$VERSION_NAME and versionCode=$BUILD_NUMBER"
+        # Use sed to replace the values in the manifest
+        sed -i.bak "s/android:versionName=\"[^\"]*\"/android:versionName=\"$VERSION_NAME\"/g" AndroidManifest.xml
+        sed -i.bak "s/android:versionCode=\"[0-9]*\"/android:versionCode=\"$BUILD_NUMBER\"/g" AndroidManifest.xml
+        
+        # Verify the update (optional, for debugging)
+        echo "Updated AndroidManifest.xml:"
+        grep -E 'android:versionName|android:versionCode' AndroidManifest.xml
+        
         # Build for each target
         TARGETS=("android/arm" "android/arm64" "android/386" "android/amd64")
         for target in "${TARGETS[@]}"; do
@@ -196,7 +221,9 @@ jobs:
         done
         ls -la *.apk
       artifact_name: android-apks
-      artifact_path: crocgui-*.apk
+      artifact_path: |
+        crocgui-*.apk
+        FyneApp.toml
 
   # Job to create a GitHub Release and upload artifacts
   create-release:
@@ -207,28 +234,42 @@ jobs:
     if: ${{ github.event_name == 'workflow_dispatch' && (github.event.inputs.build_type == 'release' || github.event.inputs.build_type == 'snapshot') }}
     
     steps:
-      # Step 0: Determine the release version from input or FyneApp.toml
+      # Step 0.1: Download the artifact containing FyneApp.toml (from Android build)
+      - name: Download FyneApp.toml artifact (from Android build)
+        uses: actions/download-artifact@v4
+        with:
+          name: android-apks
+          path: fyneapp-source-android
+
+      # Step 0.2: Determine the release version from input or FyneApp.toml
       - name: Determine Release Version
         id: get_version
         run: |
           # Get the version from the workflow input
           INPUT_VERSION="${{ github.event.inputs.release_version }}"
           
-          # If input version is empty, try to read it from FyneApp.toml
+          # If input version is empty, try to read it from the downloaded FyneApp.toml
           if [ -z "$INPUT_VERSION" ]; then
-              echo "Input version is empty, attempting to auto-detect from FyneApp.toml..."
-              # Assuming FyneApp.toml is in the workspace after checkout/setup
-              # Use grep and sed to extract the Version line
-              # This regex looks for Version = "..." and captures the version string
-              # It assumes the format is exactly Version = "version_string"
-              AUTO_VERSION=$(grep -E '^\s*Version\s*=' $GITHUB_WORKSPACE/workspace/crocgui/FyneApp.toml | sed -E 's/^\s*Version\s*=\s*"([^"]+)".*/\1/')
-              if [ -n "$AUTO_VERSION" ]; then
-                  echo "Auto-detected version: $AUTO_VERSION"
-                  RELEASE_VERSION="$AUTO_VERSION"
+              echo "Input version is empty, attempting to auto-detect from downloaded FyneApp.toml"
+              # FyneApp.toml is now in the fyneapp-source-android directory after download
+              FYNEAPP_TOML_PATH="$GITHUB_WORKSPACE/fyneapp-source-android/FyneApp.toml"
+              if [ -f "$FYNEAPP_TOML_PATH" ]; then
+                  # Use grep and sed to extract the Version line
+                  # This regex looks for Version = "..." and captures the version string
+                  # It assumes the format is exactly Version = "version_string"
+                  AUTO_VERSION=$(grep -E '^\s*Version\s*=' "$FYNEAPP_TOML_PATH" | sed -E 's/^\s*Version\s*=\s*"([^"]+)".*/\1/')
+                  if [ -n "$AUTO_VERSION" ]; then
+                      echo "Auto-detected version: $AUTO_VERSION"
+                      RELEASE_VERSION="$AUTO_VERSION"
+                  else
+                      echo "ERROR: Could not extract version from FyneApp.toml (format might be incorrect)."
+                      echo "Contents of downloaded FyneApp.toml:"
+                      cat "$FYNEAPP_TOML_PATH"
+                      exit 1
+                  fi
               else
-                  echo "ERROR: Could not auto-detect version from FyneApp.toml and no input version provided."
-                  echo "Contents of FyneApp.toml:"
-                  cat $GITHUB_WORKSPACE/workspace/crocgui/FyneApp.toml
+                  echo "ERROR: FyneApp.toml not found at $FYNEAPP_TOML_PATH"
+                  ls -la "$GITHUB_WORKSPACE/fyneapp-source-android/"
                   exit 1
               fi
           else
@@ -240,7 +281,7 @@ jobs:
           echo "release_version=$RELEASE_VERSION" >> $GITHUB_OUTPUT
           echo "Determined release version for this run: $RELEASE_VERSION"
 
-      # Step 1: Download all artifacts from previous jobs
+      # Step 1: Download all other artifacts from previous jobs
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
@@ -257,6 +298,7 @@ jobs:
               cp -r "$artifact_dir"* release-assets/
             fi
           done
+          
           # Find and create .dmg images for all .app bundles in release-assets
           find release-assets -type d -name "*.app" -print0 | while IFS= read -r -d '' app_bundle; do
             parent_dir=$(dirname "$app_bundle")
@@ -272,6 +314,11 @@ jobs:
               exit 1
             fi
           done
+          
+          # Copy the FyneApp.toml from the downloaded artifact to release assets
+          # We can take it from Android artifact.
+          cp -f "$GITHUB_WORKSPACE/fyneapp-source-android/FyneApp.toml" release-assets/
+          
           # Create a build information file
           echo "Build Information" > release-assets/BUILD_INFO.txt
           echo "=================" >> release-assets/BUILD_INFO.txt
@@ -316,7 +363,10 @@ jobs:
             - macOS (Apple Silicon - arm64)
             - macOS (Intel - amd64)
             - Android (ARM, ARM64, x86, x86_64)
-                       
+            
+            ### Included Files:
+            - FyneApp.toml (contains version information used for this release)
+            
             ### Notes:
             - Windows: Executable file (`crocgui.exe`) is provided.
             - Linux: The application is packaged as a .tar.xz archive (crocgui.tar.xz). Extract and run the contained executable.
