@@ -1,7 +1,7 @@
 # GitHub Actions workflow file for building and releasing a Fyne app for all platforms (Windows, Linux, macOS, Android)
 # Includes installation of dependencies like MinGW-w64 cross-compiler, Mesa OpenGL, GLFW, Android NDK, etc.
 # Manual trigger only
-name: Fyne package All Platforms and Release
+name: Fyne package all and Release
 
 # Define triggers for the workflow
 on:

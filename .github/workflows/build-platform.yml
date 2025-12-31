@@ -25,7 +25,7 @@ jobs:
     runs-on: ${{ inputs.runs_on }}
     steps:
       - name: Setup and Checkout
-        uses: ./.github/actions/setup-and-checkout@v1
+        uses: ./.github/actions/setup-and-checkout
 
       - name: Execute build script
         run: ${{ inputs.build_script }}
