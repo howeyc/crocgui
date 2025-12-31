@@ -38,7 +38,7 @@ jobs:
         export CC=x86_64-w64-mingw32-gcc
         sudo apt-get update
         sudo apt-get install -y gcc-mingw-w64-x86-64
-        fyne package --os windows --release -- --ldflags="-s -w"
+        fyne package --os windows --release
         if [ ! -f "crocgui.exe" ]; then
             echo "ERROR: fyne package did not create crocgui.exe"
             ls -la .
@@ -47,7 +47,7 @@ jobs:
         echo "Contents of current directory after build:"
         ls -la .
       artifact_name: windows-amd64-build
-      artifact_path: ${{ github.workspace }}/workspace/crocgui/crocgui.exe
+      artifact_path: crocgui.exe
 
   # Job to build the application for Linux target
   build-linux:
@@ -63,7 +63,7 @@ jobs:
         export GOARCH=amd64
         sudo apt-get update
         sudo apt-get install -y libgl1-mesa-dev libegl1-mesa-dev libgles2-mesa-dev libxrandr-dev libxcursor-dev libxinerama-dev libxi-dev libxss-dev libxxf86vm-dev
-        fyne package --os linux --release -- --ldflags="-s -w"
+        fyne package --os linux --release
         if [ ! -f "crocgui.tar.xz" ]; then
             echo "ERROR: fyne package did not create crocgui.tar.xz"
             ls -la .
@@ -72,7 +72,7 @@ jobs:
         echo "Contents of current directory after build:"
         ls -la .
       artifact_name: linux-amd64-build
-      artifact_path: ${{ github.workspace }}/workspace/crocgui/crocgui.tar.xz
+      artifact_path: crocgui.tar.xz
 
   # Job to build the application for macOS target
   build-macos:
@@ -87,7 +87,7 @@ jobs:
         export GOOS=darwin
         # Build for amd64
         export GOARCH=amd64
-        fyne package --os darwin --release --name "crocgui-amd64" -- --ldflags="-s -w"
+        fyne package --os darwin --release --name "crocgui-amd64"
         if [ ! -d "crocgui-amd64.app" ]; then
             echo "ERROR: fyne package did not create crocgui-amd64.app for amd64"
             ls -la .
@@ -95,7 +95,7 @@ jobs:
         fi
         # Build for arm64
         export GOARCH=arm64
-        fyne package --os darwin --release --name "crocgui-arm64" -- --ldflags="-s -w"
+        fyne package --os darwin --release --name "crocgui-arm64"
         if [ ! -d "crocgui-arm64.app" ]; then
             echo "ERROR: fyne package did not create crocgui-arm64.app for arm64"
             ls -la .
@@ -122,8 +122,8 @@ jobs:
         ls -la .
       artifact_name: macos-builds
       artifact_path: |
-        ${{ github.workspace }}/workspace/crocgui/crocgui-amd64.app
-        ${{ github.workspace }}/workspace/crocgui/crocgui-arm64.app
+        crocgui-amd64.app
+        crocgui-arm64.app
 
   # Job to build the application for Android target
   build-android:
@@ -166,7 +166,7 @@ jobs:
           export CGO_ENABLED=1
           export GOOS=$GOOS
           export GOARCH=$GOARCH
-          fyne package -os $target --release -- --ldflags="-s -w"
+          fyne package -os $target --release
           APK_NAME="crocgui.apk"
           if [ -f "$APK_NAME" ]; then
               mv "$APK_NAME" "crocgui-${GOARCH}.apk"
@@ -178,7 +178,7 @@ jobs:
         done
         ls -la *.apk
       artifact_name: android-apks
-      artifact_path: ${{ github.workspace }}/workspace/crocgui/crocgui-*.apk
+      artifact_path: crocgui-*.apk
 
   # Job to create a GitHub Release and upload artifacts
   create-release:

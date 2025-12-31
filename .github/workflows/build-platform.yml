@@ -39,6 +39,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ${{ inputs.artifact_name }}
-          path: ${{ inputs.artifact_path }}
+          path: ${{ github.workspace }}/workspace/crocgui/${{ inputs.artifact_path }}
           retention-days: 7
           if-no-files-found: error
