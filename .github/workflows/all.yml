@@ -140,6 +140,24 @@ jobs:
             echo "ERROR: ANDROID_HOME is not set."
             exit 1
         fi
+        # Check if sdkmanager is available via the standard path and update PATH if necessary
+        SDKMANAGER_PATH="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+        if [ -f "$SDKMANAGER_PATH" ]; then
+            echo "sdkmanager found at standard path: $SDKMANAGER_PATH"
+            export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin
+        else
+            echo "sdkmanager not found at standard path. Checking tools/bin..."
+            SDKMANAGER_PATH="$ANDROID_HOME/tools/bin/sdkmanager"
+            if [ -f "$SDKMANAGER_PATH" ]; then
+                echo "sdkmanager found at legacy path: $SDKMANAGER_PATH"
+                export PATH=$PATH:$ANDROID_HOME/tools/bin
+            else
+                echo "ERROR: sdkmanager not found in standard locations under ANDROID_HOME ($ANDROID_HOME)."
+                echo "Contents of $ANDROID_HOME:"
+                ls -la $ANDROID_HOME/
+                exit 1
+            fi
+        fi
         # Install NDK
         NDK_VERSION="27.3.13750724"
         echo "Installing NDK version: $NDK_VERSION"
