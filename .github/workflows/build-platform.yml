@@ -23,7 +23,13 @@ on:
 jobs:
   build:
     runs-on: ${{ inputs.runs_on }}
+    
     steps:
+      - name: Checkout repository (to access local actions)
+        uses: actions/checkout@v4
+        with:
+            path: .
+
       - name: Setup and Checkout
         uses: ./.github/actions/setup-and-checkout
 
