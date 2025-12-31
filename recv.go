@@ -634,6 +634,7 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 					removeEntrys(false)
 					reload()
 					showPage()
+					log.Warnf("NumGoroutine %d", runtime.NumGoroutine())
 				})
 			}()
 
@@ -650,7 +651,6 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 				case <-done:
 					return
 				case <-doneChan:
-
 					return
 				case <-cancelChan:
 					s := fmt.Sprintf("%s %s", lp("Receive cancelled."), filename)
@@ -763,7 +763,6 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 				a.Preferences().SetString("DeleteFile", fpath)
 			})
 			close(doneChan)
-			log.Warnf("NumGoroutine %d", runtime.NumGoroutine())
 		}() // Receive
 		//  +2 go routines
 		log.Warnf("NumGoroutine %d", runtime.NumGoroutine())
@@ -1040,14 +1039,25 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 		container.NewBorder(top, nil, nil, nil, scroller))
 
 	showPage = func() {
-		if parent.Selected() != ti {
-			fyne.Do(func() {
-				parent.Select(ti)
-			})
+		if parent == nil {
+			return
 		}
-		fyne.Do(parent.Selected().Content.Refresh)
-
+		ps := parent.Selected()
+		if ps == nil || ti == nil {
+			return
+		}
+		fyne.Do(func() {
+			if ps != ti {
+				parent.Select(ti)
+				ps := parent.Selected()
+				if ps == nil {
+					return
+				}
+			}
+			ps.Content.Refresh()
+		})
 	}
+
 	return
 }
 

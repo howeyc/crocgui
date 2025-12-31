@@ -3,6 +3,7 @@ module crocgui
 go 1.24.3
 
 replace github.com/schollz/croc/v10 => ../croc
+replace github.com/schollz/peerdiscovery => ../peerdiscovery
 
 require (
 	fyne.io/fyne/v2 v2.6.1

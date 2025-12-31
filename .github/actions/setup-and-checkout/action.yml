@@ -1,0 +1,54 @@
+# .github/actions/setup-and-checkout/action.yml
+name: 'Setup and Checkout'
+description: 'Checkout repos and install Go/Fyne'
+inputs:
+  croc_ref:
+    description: 'Ref for the croc dependency repo'
+    required: false
+    default: 'main'
+  go_version:
+    description: 'Go version to install'
+    required: false
+    default: '1.21'
+
+runs:
+  using: "composite"
+  steps:
+    - name: Checkout main repository (crocgui)
+      uses: actions/checkout@v4
+      with:
+        path: main-repo
+
+    - name: Checkout croc dependency
+      uses: actions/checkout@v4
+      with:
+        repository: abakum/croc
+        ref: ${{ inputs.croc_ref }}
+        path: croc-dependency
+
+    - name: Setup workspace for fyne build
+      run: |
+        mkdir -p $GITHUB_WORKSPACE/workspace/crocgui
+        mkdir -p $GITHUB_WORKSPACE/workspace/croc
+        cp -r main-repo/* $GITHUB_WORKSPACE/workspace/crocgui/
+        cp -r croc-dependency/* $GITHUB_WORKSPACE/workspace/croc/
+        
+        if [ ! -f "$GITHUB_WORKSPACE/workspace/crocgui/FyneApp.toml" ]; then
+            echo "ERROR: FyneApp.toml not found in $GITHUB_WORKSPACE/workspace/crocgui/"
+            exit 1
+        fi
+        if [ ! -f "$GITHUB_WORKSPACE/workspace/crocgui/Icon.png" ]; then
+            echo "WARNING: Icon.png not found in $GITHUB_WORKSPACE/workspace/crocgui/"
+        fi
+      shell: bash
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ inputs.go_version }}
+        cache-dependency-path: ${{ github.workspace }}/main-repo/go.sum
+
+    - name: Install Fyne CLI
+      run: |
+        go install fyne.io/tools/cmd/fyne@latest
+      shell: bash

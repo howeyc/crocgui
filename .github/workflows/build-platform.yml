@@ -1,0 +1,51 @@
+# .github/workflows/build-platform.yml
+name: Build Platform
+
+on:
+  workflow_call:
+    inputs:
+      platform_name:
+        required: true
+        type: string
+      runs_on:
+        required: true
+        type: string # e.g., "ubuntu-latest", "macos-latest", "windows-latest"
+      build_script:
+        required: true
+        type: string # Bash script to run for building
+      artifact_name:
+        required: true
+        type: string
+      artifact_path:
+        required: true
+        type: string
+      go_version:
+        required: false
+        type: string
+        default: '1.21'
+      croc_ref:
+        required: false
+        type: string
+        default: 'main'
+
+jobs:
+  build:
+    runs-on: ${{ inputs.runs_on }} # Use the passed runs-on
+    steps:
+      - name: Setup and Checkout
+        uses: ./.github/actions/setup-and-checkout@v1 # Use our composite action
+        with:
+          go_version: ${{ inputs.go_version }}
+          croc_ref: ${{ inputs.croc_ref }}
+
+      - name: Execute build script
+        run: ${{ inputs.build_script }}
+        shell: bash
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.artifact_name }}
+          path: ${{ inputs.artifact_path }}
+          retention-days: 7
+          if-no-files-found: error

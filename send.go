@@ -688,6 +688,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 						removeEntrys(false)
 						reload()
 						showPage()
+						log.Warnf("NumGoroutine %d", runtime.NumGoroutine())
 					})
 				}()
 
@@ -826,7 +827,6 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 
 				})
 				close(doneChan)
-				log.Warnf("NumGoroutine %d", runtime.NumGoroutine())
 			}() // Send
 		}() //go
 		// +12 go routines
@@ -1267,12 +1267,23 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 	ti = container.NewTabItemWithIcon(lp("Send"), theme.MailSendIcon(),
 		container.NewBorder(top, nil, nil, nil, scroller))
 	showPage = func() {
-		if parent.Selected() != ti {
-			fyne.Do(func() {
-				parent.Select(ti)
-			})
+		if parent == nil {
+			return
 		}
-		fyne.Do(parent.Selected().Content.Refresh)
+		ps := parent.Selected()
+		if ps == nil || ti == nil {
+			return
+		}
+		fyne.Do(func() {
+			if ps != ti {
+				parent.Select(ti)
+				ps := parent.Selected()
+				if ps == nil {
+					return
+				}
+			}
+			ps.Content.Refresh()
+		})
 	}
 
 	return
