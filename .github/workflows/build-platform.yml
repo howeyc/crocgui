@@ -27,13 +27,16 @@ on:
         required: false
         type: string
         default: 'main'
+      app_name: 
+        required: true
+        type: string
 
 jobs:
   build:
-    runs-on: ${{ inputs.runs_on }} # Use the passed runs-on
+    runs-on: ${{ inputs.runs_on }}
     steps:
       - name: Setup and Checkout
-        uses: ./.github/actions/setup-and-checkout@v1 # Use our composite action
+        uses: ./.github/actions/setup-and-checkout@v1
         with:
           go_version: ${{ inputs.go_version }}
           croc_ref: ${{ inputs.croc_ref }}
