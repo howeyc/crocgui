@@ -85,25 +85,23 @@ jobs:
         echo "Building for macOS amd64 and arm64..."
         export CGO_ENABLED=1
         export GOOS=darwin
+        
+        BUILD_DIR="$GITHUB_WORKSPACE/workspace/crocgui/macos-build"
+        mkdir -p "$BUILD_DIR"
+        cd "$BUILD_DIR"
+        
         # Build for amd64
         export GOARCH=amd64
-        fyne package --os darwin --release --name "crocgui-amd64"
-        if [ ! -d "crocgui-amd64.app" ]; then
-            echo "ERROR: fyne package did not create crocgui-amd64.app for amd64"
-            ls -la .
-            exit 1
-        fi
+        fyne package --os darwin --release --name "crocgui-amd64" --appBuild 1
+        
         # Build for arm64
         export GOARCH=arm64
-        fyne package --os darwin --release --name "crocgui-arm64"
-        if [ ! -d "crocgui-arm64.app" ]; then
-            echo "ERROR: fyne package did not create crocgui-arm64.app for arm64"
-            ls -la .
-            exit 1
-        fi
+        fyne package --os darwin --release --name "crocgui-arm64" --appBuild 1
+        
         # Check architecture
         AMD64_EXECUTABLE_PATH="crocgui-amd64.app/Contents/MacOS/crocgui"
         ARM64_EXECUTABLE_PATH="crocgui-arm64.app/Contents/MacOS/crocgui"
+        
         if [ -f "$AMD64_EXECUTABLE_PATH" ]; then
             echo "Architecture of $AMD64_EXECUTABLE_PATH:"
             file "$AMD64_EXECUTABLE_PATH"
@@ -111,6 +109,7 @@ jobs:
             echo "ERROR: Executable not found at $AMD64_EXECUTABLE_PATH"
             exit 1
         fi
+        
         if [ -f "$ARM64_EXECUTABLE_PATH" ]; then
             echo "Architecture of $ARM64_EXECUTABLE_PATH:"
             file "$ARM64_EXECUTABLE_PATH"
@@ -118,8 +117,6 @@ jobs:
             echo "ERROR: Executable not found at $ARM64_EXECUTABLE_PATH"
             exit 1
         fi
-        echo "Contents of current directory after build:"
-        ls -la .
         
         # Create DMG files using hdiutil (macOS utility)
         echo "Creating DMG for crocgui-amd64.app"
@@ -129,6 +126,11 @@ jobs:
         hdiutil create -srcfolder "crocgui-arm64.app" -volname "crocgui-arm64" -ov -format UDZO "crocgui-arm64.dmg"
         
         echo "Contents of current directory after DMG creation:"
+        ls -la *.dmg
+        
+        mv *.dmg "$GITHUB_WORKSPACE/workspace/crocgui/"
+        cd "$GITHUB_WORKSPACE/workspace/crocgui"
+        echo "DMG files in project root:"
         ls -la *.dmg
       artifact_name: macos-builds
       artifact_path: |
@@ -298,12 +300,14 @@ jobs:
           
           # Copy all files from artifacts subdirectories to release-assets
           echo "Copying files to release-assets..."
-          find artifacts -type f -exec cp {} release-assets/ \;
-          
-          # Clean up repo-temp if it exists from previous step
-          rm -rf repo-temp
+          for file in $(find artifacts -type f -name "*.exe" -o -name "*.tar.xz" -o -name "*.dmg" -o -name "*.apk"); do
+            filename=$(basename "$file")
+            echo "Copying $filename to release-assets/"
+            cp "$file" "release-assets/$filename"
+          done
           
           # Clone repository to get FyneApp.toml for release
+          rm -rf repo-temp
           git clone https://github.com/${{ github.repository }}.git repo-temp
           cp repo-temp/FyneApp.toml release-assets/
           
