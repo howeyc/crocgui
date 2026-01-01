@@ -86,10 +86,6 @@ jobs:
         export CGO_ENABLED=1
         export GOOS=darwin
         
-        BUILD_DIR="$GITHUB_WORKSPACE/workspace/crocgui/macos-build"
-        mkdir -p "$BUILD_DIR"
-        cd "$BUILD_DIR"
-        
         # Build for amd64
         export GOARCH=amd64
         fyne package --os darwin --release --name "crocgui-amd64"
@@ -118,6 +114,9 @@ jobs:
             exit 1
         fi
         
+        echo "Contents of current directory after build:"
+        ls -la .
+        
         # Create DMG files using hdiutil (macOS utility)
         echo "Creating DMG for crocgui-amd64.app"
         hdiutil create -srcfolder "crocgui-amd64.app" -volname "crocgui-amd64" -ov -format UDZO "crocgui-amd64.dmg"
@@ -128,10 +127,7 @@ jobs:
         echo "Contents of current directory after DMG creation:"
         ls -la *.dmg
         
-        mv *.dmg "$GITHUB_WORKSPACE/workspace/crocgui/"
-        cd "$GITHUB_WORKSPACE/workspace/crocgui"
-        echo "DMG files in project root:"
-        ls -la *.dmg
+        rm -rf crocgui-amd64.app crocgui-arm64.app
       artifact_name: macos-builds
       artifact_path: |
         crocgui-amd64.dmg
@@ -300,7 +296,7 @@ jobs:
           
           # Copy all files from artifacts subdirectories to release-assets
           echo "Copying files to release-assets..."
-          for file in $(find artifacts -type f -name "*.exe" -o -name "*.tar.xz" -o -name "*.dmg" -o -name "*.apk"); do
+          for file in $(find artifacts -type f \( -name "*.exe" -o -name "*.tar.xz" -o -name "*.dmg" -o -name "*.apk" \)); do
             filename=$(basename "$file")
             echo "Copying $filename to release-assets/"
             cp "$file" "release-assets/$filename"
