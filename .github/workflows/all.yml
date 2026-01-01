@@ -120,10 +120,20 @@ jobs:
         fi
         echo "Contents of current directory after build:"
         ls -la .
+        
+        # Create DMG files using hdiutil (macOS utility)
+        echo "Creating DMG for crocgui-amd64.app"
+        hdiutil create -srcfolder "crocgui-amd64.app" -volname "crocgui-amd64" -ov -format UDZO "crocgui-amd64.dmg"
+        
+        echo "Creating DMG for crocgui-arm64.app"
+        hdiutil create -srcfolder "crocgui-arm64.app" -volname "crocgui-arm64" -ov -format UDZO "crocgui-arm64.dmg"
+        
+        echo "Contents of current directory after DMG creation:"
+        ls -la *.dmg
       artifact_name: macos-builds
       artifact_path: |
-        crocgui-amd64.app
-        crocgui-arm64.app
+        crocgui-amd64.dmg
+        crocgui-arm64.dmg
 
   # Job to build the application for Android target
   build-android:
@@ -229,7 +239,7 @@ jobs:
   create-release:
     # This job waits for all build jobs to finish
     needs: [build-windows, build-linux, build-macos, build-android]
-    runs-on: macos-latest # Consistent with main build runner, needed for hdiutil
+    runs-on: ubuntu-latest # Use Ubuntu for consistent sed behavior and version extraction
     # Only run this job if workflow was triggered manually with build_type 'release' or 'snapshot'
     if: ${{ github.event_name == 'workflow_dispatch' && (github.event.inputs.build_type == 'release' || github.event.inputs.build_type == 'snapshot') }}
     
@@ -241,7 +251,7 @@ jobs:
           name: android-apks
           path: fyneapp-source-android
 
-      # Step 0.2: Determine the release version from input or FyneApp.toml
+      # Step 0.2: Determine the release version from input or FyneApp.toml using sed on Ubuntu
       - name: Determine Release Version
         id: get_version
         run: |
@@ -299,22 +309,6 @@ jobs:
             fi
           done
           
-          # Find and create .dmg images for all .app bundles in release-assets
-          find release-assets -type d -name "*.app" -print0 | while IFS= read -r -d '' app_bundle; do
-            parent_dir=$(dirname "$app_bundle")
-            app_name=$(basename "$app_bundle")
-            dmg_name="${app_name%.app}.dmg"
-            dmg_path="$parent_dir/$dmg_name"
-            echo "Creating DMG for $app_bundle at $dmg_path"
-            hdiutil create -srcfolder "$app_bundle" -volname "$app_name" -ov -format UDZO "$dmg_path"
-            if [ $? -eq 0 ]; then
-              echo "Successfully created DMG: $dmg_name"
-            else
-              echo "Error: Failed to create DMG for $app_bundle"
-              exit 1
-            fi
-          done
-          
           # Copy the FyneApp.toml from the downloaded artifact to release assets
           # We can take it from Android artifact.
           cp -f "$GITHUB_WORKSPACE/fyneapp-source-android/FyneApp.toml" release-assets/
@@ -329,7 +323,7 @@ jobs:
           # Use bash command substitution to execute 'date -u' and capture its output
           BUILD_DATE=$(date -u)
           echo "Build Date: $BUILD_DATE" >> release-assets/BUILD_INFO.txt
-          echo "GitHub Run: https://github.com/    $GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" >> release-assets/BUILD_INFO.txt
+          echo "GitHub Run: https://github.com/      $GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" >> release-assets/BUILD_INFO.txt
           echo "" >> release-assets/BUILD_INFO.txt
           # List the generated files
           echo "Generated files:" >> release-assets/BUILD_INFO.txt
