@@ -92,11 +92,11 @@ jobs:
         
         # Build for amd64
         export GOARCH=amd64
-        fyne package --os darwin --release --name "crocgui-amd64" --appBuild 1
+        fyne package --os darwin --release --name "crocgui-amd64"
         
         # Build for arm64
         export GOARCH=arm64
-        fyne package --os darwin --release --name "crocgui-arm64" --appBuild 1
+        fyne package --os darwin --release --name "crocgui-arm64"
         
         # Check architecture
         AMD64_EXECUTABLE_PATH="crocgui-amd64.app/Contents/MacOS/crocgui"
