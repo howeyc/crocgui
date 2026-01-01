@@ -254,6 +254,7 @@ jobs:
           if [ -z "$INPUT_VERSION" ]; then
               echo "Input version is empty, attempting to auto-detect from FyneApp.toml in repository"
               # Clone the repository to get FyneApp.toml
+              rm -rf repo-temp
               git clone https://github.com/${{ github.repository }}.git repo-temp
               cd repo-temp
               FYNEAPP_TOML_PATH="FyneApp.toml"
@@ -298,6 +299,9 @@ jobs:
           # Copy all files from artifacts subdirectories to release-assets
           echo "Copying files to release-assets..."
           find artifacts -type f -exec cp {} release-assets/ \;
+          
+          # Clean up repo-temp if it exists from previous step
+          rm -rf repo-temp
           
           # Clone repository to get FyneApp.toml for release
           git clone https://github.com/${{ github.repository }}.git repo-temp
