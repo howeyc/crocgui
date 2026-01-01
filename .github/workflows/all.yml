@@ -233,53 +233,42 @@ jobs:
       artifact_name: android-apks
       artifact_path: |
         crocgui-*.apk
-        FyneApp.toml
 
   # Job to create a GitHub Release and upload artifacts
   create-release:
     # This job waits for all build jobs to finish
     needs: [build-windows, build-linux, build-macos, build-android]
-    runs-on: ubuntu-latest # Use Ubuntu for consistent sed behavior and version extraction
+    runs-on: ubuntu-latest
     # Only run this job if workflow was triggered manually with build_type 'release' or 'snapshot'
     if: ${{ github.event_name == 'workflow_dispatch' && (github.event.inputs.build_type == 'release' || github.event.inputs.build_type == 'snapshot') }}
     
     steps:
-      # Step 0.1: Download the artifact containing FyneApp.toml (from Android build)
-      - name: Download FyneApp.toml artifact (from Android build)
-        uses: actions/download-artifact@v4
-        with:
-          name: android-apks
-          path: fyneapp-source-android
-
-      # Step 0.2: Determine the release version from input or FyneApp.toml using sed on Ubuntu
+      # Step 0: Determine the release version from input or FyneApp.toml
       - name: Determine Release Version
         id: get_version
         run: |
           # Get the version from the workflow input
           INPUT_VERSION="${{ github.event.inputs.release_version }}"
           
-          # If input version is empty, try to read it from the downloaded FyneApp.toml
+          # If input version is empty, try to read it from the FyneApp.toml in the repo
           if [ -z "$INPUT_VERSION" ]; then
-              echo "Input version is empty, attempting to auto-detect from downloaded FyneApp.toml"
-              # FyneApp.toml is now in the fyneapp-source-android directory after download
-              FYNEAPP_TOML_PATH="$GITHUB_WORKSPACE/fyneapp-source-android/FyneApp.toml"
+              echo "Input version is empty, attempting to auto-detect from FyneApp.toml in repository"
+              # Clone the repository to get FyneApp.toml
+              git clone https://github.com/${{ github.repository }}.git repo-temp
+              cd repo-temp
+              FYNEAPP_TOML_PATH="FyneApp.toml"
               if [ -f "$FYNEAPP_TOML_PATH" ]; then
-                  # Use grep and sed to extract the Version line
-                  # This regex looks for Version = "..." and captures the version string
-                  # It assumes the format is exactly Version = "version_string"
                   AUTO_VERSION=$(grep -E '^\s*Version\s*=' "$FYNEAPP_TOML_PATH" | sed -E 's/^\s*Version\s*=\s*"([^"]+)".*/\1/')
                   if [ -n "$AUTO_VERSION" ]; then
                       echo "Auto-detected version: $AUTO_VERSION"
                       RELEASE_VERSION="$AUTO_VERSION"
                   else
-                      echo "ERROR: Could not extract version from FyneApp.toml (format might be incorrect)."
-                      echo "Contents of downloaded FyneApp.toml:"
+                      echo "ERROR: Could not extract version from FyneApp.toml"
                       cat "$FYNEAPP_TOML_PATH"
                       exit 1
                   fi
               else
-                  echo "ERROR: FyneApp.toml not found at $FYNEAPP_TOML_PATH"
-                  ls -la "$GITHUB_WORKSPACE/fyneapp-source-android/"
+                  echo "ERROR: FyneApp.toml not found in repository"
                   exit 1
               fi
           else
@@ -287,60 +276,57 @@ jobs:
               RELEASE_VERSION="$INPUT_VERSION"
           fi
           
-          # Set the determined version as an output for later use
           echo "release_version=$RELEASE_VERSION" >> $GITHUB_OUTPUT
           echo "Determined release version for this run: $RELEASE_VERSION"
 
-      # Step 1: Download all other artifacts from previous jobs
+      # Step 1: Download all artifacts from previous jobs
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
           path: artifacts
 
-      # Step 2: Prepare the release assets (optional: add build info)
+      # Step 2: Prepare the release assets
       - name: Prepare release assets
         run: |
           echo "Preparing release assets..."
+          echo "Artifacts structure:"
+          find artifacts -type f
+          
+          # Create release-assets directory
           mkdir -p release-assets
-          for artifact_dir in artifacts/*/; do
-            if [ -d "$artifact_dir" ]; then
-              echo "Copying contents from $artifact_dir to release-assets/"
-              cp -r "$artifact_dir"* release-assets/
-            fi
-          done
           
-          # Copy the FyneApp.toml from the downloaded artifact to release assets
-          # We can take it from Android artifact.
-          cp -f "$GITHUB_WORKSPACE/fyneapp-source-android/FyneApp.toml" release-assets/
+          # Copy all files from artifacts subdirectories to release-assets
+          echo "Copying files to release-assets..."
+          find artifacts -type f -exec cp {} release-assets/ \;
           
-          # Create a build information file
+          # Clone repository to get FyneApp.toml for release
+          git clone https://github.com/${{ github.repository }}.git repo-temp
+          cp repo-temp/FyneApp.toml release-assets/
+          
+          # Create build information file
           echo "Build Information" > release-assets/BUILD_INFO.txt
           echo "=================" >> release-assets/BUILD_INFO.txt
-          echo "Project: crocgui (from FyneApp.toml)" >> release-assets/BUILD_INFO.txt
-          # Use the version determined in the previous step
+          echo "Project: crocgui" >> release-assets/BUILD_INFO.txt
           echo "Version: ${{ steps.get_version.outputs.release_version || 'manual_run' }}" >> release-assets/BUILD_INFO.txt
           echo "Build Type: ${{ github.event.inputs.build_type || 'manual' }}" >> release-assets/BUILD_INFO.txt
-          # Use bash command substitution to execute 'date -u' and capture its output
           BUILD_DATE=$(date -u)
           echo "Build Date: $BUILD_DATE" >> release-assets/BUILD_INFO.txt
-          echo "GitHub Run: https://github.com/      $GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" >> release-assets/BUILD_INFO.txt
+          echo "GitHub Run: https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" >> release-assets/BUILD_INFO.txt
           echo "" >> release-assets/BUILD_INFO.txt
-          # List the generated files
           echo "Generated files:" >> release-assets/BUILD_INFO.txt
           echo "----------------" >> release-assets/BUILD_INFO.txt
           ls -la release-assets/ >> release-assets/BUILD_INFO.txt
-          # Print the file content for verification
-          cat release-assets/BUILD_INFO.txt
-          # Export the BUILD_DATE to the environment so it's available in the next step
-          echo "BUILD_DATE=$BUILD_DATE" >> $GITHUB_ENV
+          
+          echo "Files in release-assets:"
+          ls -la release-assets/
+          echo "File sizes:"
+          du -sh release-assets/*
 
       # Step 3: Create the GitHub Release and upload assets
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          # Use the version determined in the 'get_version' step
           tag_name: ${{ steps.get_version.outputs.release_version && format('v{0}', steps.get_version.outputs.release_version) }}
-          # Use the determined version for the release name as well
           name: Release ${{ steps.get_version.outputs.release_version && format('v{0}', steps.get_version.outputs.release_version) }}
           draft: false
           prerelease: ${{ github.event.inputs.build_type == 'snapshot' }}
@@ -349,23 +335,26 @@ jobs:
             ## crocgui ${{ steps.get_version.outputs.release_version && format('v{0}', steps.get_version.outputs.release_version) }}
             
             Release built automatically via GitHub Actions for multiple platforms.
-            App details (Name, ID, Icon, Version) read from `FyneApp.toml`.
             
             ### Included Platforms:
-            - Windows (Intel/AMD - amd64)
-            - Linux (Intel/AMD - amd64)
-            - macOS (Apple Silicon - arm64)
-            - macOS (Intel - amd64)
-            - Android (ARM, ARM64, x86, x86_64)
+            - Windows (Intel/AMD - amd64) - `crocgui.exe`
+            - Linux (Intel/AMD - amd64) - `crocgui.tar.xz`
+            - macOS (Apple Silicon - arm64) - `crocgui-arm64.dmg`
+            - macOS (Intel - amd64) - `crocgui-amd64.dmg`
+            - Android (ARM) - `crocgui-arm.apk`
+            - Android (ARM64) - `crocgui-arm64.apk`
+            - Android (x86) - `crocgui-386.apk`
+            - Android (x86_64) - `crocgui-amd64.apk`
             
-            ### Included Files:
-            - FyneApp.toml (contains version information used for this release)
+            ### Installation:
+            - **Windows**: Run `crocgui.exe`
+            - **Linux**: Extract `crocgui.tar.xz` and run the executable
+            - **macOS**: Mount `.dmg` file and drag app to Applications folder
+            - **Android**: Install `.apk` file on your device
             
             ### Notes:
-            - Windows: Executable file (`crocgui.exe`) is provided.
-            - Linux: The application is packaged as a .tar.xz archive (crocgui.tar.xz). Extract and run the contained executable.
-            - macOS: `.dmg` files are provided for both Apple Silicon (`crocgui-arm64.dmg`) and Intel (`crocgui-amd64.dmg`).
-            - Android: APK files are provided for multiple architectures (`crocgui-arm.apk`, `crocgui-arm64.apk`, `crocgui-386.apk`, `crocgui-amd64.apk`).
-            - To install, follow the instructions for your platform. Ensure you have necessary runtime libraries installed (e.g., Mesa OpenGL libraries on Linux).
+            - All platform builds are included in this release
+            - Check BUILD_INFO.txt for build details
+            - FyneApp.toml contains app metadata
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
