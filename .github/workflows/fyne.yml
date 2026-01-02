@@ -201,8 +201,8 @@ jobs:
           retention-days: 7 # Keep artifacts for 7 days
           if-no-files-found: error # Fail if the .tar.xz is not found
 
-  # Job to build the application for macOS target
-  build-macos:
+  # Job to build the application for macOS x86_64 (Intel) target
+  build-macos-amd64:
     #if: false
     runs-on: macos-latest # Runs on a macOS runner
     steps:
@@ -242,72 +242,136 @@ jobs:
           # Install the Fyne CLI tool
           go install fyne.io/tools/cmd/fyne@latest
 
-      # Step 8: Build the application for both macOS architectures (amd64 and arm64)
-      - name: Build for macOS amd64 and arm64
+      # Step 7: Build the application for macOS amd64 (Intel)
+      - name: Build for macOS amd64 (Intel)
         run: |
           # Change directory to the project root inside the workspace
           cd $GITHUB_WORKSPACE/workspace/crocgui
           
-          echo "Building for macOS architectures..."
+          echo "Building for macOS amd64 (Intel)..."
           
-          # Define the architectures as a bash array
-          ARCHITECTURES=("amd64" "arm64")
+          # Set environment variables for cross-compilation
+          export CGO_ENABLED=1
+          export GOOS=darwin
+          export GOARCH=amd64
           
-          # Loop through each architecture
-          for arch in "${ARCHITECTURES[@]}"; do
-            echo "Building for architecture: $arch"
-            
-            # Set environment variables for cross-compilation
-            export CGO_ENABLED=1
-            export GOOS=darwin
-            export GOARCH=$arch
-            # Use fyne package to create the .app bundle for the architecture
-            fyne package --os darwin --release --name "crocgui-$arch"
-            
-            # Verify the .app bundle was created
-            APP_NAME="crocgui-$arch.app"
-            if [ ! -d "$APP_NAME" ]; then
-                echo "ERROR: fyne package did not create $APP_NAME for $arch"
-                ls -la .
-                exit 1
-            fi
-            
-            # List the output directory to confirm build success
-            echo "Contents of current directory after build for $arch:"
-            ls -la .
-            
-            # --- Create DMG file using hdiutil (macOS utility) ---
-            echo "Creating DMG for $APP_NAME"
-            DMG_NAME="crocgui-$arch.dmg"
-            hdiutil create -srcfolder "$APP_NAME" -volname "crocgui-$arch" -ov -format UDZO "$DMG_NAME"
-
-            # List the output directory to confirm DMG creation
-            echo "Contents of current directory after DMG creation for $arch:"
-            ls -la "$DMG_NAME"
-
-            # Remove .app bundle after DMG creation if desired
-            #rm -rf "$APP_NAME"
-            echo "Removed .app bundle after creating DMG for $arch."
-            pkill -f "diskimages-helper"
-          done
+          # Use fyne package to create the .app bundle for amd64
+          fyne package --os darwin --release --name "crocgui-amd64"
+          APP_NAME="crocgui-amd64.app"
           
-          # List final output directory
-          echo "Final contents of current directory:"
+          # Verify the .app bundle was created
+          if [ ! -d "$APP_NAME" ]; then
+              echo "ERROR: fyne package did not create $APP_NAME for amd64"
+              ls -la .
+              exit 1
+          fi
+          
+          # Create DMG file using hdiutil (macOS utility)
+          echo "Creating DMG for $APP_NAME"
+          DMG_NAME="crocgui-amd64.dmg"
+          hdiutil create -srcfolder "$APP_NAME" -volname "crocgui-amd64" -ov -format UDZO "$DMG_NAME"
+          
+          # List the output directory to confirm DMG creation
+          echo "Contents of current directory after DMG creation:"
           ls -la *.dmg
 
-      # Step 9: Upload the built .dmg files as artifacts
-      - name: Upload macOS artifacts
+      # Step 8: Upload the built .dmg file as an artifact
+      - name: Upload macOS amd64 artifact
         # Upload even if the build step failed, to help with debugging
         if: success() || failure()
         uses: actions/upload-artifact@v4
         with:
-          name: macos-builds
-          # Path to the built .dmg files
-          path: |
-            ${{ github.workspace }}/workspace/crocgui/crocgui-amd64.dmg
-            ${{ github.workspace }}/workspace/crocgui/crocgui-arm64.dmg
+          name: macos-amd64-build
+          # Path to the built .dmg file
+          path: ${{ github.workspace }}/workspace/crocgui/crocgui-amd64.dmg
           retention-days: 7 # Keep artifacts for 7 days
-          if-no-files-found: error # Fail if the expected .dmg files are not found
+          if-no-files-found: error # Fail if the .dmg file is not found
+
+  # Job to build the application for macOS arm64 (Apple Silicon) target
+  build-macos-arm64:
+    #if: false
+    runs-on: macos-latest # Runs on a macOS runner
+    steps:
+      # Step 1: Checkout the main repository (your Fyne app) directly into workspace/crocgui
+      - name: Checkout main repository (crocgui)
+        uses: actions/checkout@v4
+        with:
+          path: workspace/crocgui # Checkout directly into the desired workspace subdirectory
+
+      # Step 2: Checkout the croc dependency repository directly into workspace/croc
+      - name: Checkout croc dependency
+        uses: actions/checkout@v4
+        with:
+          repository: abakum/croc
+          ref: main
+          path: workspace/croc # Checkout directly into the desired workspace subdirectory
+
+      # Step 3: Checkout the peerdiscovery dependency repository directly into workspace/peerdiscovery
+      - name: Checkout peerdiscovery dependency
+        uses: actions/checkout@v4
+        with:
+          repository: abakum/peerdiscovery
+          ref: main
+          path: workspace/peerdiscovery # Checkout directly into the desired workspace subdirectory
+
+      # Step 5: Install Go
+      - name: Set up Go
+        uses: actions/setup-go@v5 # Use the latest version of the Go setup action
+        with:
+          go-version: '1.24' # Specify your Go version
+          # Cache dependencies based on go.sum file in the main-repo path (now in workspace/crocgui)
+          cache-dependency-path: ${{ github.workspace }}/workspace/crocgui/go.sum
+
+      # Step 6: Install Fyne CLI
+      - name: Install Fyne CLI
+        run: |
+          # Install the Fyne CLI tool
+          go install fyne.io/tools/cmd/fyne@latest
+
+      # Step 7: Build the application for macOS arm64 (Apple Silicon)
+      - name: Build for macOS arm64 (Apple Silicon)
+        run: |
+          # Change directory to the project root inside the workspace
+          cd $GITHUB_WORKSPACE/workspace/crocgui
+          
+          echo "Building for macOS arm64 (Apple Silicon)..."
+          
+          # Set environment variables for cross-compilation
+          export CGO_ENABLED=1
+          export GOOS=darwin
+          export GOARCH=arm64
+          
+          # Use fyne package to create the .app bundle for arm64
+          fyne package --os darwin --release --name "crocgui-arm64"
+          APP_NAME="crocgui-arm64.app"
+          
+          # Verify the .app bundle was created
+          if [ ! -d "$APP_NAME" ]; then
+              echo "ERROR: fyne package did not create $APP_NAME for arm64"
+              ls -la .
+              exit 1
+          fi
+          
+          # Create DMG file using hdiutil (macOS utility)
+          echo "Creating DMG for $APP_NAME"
+          DMG_NAME="crocgui-arm64.dmg"
+          hdiutil create -srcfolder "$APP_NAME" -volname "crocgui-arm64" -ov -format UDZO "$DMG_NAME"
+          
+          # List the output directory to confirm DMG creation
+          echo "Contents of current directory after DMG creation:"
+          ls -la *.dmg
+
+      # Step 8: Upload the built .dmg file as an artifact
+      - name: Upload macOS arm64 artifact
+        # Upload even if the build step failed, to help with debugging
+        if: success() || failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-arm64-build
+          # Path to the built .dmg file
+          path: ${{ github.workspace }}/workspace/crocgui/crocgui-arm64.dmg
+          retention-days: 7 # Keep artifacts for 7 days
+          if-no-files-found: error # Fail if the .dmg file is not found
 
   # Job to build the application for Android target
   build-android:
@@ -457,7 +521,7 @@ jobs:
   create-release:
     #if: false
     # This job waits for all build jobs to finish
-    needs: [build-windows, build-linux, build-macos, build-android]
+    needs: [build-windows, build-linux, build-macos-amd64, build-macos-arm64, build-android]
     runs-on: ubuntu-latest
     steps:
       # Step 0: Checkout the repository to access FyneApp.toml
