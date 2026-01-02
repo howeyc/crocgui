@@ -276,22 +276,7 @@ jobs:
             echo "Contents of current directory after build for $arch:"
             ls -la .
             
-            # --- Check the architecture of the executable inside the .app bundle ---
-            echo "Checking architecture of executables for $arch..."
-            
-            EXECUTABLE_PATH="$APP_NAME/Contents/MacOS/crocgui"
-            
-            if [ -f "$EXECUTABLE_PATH" ]; then
-                echo "Architecture of $EXECUTABLE_PATH:"
-                file "$EXECUTABLE_PATH"
-            else
-                echo "ERROR: Executable not found at $EXECUTABLE_PATH"
-                exit 1
-            fi
-
             # --- Create DMG file using hdiutil (macOS utility) ---
-            sync
-            sleep 3
             echo "Creating DMG for $APP_NAME"
             DMG_NAME="crocgui-$arch.dmg"
             hdiutil create -srcfolder "$APP_NAME" -volname "crocgui-$arch" -ov -format UDZO "$DMG_NAME"
@@ -301,8 +286,10 @@ jobs:
             ls -la "$DMG_NAME"
 
             # Remove .app bundle after DMG creation if desired
-            rm -rf "$APP_NAME"
+            #rm -rf "$APP_NAME"
             echo "Removed .app bundle after creating DMG for $arch."
+            hdiutil detach -force /Volumes/crocgui-$arch
+            pkill -f "diskimages-helper"
           done
           
           # List final output directory
