@@ -43,16 +43,16 @@ clean:
 	go clean
 	rm crocgui.apk
 
-arm: main.go send.go recv.go settings.go theme.go about.go AndroidManifest.xml
+arm: 
 	fyne package -os android/arm --release
 
-arm64: main.go send.go recv.go settings.go theme.go about.go AndroidManifest.xml
+arm64: 
 	fyne package -os android/arm64 --release
 
-386: main.go send.go recv.go settings.go theme.go about.go AndroidManifest.xml
+386:
 	fyne package -os android/386 --release
 
-amd64: main.go send.go recv.go settings.go theme.go about.go AndroidManifest.xml
+amd64:
 	fyne package -os android/amd64 --release
 
 emulator:
@@ -76,21 +76,21 @@ linux:
 windows: 
 	#sudo apt-get install gcc-mingw-w64-x86-64
 	#go install fyne.io/tools/cmd/fyne@latest
-	#CC=x86_64-w64-mingw32-gcc fyne package -os windows --release -tags=opengl
 	CC=x86_64-w64-mingw32-gcc fyne package -os windows --release
 
 windowsgui:
-	GOOS=windows GOARCH=amd64 CGO_ENABLED=1 CC=x86_64-w64-mingw32-gcc go build -ldflags="-s -H windowsgui" -tags=opengl
+	#GOOS=windows GOARCH=amd64 CGO_ENABLED=1 CC=x86_64-w64-mingw32-gcc go build -ldflags="-s -H windowsgui" -tags=opengl
+	GOOS=windows CC=x86_64-w64-mingw32-gcc CGO_ENABLED=1 go build -ldflags="-s -H windowsgui"
+
+mwindows:
+	GOOS=windows CC=x86_64-w64-mingw32-gcc CGO_ENABLED=1 go build -ldflags="-s -extldflags=-mwindows"
 
 wsl:
-	GOOS=windows GOARCH=amd64 CGO_ENABLED=1 CC=x86_64-w64-mingw32-gcc go build -ldflags=-s -tags=opengl
+	GOOS=windows CC=x86_64-w64-mingw32-gcc CGO_ENABLED=1 go build -ldflags=-s
 
 darwin: 
 	fyne package -os darwin --release
 	cp -r crocgui.app /Applications/
-	cp crocgui.app/Contents/Info.plist darm/crocgui.app/Contents/
-	cp crocgui.app/Contents/Resources/* darm/crocgui.app/Contents/Resources/
-	mkdir -p darm/crocgui.app/Contents/MacOS
 
 ios: 
 	fyne package -os ios --release
@@ -100,8 +100,10 @@ install:
 
 darm: 
 	#brew install glfw
-	GOFLAGS=-ldflags=-s CGO_ENABLED=1 GOOS=darwin GOARCH=arm64 go build -o darm/crocgui.app/Contents/MacOS/crocgui .&&cp -r darm/crocgui.app /Applications/
+	GOARCH=arm64 fyne package -os darwin --release
+	cp -r crocgui.app /Applications/
 
 damd: 
 	#brew install glfw
-	GOFLAGS=-ldflags=-s CGO_ENABLED=1 GOOS=darwin GOARCH=amd64 go build -o crocgui.app/Contents/MacOS/crocgui .&&cp -r crocgui.app /Applications/
+	GOARCH=amd64 fyne package -os darwin --release
+	cp -r crocgui.app /Applications/

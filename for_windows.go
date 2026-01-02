@@ -4,7 +4,6 @@ package main
 
 import (
 	"os"
-	"syscall"
 )
 
 // CanCreateSymlinks проверяет, запущено ли приложение с правами администратора.
@@ -16,9 +15,22 @@ func CanCreateSymlinks() bool {
 	return false
 }
 
-func isGUIApplication() bool {
-	kernel32 := syscall.NewLazyDLL("kernel32.dll")
-	getConsoleWindow := kernel32.NewProc("GetConsoleWindow")
-	h, _, _ := getConsoleWindow.Call()
-	return h == 0
-}
+// func isWindowsGUI() (ok bool) {
+// 	// return syscall.Stdout == 0 && syscall.Stderr == 0
+// 	kernel32 := syscall.NewLazyDLL("kernel32.dll")
+// 	getConsoleWindow := kernel32.NewProc("GetConsoleWindow")
+// 	h, _, _ := getConsoleWindow.Call()
+// 	ok = h == 0
+// 	if ok {
+// 		WR, err := os.OpenFile(os.DevNull, os.O_WRONLY, 0)
+// 		if err == nil {
+// 			os.Stderr = WR
+// 			os.Stdout = WR
+// 		}
+// 		RD, err := os.OpenFile(os.DevNull, os.O_RDONLY, 0)
+// 		if err != nil {
+// 			os.Stdin = RD
+// 		}
+// 	}
+// 	return
+// }

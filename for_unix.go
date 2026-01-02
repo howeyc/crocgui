@@ -6,4 +6,4 @@ func CanCreateSymlinks() bool {
 	return !isMobile
 }
 
-func isGUIApplication() bool { return false }
+// func isWindowsGUI() bool { return false }

@@ -14,6 +14,7 @@ import (
 	"runtime/debug"
 	"strings"
 	"sync/atomic"
+	"syscall"
 	"time"
 
 	"github.com/schollz/croc/v10/src/croc"
@@ -99,6 +100,7 @@ var (
 	connect   = os.Getenv("HTTP_PROXY")
 	code      = os.Getenv("CROC_SECRET")
 	AppClosed string
+	GUI       = syscall.Stdout == 0 && syscall.Stderr == 0 //for windowsgui
 )
 
 const (
@@ -192,8 +194,9 @@ func main() {
 		isAndroid = true
 		fallthrough
 	case "ios":
-		setOut(true)
 		isMobile = true
+		GUI = true
+		setOut(GUI)
 	case "linux":
 		replacer = strings.NewReplacer(
 			"\x1b[0;34;1m[trace]\t\x1b[0m", "",
@@ -210,7 +213,7 @@ func main() {
 		}
 		fallthrough
 	default:
-		setOut(isGUIApplication())
+		setOut(GUI)
 	}
 
 	w := a.NewWindow("croc")

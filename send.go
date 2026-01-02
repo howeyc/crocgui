@@ -624,7 +624,10 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 				Exclude:        Exclude,
 				ZipFolder:      ZipFolder,
 				// Overwrite:        a.Preferences().Bool("overwrite"),
-				GitIgnore: GitIgnore,
+				GitIgnore:        GitIgnore,
+				Quiet:            GUI,
+				IgnoreStdin:      GUI,
+				DisableClipboard: true,
 			}
 			RelayPorts := ""
 			opt.RelayPassword, opt.RelayAddress, opt.RelayAddress6, RelayPorts,
@@ -962,35 +965,37 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 			processIntent()
 		})
 	} else {
-		if stat, err := os.Stdin.Stat(); err == nil && ((stat.Mode() & os.ModeCharDevice) == 0) {
-			// cat file|crocgui
-			go func() {
-				fnames, err := getStdin()
-				if err != nil {
-					return
-				}
-				utils.MarkFileForRemoval(fnames[0])
-				var wga sync.WaitGroup
-				for _, src := range fnames {
-					src, err := filepath.Abs(src)
+		if !GUI {
+			if stat, err := os.Stdin.Stat(); err == nil && ((stat.Mode() & os.ModeCharDevice) == 0) {
+				// cat file|crocgui
+				go func() {
+					fnames, err := getStdin()
 					if err != nil {
-						log.Warnf("abs %s: %v", src, err)
-						continue
+						return
 					}
-					if err := addPath(src, &wga); err != nil {
-						log.Error(err.Error())
+					utils.MarkFileForRemoval(fnames[0])
+					var wga sync.WaitGroup
+					for _, src := range fnames {
+						src, err := filepath.Abs(src)
+						if err != nil {
+							log.Warnf("abs %s: %v", src, err)
+							continue
+						}
+						if err := addPath(src, &wga); err != nil {
+							log.Error(err.Error())
+						}
 					}
-				}
-				select {
-				case <-done:
-				default:
-					wga.Wait()
-					log.Debugf("done %v", fnames)
-					removeEntrys(false)
-					reload()
-					showPage()
-				}
-			}()
+					select {
+					case <-done:
+					default:
+						wga.Wait()
+						log.Debugf("done %v", fnames)
+						removeEntrys(false)
+						reload()
+						showPage()
+					}
+				}()
+			}
 		}
 
 		if len(os.Args) > 1 {

@@ -575,6 +575,8 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 			Overwrite:        a.Preferences().Bool("overwrite"),
 			MulticastAddress: a.Preferences().String("multicast-address"),
 			TestFlag:         a.Preferences().Bool("testing"),
+			Quiet:            GUI,
+			IgnoreStdin:      GUI,
 		}
 		opt.RelayPassword, opt.RelayAddress, opt.RelayAddress6, _,
 			comm.Socks5Proxy, comm.HttpProxy = def(a)

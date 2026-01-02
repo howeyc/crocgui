@@ -39,4 +39,6 @@ debug
 *.tmp
 *.temp
 /tmp/
-/fyne-cross/
+/crocgui.app/
+/croc.apk
+/croc.exe
