@@ -38,6 +38,7 @@ debug
 # Temp files
 *.tmp
 *.temp
+*.bak
 /tmp/
 /crocgui.app/
 /croc.apk

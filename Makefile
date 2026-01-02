@@ -2,7 +2,24 @@ VSCODE_DIR := .vscode
 SETTINGS_FILE := $(VSCODE_DIR)/settings.json
 WSL_HOST_IP := $(shell ip route list default | awk '{print $$3}')
 
-.PHONY: all clean arm arm64 386 amd64 linux window wsl darwin ios install darm emulator adb wsladb logcat atags tags wtags t windowsgui
+.PHONY: all clean arm arm64 386 amd64 linux windows wsl darwin ios install darm emulator adb wsladb logcat atags tags wtags t windowsgui ver
+
+ver:
+	@echo "Reading version and build number from FyneApp.toml..."
+	@VERSION_NAME=$$(grep -E '^\s*Version\s*=' FyneApp.toml | sed -E 's/^\s*Version\s*=\s*"([^"]+)".*/\1/') && \
+	BUILD_NUMBER=$$(grep -E '^\s*Build\s*=' FyneApp.toml | sed -E 's/^\s*Build\s*=\s*([0-9]+).*/\1/') && \
+	if [ -z "$$VERSION_NAME" ] || [ -z "$$BUILD_NUMBER" ]; then \
+		echo "ERROR: Could not extract Version or Build number from FyneApp.toml."; \
+		cat FyneApp.toml; \
+		exit 1; \
+	fi && \
+	echo "Extracted Version Name: $$VERSION_NAME" && \
+	echo "Extracted Build Number: $$BUILD_NUMBER" && \
+	echo "Updating AndroidManifest.xml with versionName=$$VERSION_NAME and versionCode=$$BUILD_NUMBER" && \
+	sed -i.bak "s/android:versionName=\"[^\"]*\"/android:versionName=\"$$VERSION_NAME\"/g" AndroidManifest.xml && \
+	sed -i.bak "s/android:versionCode=\"[0-9]*\"/android:versionCode=\"$$BUILD_NUMBER\"/g" AndroidManifest.xml && \
+	echo "Updated AndroidManifest.xml:" && \
+	grep -E 'android:versionName|android:versionCode' AndroidManifest.xml
 
 atags:	
 	@mkdir -p $(VSCODE_DIR)
@@ -41,18 +58,18 @@ android: main.go send.go recv.go settings.go theme.go about.go AndroidManifest.x
 
 clean:
 	go clean
-	rm crocgui.apk
+	rm -f crocgui.apk
 
-arm: 
+arm: ver
 	fyne package -os android/arm --release
 
-arm64: 
+arm64: ver
 	fyne package -os android/arm64 --release
 
-386:
+386: ver
 	fyne package -os android/386 --release
 
-amd64:
+amd64: ver
 	fyne package -os android/amd64 --release
 
 emulator:

@@ -101,6 +101,7 @@ var (
 	code      = os.Getenv("CROC_SECRET")
 	AppClosed string
 	GUI       = syscall.Stdout == 0 && syscall.Stderr == 0 //for windowsgui
+	FORK      = "github.com/abakum/crocgui"
 )
 
 const (
@@ -321,7 +322,6 @@ func refreshWindow(a fyne.App, w fyne.Window) {
 		aboutTabItem(a, w),
 	)
 
-	at.SelectIndex(atSI)
 	at.OnSelected = func(tab *container.TabItem) {
 		atSI = at.SelectedIndex()
 		a.Preferences().SetInt("tab", atSI)
@@ -336,6 +336,7 @@ func refreshWindow(a fyne.App, w fyne.Window) {
 	} else {
 		w.SetContent(container.NewBorder(top, nil, nil, nil, at))
 	}
+	at.SelectIndex(atSI)
 }
 
 func ls(path string) (files []string) {

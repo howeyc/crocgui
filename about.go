@@ -27,7 +27,9 @@ func aboutTabItem(a fyne.App, _ fyne.Window) *container.TabItem {
 	longdesc := string(longdescbytes)
 	longdesc = strings.ReplaceAll(longdesc, "<b>", "")
 	longdesc = strings.ReplaceAll(longdesc, "</b>", "")
-	aboutInfo := widget.NewLabel(longdesc)
+	md := a.Metadata()
+	aboutInfo := widget.NewLabel(fmt.Sprintf("%s v%s.%d\n\n%s",
+		FORK, md.Version, md.Build, longdesc))
 	aboutInfo.Wrapping = fyne.TextWrapWord
 
 	// acLicense := widget.NewAccordion()
