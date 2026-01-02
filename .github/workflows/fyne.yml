@@ -25,7 +25,7 @@ on:
 jobs:
   # Job to build the application for Windows target
   build-windows:
-    if: false
+    #if: false
     runs-on: ubuntu-latest # Runs on Ubuntu to use MinGW cross-compiler
     steps:
       # Step 1: Checkout the main repository (your Fyne app) directly into workspace/crocgui
@@ -115,7 +115,7 @@ jobs:
 
   # Job to build the application for Linux target
   build-linux:
-    if: false
+    #if: false
     runs-on: ubuntu-latest # Runs on Ubuntu to build natively for Linux
     steps:
       # Step 1: Checkout the main repository (your Fyne app) directly into workspace/crocgui
@@ -241,13 +241,6 @@ jobs:
           # Install the Fyne CLI tool
           go install fyne.io/tools/cmd/fyne@latest
 
-      # Step 7: Install glfw dependency (required for CGO builds if using glfw)
-      - name: Install glfw dependency
-        if: false
-        run: |
-          # Use Homebrew to install glfw (required for CGO-enabled builds using glfw)
-          brew install glfw
-
       # Step 8: Build the application for both macOS architectures (amd64 and arm64)
       - name: Build for macOS amd64 and arm64
         run: |
@@ -331,7 +324,7 @@ jobs:
 
   # Job to build the application for Android target
   build-android:
-    if: false
+    #if: false
     runs-on: ubuntu-latest # Runs on Ubuntu to use fyne package with Android NDK
     steps:
       # Step 1: Checkout the main repository (your Fyne app) directly into workspace/crocgui
@@ -478,9 +471,7 @@ jobs:
     # This job waits for all build jobs to finish
     needs: [build-windows, build-linux, build-macos, build-android]
     runs-on: ubuntu-latest
-    # Only run this job if workflow was triggered manually with build_type 'release' or 'snapshot'
-    if: ${{ github.event_name == 'workflow_dispatch' && (github.event.inputs.build_type == 'release' || github.event.inputs.build_type == 'snapshot') }}
-    
+    if: false
     steps:
       # Step 0: Checkout the repository to access FyneApp.toml
       - name: Checkout repository
