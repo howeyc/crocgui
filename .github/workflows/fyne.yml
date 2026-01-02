@@ -296,6 +296,8 @@ jobs:
             fi
 
             # --- Create DMG file using hdiutil (macOS utility) ---
+            sync
+            sleep 3
             echo "Creating DMG for $APP_NAME"
             DMG_NAME="crocgui-$arch.dmg"
             hdiutil create -srcfolder "$APP_NAME" -volname "crocgui-$arch" -ov -format UDZO "$DMG_NAME"
@@ -312,7 +314,7 @@ jobs:
           # List final output directory
           echo "Final contents of current directory:"
           ls -la *.dmg
-          
+
       # Step 9: Upload the built .dmg files as artifacts
       - name: Upload macOS artifacts
         # Upload even if the build step failed, to help with debugging
