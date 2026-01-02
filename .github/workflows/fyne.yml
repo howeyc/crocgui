@@ -25,7 +25,7 @@ on:
 jobs:
   # Job to build the application for Windows target
   build-windows:
-    #if: false
+    if: false
     runs-on: ubuntu-latest # Runs on Ubuntu to use MinGW cross-compiler
     steps:
       # Step 1: Checkout the main repository (your Fyne app) directly into workspace/crocgui
@@ -62,7 +62,7 @@ jobs:
       - name: Install MinGW-w64 cross-compiler
         run: |
           # Update package list and install MinGW-w64 GCC for x86_64
-          sudo apt-get update
+          #sudo apt-get update
           sudo apt-get install -y gcc-mingw-w64-x86-64
 
       # Step 7: Install Fyne CLI
@@ -153,8 +153,9 @@ jobs:
         run: |
           # Update package list and install Mesa libraries required by Fyne for OpenGL support
           # and X11 libraries required by GLFW
-          sudo apt-get update
-          sudo apt-get install -y libgl1-mesa-dev libegl1-mesa-dev libgles2-mesa-dev libxrandr-dev libxcursor-dev libxinerama-dev libxi-dev libxss-dev libxxf86vm-dev
+          #sudo apt-get update
+          #sudo apt-get install -y libgl1-mesa-dev libegl1-mesa-dev libgles2-mesa-dev libxrandr-dev libxcursor-dev libxinerama-dev libxi-dev libxss-dev libxxf86vm-dev
+          sudo apt-get install -y libgl1-mesa-dev xorg-dev libxkbcommon-dev
 
       # Step 7: Install Fyne CLI
       - name: Install Fyne CLI
@@ -203,7 +204,7 @@ jobs:
 
   # Job to build the application for macOS x86_64 (Intel) target
   build-macos-amd64:
-    #if: false
+    if: false
     runs-on: macos-latest # Runs on a macOS runner
     steps:
       # Step 1: Checkout the main repository (your Fyne app) directly into workspace/crocgui
@@ -289,7 +290,7 @@ jobs:
 
   # Job to build the application for macOS arm64 (Apple Silicon) target
   build-macos-arm64:
-    #if: false
+    if: false
     runs-on: macos-latest # Runs on a macOS runner
     steps:
       # Step 1: Checkout the main repository (your Fyne app) directly into workspace/crocgui
@@ -375,7 +376,7 @@ jobs:
 
   # Job to build the application for Android target
   build-android:
-    #if: false
+    if: false
     runs-on: ubuntu-latest # Runs on Ubuntu to use fyne package with Android NDK
     steps:
       # Step 1: Checkout the main repository (your Fyne app) directly into workspace/crocgui
@@ -519,7 +520,7 @@ jobs:
 
   # Job to create a GitHub Release and upload artifacts
   create-release:
-    #if: false
+    if: false
     # This job waits for all build jobs to finish
     needs: [build-windows, build-linux, build-macos-amd64, build-macos-arm64, build-android]
     runs-on: ubuntu-latest
