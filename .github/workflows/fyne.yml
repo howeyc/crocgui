@@ -254,79 +254,65 @@ jobs:
           # Change directory to the project root inside the workspace
           cd $GITHUB_WORKSPACE/workspace/crocgui
           
-          echo "Building for macOS amd64 and arm64..."
+          echo "Building for macOS architectures..."
           
-          # --- Build for amd64 using fyne package ---
-          echo "Building for amd64..."
-          export CGO_ENABLED=1
-          export GOOS=darwin
-          export GOARCH=amd64
-          # Use fyne package to create the .app bundle for amd64
-          fyne package --os darwin --release --name "crocgui-amd64"
+          # Define the architectures as a bash array
+          ARCHITECTURES=("amd64" "arm64")
           
-          # Verify the .app bundle was created
-          if [ ! -d "crocgui-amd64.app" ]; then
-              echo "ERROR: fyne package did not create crocgui-amd64.app for amd64"
-              ls -la .
-              exit 1
-          fi
-          
-          # --- Build for arm64 using fyne package ---
-          echo "Building for arm64..."
-          export CGO_ENABLED=1
-          export GOOS=darwin
-          export GOARCH=arm64
-          # Use fyne package to create the .app bundle for arm64
-          fyne package --os darwin --release --name "crocgui-arm64"
-          
-          # Verify the .app bundle was created
-          if [ ! -d "crocgui-arm64.app" ]; then
-              echo "ERROR: fyne package did not create crocgui-arm64.app for arm64"
-              ls -la .
-              exit 1
-          fi
-          
-          # List the output directory to confirm build success
-          echo "Contents of current directory after build:"
-          ls -la .
-          
-          # --- Check the architecture of the executables inside the .app bundles ---
-          echo "Checking architecture of executables..."
-          
-          AMD64_EXECUTABLE_PATH="crocgui-amd64.app/Contents/MacOS/crocgui"
-          ARM64_EXECUTABLE_PATH="crocgui-arm64.app/Contents/MacOS/crocgui"
-          
-          if [ -f "$AMD64_EXECUTABLE_PATH" ]; then
-              echo "Architecture of $AMD64_EXECUTABLE_PATH:"
-              file "$AMD64_EXECUTABLE_PATH"
-          else
-              echo "ERROR: Executable not found at $AMD64_EXECUTABLE_PATH"
-              exit 1
-          fi
-          
-          if [ -f "$ARM64_EXECUTABLE_PATH" ]; then
-              echo "Architecture of $ARM64_EXECUTABLE_PATH:"
-              file "$ARM64_EXECUTABLE_PATH"
-          else
-              echo "ERROR: Executable not found at $ARM64_EXECUTABLE_PATH"
-              exit 1
-          fi
+          # Loop through each architecture
+          for arch in "${ARCHITECTURES[@]}"; do
+            echo "Building for architecture: $arch"
+            
+            # Set environment variables for cross-compilation
+            export CGO_ENABLED=1
+            export GOOS=darwin
+            export GOARCH=$arch
+            # Use fyne package to create the .app bundle for the architecture
+            fyne package --os darwin --release --name "crocgui-$arch"
+            
+            # Verify the .app bundle was created
+            APP_NAME="crocgui-$arch.app"
+            if [ ! -d "$APP_NAME" ]; then
+                echo "ERROR: fyne package did not create $APP_NAME for $arch"
+                ls -la .
+                exit 1
+            fi
+            
+            # List the output directory to confirm build success
+            echo "Contents of current directory after build for $arch:"
+            ls -la .
+            
+            # --- Check the architecture of the executable inside the .app bundle ---
+            echo "Checking architecture of executables for $arch..."
+            
+            EXECUTABLE_PATH="$APP_NAME/Contents/MacOS/crocgui"
+            
+            if [ -f "$EXECUTABLE_PATH" ]; then
+                echo "Architecture of $EXECUTABLE_PATH:"
+                file "$EXECUTABLE_PATH"
+            else
+                echo "ERROR: Executable not found at $EXECUTABLE_PATH"
+                exit 1
+            fi
 
-          # --- Create DMG files using hdiutil (macOS utility) ---
-          echo "Creating DMG for crocgui-amd64.app"
-          hdiutil create -srcfolder "crocgui-amd64.app" -volname "crocgui-amd64" -ov -format UDZO "crocgui-amd64.dmg"
+            # --- Create DMG file using hdiutil (macOS utility) ---
+            echo "Creating DMG for $APP_NAME"
+            DMG_NAME="crocgui-$arch.dmg"
+            hdiutil create -srcfolder "$APP_NAME" -volname "crocgui-$arch" -ov -format UDZO "$DMG_NAME"
 
-          echo "Creating DMG for crocgui-arm64.app"
-          hdiutil create -srcfolder "crocgui-arm64.app" -volname "crocgui-arm64" -ov -format UDZO "crocgui-arm64.dmg"
+            # List the output directory to confirm DMG creation
+            echo "Contents of current directory after DMG creation for $arch:"
+            ls -la "$DMG_NAME"
 
-          # List the output directory to confirm DMG creation
-          echo "Contents of current directory after DMG creation:"
+            # Remove .app bundle after DMG creation if desired
+            rm -rf "$APP_NAME"
+            echo "Removed .app bundle after creating DMG for $arch."
+          done
+          
+          # List final output directory
+          echo "Final contents of current directory:"
           ls -la *.dmg
-
-          # Remove .app bundles after DMG creation if desired
-          rm -rf crocgui-amd64.app crocgui-arm64.app
-          echo "Removed .app bundles after creating DMGs."
-
+          
       # Step 9: Upload the built .dmg files as artifacts
       - name: Upload macOS artifacts
         # Upload even if the build step failed, to help with debugging
