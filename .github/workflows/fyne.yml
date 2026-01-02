@@ -25,6 +25,7 @@ on:
 jobs:
   # Job to build the application for Windows target
   build-windows:
+    if: false
     runs-on: ubuntu-latest # Runs on Ubuntu to use MinGW cross-compiler
     steps:
       # Step 1: Checkout the main repository (your Fyne app) directly into workspace/crocgui
@@ -114,6 +115,7 @@ jobs:
 
   # Job to build the application for Linux target
   build-linux:
+    if: false
     runs-on: ubuntu-latest # Runs on Ubuntu to build natively for Linux
     steps:
       # Step 1: Checkout the main repository (your Fyne app) directly into workspace/crocgui
@@ -241,6 +243,7 @@ jobs:
 
       # Step 7: Install glfw dependency (required for CGO builds if using glfw)
       - name: Install glfw dependency
+        if: false
         run: |
           # Use Homebrew to install glfw (required for CGO-enabled builds using glfw)
           brew install glfw
@@ -340,6 +343,7 @@ jobs:
 
   # Job to build the application for Android target
   build-android:
+    if: false
     runs-on: ubuntu-latest # Runs on Ubuntu to use fyne package with Android NDK
     steps:
       # Step 1: Checkout the main repository (your Fyne app) directly into workspace/crocgui
@@ -391,52 +395,6 @@ jobs:
           go-version: '1.24' # Specify your Go version
           # Cache dependencies based on go.sum file in the main-repo path (now in workspace/crocgui)
           cache-dependency-path: ${{ github.workspace }}/workspace/crocgui/go.sum
-
-      # Step 6: Check Android SDK environment and install NDK
-      - name: Check Android SDK and Install NDK
-        if: false
-        run: |
-          # Check ANDROID_HOME
-          echo "ANDROID_HOME is set to: $ANDROID_HOME"
-          if [ -z "$ANDROID_HOME" ]; then
-              echo "ERROR: ANDROID_HOME is not set."
-              exit 1
-          fi
-          # Check if sdkmanager is available via the standard path and update PATH if necessary
-          SDKMANAGER_PATH="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
-          if [ -f "$SDKMANAGER_PATH" ]; then
-              echo "sdkmanager found at standard path: $SDKMANAGER_PATH"
-              export PATH=$PATH:$ANDROID_HOME/cmdline-tools/latest/bin
-          else
-              echo "sdkmanager not found at standard path. Checking tools/bin..."
-              SDKMANAGER_PATH="$ANDROID_HOME/tools/bin/sdkmanager"
-              if [ -f "$SDKMANAGER_PATH" ]; then
-                  echo "sdkmanager found at legacy path: $SDKMANAGER_PATH"
-                  export PATH=$PATH:$ANDROID_HOME/tools/bin
-              else
-                  echo "ERROR: sdkmanager not found in standard locations under ANDROID_HOME ($ANDROID_HOME)."
-                  echo "Contents of $ANDROID_HOME:"
-                  ls -la $ANDROID_HOME/
-                  exit 1
-              fi
-          fi
-          # Install NDK
-          NDK_VERSION="27.3.13750724"
-          echo "Installing NDK version: $NDK_VERSION"
-          if command -v sdkmanager &> /dev/null; then
-              sdkmanager --install "ndk;$NDK_VERSION"
-              NDK_PATH="$ANDROID_HOME/ndk/$NDK_VERSION"
-              if [ -d "$NDK_PATH" ]; then
-                  export ANDROID_NDK_HOME=$NDK_PATH
-                  echo "ANDROID_NDK_HOME set to: $ANDROID_NDK_HOME"
-              else
-                  echo "ERROR: NDK directory $NDK_PATH does not exist after installation."
-                  exit 1
-              fi
-          else
-              echo "ERROR: sdkmanager is not available in PATH after checking/setting PATH."
-              exit 1
-          fi
 
       # Step 7: Install Fyne CLI
       - name: Install Fyne CLI
