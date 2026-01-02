@@ -203,6 +203,7 @@ jobs:
 
   # Job to build the application for macOS target
   build-macos:
+    #if: false
     runs-on: macos-latest # Runs on a macOS runner
     steps:
       # Step 1: Checkout the main repository (your Fyne app) directly into workspace/crocgui
@@ -468,10 +469,10 @@ jobs:
 
   # Job to create a GitHub Release and upload artifacts
   create-release:
+    #if: false
     # This job waits for all build jobs to finish
     needs: [build-windows, build-linux, build-macos, build-android]
     runs-on: ubuntu-latest
-    if: false
     steps:
       # Step 0: Checkout the repository to access FyneApp.toml
       - name: Checkout repository
