@@ -62,7 +62,7 @@ jobs:
       - name: Install MinGW-w64 cross-compiler
         run: |
           # Update package list and install MinGW-w64 GCC for x86_64
-          #sudo apt-get update
+          sudo apt-get update
           sudo apt-get install -y gcc-mingw-w64-x86-64
 
       # Step 7: Install Fyne CLI
@@ -153,7 +153,7 @@ jobs:
         run: |
           # Update package list and install Mesa libraries required by Fyne for OpenGL support
           # and X11 libraries required by GLFW
-          #sudo apt-get update
+          sudo apt-get update
           #sudo apt-get install -y libgl1-mesa-dev libegl1-mesa-dev libgles2-mesa-dev libxrandr-dev libxcursor-dev libxinerama-dev libxi-dev libxss-dev libxxf86vm-dev
           sudo apt-get install -y libgl1-mesa-dev xorg-dev libxkbcommon-dev
 
