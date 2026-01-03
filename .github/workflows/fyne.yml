@@ -257,8 +257,8 @@ jobs:
           export GOARCH=amd64
           
           # Use fyne package to create the .app bundle for amd64
-          fyne package --os darwin --release --name "crocgui-amd64"
-          APP_NAME="crocgui-amd64.app"
+          fyne package --os darwin --release
+          APP_NAME="crocgui.app"
           
           # Verify the .app bundle was created
           if [ ! -d "$APP_NAME" ]; then
@@ -343,8 +343,8 @@ jobs:
           export GOARCH=arm64
           
           # Use fyne package to create the .app bundle for arm64
-          fyne package --os darwin --release --name "crocgui-arm64"
-          APP_NAME="crocgui-arm64.app"
+          fyne package --os darwin --release
+          APP_NAME="crocgui.app"
           
           # Verify the .app bundle was created
           if [ ! -d "$APP_NAME" ]; then

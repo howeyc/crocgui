@@ -2,7 +2,7 @@
 Icon = "Icon.png"
 Name = "crocgui"
 ID = "com.github.howeyc.crocgui"
-Version = "1.11.31"
+Version = "1.11.32"
 Build = 1194
 
 [LinuxAndBSD]
