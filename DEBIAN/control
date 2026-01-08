@@ -1,0 +1,9 @@
+Package: crocgui
+Version: 1.11.32
+Section: net
+Priority: optional
+Architecture: amd64
+Maintainer: github.com/abakum
+Depends: make, tar, libgl1-mesa-dev
+Description: GUI for croc
+Homepage: https://github.com/abakum/crocgui

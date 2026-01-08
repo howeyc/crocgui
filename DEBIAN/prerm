@@ -1,0 +1,59 @@
+#!/bin/bash
+# Pre-removal script for crocgui .deb package
+
+set -e
+
+echo "Running pre-removal script..."
+
+ACTION="$1"
+
+case "$ACTION" in
+    remove)
+        # Package is being removed, but not purged
+        echo "Removing crocgui (keeping configuration)..."
+        ;;
+    upgrade)
+        # Package is being upgraded to a new version
+        echo "Upgrading crocgui to new version..."
+        # We'll remove old files in prerm, new version will install in postinst
+        ;;
+    deconfigure)
+        # Package's dependency is being removed but package will remain
+        echo "Deconfiguring crocgui due to dependency removal..."
+        ;;
+    *)
+        echo "Unknown or no action specified: '$ACTION'"
+        exit 0  # Exit gracefully for unknown actions
+        ;;
+esac
+
+# Only uninstall files if we're removing or upgrading
+if [ "$ACTION" = "remove" ] || [ "$ACTION" = "upgrade" ] || [ "$ACTION" = "deconfigure" ]; then
+    echo "Uninstalling crocgui files..."
+    
+    # Extract and run uninstallation from the included tar.xz
+    if [ -f "/usr/share/crocgui/crocgui.tar.xz" ]; then
+        # Create temporary directory
+        TEMP_DIR=$(mktemp -d)
+        trap "rm -rf $TEMP_DIR" EXIT
+        
+        # Extract to temporary directory
+        tar -xf "/usr/share/crocgui/crocgui.tar.xz" -C "$TEMP_DIR"
+        
+        # Navigate to temp directory
+        cd "$TEMP_DIR"
+        
+        # Run system uninstallation
+        make -C "$TEMP_DIR" -f Makefile uninstall 2>/dev/null || echo "Make uninstall completed (some warnings may be normal)"
+
+        
+        # Clean up
+        rm -rf "$TEMP_DIR"
+        
+        echo "crocgui files uninstalled."
+    else
+        echo "WARNING: crocgui.tar.xz not found."
+    fi
+fi
+
+echo "Pre-removal script finished."

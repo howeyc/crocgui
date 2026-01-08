@@ -1,0 +1,56 @@
+#!/bin/bash
+# Post-installation script for crocgui .deb package
+
+set -e
+
+echo "Running post-installation script..."
+
+ACTION="$1"
+OLD_VERSION="$2"
+
+case "$ACTION" in
+    configure)
+        # First installation or reconfiguration
+        if [ -z "$OLD_VERSION" ]; then
+            echo "Configuring crocgui for first installation..."
+        else
+            echo "Reconfiguring crocgui (upgraded from $OLD_VERSION)..."
+        fi
+        ;;
+        
+    abort-upgrade|abort-remove|abort-deconfigure)
+        echo "Installation/upgrade was aborted, rolling back..."
+        exit 1
+        ;;
+        
+    *)
+        echo "Unknown action: '$ACTION'"
+        exit 0
+        ;;
+esac
+
+# Extract and run installation from the included tar.xz
+if [ -f "/usr/share/crocgui/crocgui.tar.xz" ]; then
+    echo "Installing crocgui files..."
+    
+    # Create temporary directory
+    TEMP_DIR=$(mktemp -d)
+    trap "rm -rf $TEMP_DIR" EXIT
+    
+    # Extract to temporary directory
+    tar -xf "/usr/share/crocgui/crocgui.tar.xz" -C "$TEMP_DIR"
+    
+    # Run system installation
+    make -C "$TEMP_DIR" -f Makefile install
+    
+    # Clean up
+    rm -rf "$TEMP_DIR"
+    
+    echo "crocgui installation completed."
+    echo "Run it `gtk-launch com.github.howeyc.crocgui`"
+else
+    echo "ERROR: crocgui.tar.xz not found in /usr/share/crocgui/"
+    exit 1
+fi
+
+echo "Post-installation script finished."

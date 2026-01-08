@@ -4,6 +4,11 @@
 *.so
 *.dylib
 /bin/
+/crocgui.app/
+/croc.apk
+/croc.exe
+/*.deb
+/*.xz
 
 # Test binary
 *.test
@@ -40,6 +45,3 @@ debug
 *.temp
 *.bak
 /tmp/
-/crocgui.app/
-/croc.apk
-/croc.exe

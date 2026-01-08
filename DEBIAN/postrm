@@ -1,0 +1,44 @@
+#!/bin/bash
+# Post-removal script for crocgui .deb package
+
+set -e
+
+echo "Running post-removal script..."
+
+ACTION="$1"
+
+case "$ACTION" in
+    purge)
+        # Package is being completely removed (including config files)
+        echo "Purging crocgui..."
+        
+        # Get the home directory of the user running this script
+        if [ "$(id -u)" -eq 0 ]; then
+            # Running as root - use /root
+            HOME_DIR="/root"
+        else
+            # Running as regular user
+            HOME_DIR="$HOME"
+        fi
+        
+        CONFIG_FILE="$HOME_DIR/.config/fyne/com.github.howeyc.crocgui/preferences.json"
+        
+        if [ -f "$CONFIG_FILE" ]; then
+            echo "Removing: $CONFIG_FILE"
+            rm -f "$CONFIG_FILE"
+        else
+            echo "Config file not found: $CONFIG_FILE"
+        fi
+        ;;
+    
+    remove|upgrade|failed-upgrade|abort-install|abort-upgrade|disappear)
+        # All other actions - DO NOT remove config files
+        echo "Action: $ACTION - keeping configuration files"
+        ;;
+        
+    *)
+        echo "Unknown action: '$ACTION'"
+        ;;
+esac
+
+echo "Post-removal script finished."

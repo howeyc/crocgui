@@ -190,17 +190,52 @@ jobs:
           echo "Contents of current directory after build:"
           ls -la .
 
-      # Step 9: Upload the built Linux app as an artifact
-      - name: Upload Linux artifact
+      # Step 9: Build .deb package
+      - name: Build .deb package
+        run: |
+          echo "Building .deb package..."
+          
+          # Ensure build-deb.sh is executable
+          chmod +x build-deb.sh 2>/dev/null || true
+          
+          # Run build-deb.sh to build the .deb package
+          ./build-deb.sh
+          
+          # Verify the .deb file was created
+          DEB_FILE=$(ls crocgui_*_amd64.deb 2>/dev/null | head -1)
+          if [ -z "$DEB_FILE" ]; then
+              echo "ERROR: make deb did not create a .deb file matching pattern crocgui_*_amd64.deb"
+              ls -la .
+              echo "Available files:"
+              find . -name "*.deb" -o -name "*.tar.xz" | sort
+              exit 1
+          fi
+          
+          # Display .deb package info
+          echo "Successfully created .deb package: $DEB_FILE"
+          echo "Package info:"
+          dpkg -I "$DEB_FILE" || true
+          
+          # Verify package size
+          echo "Package size: $(du -h "$DEB_FILE" | cut -f1)"
+          
+          # List the output directory to confirm .deb creation
+          echo "Contents of current directory after make deb:"
+          ls -la .
+
+      # Step 11: Upload the built Linux artifacts
+      - name: Upload Linux artifacts
         # Upload even if the build step failed, to help with debugging
         if: success() || failure()
         uses: actions/upload-artifact@v4
         with:
           name: linux-amd64-build
-          # Path to the built Linux .tar.xz archive
-          path: ${{ github.workspace }}/workspace/crocgui/crocgui.tar.xz
+          # Path to the built Linux artifacts
+          path: |
+            ${{ github.workspace }}/workspace/crocgui/crocgui.tar.xz
+            ${{ github.workspace }}/workspace/crocgui/crocgui_*_amd64.deb
           retention-days: 7 # Keep artifacts for 7 days
-          if-no-files-found: error # Fail if the .tar.xz is not found
+          if-no-files-found: error # Fail if no files are found
 
   # Job to build the application for macOS x86_64 (Intel) target
   build-macos-amd64:
@@ -623,7 +658,7 @@ jobs:
           name: Release ${{ steps.get_version.outputs.release_version && format('v{0}', steps.get_version.outputs.release_version) }}
           draft: false # Make it a public release
           prerelease: ${{ github.event.inputs.build_type == 'snapshot' }} # Mark as pre-release if type is 'snapshot'
-          # Upload all files from the prepared release-assets directory (now includes .dmg files, .tar.xz, .exe, .apk)
+          # Upload all files from the prepared release-assets directory (now includes .dmg files, .tar.xz, .exe, .apk, .deb)
           files: release-assets/*
           # Body text for the release description
           body: |
@@ -634,7 +669,7 @@ jobs:
             
             ### Included Platforms:
             - Windows (Intel - x86_64)
-            - Linux (Intel - x86_64)
+            - Linux (Intel - x86_64) - both .tar.xz and .deb packages
             - macOS (Intel/Apple Silicon - x86_64/ARM64)
             - Android (x86_64, ARM64, x86, ARM)
             
@@ -643,10 +678,14 @@ jobs:
             
             ### Notes:
             - Windows: Executable file (`crocgui.exe`) is provided.
-            - Linux: The application is packaged as a .tar.xz archive (crocgui.tar.xz). Extract and run the contained executable.
+            - Linux: The application is packaged as both a .tar.xz archive (crocgui.tar.xz) and a .deb package for easy installation.
             - macOS: `.dmg` files are provided for both Apple Silicon (`crocgui-arm64.dmg`) and Intel (`crocgui-amd64.dmg`).
             - Android: APK files are provided for multiple architectures (`crocgui-arm.apk`, `crocgui-arm64.apk`, `crocgui-386.apk`, `crocgui-amd64.apk`).
-            - To install, follow the instructions for your platform. Ensure you have necessary runtime libraries installed (e.g., Mesa OpenGL libraries on Linux).
+            
+            ### Linux Installation:
+            - **.deb package**: Install with `sudo dpkg -i crocgui_*_amd64.deb`
+            - **tar.xz archive**: User install with `TEMP_DIR=$(mktemp -d)&&trap "rm -rf $TEMP_DIR" EXIT&&tar -xf crocgui.tar.xz -C "$TEMP_DIR"&&make -C "$TEMP_DIR" -f Makefile user-install`
+            - **tar.xz archive**: System install with `TEMP_DIR=$(mktemp -d)&&trap "rm -rf $TEMP_DIR" EXIT&&tar -xf crocgui.tar.xz -C "$TEMP_DIR"&&sudo make -C "$TEMP_DIR" -f Makefile install`
         env:
           # Token required to create the release
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
