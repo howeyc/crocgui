@@ -40,13 +40,9 @@ if [ "$ACTION" = "remove" ] || [ "$ACTION" = "upgrade" ] || [ "$ACTION" = "decon
         # Extract to temporary directory
         tar -xf "/usr/share/crocgui/crocgui.tar.xz" -C "$TEMP_DIR"
         
-        # Navigate to temp directory
-        cd "$TEMP_DIR"
-        
         # Run system uninstallation
         make -C "$TEMP_DIR" -f Makefile uninstall 2>/dev/null || echo "Make uninstall completed (some warnings may be normal)"
-
-        
+       
         # Clean up
         rm -rf "$TEMP_DIR"
         

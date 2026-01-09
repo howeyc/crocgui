@@ -1,90 +1,70 @@
-#!/bin/bash
-# Script to build .deb package from crocgui.tar.xz
+#!/usr/bin/env bash
+# .deb package builder with clean output
 
-set -e
+set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-
-cd "$SCRIPT_DIR"
-
-echo "=== Building .deb package for crocgui ==="
-
-# Check if required files exist
-if [ ! -f "crocgui.tar.xz" ]; then
-    echo "ERROR: crocgui.tar.xz not found in current directory"
-    exit 1
-fi
-
-if [ ! -f "FyneApp.toml" ]; then
-    echo "ERROR: FyneApp.toml not found in current directory"
-    exit 1
-fi
-
-# Read version from FyneApp.toml
+# Get version from FyneApp.toml
 VERSION=$(grep -E '^\s*Version\s*=' FyneApp.toml | sed -E 's/^\s*Version\s*=\s*"([^"]+)".*/\1/')
-if [ -z "$VERSION" ]; then
-    echo "ERROR: Could not extract Version from FyneApp.toml."
-    cat FyneApp.toml
-    exit 1
-fi
+NAME="crocgui_${VERSION}_amd64"
+DEB_FILE="${NAME}.deb"
 
-echo "Version from FyneApp.toml: $VERSION"
+echo "=== Building .deb package ==="
+echo "Version: $VERSION"
+echo "Package: $DEB_FILE"
 
-# Clean up existing .deb file
-rm -f "crocgui_*.deb"
+# Cleanup and create structure
+rm -f crocgui_*.deb 2>/dev/null || true
+rm -rf "$NAME" 2>/dev/null || true
+mkdir -p "$NAME/DEBIAN" "$NAME/usr/share/crocgui"
 
-# Create directory structure for .deb package
-DEB_DIR="crocgui_${VERSION}_amd64"
-echo "Creating .deb structure in: $DEB_DIR"
+# Copy files
+cp crocgui.tar.xz "$NAME/usr/share/crocgui/"
+cp DEBIAN/control "$NAME/DEBIAN/"
+sed -i "s/^Version:.*/Version: $VERSION/" "$NAME/DEBIAN/control"
 
-# Clean up existing directory
-rm -rf "$DEB_DIR"
+# Optional scripts
+for script in postinst prerm postrm; do
+    [ -f "DEBIAN/$script" ] && cp "DEBIAN/$script" "$NAME/DEBIAN/" && chmod +x "$NAME/DEBIAN/$script"
+done
 
-# Create directory structure
-mkdir -p "$DEB_DIR/DEBIAN"
-mkdir -p "$DEB_DIR/usr/share/crocgui"
-
-# Copy the original tar.xz archive to the package
-cp crocgui.tar.xz "$DEB_DIR/usr/share/crocgui/"
-
-# Create control file with correct version
-echo "Creating control file with version $VERSION..."
-cp "DEBIAN/control" "$DEB_DIR/DEBIAN/control"
-sed -i "s/^Version: .*/Version: $VERSION/" "$DEB_DIR/DEBIAN/control"
-
-# Copy maintenance scripts
-echo "Copying maintenance scripts..."
-cp "DEBIAN/postinst" "$DEB_DIR/DEBIAN/"
-cp "DEBIAN/prerm" "$DEB_DIR/DEBIAN/"
-cp "DEBIAN/postrm" "$DEB_DIR/DEBIAN/"
-
-# Set executable permissions
-chmod +x "$DEB_DIR/DEBIAN/postinst"
-chmod +x "$DEB_DIR/DEBIAN/prerm"
-chmod +x "$DEB_DIR/DEBIAN/postrm"
-
-# Build the .deb package with desired filename
-echo "Building .deb package..."
-dpkg-deb --build --root-owner-group "$DEB_DIR" "crocgui_${VERSION}_amd64.deb"
+# Build package
+echo "Building package..."
+dpkg-deb --build --root-owner-group "$NAME" "$DEB_FILE"
+rm -rf "$NAME"
 
 echo ""
-echo "=== Package created successfully! ==="
-echo "File: crocgui_${VERSION}_amd64.deb"
-echo "Size: $(du -h crocgui_${VERSION}_amd64.deb | cut -f1)"
+echo "=== Package created ==="
+echo "File: $DEB_FILE"
+echo "Size: $(du -h "$DEB_FILE" | cut -f1)"
 
-# Verify the package
+# Show package metadata (без дублей)
+echo ""
+echo "Package metadata:"
+echo "-----------------"
+dpkg -I "$DEB_FILE" 2>/dev/null | awk '!seen[$0]++' | head -20
+
+# Show package contents (без дублей)
 echo ""
 echo "Package contents:"
-dpkg -c "crocgui_${VERSION}_amd64.deb" | head -20
+echo "-----------------"
+dpkg -c "$DEB_FILE" 2>/dev/null | awk '!seen[$0]++'
 
 echo ""
-echo "Package info:"
-dpkg -I "crocgui_${VERSION}_amd64.deb"
+echo "=== Verification ==="
+# Verify key files exist in package
+if dpkg -c "$DEB_FILE" 2>/dev/null | grep -q "crocgui.tar.xz"; then
+    echo "✅ crocgui.tar.xz included"
+else
+    echo "❌ ERROR: crocgui.tar.xz missing"
+    exit 1
+fi
 
-# Clean up temporary directory
-rm -rf "$DEB_DIR"
+if dpkg -I "$DEB_FILE" 2>/dev/null | grep -q "Version: $VERSION"; then
+    echo "✅ Version matches: $VERSION"
+else
+    echo "❌ ERROR: Version mismatch"
+    exit 1
+fi
 
 echo ""
-echo "To install:"
-echo "sudo dpkg -i crocgui_${VERSION}_amd64.deb"
-
+echo "✅ Done. Package built successfully."

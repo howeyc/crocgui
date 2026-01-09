@@ -3,7 +3,7 @@
     xmlns:tools="http://schemas.android.com/tools"
     package="com.github.howeyc.crocgui"
     android:versionCode="1196"
-    android:versionName="1.11.32">
+    android:versionName="1.11.33">
 
     <application 
         android:label="Croc"

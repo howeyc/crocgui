@@ -200,29 +200,7 @@ jobs:
           
           # Run build-deb.sh to build the .deb package
           ./build-deb.sh
-          
-          # Verify the .deb file was created
-          DEB_FILE=$(ls crocgui_*_amd64.deb 2>/dev/null | head -1)
-          if [ -z "$DEB_FILE" ]; then
-              echo "ERROR: make deb did not create a .deb file matching pattern crocgui_*_amd64.deb"
-              ls -la .
-              echo "Available files:"
-              find . -name "*.deb" -o -name "*.tar.xz" | sort
-              exit 1
-          fi
-          
-          # Display .deb package info
-          echo "Successfully created .deb package: $DEB_FILE"
-          echo "Package info:"
-          dpkg -I "$DEB_FILE" || true
-          
-          # Verify package size
-          echo "Package size: $(du -h "$DEB_FILE" | cut -f1)"
-          
-          # List the output directory to confirm .deb creation
-          echo "Contents of current directory after make deb:"
-          ls -la .
-
+                    
       # Step 11: Upload the built Linux artifacts
       - name: Upload Linux artifacts
         # Upload even if the build step failed, to help with debugging

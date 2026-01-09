@@ -160,8 +160,8 @@ useri: crocgui.tar.xz
 	cd "$$TEMP_DIR"; \
 	echo "Installing for current user..."; \
 	make user-install; \
-	echo "User installation completed! Installed to ~/.local/bin/"
-	echo "Run it `gtk-launch com.github.howeyc.crocgui`"
+	echo "User installation completed! Installed to ~/.local/bin/"; \
+	echo "Run it with: gtk-launch com.github.howeyc.crocgui"
 
 userr: crocgui.tar.xz
 	@echo "User uninstallation..."
