@@ -193,10 +193,25 @@ jobs:
       # Step 9: Build .deb package
       - name: Build .deb package
         run: |
+          cd $GITHUB_WORKSPACE/workspace/crocgui || { echo "Failed to cd to project directory"; exit 1; }
+          
+          echo "=== DEBUG: Current directory after cd ==="
+          pwd
+          echo "=== DEBUG: Checking build-deb.sh ==="
+          if [ ! -f "build-deb.sh" ]; then
+              echo "ERROR: build-deb.sh not found in $(pwd)"
+              echo "Files in current directory:"
+              ls -la
+              exit 1
+          fi
+          
           echo "Building .deb package..."
           
           # Ensure build-deb.sh is executable
-          chmod +x build-deb.sh 2>/dev/null || true
+          chmod +x build-deb.sh
+          
+          echo "=== DEBUG: Script permissions ==="
+          ls -la build-deb.sh
           
           # Run build-deb.sh to build the .deb package
           ./build-deb.sh
