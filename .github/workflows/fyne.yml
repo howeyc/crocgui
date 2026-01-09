@@ -1,6 +1,6 @@
-# GitHub Actions workflow file for building and releasing a Fyne app for all platforms (Windows, Linux, macOS, Android)
-# Includes installation of dependencies like MinGW-w64 cross-compiler, Mesa OpenGL, GLFW, Android NDK, etc.
-# Manual trigger only
+# GitHub Actions workflow file for building and releasing a Fyne app for all platforms
+# Includes installation of dependencies like MinGW-w64 cross-compiler, Mesa OpenGL, GLFW, etc.
+# Manual trigger only with platform selection options
 name: Fyne package All and Release
 
 # Define triggers for the workflow
@@ -20,15 +20,29 @@ on:
         options:
           - release
           - snapshot
+      # Platform selection for targeted builds
+      build_target:
+        description: 'Select platform(s) to build'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - all            # Build all platforms
+          - windows        # Build Windows only
+          - linux          # Build Linux only
+          - macos-amd64    # Build macOS Intel only
+          - macos-arm64    # Build macOS Apple Silicon only
+          - android        # Build Android only
 
 # Define the jobs for the workflow
 jobs:
   # Job to build the application for Windows target
   build-windows:
-    #if: false
+    # Run only if 'all' or 'windows' is selected
+    if: ${{ github.event.inputs.build_target == 'all' || github.event.inputs.build_target == 'windows' }}
     runs-on: ubuntu-latest # Runs on Ubuntu to use MinGW cross-compiler
     steps:
-      # Step 1: Checkout the main repository (your Fyne app) directly into workspace/crocgui
+      # Step 1: Checkout the main repository directly into workspace/crocgui
       - name: Checkout main repository (crocgui)
         uses: actions/checkout@v4
         with:
@@ -50,31 +64,28 @@ jobs:
           ref: main
           path: workspace/peerdiscovery # Checkout directly into the desired workspace subdirectory
 
-      # Step 5: Install Go
+      # Step 4: Install Go
       - name: Set up Go
-        uses: actions/setup-go@v5 # Use the latest version of the Go setup action
+        uses: actions/setup-go@v5
         with:
-          go-version: '1.24' # Specify your Go version
-          # Cache dependencies based on go.sum file in the main-repo path (now in workspace/crocgui)
+          go-version: '1.24'
+          # Cache dependencies based on go.sum file
           cache-dependency-path: ${{ github.workspace }}/workspace/crocgui/go.sum
 
-      # Step 6: Install MinGW-w64 cross-compiler
+      # Step 5: Install MinGW-w64 cross-compiler for Windows builds
       - name: Install MinGW-w64 cross-compiler
         run: |
-          # Update package list and install MinGW-w64 GCC for x86_64
           sudo apt-get update
           sudo apt-get install -y gcc-mingw-w64-x86-64
 
-      # Step 7: Install Fyne CLI
+      # Step 6: Install Fyne CLI
       - name: Install Fyne CLI
         run: |
-          # Install the Fyne CLI tool
           go install fyne.io/tools/cmd/fyne@latest
 
-      # Step 8: Build the application using fyne package for Windows
+      # Step 7: Build the application using fyne package for Windows
       - name: Build with fyne for Windows
         run: |
-          # Change directory to the project root inside the workspace
           cd $GITHUB_WORKSPACE/workspace/crocgui
           
           echo "Building for Windows amd64 using MinGW-w64..."
@@ -83,11 +94,9 @@ jobs:
           export CGO_ENABLED=1
           export GOOS=windows
           export GOARCH=amd64
-          # Set the C compiler to the MinGW-w64 cross-compiler
           export CC=x86_64-w64-mingw32-gcc
           
-          # Use fyne package to build the Windows executable and package it
-          # The -tags opengl flag is passed via --
+          # Use fyne package to build the Windows executable
           fyne package --os windows --release
           
           # Verify the .exe file was created
@@ -97,32 +106,30 @@ jobs:
               exit 1
           fi
           
-          # List the output directory to confirm build success
           echo "Contents of current directory after build:"
           ls -la .
 
-      # Step 9: Upload the built .exe as an artifact
+      # Step 8: Upload the built .exe as an artifact
       - name: Upload Windows artifact
-        # Upload even if the build step failed, to help with debugging
         if: success() || failure()
         uses: actions/upload-artifact@v4
         with:
           name: windows-amd64-build
-          # Path to the built .exe file
           path: ${{ github.workspace }}/workspace/crocgui/crocgui.exe
-          retention-days: 7 # Keep artifacts for 7 days
-          if-no-files-found: error # Fail if the .exe is not found
+          retention-days: 7
+          if-no-files-found: error
 
   # Job to build the application for Linux target
   build-linux:
-    #if: false
+    # Run only if 'all' or 'linux' is selected
+    if: ${{ github.event.inputs.build_target == 'all' || github.event.inputs.build_target == 'linux' }}
     runs-on: ubuntu-latest # Runs on Ubuntu to build natively for Linux
     steps:
-      # Step 1: Checkout the main repository (your Fyne app) directly into workspace/crocgui
+      # Step 1: Checkout the main repository directly into workspace/crocgui
       - name: Checkout main repository (crocgui)
         uses: actions/checkout@v4
         with:
-          path: workspace/crocgui # Checkout directly into the desired workspace subdirectory
+          path: workspace/crocgui
 
       # Step 2: Checkout the croc dependency repository directly into workspace/croc
       - name: Checkout croc dependency
@@ -130,7 +137,7 @@ jobs:
         with:
           repository: abakum/croc
           ref: main
-          path: workspace/croc # Checkout directly into the desired workspace subdirectory
+          path: workspace/croc
 
       # Step 3: Checkout the peerdiscovery dependency repository directly into workspace/peerdiscovery
       - name: Checkout peerdiscovery dependency
@@ -138,40 +145,34 @@ jobs:
         with:
           repository: abakum/peerdiscovery
           ref: main
-          path: workspace/peerdiscovery # Checkout directly into the desired workspace subdirectory
+          path: workspace/peerdiscovery
 
-      # Step 5: Install Go
+      # Step 4: Install Go
       - name: Set up Go
-        uses: actions/setup-go@v5 # Use the latest version of the Go setup action
+        uses: actions/setup-go@v5
         with:
-          go-version: '1.24' # Specify your Go version
-          # Cache dependencies based on go.sum file in the main-repo path (now in workspace/crocgui)
+          go-version: '1.24'
           cache-dependency-path: ${{ github.workspace }}/workspace/crocgui/go.sum
 
-      # Step 6: Install Linux dependencies required by Fyne (OpenGL, EGL, GLES, X11)
-      - name: Install Linux dependencies (libgl1-mesa-dev xorg-dev libxkbcommon-dev)
+      # Step 5: Install Linux dependencies required by Fyne (OpenGL, X11, etc.)
+      - name: Install Linux dependencies
         run: |
-          # Update package list and install Mesa libraries required by Fyne for OpenGL support
-          # and X11 libraries required by GLFW
           sudo apt-get update
-          #sudo apt-get install -y libgl1-mesa-dev libegl1-mesa-dev libgles2-mesa-dev libxrandr-dev libxcursor-dev libxinerama-dev libxi-dev libxss-dev libxxf86vm-dev
           sudo apt-get install -y libgl1-mesa-dev xorg-dev libxkbcommon-dev
 
-      # Step 7: Install Fyne CLI
+      # Step 6: Install Fyne CLI
       - name: Install Fyne CLI
         run: |
-          # Install the Fyne CLI tool
           go install fyne.io/tools/cmd/fyne@latest
 
-      # Step 8: Build the application using fyne package for Linux
+      # Step 7: Build the application using fyne package for Linux
       - name: Build with fyne for Linux
         run: |
-          # Change directory to the project root inside the workspace
           cd $GITHUB_WORKSPACE/workspace/crocgui
           
           echo "Building for Linux amd64..."
           
-          # Set environment variables for native compilation (CGO is enabled by default)
+          # Set environment variables for native compilation
           export CGO_ENABLED=1
           export GOOS=linux
           export GOARCH=amd64
@@ -186,60 +187,52 @@ jobs:
               exit 1
           fi
           
-          # List the output directory to confirm build success
           echo "Contents of current directory after build:"
           ls -la .
 
-      # Step 9: Build .deb package
+      # Step 8: Build .deb package
       - name: Build .deb package
         run: |
           cd $GITHUB_WORKSPACE/workspace/crocgui || { echo "Failed to cd to project directory"; exit 1; }
           
-          echo "=== DEBUG: Current directory after cd ==="
-          pwd
-          echo "=== DEBUG: Checking build-deb.sh ==="
-          if [ ! -f "build-deb.sh" ]; then
-              echo "ERROR: build-deb.sh not found in $(pwd)"
-              echo "Files in current directory:"
-              ls -la
-              exit 1
-          fi
-          
           echo "Building .deb package..."
           
           # Ensure build-deb.sh is executable
-          chmod +x build-deb.sh
-          
-          echo "=== DEBUG: Script permissions ==="
-          ls -la build-deb.sh
+          chmod +x build-deb.sh 2>/dev/null || true
           
           # Run build-deb.sh to build the .deb package
           ./build-deb.sh
-                    
-      # Step 11: Upload the built Linux artifacts
+          
+          # Verify .deb package was created
+          if ! ls crocgui_*_amd64.deb 1> /dev/null 2>&1; then
+              echo "ERROR: build-deb.sh did not create .deb package"
+              ls -la .
+              exit 1
+          fi
+
+      # Step 9: Upload the built Linux artifacts
       - name: Upload Linux artifacts
-        # Upload even if the build step failed, to help with debugging
         if: success() || failure()
         uses: actions/upload-artifact@v4
         with:
           name: linux-amd64-build
-          # Path to the built Linux artifacts
           path: |
             ${{ github.workspace }}/workspace/crocgui/crocgui.tar.xz
             ${{ github.workspace }}/workspace/crocgui/crocgui_*_amd64.deb
-          retention-days: 7 # Keep artifacts for 7 days
-          if-no-files-found: error # Fail if no files are found
+          retention-days: 7
+          if-no-files-found: error
 
   # Job to build the application for macOS x86_64 (Intel) target
   build-macos-amd64:
-    #if: false
+    # Run only if 'all' or 'macos-amd64' is selected
+    if: ${{ github.event.inputs.build_target == 'all' || github.event.inputs.build_target == 'macos-amd64' }}
     runs-on: macos-latest # Runs on a macOS runner
     steps:
-      # Step 1: Checkout the main repository (your Fyne app) directly into workspace/crocgui
+      # Step 1: Checkout the main repository directly into workspace/crocgui
       - name: Checkout main repository (crocgui)
         uses: actions/checkout@v4
         with:
-          path: workspace/crocgui # Checkout directly into the desired workspace subdirectory
+          path: workspace/crocgui
 
       # Step 2: Checkout the croc dependency repository directly into workspace/croc
       - name: Checkout croc dependency
@@ -247,7 +240,7 @@ jobs:
         with:
           repository: abakum/croc
           ref: main
-          path: workspace/croc # Checkout directly into the desired workspace subdirectory
+          path: workspace/croc
 
       # Step 3: Checkout the peerdiscovery dependency repository directly into workspace/peerdiscovery
       - name: Checkout peerdiscovery dependency
@@ -255,31 +248,28 @@ jobs:
         with:
           repository: abakum/peerdiscovery
           ref: main
-          path: workspace/peerdiscovery # Checkout directly into the desired workspace subdirectory
+          path: workspace/peerdiscovery
 
-      # Step 5: Install Go
+      # Step 4: Install Go
       - name: Set up Go
-        uses: actions/setup-go@v5 # Use the latest version of the Go setup action
+        uses: actions/setup-go@v5
         with:
-          go-version: '1.24' # Specify your Go version
-          # Cache dependencies based on go.sum file in the main-repo path (now in workspace/crocgui)
+          go-version: '1.24'
           cache-dependency-path: ${{ github.workspace }}/workspace/crocgui/go.sum
 
-      # Step 6: Install Fyne CLI
+      # Step 5: Install Fyne CLI
       - name: Install Fyne CLI
         run: |
-          # Install the Fyne CLI tool
           go install fyne.io/tools/cmd/fyne@latest
 
-      # Step 7: Build the application for macOS amd64 (Intel)
+      # Step 6: Build the application for macOS amd64 (Intel)
       - name: Build for macOS amd64 (Intel)
         run: |
-          # Change directory to the project root inside the workspace
           cd $GITHUB_WORKSPACE/workspace/crocgui
           
           echo "Building for macOS amd64 (Intel)..."
           
-          # Set environment variables for cross-compilation
+          # Set environment variables
           export CGO_ENABLED=1
           export GOOS=darwin
           export GOARCH=amd64
@@ -300,32 +290,37 @@ jobs:
           DMG_NAME="crocgui-amd64.dmg"
           hdiutil create -srcfolder "$APP_NAME" -volname "crocgui-amd64" -ov -format UDZO "$DMG_NAME"
           
-          # List the output directory to confirm DMG creation
+          # Verify DMG was created
+          if [ ! -f "$DMG_NAME" ]; then
+              echo "ERROR: Failed to create DMG file"
+              ls -la .
+              exit 1
+          fi
+          
           echo "Contents of current directory after DMG creation:"
           ls -la *.dmg
 
-      # Step 8: Upload the built .dmg file as an artifact
+      # Step 7: Upload the built .dmg file as an artifact
       - name: Upload macOS amd64 artifact
-        # Upload even if the build step failed, to help with debugging
         if: success() || failure()
         uses: actions/upload-artifact@v4
         with:
           name: macos-amd64-build
-          # Path to the built .dmg file
           path: ${{ github.workspace }}/workspace/crocgui/crocgui-amd64.dmg
-          retention-days: 7 # Keep artifacts for 7 days
-          if-no-files-found: error # Fail if the .dmg file is not found
+          retention-days: 7
+          if-no-files-found: error
 
   # Job to build the application for macOS arm64 (Apple Silicon) target
   build-macos-arm64:
-    #if: false
+    # Run only if 'all' or 'macos-arm64' is selected
+    if: ${{ github.event.inputs.build_target == 'all' || github.event.inputs.build_target == 'macos-arm64' }}
     runs-on: macos-latest # Runs on a macOS runner
     steps:
-      # Step 1: Checkout the main repository (your Fyne app) directly into workspace/crocgui
+      # Step 1: Checkout the main repository directly into workspace/crocgui
       - name: Checkout main repository (crocgui)
         uses: actions/checkout@v4
         with:
-          path: workspace/crocgui # Checkout directly into the desired workspace subdirectory
+          path: workspace/crocgui
 
       # Step 2: Checkout the croc dependency repository directly into workspace/croc
       - name: Checkout croc dependency
@@ -333,7 +328,7 @@ jobs:
         with:
           repository: abakum/croc
           ref: main
-          path: workspace/croc # Checkout directly into the desired workspace subdirectory
+          path: workspace/croc
 
       # Step 3: Checkout the peerdiscovery dependency repository directly into workspace/peerdiscovery
       - name: Checkout peerdiscovery dependency
@@ -341,31 +336,28 @@ jobs:
         with:
           repository: abakum/peerdiscovery
           ref: main
-          path: workspace/peerdiscovery # Checkout directly into the desired workspace subdirectory
+          path: workspace/peerdiscovery
 
-      # Step 5: Install Go
+      # Step 4: Install Go
       - name: Set up Go
-        uses: actions/setup-go@v5 # Use the latest version of the Go setup action
+        uses: actions/setup-go@v5
         with:
-          go-version: '1.24' # Specify your Go version
-          # Cache dependencies based on go.sum file in the main-repo path (now in workspace/crocgui)
+          go-version: '1.24'
           cache-dependency-path: ${{ github.workspace }}/workspace/crocgui/go.sum
 
-      # Step 6: Install Fyne CLI
+      # Step 5: Install Fyne CLI
       - name: Install Fyne CLI
         run: |
-          # Install the Fyne CLI tool
           go install fyne.io/tools/cmd/fyne@latest
 
-      # Step 7: Build the application for macOS arm64 (Apple Silicon)
+      # Step 6: Build the application for macOS arm64 (Apple Silicon)
       - name: Build for macOS arm64 (Apple Silicon)
         run: |
-          # Change directory to the project root inside the workspace
           cd $GITHUB_WORKSPACE/workspace/crocgui
           
           echo "Building for macOS arm64 (Apple Silicon)..."
           
-          # Set environment variables for cross-compilation
+          # Set environment variables
           export CGO_ENABLED=1
           export GOOS=darwin
           export GOARCH=arm64
@@ -386,32 +378,37 @@ jobs:
           DMG_NAME="crocgui-arm64.dmg"
           hdiutil create -srcfolder "$APP_NAME" -volname "crocgui-arm64" -ov -format UDZO "$DMG_NAME"
           
-          # List the output directory to confirm DMG creation
+          # Verify DMG was created
+          if [ ! -f "$DMG_NAME" ]; then
+              echo "ERROR: Failed to create DMG file"
+              ls -la .
+              exit 1
+          fi
+          
           echo "Contents of current directory after DMG creation:"
           ls -la *.dmg
 
-      # Step 8: Upload the built .dmg file as an artifact
+      # Step 7: Upload the built .dmg file as an artifact
       - name: Upload macOS arm64 artifact
-        # Upload even if the build step failed, to help with debugging
         if: success() || failure()
         uses: actions/upload-artifact@v4
         with:
           name: macos-arm64-build
-          # Path to the built .dmg file
           path: ${{ github.workspace }}/workspace/crocgui/crocgui-arm64.dmg
-          retention-days: 7 # Keep artifacts for 7 days
-          if-no-files-found: error # Fail if the .dmg file is not found
+          retention-days: 7
+          if-no-files-found: error
 
   # Job to build the application for Android target
   build-android:
-    #if: false
+    # Run only if 'all' or 'android' is selected
+    if: ${{ github.event.inputs.build_target == 'all' || github.event.inputs.build_target == 'android' }}
     runs-on: ubuntu-latest # Runs on Ubuntu to use fyne package with Android NDK
     steps:
-      # Step 1: Checkout the main repository (your Fyne app) directly into workspace/crocgui
+      # Step 1: Checkout the main repository directly into workspace/crocgui
       - name: Checkout main repository (crocgui)
         uses: actions/checkout@v4
         with:
-          path: workspace/crocgui # Checkout directly into the desired workspace subdirectory
+          path: workspace/crocgui
 
       # Step 2: Checkout the croc dependency repository directly into workspace/croc
       - name: Checkout croc dependency
@@ -419,7 +416,7 @@ jobs:
         with:
           repository: abakum/croc
           ref: main
-          path: workspace/croc # Checkout directly into the desired workspace subdirectory
+          path: workspace/croc
 
       # Step 3: Checkout the peerdiscovery dependency repository directly into workspace/peerdiscovery
       - name: Checkout peerdiscovery dependency
@@ -427,17 +424,15 @@ jobs:
         with:
           repository: abakum/peerdiscovery
           ref: main
-          path: workspace/peerdiscovery # Checkout directly into the desired workspace subdirectory
+          path: workspace/peerdiscovery
 
-      # Step 4: Verify FyneApp.toml and AndroidManifest.xml (no need for separate setup step)
+      # Step 4: Verify FyneApp.toml and AndroidManifest.xml
       - name: Verify FyneApp.toml and AndroidManifest.xml
         run: |
-          # Print the structure for debugging, check for FyneApp.toml and AndroidManifest.xml
           echo "Workspace structure (crocgui):"
           ls -la $GITHUB_WORKSPACE/workspace/crocgui/
           if [ -f "$GITHUB_WORKSPACE/workspace/crocgui/FyneApp.toml" ]; then
-            echo "FyneApp.toml found:"
-            cat $GITHUB_WORKSPACE/workspace/crocgui/FyneApp.toml
+            echo "FyneApp.toml found"
           else
             echo "ERROR: FyneApp.toml not found in $GITHUB_WORKSPACE/workspace/crocgui/"
             exit 1
@@ -451,23 +446,19 @@ jobs:
 
       # Step 5: Install Go
       - name: Set up Go
-        uses: actions/setup-go@v5 # Use the latest version of the Go setup action
+        uses: actions/setup-go@v5
         with:
-          go-version: '1.24' # Specify your Go version
-          # Cache dependencies based on go.sum file in the main-repo path (now in workspace/crocgui)
+          go-version: '1.24'
           cache-dependency-path: ${{ github.workspace }}/workspace/crocgui/go.sum
 
-      # Step 7: Install Fyne CLI
+      # Step 6: Install Fyne CLI
       - name: Install Fyne CLI
         run: |
-          # Install the Fyne CLI tool
           go install fyne.io/tools/cmd/fyne@latest
 
-      # Step 8: Build the application using fyne package for Android targets
-      # We will loop through the targets to build each one
+      # Step 7: Build the application using fyne package for Android targets
       - name: Build with fyne package for Android targets
         run: |
-          # Change directory to the project root inside the workspace
           cd $GITHUB_WORKSPACE/workspace/crocgui
           
           # Read version and build number from FyneApp.toml
@@ -486,13 +477,8 @@ jobs:
           
           # Update AndroidManifest.xml with the extracted values
           echo "Updating AndroidManifest.xml with versionName=$VERSION_NAME and versionCode=$BUILD_NUMBER"
-          # Use sed to replace the values in the manifest
           sed -i.bak "s/android:versionName=\"[^\"]*\"/android:versionName=\"$VERSION_NAME\"/g" AndroidManifest.xml
           sed -i.bak "s/android:versionCode=\"[0-9]*\"/android:versionCode=\"$BUILD_NUMBER\"/g" AndroidManifest.xml
-          
-          # Verify the update (optional, for debugging)
-          echo "Updated AndroidManifest.xml:"
-          grep -E 'android:versionName|android:versionCode' AndroidManifest.xml
           
           echo "Building for Android targets: android/arm, android/arm64, android/386, android/amd64"
           
@@ -505,18 +491,16 @@ jobs:
             
             # Extract OS and ARCH from target (format: os/arch)
             GOOS=${target%/*}
-            GOARCH=${target#*/} # This gets the part after the last '/'
+            GOARCH=${target#*/}
             
             # Set environment variables for cross-compilation
             export CGO_ENABLED=1
             export GOOS=$GOOS
             export GOARCH=$GOARCH
-            # ANDROID_NDK_HOME should already be set from the previous step
             
-            echo "Environment: GOOS=$GOOS, GOARCH=$GOARCH, ANDROID_NDK_HOME=$ANDROID_NDK_HOME"
+            echo "Environment: GOOS=$GOOS, GOARCH=$GOARCH"
             
             # Use fyne package to build the Android APK for the target
-            # The command from your Makefile: fyne package -os android/<arch> --release
             fyne package -os $target --release
             APK_NAME="crocgui.apk"
             if [ -f "$APK_NAME" ]; then
@@ -528,38 +512,36 @@ jobs:
             fi
           done
           
-          # List the output directory to confirm all APKs were built
           echo "Contents of current directory after all builds:"
           ls -la *.apk
 
-      # Step 9: Upload the built APK files as artifacts
+      # Step 8: Upload the built APK files as artifacts
       - name: Upload Android artifacts
-        # Upload even if the build step failed, to help with debugging
         if: success() || failure()
         uses: actions/upload-artifact@v4
         with:
           name: android-apks
-          # Path to the built APK files generated by fyne package
-          # Paths are now relative to the $GITHUB_WORKSPACE after checkout
           path: |
             ${{ github.workspace }}/workspace/crocgui/crocgui-*.apk
-          retention-days: 7 # Keep artifacts for 7 days
-          if-no-files-found: error # Fail if no .apk files are found
+          retention-days: 7
+          if-no-files-found: error
 
   # Job to create a GitHub Release and upload artifacts
+  # Only runs when 'all' is selected to avoid creating releases for partial builds
   create-release:
-    #if: false
+    # Run only if 'all' is selected
+    if: ${{ github.event.inputs.build_target == 'all' }}
     # This job waits for all build jobs to finish
     needs: [build-windows, build-linux, build-macos-amd64, build-macos-arm64, build-android]
     runs-on: ubuntu-latest
     steps:
-      # Step 0: Checkout the repository to access FyneApp.toml
+      # Step 1: Checkout the repository to access FyneApp.toml
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          path: repo-checkout # Checkout into a subdirectory to avoid conflicts if needed
+          path: repo-checkout
 
-      # Step 1: Determine the release version from input or FyneApp.toml (from checkout)
+      # Step 2: Determine the release version from input or FyneApp.toml
       - name: Determine Release Version
         id: get_version
         run: |
@@ -569,19 +551,14 @@ jobs:
           # If input version is empty, try to read it from the checked-out FyneApp.toml
           if [ -z "$INPUT_VERSION" ]; then
               echo "Input version is empty, attempting to auto-detect from checked-out FyneApp.toml"
-              # FyneApp.toml is now in the repo-checkout directory after checkout
               FYNEAPP_TOML_PATH="$GITHUB_WORKSPACE/repo-checkout/FyneApp.toml"
               if [ -f "$FYNEAPP_TOML_PATH" ]; then
-                  # Use grep and sed to extract the Version line
-                  # This regex looks for Version = "..." and captures the version string
-                  # It assumes the format is exactly Version = "version_string"
                   AUTO_VERSION=$(grep -E '^\s*Version\s*=' "$FYNEAPP_TOML_PATH" | sed -E 's/^\s*Version\s*=\s*"([^"]+)".*/\1/')
                   if [ -n "$AUTO_VERSION" ]; then
                       echo "Auto-detected version: $AUTO_VERSION"
                       RELEASE_VERSION="$AUTO_VERSION"
                   else
                       echo "ERROR: Could not extract version from FyneApp.toml (format might be incorrect)."
-                      echo "Contents of checked-out FyneApp.toml:"
                       cat "$FYNEAPP_TOML_PATH"
                       exit 1
                   fi
@@ -599,17 +576,19 @@ jobs:
           echo "release_version=$RELEASE_VERSION" >> $GITHUB_OUTPUT
           echo "Determined release version for this run: $RELEASE_VERSION"
 
-      # Step 2: Download all artifacts from previous jobs
+      # Step 3: Download all artifacts from previous jobs
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
           path: artifacts
 
-      # Step 3: Prepare the release assets (optional: add build info)
+      # Step 4: Prepare the release assets
       - name: Prepare release assets
         run: |
           echo "Preparing release assets..."
           mkdir -p release-assets
+          
+          # Copy all artifacts to release-assets directory
           for artifact_dir in artifacts/*/; do
             if [ -d "$artifact_dir" ]; then
               echo "Copying contents from $artifact_dir to release-assets/"
@@ -624,34 +603,27 @@ jobs:
           echo "Build Information" > release-assets/BUILD_INFO.txt
           echo "=================" >> release-assets/BUILD_INFO.txt
           echo "Project: crocgui (from FyneApp.toml)" >> release-assets/BUILD_INFO.txt
-          # Use the version determined in the previous step
           echo "Version: ${{ steps.get_version.outputs.release_version || 'manual_run' }}" >> release-assets/BUILD_INFO.txt
           echo "Build Type: ${{ github.event.inputs.build_type || 'manual' }}" >> release-assets/BUILD_INFO.txt
-          # Use bash command substitution to execute 'date -u' and capture its output
           BUILD_DATE=$(date -u)
           echo "Build Date: $BUILD_DATE" >> release-assets/BUILD_INFO.txt
-          echo "GitHub Run: https://github.com/  $GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" >> release-assets/BUILD_INFO.txt
+          echo "GitHub Run: https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" >> release-assets/BUILD_INFO.txt
           echo "" >> release-assets/BUILD_INFO.txt
-          # List the generated files
           echo "Generated files:" >> release-assets/BUILD_INFO.txt
           echo "----------------" >> release-assets/BUILD_INFO.txt
           ls -la release-assets/ >> release-assets/BUILD_INFO.txt
-          # Print the file content for verification
-          cat release-assets/BUILD_INFO.txt
-          # Export the BUILD_DATE to the environment so it's available in the next step
-          echo "BUILD_DATE=$BUILD_DATE" >> $GITHUB_ENV
 
-      # Step 4: Create the GitHub Release and upload assets
+      # Step 5: Create the GitHub Release and upload assets
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2 # Use the latest version of the release action
+        uses: softprops/action-gh-release@v2
         with:
-          # Use the input version for the release (or the one determined from FyneApp.toml)
+          # Use the version for the release tag
           tag_name: ${{ steps.get_version.outputs.release_version && format('v{0}', steps.get_version.outputs.release_version) }}
           # Name the release
           name: Release ${{ steps.get_version.outputs.release_version && format('v{0}', steps.get_version.outputs.release_version) }}
           draft: false # Make it a public release
           prerelease: ${{ github.event.inputs.build_type == 'snapshot' }} # Mark as pre-release if type is 'snapshot'
-          # Upload all files from the prepared release-assets directory (now includes .dmg files, .tar.xz, .exe, .apk, .deb)
+          # Upload all files from the prepared release-assets directory
           files: release-assets/*
           # Body text for the release description
           body: |
@@ -668,6 +640,7 @@ jobs:
             
             ### Included Files:
             - FyneApp.toml (contains version information used for this release)
+            - BUILD_INFO.txt (build details)
             
             ### Notes:
             - Windows: Executable file (`crocgui.exe`) is provided.
