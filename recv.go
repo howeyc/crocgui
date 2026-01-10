@@ -40,17 +40,24 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 	recvDir, _ := os.MkdirTemp("", "crocgui-recv")
 
 	// ========================= clear receive entry =========================
-	clearRecvEntry := widget.NewButton("clear", func() {
+	clearRecvEntry := widget.NewButtonWithIcon("", theme.ContentClearIcon(), func() {
 		recvEntry.Text = ""
 		recvEntry.Refresh()
 	})
 
 	// ========================= paste receive entry =========================
-	pasteRecvEntry := widget.NewButton("paste", func() {
+	pasteRecvEntry := widget.NewButtonWithIcon("", theme.ContentPasteIcon(), func() {
 		clipboard := a.Clipboard()
 		recvEntry.Text = clipboard.Content()
 		recvEntry.Refresh()
 	})
+
+	// ============================ receive entry container ============================
+	additionalRecvEntry := container.NewHBox(clearRecvEntry, pasteRecvEntry)
+	recvEntryContainer := container.NewBorder(
+		nil, nil, nil, additionalRecvEntry,
+		recvEntry, additionalRecvEntry,
+	)
 
 	boxholder := container.NewVBox()
 	receiverScroller := container.NewVScroll(boxholder)
@@ -226,8 +233,7 @@ func recvTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 
 	receiveTop := container.NewVBox(
 		container.NewHBox(topline, layout.NewSpacer()),
-		widget.NewForm(&widget.FormItem{Text: lp("Receive Code"), Widget: recvEntry, HintText: "Spaces ( ) become dash (-)"}),
-		container.NewHBox(layout.NewSpacer(), clearRecvEntry, pasteRecvEntry),
+		widget.NewForm(&widget.FormItem{Text: lp("Receive Code"), Widget: recvEntryContainer, HintText: "Spaces ( ) become dash (-)"}),
 	)
 	receiveBot := container.NewVBox(
 		activeButtonHolder,
