@@ -18,3 +18,8 @@ https://github.com/schollz/croc
 - for Android, send files without nested directories, and receive even nested directories, saving them into .zip files
 - view the protocol in color, albeit not as fast as in the console
 - for Android, view the protocol via `adb logcat -s croc`
+
+<b>IMHO</b>
+A digital publisher signature is a mechanism employed by centralized platforms, such as app stores, for the purpose of content moderation and validation.
+In contrast, for direct 'first-hand' distribution (e.g., via GitHub), a cryptographic hash provided by the author suffices to verify the file's integrity and provenance.
+A third-party signature, therefore, serves merely as an indicator that the application has undergone review and adheres to the platform's established rules, security policies, or technical requirements.

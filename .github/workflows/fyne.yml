@@ -628,30 +628,49 @@ jobs:
           # Body text for the release description
           body: |
             ## crocgui ${{ steps.get_version.outputs.release_version && format('v{0}', steps.get_version.outputs.release_version) }}
-            
+
             Release built via GitHub Actions for multiple platforms.
             App Version read from `FyneApp.toml`.
+
+            ### Included Platforms & Files:
+            - **Windows (x86_64)**: Executable `crocgui.exe`
+            - **Linux (x86_64)**: `.tar.xz` archive and `.deb` package  
+            - **macOS**: `.dmg` files for Apple Silicon (`crocgui-arm64.dmg`) and Intel (`crocgui-amd64.dmg`)
+            - **Android**: APK files for ARM64, ARM, x86_64, x86 architectures
+            - Metadata: `FyneApp.toml` (version info), `BUILD_INFO.txt` (build details)
+
+            ### Package Manager Installation (Recommended):
+            - **macOS**: `brew install --cask abakum/tap/crocgui`
+            - **Linux**: `brew install --formula abakum/tap/crocgui`
+            - **Linux**: `sudo dpkg -i crocgui_*_amd64.deb`
+            - **Windows**: `scoop bucket add abakum https://github.com/abakum/homebrew-tap && scoop install crocgui`
+
+            ### Manual Installation:
+
+            #### Linux (from tar.xz):
+
+            **System installation (requires sudo):**
+            ```
+            TEMP_DIR=$(mktemp -d) && trap "rm -rf $TEMP_DIR" EXIT && tar -xf crocgui.tar.xz -C "$TEMP_DIR" && sudo make -C "$TEMP_DIR" -f Makefile install
+            ```
+
+            **User installation (no sudo):**
+            ```
+            TEMP_DIR=$(mktemp -d) && trap "rm -rf $TEMP_DIR" EXIT && tar -xf crocgui.tar.xz -C "$TEMP_DIR" && make -C "$TEMP_DIR" -f Makefile user-install
+            ```
             
-            ### Included Platforms:
-            - Windows (Intel - x86_64)
-            - Linux (Intel - x86_64) - both .tar.xz and .deb packages
-            - macOS (Intel/Apple Silicon - x86_64/ARM64)
-            - Android (x86_64, ARM64, x86, ARM)
-            
-            ### Included Files:
-            - FyneApp.toml (contains version information used for this release)
-            - BUILD_INFO.txt (build details)
-            
+            #### macOS (from .dmg):
+            Mount the .dmg file and drag crocgui.app to Applications folder
+
+            ### Launch Instructions:
+            - **macOS**: `open /Applications/crocgui.app` or click in Launchpad
+            - **Linux**: `crocgui` or `gtk-launch com.github.howeyc.crocgui`
+            - **Windows**: `crocgui` from Command Prompt/PowerShell
+
             ### Notes:
-            - Windows: Executable file (`crocgui.exe`) is provided.
-            - Linux: The application is packaged as both a .tar.xz archive (crocgui.tar.xz) and a .deb package for easy installation.
-            - macOS: `.dmg` files are provided for both Apple Silicon (`crocgui-arm64.dmg`) and Intel (`crocgui-amd64.dmg`).
-            - Android: APK files are provided for multiple architectures (`crocgui-arm.apk`, `crocgui-arm64.apk`, `crocgui-386.apk`, `crocgui-amd64.apk`).
-            
-            ### Linux Installation:
-            - **.deb package**: Install with `sudo dpkg -i crocgui_*_amd64.deb`
-            - **tar.xz archive**: User install with `TEMP_DIR=$(mktemp -d)&&trap "rm -rf $TEMP_DIR" EXIT&&tar -xf crocgui.tar.xz -C "$TEMP_DIR"&&make -C "$TEMP_DIR" -f Makefile user-install`
-            - **tar.xz archive**: System install with `TEMP_DIR=$(mktemp -d)&&trap "rm -rf $TEMP_DIR" EXIT&&tar -xf crocgui.tar.xz -C "$TEMP_DIR"&&sudo make -C "$TEMP_DIR" -f Makefile install`
+            - Homebrew installations on Linux require [Homebrew for Linux](https://docs.brew.sh/Homebrew-on-Linux)
+            - After manual installation, you may need to log out and back in for desktop menu integration
+            - Android APKs can be sideloaded or installed via ADB
         env:
           # Token required to create the release
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

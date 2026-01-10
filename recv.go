@@ -580,11 +580,18 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 		}
 		opt.RelayPassword, opt.RelayAddress, opt.RelayAddress6, _,
 			comm.Socks5Proxy, comm.HttpProxy = def(a)
-		if strings.HasPrefix(opt.RelayAddress, "0") {
-			opt.RelayAddress = strings.TrimPrefix(opt.RelayAddress, "0")
+
+		switch {
+		case strings.HasPrefix(opt.RelayAddress, "0"):
 			// Подключаемся напрямую к отправителю
 			// --ip
-			opt.IP = opt.RelayAddress
+			opt.IP = strings.TrimPrefix(opt.RelayAddress, "0")
+			fallthrough
+		case opt.OnlyLocal:
+			opt.RelayAddress = ""
+			opt.RelayAddress6 = ""
+			// Не у кого запрашивать локальный адрес
+			opt.TestFlag = false
 		}
 
 		ctx, ctc := context.WithCancel(context.Background())
