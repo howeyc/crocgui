@@ -531,7 +531,9 @@ jobs:
       - name: Clean signed APK filenames
         run: |
           cd ${{ github.workspace }}/workspace/crocgui
-          
+
+          rm -f *-temp.apk
+
           if ! compgen -G "*-signed.apk" > /dev/null; then
             echo "::error file=,title=Missing Signed APKs::No *-signed.apk files found. The signing step may have failed or produced no output."
             exit 1
