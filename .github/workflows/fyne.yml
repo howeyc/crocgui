@@ -515,7 +515,50 @@ jobs:
           echo "Contents of current directory after all builds:"
           ls -la *.apk
 
-      # Step 8: Upload the built APK files as artifacts
+      # Step 8: Sign Android APKs
+      - name: Sign and rename APK for Android
+        id: sign_apk
+        uses: r0adkll/sign-android-release@v1
+        env:
+          RELEASE_DIR: ${{ github.workspace }}/workspace/crocgui
+        with:
+          releaseDirectory: ${{ env.RELEASE_DIR }}
+          signingKeyBase64: ${{ secrets.ANDROID_SIGNING_KEY }}
+          alias: ${{ secrets.ANDROID_KEY_ALIAS }}
+          keyStorePassword: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          keyPassword: ${{ secrets.ANDROID_KEY_PASSWORD }}
+
+      # Step 9: Remove '-signed' suffix from APK filenames
+      - name: Clean signed APK filenames
+        run: |
+          cd ${{ github.workspace }}/workspace/crocgui
+          if ! compgen -G "*-signed.apk" > /dev/null; then
+            echo "::error file=,title=Missing Signed APKs::No *-signed.apk files found. The signing step may have failed or produced no output."
+            exit 1
+          fi
+
+          for signed_file in *-signed.apk; do
+            if [ -f "$signed_file" ]; then
+              if apksigner verify --print-certs "$signed_file" > /dev/null 2>&1; then
+                echo "Signature verification PASSED for: $signed_file"
+              else
+                echo "::error file=$signed_file,title=Invalid APK Signature::Signature verification FAILED for: $signed_file"
+                exit 1
+              fi
+
+              base_name=$(basename "$signed_file" -signed.apk).apk
+              
+              if [ -f "$base_name" ]; then
+                rm -f "$base_name"
+                echo "Removed unsigned file: $base_name"
+              fi
+              
+              mv "$signed_file" "$base_name"
+              echo "Renamed: $signed_file -> $base_name"
+            fi
+          done
+
+      # Step 10: Upload the signed APK files as artifacts
       - name: Upload Android artifacts
         if: success() || failure()
         uses: actions/upload-artifact@v4

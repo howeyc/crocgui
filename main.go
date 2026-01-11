@@ -101,7 +101,7 @@ var (
 	code      = os.Getenv("CROC_SECRET")
 	AppClosed string
 	GUI       = syscall.Stdout == 0 && syscall.Stderr == 0 //for windowsgui
-	FORK      = "github.com/abakum/crocgui"
+	FORK      = "github.com/howeyc/crocgui v1.11.5.40\ngithub.com/abakum/crocgui"
 )
 
 const (
