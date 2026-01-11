@@ -4,9 +4,9 @@
 *.so
 *.dylib
 /bin/
-/crocgui.app/
-/croc.apk
-/croc.exe
+/*.app/
+/*.apk
+/*.exe
 /*.deb
 /*.xz
 

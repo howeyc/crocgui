@@ -525,12 +525,13 @@ jobs:
           keyAlias: ${{ secrets.ANDROID_KEY_ALIAS }}
           keyStorePassword: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           keyPassword: ${{ secrets.ANDROID_KEY_PASSWORD }}
-          buildToolsVersion: "35.0.0"
+          buildToolsVersion: "36.0.0"
 
       # Step 9: Remove '-signed' suffix from APK filenames
       - name: Clean signed APK filenames
         run: |
           cd ${{ github.workspace }}/workspace/crocgui
+          
           if ! compgen -G "*-signed.apk" > /dev/null; then
             echo "::error file=,title=Missing Signed APKs::No *-signed.apk files found. The signing step may have failed or produced no output."
             exit 1
