@@ -698,7 +698,7 @@ jobs:
             ### Notes:
             - Homebrew installations on Linux require [Homebrew for Linux](https://docs.brew.sh/Homebrew-on-Linux)
             - After manual installation, you may need to log out and back in for desktop menu integration
-            - Android APKs can be sideloaded or installed via ADB
+            - Android APKs are developer-signed and can be directly sideloaded or installed via ADB
         env:
           # Token required to create the release
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
