@@ -518,15 +518,14 @@ jobs:
       # Step 8: Sign Android APKs
       - name: Sign and rename APK for Android
         id: sign_apk
-        uses: r0adkll/sign-android-release@v1
-        env:
-          RELEASE_DIR: ${{ github.workspace }}/workspace/crocgui
+        uses: ilharp/sign-android-release@v2
         with:
-          releaseDirectory: ${{ env.RELEASE_DIR }}
-          signingKeyBase64: ${{ secrets.ANDROID_SIGNING_KEY }}
-          alias: ${{ secrets.ANDROID_KEY_ALIAS }}
+          releaseDir: ${{ github.workspace }}/workspace/crocgui
+          signingKey: ${{ secrets.ANDROID_SIGNING_KEY }}
+          keyAlias: ${{ secrets.ANDROID_KEY_ALIAS }}
           keyStorePassword: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           keyPassword: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          buildToolsVersion: "36.0.0"
 
       # Step 9: Remove '-signed' suffix from APK filenames
       - name: Clean signed APK filenames
