@@ -233,9 +233,8 @@ func main() {
 	// 	a.Preferences().StringWithFallback("relay-password", DEFAULT_PASSPHRASE))
 	a.Preferences().SetString("relay-ports",
 		a.Preferences().StringWithFallback("relay-ports", strings.Join(makePorts(0, 8), ",")))
-	// Лучше использовать testing или ip или явно host чем флудить локалку
-	a.Preferences().SetBool("disable-local",
-		a.Preferences().BoolWithFallback("disable-local", true))
+	// a.Preferences().SetBool("disable-local",
+	// 	a.Preferences().BoolWithFallback("disable-local", true))
 	a.Preferences().SetBool("testing",
 		a.Preferences().BoolWithFallback("testing", true))
 	// a.Preferences().SetBool("force-local",
@@ -299,6 +298,8 @@ func main() {
 		atSI = 0
 		a.Preferences().SetInt("tab", 0)
 	}
+	a.Preferences().SetBool("hide-logo",
+		a.Preferences().BoolWithFallback("hide-logo", true))
 	refreshWindow(a, w)
 	w.Resize(size)
 	AppClosed = lp("App closed. Tap to start.")
