@@ -61,7 +61,6 @@ func aboutTabItem(a fyne.App, _ fyne.Window) *container.TabItem {
 			bfontLicense, rerr := fsFonts.ReadFile(fmt.Sprintf("internal/fonts/%s", fe.Name()))
 			if rerr == nil {
 				strLicense := string(bfontLicense)
-				// acLicense.Append(widget.NewAccordionItem(fmt.Sprintf("Font: %s", fbase), widget.NewLabel(strLicense)))
 				ais = append(ais, widget.NewAccordionItem(fmt.Sprintf("Font: %s", fbase), widget.NewLabel(strLicense)))
 			}
 		}
@@ -76,7 +75,41 @@ func aboutTabItem(a fyne.App, _ fyne.Window) *container.TabItem {
 		w.Resize(size)
 		w.Show()
 	})
-	return container.NewTabItemWithIcon(ZeroWidthJoiner, theme.InfoIcon(), //lp("About")
-		container.NewVScroll(container.NewVBox(aboutInfo, licenseToggle)),
+
+	// Создаём гиперссылку для обновления (пока пустую, скрытую)
+	updateHyperlink := widget.NewHyperlink("", nil)
+	updateHyperlink.Hidden = true
+
+	// Собираем интерфейс: сначала гиперссылка, потом основная информация
+	ti := container.NewTabItemWithIcon(ZeroWidthJoiner, theme.InfoIcon(), //lp("About")
+		container.NewVScroll(container.NewVBox(
+			updateHyperlink,
+			aboutInfo,
+			licenseToggle,
+		)),
 	)
+	OnSelectedReload[4] = func() {
+		go func() {
+			latestVersion, err := Latest(FORKto, CG)
+			if err != nil || updateHyperlink == nil {
+				return
+			}
+
+			currentVersion := fmt.Sprintf("v%s.%d", a.Metadata().Version, a.Metadata().Build)
+			if latestVersion == currentVersion {
+				return
+			}
+
+			// Если есть новая версия, показываем гиперссылку
+			fyne.Do(func() {
+				updateHyperlink.SetText(lp("New version") + " " + latestVersion)
+				updateHyperlink.SetURLFromString(fmt.Sprintf("%s/%s/%s/releases/tag/%s",
+					GH, FORKto, CG, latestVersion))
+				updateHyperlink.Hidden = false
+
+				ti.Content.Refresh()
+			})
+		}()
+	}
+	return ti
 }

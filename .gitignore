@@ -45,3 +45,4 @@ debug
 *.temp
 *.bak
 /tmp/
+*.jks

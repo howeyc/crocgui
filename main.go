@@ -34,6 +34,45 @@ import (
 	"fyne.io/fyne/v2/theme"
 )
 
+const (
+	EMULATE                = time.Second * 0
+	CROC_SECRET            = "CROC_SECRET"
+	TOTP                   = "TOTP-" + CROC_SECRET
+	DOTZIP                 = ".zip"
+	ZhangHai               = "content://me.zhanghai.android.files.file_provider/"
+	Ghisler                = "content://com.ghisler.files/"
+	SEND                   = "crocgui-send"
+	RECV                   = "crocgui-recv"
+	MIME_TYPE_DIR          = "vnd.android.document/directory"
+	MIME_TYPE_OCTET_STREAM = "application/octet-stream"
+	ID                     = "com.github.howeyc.crocgui"
+	LastFolder             = "fyne:fileDialogLastFolder"
+	DEFAULT                = "default"
+	NONDEFAULT             = "non-default: "
+	STDIN                  = "croc-stdin-"
+	DEFAULT_RELAY          = "croc.schollz.com"
+	DEFAULT_RELAY6         = "croc6.schollz.com"
+	DEFAULT_PORT           = 9009
+	TRANSFERS              = 5
+	DEFAULT_PASSPHRASE     = "pass123"
+	REFUSING               = "refusing files"
+	CROCDEBUGLOG           = "crocdebuglog.txt"
+
+	// cmd/c "set LOGGER=trace&crocgui.exe"
+	// LOGGER=trace crocgui
+	LEVEL    = "debug"
+	FORKfrom = "howeyc"
+	FORKto   = "abakum"
+	GH       = "https://github.com"
+	CG       = "crocgui"
+)
+
+const (
+	ZeroWidthSpace     = string(rune(0x200B) + iota) // Пробел нулевой ширины
+	ZeroWidthNonJoiner                               // Не-соединитель нулевой ширины
+	ZeroWidthJoiner                                  // Соединитель нулевой ширины
+)
+
 //go:embed metadata/en-US/images/featureGraphic.png
 var textlogobytes []byte
 
@@ -50,7 +89,7 @@ var (
 	atSI                   int
 	notFinish              bool
 	wd                     string
-	OnSelectedReload       = make(map[int]func(), 2)
+	OnSelectedReload       = make(map[int]func(), 5)
 	swap                   bool
 	tempDir                string
 	ready                  func() bool
@@ -101,42 +140,10 @@ var (
 	code      = os.Getenv("CROC_SECRET")
 	AppClosed string
 	GUI       = syscall.Stdout == 0 && syscall.Stderr == 0 //for windowsgui
-	FORK      = "github.com/howeyc/crocgui v1.11.5.40\ngithub.com/abakum/crocgui"
-)
-
-const (
-	EMULATE                = time.Second * 0
-	CROC_SECRET            = "CROC_SECRET"
-	TOTP                   = "TOTP-" + CROC_SECRET
-	DOTZIP                 = ".zip"
-	ZhangHai               = "content://me.zhanghai.android.files.file_provider/"
-	Ghisler                = "content://com.ghisler.files/"
-	SEND                   = "crocgui-send"
-	RECV                   = "crocgui-recv"
-	MIME_TYPE_DIR          = "vnd.android.document/directory"
-	MIME_TYPE_OCTET_STREAM = "application/octet-stream"
-	ID                     = "com.github.howeyc.crocgui"
-	LastFolder             = "fyne:fileDialogLastFolder"
-	DEFAULT                = "default"
-	NONDEFAULT             = "non-default: "
-	STDIN                  = "croc-stdin-"
-	DEFAULT_RELAY          = "croc.schollz.com"
-	DEFAULT_RELAY6         = "croc6.schollz.com"
-	DEFAULT_PORT           = 9009
-	TRANSFERS              = 5
-	DEFAULT_PASSPHRASE     = "pass123"
-	REFUSING               = "refusing files"
-	CROCDEBUGLOG           = "crocdebuglog.txt"
-
-	// cmd/c "set LOGGER=trace&crocgui.exe"
-	// LOGGER=trace crocgui
-	LEVEL = "debug"
-)
-
-const (
-	ZeroWidthSpace     = string(rune(0x200B) + iota) // Пробел нулевой ширины
-	ZeroWidthNonJoiner                               // Не-соединитель нулевой ширины
-	ZeroWidthJoiner                                  // Соединитель нулевой ширины
+	FORK      = fmt.Sprintf("%s/%s/%s v1.11.5.40\n"+
+		"%s/%s/%s",
+		GH, FORKfrom, CG,
+		GH, FORKto, CG)
 )
 
 func main() {
