@@ -11,6 +11,7 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
+	log "github.com/schollz/logger"
 )
 
 //go:embed metadata
@@ -96,8 +97,10 @@ func aboutTabItem(a fyne.App, _ fyne.Window) *container.TabItem {
 	OnSelectedReload[4] = func() {
 		go func() {
 			latestVersion, err := Latest(FORKto, CG)
+			currentVersion := fmt.Sprintf("v%s", md.Version)
+			log.Debugf("%s %s %v", currentVersion, latestVersion, err)
 
-			if currentVersion := fmt.Sprintf("v%s.%d", md.Version, md.Build); err != nil || newHyperlink == nil || latestVersion == currentVersion {
+			if err != nil || newHyperlink == nil || latestVersion == currentVersion {
 				return
 			}
 			url := fmt.Sprintf("%s/%s/%s/releases/tag/%s",
