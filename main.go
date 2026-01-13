@@ -60,11 +60,13 @@ const (
 
 	// cmd/c "set LOGGER=trace&crocgui.exe"
 	// LOGGER=trace crocgui
-	LEVEL    = "debug"
-	FORKfrom = "howeyc"
-	FORKto   = "abakum"
-	GH       = "https://github.com"
-	CG       = "crocgui"
+	LEVEL           = "debug"
+	FORKfrom        = "howeyc"
+	FORKfromVersion = "1.11.5"
+	FORKfromBuild   = 40
+	FORKto          = "abakum"
+	GH              = "github.com"
+	CG              = "crocgui"
 )
 
 const (

@@ -28,8 +28,7 @@ func aboutTabItem(a fyne.App, _ fyne.Window) *container.TabItem {
 	longdesc = strings.ReplaceAll(longdesc, "<b>", "")
 	longdesc = strings.ReplaceAll(longdesc, "</b>", "")
 	md := a.Metadata()
-	aboutInfo := widget.NewLabel(fmt.Sprintf("%s v%s.%d\n\n%s",
-		FORK, md.Version, md.Build, longdesc))
+	aboutInfo := widget.NewLabel(longdesc)
 	aboutInfo.Wrapping = fyne.TextWrapWord
 
 	// acLicense := widget.NewAccordion()
@@ -76,14 +75,20 @@ func aboutTabItem(a fyne.App, _ fyne.Window) *container.TabItem {
 		w.Show()
 	})
 
-	// Создаём гиперссылку для обновления (пока пустую, скрытую)
-	updateHyperlink := widget.NewHyperlink("", nil)
-	updateHyperlink.Hidden = true
+	fromHyperlink := widget.NewHyperlink(fmt.Sprintf("%s/%s/%s v%s.%d", GH, FORKfrom, CG, FORKfromVersion, FORKfromBuild), nil)
+	fromHyperlink.SetURLFromString(fmt.Sprintf("https://%s/%s/%s/releases/tag/v%s", GH, FORKfrom, CG, FORKfromVersion))
+	oldHyperlink := widget.NewHyperlink(fmt.Sprintf("%s/%s/%s v%s.%d", GH, FORKto, CG, md.Version, md.Build), nil)
+	oldHyperlink.SetURLFromString(fmt.Sprintf("https://%s/%s/%s/releases/tag/v%s", GH, FORKto, CG, md.Version))
+	newHyperlink := widget.NewHyperlink("", nil)
+	newHyperlink.Hidden = true
 
-	// Собираем интерфейс: сначала гиперссылка, потом основная информация
 	ti := container.NewTabItemWithIcon(ZeroWidthJoiner, theme.InfoIcon(), //lp("About")
 		container.NewVScroll(container.NewVBox(
-			updateHyperlink,
+			container.New(&tightVBoxLayout{},
+				fromHyperlink,
+				oldHyperlink,
+				newHyperlink,
+			),
 			aboutInfo,
 			licenseToggle,
 		)),
@@ -91,25 +96,50 @@ func aboutTabItem(a fyne.App, _ fyne.Window) *container.TabItem {
 	OnSelectedReload[4] = func() {
 		go func() {
 			latestVersion, err := Latest(FORKto, CG)
-			if err != nil || updateHyperlink == nil {
+
+			if currentVersion := fmt.Sprintf("v%s.%d", md.Version, md.Build); err != nil || newHyperlink == nil || latestVersion == currentVersion {
 				return
 			}
+			url := fmt.Sprintf("%s/%s/%s/releases/tag/%s",
+				GH, FORKto, CG, latestVersion)
 
-			currentVersion := fmt.Sprintf("v%s.%d", a.Metadata().Version, a.Metadata().Build)
-			if latestVersion == currentVersion {
-				return
-			}
-
-			// Если есть новая версия, показываем гиперссылку
 			fyne.Do(func() {
-				updateHyperlink.SetText(lp("New version") + " " + latestVersion)
-				updateHyperlink.SetURLFromString(fmt.Sprintf("%s/%s/%s/releases/tag/%s",
-					GH, FORKto, CG, latestVersion))
-				updateHyperlink.Hidden = false
+				newHyperlink.SetText(url)
+				newHyperlink.SetURLFromString("https://" + url)
+				newHyperlink.Hidden = false
 
 				ti.Content.Refresh()
 			})
 		}()
 	}
 	return ti
+}
+
+type tightVBoxLayout struct{}
+
+const tight = 0.6
+
+func (t *tightVBoxLayout) Layout(objects []fyne.CanvasObject, size fyne.Size) {
+	yPos := float32(0)
+	for _, obj := range objects {
+		if obj.Visible() {
+			obj.Resize(fyne.NewSize(size.Width, obj.MinSize().Height))
+			obj.Move(fyne.NewPos(0, yPos))
+			yPos += obj.MinSize().Height * tight
+		}
+	}
+}
+
+func (t *tightVBoxLayout) MinSize(objects []fyne.CanvasObject) fyne.Size {
+	height := float32(0)
+	width := float32(0)
+	for _, obj := range objects {
+		if obj.Visible() {
+			height += obj.MinSize().Height * tight
+			if obj.MinSize().Width > width {
+				width = obj.MinSize().Width
+			}
+		}
+	}
+	return fyne.NewSize(width, height)
 }
