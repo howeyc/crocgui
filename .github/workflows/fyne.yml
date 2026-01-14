@@ -575,7 +575,7 @@ jobs:
             fi
             cat "$MANIFEST_PATH"
             sed -i 's/android:launchMode="standard"/android:launchMode="singleTop"/g' "$MANIFEST_PATH"
-            sed -i 's/android:icon="@null"/android:icon="@ref\/0x7f020000"/g' "$MANIFEST_PATH"
+            sed -i 's/android:icon="@null"/android:icon="@mipmap/icon"/g' "$MANIFEST_PATH"
             echo "  Verification in AndroidManifest.xml:"
             grep "launchMode" "$MANIFEST_PATH" || true
             grep "icon" "$MANIFEST_PATH" || true
