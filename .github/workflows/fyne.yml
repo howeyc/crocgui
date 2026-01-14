@@ -483,7 +483,8 @@ jobs:
           echo "Building for Android targets: android/arm, android/arm64, android/386, android/amd64"
           
           # Define the targets as a bash array
-          TARGETS=("android/arm" "android/arm64" "android/386" "android/amd64")
+          #TARGETS=("android/arm" "android/arm64" "android/386" "android/amd64")
+          TARGETS=("android/arm64")
           
           # Loop through each target
           for target in "${TARGETS[@]}"; do
@@ -575,8 +576,20 @@ jobs:
             fi
             cat "$MANIFEST_PATH"
             sed -i 's/android:launchMode="standard"/android:launchMode="singleTop"/g' "$MANIFEST_PATH"
-            grep "icon" "$TEMP_DIR/res/values/public.xml" || true
-            sed -i 's|android:icon="@null"|android:icon="@drawable/icon"|g' "$MANIFEST_PATH"
+
+            ls -R "$TEMP_DIR"
+            echo "  Listing resources in res/ folder:"
+            find "$TEMP_DIR/res" -maxdepth 3 -name "*icon*" || true
+
+            PUBLIC_XML="$TEMP_DIR/res/values/public.xml"
+            cat "$PUBLIC_XML" || true
+            if [ ! -f "$PUBLIC_XML" ]; then
+              mkdir -p "$TEMP_DIR/res/values"
+              echo '<?xml version="1.0" encoding="utf-8"?><resources></resources>' > "$PUBLIC_XML"
+            fi
+            sed -i '/<\/resources>/i <public type="mipmap" name="icon" id="0x7f020000" />' "$PUBLIC_XML"
+
+            sed -i 's|android:icon="@null"|android:icon="@mipmap/icon"|g' "$MANIFEST_PATH"
             echo "  Verification in AndroidManifest.xml:"
             grep "launchMode" "$MANIFEST_PATH" || true
             grep "icon" "$MANIFEST_PATH" || true
