@@ -1,11 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest
     xmlns:android="http://schemas.android.com/apk/res/android"
-    android:versionCode="1214"
+    android:versionCode="1215"
     android:versionName="1.11.37"
-    package="com.github.howeyc.crocgui"
-    platformBuildVersionCode="15"
-    platformBuildVersionName="4.0.4-1406430">
+    package="com.github.howeyc.crocgui">
 
     <!--
     <uses-sdk
