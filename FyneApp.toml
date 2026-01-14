@@ -1,11 +1,11 @@
 [Details]
-  Icon = "Icon.png"
-  Name = "crocgui"
-  ID = "com.github.howeyc.crocgui"
-  Version = "1.11.37"
-  Build = 1219
+Icon = "Icon.png"
+Name = "crocgui"
+ID = "com.github.howeyc.crocgui"
+Version = "1.11.37"
+Build = 1223
 
 [LinuxAndBSD]
-  GenericName = "GUI for croc"
-  Categories = ["FileTransfer"]
-  Comment = "A nice simple GUI for croc"
+GenericName = "GUI for croc"
+Categories = ["FileTransfer"]
+Comment = "A nice simple GUI for croc"

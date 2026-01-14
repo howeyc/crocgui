@@ -8,9 +8,6 @@ croc, herhangi iki bilgisayarın dosyaları basit ve güvenli bir şekilde aktar
 - yerel sunucu veya bağlantı noktası iletme <b>gerekli değil</b>
 - <b>ipv6-ilk</b> ipv4 geri dönüş ile
 
-Konsol sürümü uygulaması, bu arayüzle aynı kütüphaneyi kullanarak şu adreste bulunabilir:  
-https://github.com/schollz/croc
-
 <b>Bu arayüz şunları yapmanıza olanak tanır</b>
 - alandan veya CROC_SECRET ortam değişkeninden alınan gizli anahtarla tek kullanımlık şifreler kullanın
 - Windows, Linux ve macOS için, dosya veya dizin seçim iletişim kutularına ek olarak sürükle-bırak veya komut satırını kullanın

@@ -483,8 +483,7 @@ jobs:
           echo "Building for Android targets: android/arm, android/arm64, android/386, android/amd64"
           
           # Define the targets as a bash array
-          #TARGETS=("android/arm" "android/arm64" "android/386" "android/amd64")
-          TARGETS=("android/arm64")
+          TARGETS=("android/arm" "android/arm64" "android/386" "android/amd64")
           
           # Loop through each target
           for target in "${TARGETS[@]}"; do
@@ -574,14 +573,11 @@ jobs:
               rm -rf "$TEMP_DIR"
               continue
             fi
-            cat "$MANIFEST_PATH"
+            #cat "$MANIFEST_PATH"
             sed -i 's/android:launchMode="standard"/android:launchMode="singleTop"/g' "$MANIFEST_PATH"
 
             mkdir -p "$TEMP_DIR/res/mipmap-xxxhdpi-v4"
             cp "${{ github.workspace }}/workspace/crocgui/Icon.png" "$TEMP_DIR/res/mipmap-xxxhdpi-v4/icon.png"
-            ls -R "$TEMP_DIR"
-            echo "  Listing resources in res/ folder:"
-            find "$TEMP_DIR/res" -maxdepth 3 -name "*icon*" || true
 
             PUBLIC_XML="$TEMP_DIR/res/values/public.xml"
             cat "$PUBLIC_XML" || true

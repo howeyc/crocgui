@@ -53,15 +53,22 @@ func (c crocTheme) Size(name fyne.ThemeSizeName) float32 {
 
 func setThemeColor(themeName string) {
 	switch themeName {
-	case "light":
-		appTheme.color = theme.LightTheme()
 	case "grey":
 		appTheme.color = croctheme.GreyTheme()
+		appTheme.icon = croctheme.GreyTheme()
 	case "dark":
 		appTheme.color = theme.DarkTheme()
+		appTheme.icon = theme.DarkTheme()
 	case "black":
 		appTheme.color = croctheme.BlackTheme()
+		appTheme.icon = croctheme.BlackTheme()
 	case "system":
 		appTheme.color = theme.DefaultTheme()
+		appTheme.icon = theme.DefaultTheme()
+	case "light":
+		fallthrough
+	default:
+		appTheme.color = theme.LightTheme()
+		appTheme.icon = theme.LightTheme()
 	}
 }

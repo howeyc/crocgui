@@ -76,6 +76,8 @@ func aboutTabItem(a fyne.App, _ fyne.Window) *container.TabItem {
 		w.Show()
 	})
 
+	crocHyperlink := widget.NewHyperlink(fmt.Sprintf("%s/%s/%s", GH, "schollz", "croc"), nil)
+	crocHyperlink.SetURLFromString(fmt.Sprintf("https://%s/%s/%s/releases/latest", GH, "schollz", "croc"))
 	fromHyperlink := widget.NewHyperlink(fmt.Sprintf("%s/%s/%s v%s.%d", GH, FORKfrom, CG, FORKfromVersion, FORKfromBuild), nil)
 	fromHyperlink.SetURLFromString(fmt.Sprintf("https://%s/%s/%s/releases/tag/v%s", GH, FORKfrom, CG, FORKfromVersion))
 	oldHyperlink := widget.NewHyperlink(fmt.Sprintf("%s/%s/%s v%s.%d", GH, FORKto, CG, md.Version, md.Build), nil)
@@ -86,6 +88,7 @@ func aboutTabItem(a fyne.App, _ fyne.Window) *container.TabItem {
 	ti := container.NewTabItemWithIcon(ZeroWidthJoiner, theme.InfoIcon(), //lp("About")
 		container.NewVScroll(container.NewVBox(
 			container.New(&tightVBoxLayout{},
+				crocHyperlink,
 				fromHyperlink,
 				oldHyperlink,
 				newHyperlink,

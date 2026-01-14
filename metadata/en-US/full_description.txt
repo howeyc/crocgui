@@ -8,9 +8,6 @@ croc is a tool that allows any two computers to simply and securely transfer fil
 - local server or port-forwarding <b>not needed</b>
 - <b>ipv6-first</b> with ipv4 fallback
 
-A console version of the application, using the same library as this interface, is available here:  
-https://github.com/schollz/croc
-
 <b>This interface allows you to</b>
 - use one-time passwords with a secret from the field or from the CROC_SECRET environment variable
 - for Windows, Linux, and macOS, use drag-and-drop or the command line in addition to file or directory selection dialogs

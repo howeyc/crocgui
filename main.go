@@ -30,6 +30,7 @@ import (
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/lang"
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 )
@@ -233,15 +234,18 @@ func main() {
 		cleanup(w)
 	})
 
+	systemLocale := lang.SystemLocale()
+	systemLang := systemLocale.String()
+	log.Info(systemLang)
 	// Defaults
 	a.Preferences().SetString("lang",
-		a.Preferences().StringWithFallback("lang", "en-US"))
+		a.Preferences().StringWithFallback("lang", systemLang))
 	a.Preferences().SetString("relay-address",
 		a.Preferences().StringWithFallback("relay-address", DEFAULT_RELAY))
 	// a.Preferences().SetString("relay-password",
 	// 	a.Preferences().StringWithFallback("relay-password", DEFAULT_PASSPHRASE))
-	a.Preferences().SetString("relay-ports",
-		a.Preferences().StringWithFallback("relay-ports", strings.Join(makePorts(0, 8), ",")))
+	// a.Preferences().SetString("relay-ports",
+	// 	a.Preferences().StringWithFallback("relay-ports", strings.Join(makePorts(0, 8), ",")))
 	// a.Preferences().SetBool("disable-local",
 	// 	a.Preferences().BoolWithFallback("disable-local", true))
 	a.Preferences().SetBool("testing",
@@ -253,7 +257,7 @@ func main() {
 	// a.Preferences().SetBool("disable-compression",
 	// 	a.Preferences().BoolWithFallback("disable-compression", false))
 	a.Preferences().SetString("theme",
-		a.Preferences().StringWithFallback("theme", "system"))
+		a.Preferences().StringWithFallback("theme", "light"))
 	a.Preferences().SetString("font",
 		a.Preferences().StringWithFallback("font", DEFAULT))
 	a.Preferences().SetString("debug-level",
@@ -288,10 +292,10 @@ func main() {
 	a.Preferences().SetBool("overwrite",
 		a.Preferences().BoolWithFallback("overwrite", true))
 
-	appTheme.color = theme.DefaultTheme()
+	// appTheme.color = theme.DefaultTheme()
 	appTheme.size = theme.DefaultTheme()
 	appTheme.fontName = DEFAULT
-	appTheme.icon = theme.DefaultTheme()
+	// appTheme.icon = theme.DefaultTheme()
 
 	langCode = a.Preferences().String("lang")
 	langPrinter = message.NewPrinter(language.MustParse(langCode))
