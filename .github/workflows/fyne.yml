@@ -575,8 +575,10 @@ jobs:
             fi
             cat "$MANIFEST_PATH"
             sed -i 's/android:launchMode="standard"/android:launchMode="singleTop"/g' "$MANIFEST_PATH"
+            sed -i 's/android:icon="@null"/android:icon="@ref\/0x7f020000"/g' "$MANIFEST_PATH"
             echo "  Verification in AndroidManifest.xml:"
             grep "launchMode" "$MANIFEST_PATH" || true
+            grep "icon" "$MANIFEST_PATH" || true
 
             if [ ! -f "$APKTOOL_YAML" ]; then
               echo "  ERROR: apktool.yml not found in decoded APK!"
@@ -585,8 +587,10 @@ jobs:
             fi
             cat "$APKTOOL_YAML"
             sed -i 's/minSdkVersion: .*/minSdkVersion: 21/g' "$APKTOOL_YAML"
+            sed -i 's/targetSdkVersion: .*/minSdkVersion: 34/g' "$APKTOOL_YAML"
             echo "  Verification in apktool.yml:"
             grep "minSdkVersion" "$APKTOOL_YAML" || true
+            grep "targetSdkVersion" "$APKTOOL_YAML" || true
 
             NEW_APK="${ORIGINAL_APK%.apk}-patched.apk"
             echo "  Rebuilding APK..."
