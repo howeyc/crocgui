@@ -575,7 +575,8 @@ jobs:
             fi
             cat "$MANIFEST_PATH"
             sed -i 's/android:launchMode="standard"/android:launchMode="singleTop"/g' "$MANIFEST_PATH"
-            sed -i 's|android:icon="@null"|android:icon="@mipmap/icon"|g' "$MANIFEST_PATH"
+            grep "icon" "$TEMP_DIR/res/values/public.xml" || true
+            sed -i 's|android:icon="@null"|android:icon="@drawable/icon"|g' "$MANIFEST_PATH"
             echo "  Verification in AndroidManifest.xml:"
             grep "launchMode" "$MANIFEST_PATH" || true
             grep "icon" "$MANIFEST_PATH" || true
@@ -594,7 +595,7 @@ jobs:
 
             NEW_APK="${ORIGINAL_APK%.apk}-patched.apk"
             echo "  Rebuilding APK..."
-            apktool b "$TEMP_DIR" -o "$NEW_APK"
+            apktool b "$TEMP_DIR" -o "$NEW_APK" --use-aapt2
             
             if [ $? -ne 0 ]; then
               echo "  ERROR: apktool build failed"
