@@ -519,6 +519,15 @@ jobs:
         run: |
           cd ${{ github.workspace }}/workspace/crocgui
           echo "=== Patching SDK versions in APK manifests ==="
+          
+          if ! command -v apktool &> /dev/null; then
+            echo "ERROR: apktool is not installed or not in PATH"
+            echo "Installing apktool..."
+            wget -q https://bitbucket.org/iBotPeaches/apktool/downloads/apktool_2.9.3.jar -O /tmp/apktool.jar
+            echo '#!/bin/bash' > /usr/local/bin/apktool
+            echo 'java -jar /tmp/apktool.jar "$@"' >> /usr/local/bin/apktool
+            chmod +x /usr/local/bin/apktool
+          fi
 
           for ORIGINAL_APK in crocgui-*.apk; do
             if [ ! -f "$ORIGINAL_APK" ]; then
@@ -526,33 +535,70 @@ jobs:
             fi
             
             echo "Processing: $ORIGINAL_APK"
+            echo "  File size: $(wc -c < "$ORIGINAL_APK") bytes"
             
             TEMP_DIR=$(mktemp -d)
             echo "  Using temp directory: $TEMP_DIR"
             
             echo "  Decoding APK with apktool..."
-            if ! apktool d "$ORIGINAL_APK" -o "$TEMP_DIR" --force > /dev/null 2>&1; then
-              echo "  ERROR: apktool decode failed for $ORIGINAL_APK"
+            apktool d "$ORIGINAL_APK" -o "$TEMP_DIR" --force
+            APKTOOL_EXIT_CODE=$?
+            
+            if [ $APKTOOL_EXIT_CODE -ne 0 ]; then
+              echo "  ERROR: apktool decode failed for $ORIGINAL_APK (exit code: $APKTOOL_EXIT_CODE)"
+              echo "  Possible reasons:"
+              echo "  1. APK is corrupted"
+              echo "  2. APK uses unsupported compression"
+              echo "  3. APK is already processed/zipped"
+              
+              echo "  Checking if file is a valid ZIP..."
+              if unzip -t "$ORIGINAL_APK" > /dev/null 2>&1; then
+                echo "  File is a valid ZIP archive"
+              else
+                echo "  ERROR: File is NOT a valid ZIP archive - may be corrupted"
+              fi
+              
               rm -rf "$TEMP_DIR"
               continue
             fi
+            
+            echo "  APK successfully decoded to $TEMP_DIR"
             
             MANIFEST_PATH="$TEMP_DIR/AndroidManifest.xml"
             echo "  Patching $MANIFEST_PATH"
             
+            if [ ! -f "$MANIFEST_PATH" ]; then
+              echo "  ERROR: AndroidManifest.xml not found in decoded APK!"
+              rm -rf "$TEMP_DIR"
+              continue
+            fi
+            
+            cp "$MANIFEST_PATH" "$MANIFEST_PATH.original"
+            
             sed -i 's/android:minSdkVersion="15"/android:minSdkVersion="21"/g' "$MANIFEST_PATH"
             echo "  Patched SDK versions: minSdkVersion=21"
-
-            #sed -i 's/android:targetSdkVersion="29"/android:targetSdkVersion="35"/g' "$MANIFEST_PATH"
-            #echo "  Patched SDK versions: targetSdkVersion=35"
+            
+            if grep -q 'android:minSdkVersion="21"' "$MANIFEST_PATH"; then
+              echo "  Verification: minSdkVersion successfully changed to 21"
+            else
+              echo "  WARNING: minSdkVersion change may have failed"
+              echo "  Original:"
+              grep 'android:minSdkVersion' "$MANIFEST_PATH.original" || echo "    Not found"
+              echo "  Current:"
+              grep 'android:minSdkVersion' "$MANIFEST_PATH" || echo "    Not found"
+            fi
             
             NEW_APK="${ORIGINAL_APK%.apk}-patched.apk"
             echo "  Rebuilding APK..."
-            if ! apktool b "$TEMP_DIR" -o "$NEW_APK" > /dev/null 2>&1; then
+            apktool b "$TEMP_DIR" -o "$NEW_APK"
+            
+            if [ $? -ne 0 ]; then
               echo "  ERROR: apktool build failed"
               rm -rf "$TEMP_DIR"
               continue
             fi
+            
+            echo "  APK rebuilt successfully: $NEW_APK ($(wc -c < "$NEW_APK") bytes)"
             
             mv "$NEW_APK" "$ORIGINAL_APK"
             echo "  Successfully patched SDK versions in $ORIGINAL_APK"
