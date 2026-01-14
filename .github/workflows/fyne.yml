@@ -565,7 +565,6 @@ jobs:
             echo "  APK successfully decoded to $TEMP_DIR"
             
             MANIFEST_PATH="$TEMP_DIR/AndroidManifest.xml"
-            echo "  Patching $MANIFEST_PATH"
             APKTOOL_YAML="$TEMP_DIR/apktool.yml"
             echo "  Patching $APKTOOL_YAML"
             
@@ -575,9 +574,9 @@ jobs:
               continue
             fi
             cat "$MANIFEST_PATH"
-            sed -i 's/android:minSdkVersion="15"/android:minSdkVersion="21"/g' "$MANIFEST_PATH"
+            sed -i 's/android:launchMode="standard"/android:launchMode="singleTop"/g' "$MANIFEST_PATH"
             echo "  Verification in AndroidManifest.xml:"
-            grep "minSdkVersion" "$MANIFEST_PATH" || true
+            grep "launchMode" "$MANIFEST_PATH" || true
 
             if [ ! -f "$APKTOOL_YAML" ]; then
               echo "  ERROR: apktool.yml not found in decoded APK!"
@@ -585,7 +584,7 @@ jobs:
               continue
             fi
             cat "$APKTOOL_YAML"
-            sed -i 's/minSdkVersion: .*/minSdkVersion: "21"/g' "$APKTOOL_YAML"
+            sed -i 's/minSdkVersion: .*/minSdkVersion: 21/g' "$APKTOOL_YAML"
             echo "  Verification in apktool.yml:"
             grep "minSdkVersion" "$APKTOOL_YAML" || true
 

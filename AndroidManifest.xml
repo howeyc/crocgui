@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest
     xmlns:android="http://schemas.android.com/apk/res/android"
-    android:versionCode="1215"
+    android:versionCode="1217"
     android:versionName="1.11.37"
     package="com.github.howeyc.crocgui">
 
@@ -17,10 +17,10 @@
         <activity
             android:name="org.golang.app.GoNativeActivity"
             android:exported="true"
-            android:configChanges="0x7a0"
+            android:configChanges="keyboardHidden|orientation|screenSize|screenLayout|uiMode"
             android:excludeFromRecents="true"
             android:label="Croc"
-            android:launchMode="1"
+            android:launchMode="singleTop"
             android:theme="@android:style/Theme.Light">
 
             <meta-data
