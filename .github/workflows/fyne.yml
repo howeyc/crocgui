@@ -515,7 +515,7 @@ jobs:
           echo "Contents of current directory after all builds:"
           ls -la *.apk
 
-      - name: Patch SDK versions in APK manifests
+      - name: Patch SDK versions and APK manifest
         run: |
           cd ${{ github.workspace }}/workspace/crocgui
           echo "=== Patching SDK versions in APK manifests ==="
@@ -587,7 +587,7 @@ jobs:
             fi
             cat "$APKTOOL_YAML"
             sed -i 's/minSdkVersion: .*/minSdkVersion: 21/g' "$APKTOOL_YAML"
-            sed -i 's/targetSdkVersion: .*/minSdkVersion: 34/g' "$APKTOOL_YAML"
+            sed -i 's/targetSdkVersion: .*/targetSdkVersion: 34/g' "$APKTOOL_YAML"
             echo "  Verification in apktool.yml:"
             grep "minSdkVersion" "$APKTOOL_YAML" || true
             grep "targetSdkVersion" "$APKTOOL_YAML" || true
