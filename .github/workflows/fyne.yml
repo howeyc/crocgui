@@ -577,6 +577,8 @@ jobs:
             cat "$MANIFEST_PATH"
             sed -i 's/android:launchMode="standard"/android:launchMode="singleTop"/g' "$MANIFEST_PATH"
 
+            mkdir -p "$TEMP_DIR/res/mipmap-xxxhdpi-v4"
+            cp "${{ github.workspace }}/workspace/crocgui/Icon.png" "$TEMP_DIR/res/mipmap-xxxhdpi-v4/icon.png"
             ls -R "$TEMP_DIR"
             echo "  Listing resources in res/ folder:"
             find "$TEMP_DIR/res" -maxdepth 3 -name "*icon*" || true
