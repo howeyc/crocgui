@@ -515,6 +515,55 @@ jobs:
           echo "Contents of current directory after all builds:"
           ls -la *.apk
 
+      - name: Patch SDK versions in APK manifests
+        run: |
+          cd ${{ github.workspace }}/workspace/crocgui
+          echo "=== Patching SDK versions in APK manifests ==="
+
+          for ORIGINAL_APK in crocgui-*.apk; do
+            if [ ! -f "$ORIGINAL_APK" ]; then
+              continue
+            fi
+            
+            echo "Processing: $ORIGINAL_APK"
+            
+            TEMP_DIR=$(mktemp -d)
+            echo "  Using temp directory: $TEMP_DIR"
+            
+            echo "  Decoding APK with apktool..."
+            if ! apktool d "$ORIGINAL_APK" -o "$TEMP_DIR" --force > /dev/null 2>&1; then
+              echo "  ERROR: apktool decode failed for $ORIGINAL_APK"
+              rm -rf "$TEMP_DIR"
+              continue
+            fi
+            
+            MANIFEST_PATH="$TEMP_DIR/AndroidManifest.xml"
+            echo "  Patching $MANIFEST_PATH"
+            
+            sed -i 's/android:minSdkVersion="15"/android:minSdkVersion="21"/g' "$MANIFEST_PATH"
+            echo "  Patched SDK versions: minSdkVersion=21"
+
+            #sed -i 's/android:targetSdkVersion="29"/android:targetSdkVersion="35"/g' "$MANIFEST_PATH"
+            #echo "  Patched SDK versions: targetSdkVersion=35"
+            
+            NEW_APK="${ORIGINAL_APK%.apk}-patched.apk"
+            echo "  Rebuilding APK..."
+            if ! apktool b "$TEMP_DIR" -o "$NEW_APK" > /dev/null 2>&1; then
+              echo "  ERROR: apktool build failed"
+              rm -rf "$TEMP_DIR"
+              continue
+            fi
+            
+            mv "$NEW_APK" "$ORIGINAL_APK"
+            echo "  Successfully patched SDK versions in $ORIGINAL_APK"
+            
+            rm -rf "$TEMP_DIR"
+          done
+          
+          echo "=== SDK version patching complete ==="
+          echo "Patched APKs:"
+          ls -la crocgui-*.apk
+
       # Step 8: Sign Android APKs
       - name: Sign and rename APK for Android
         id: sign_apk
