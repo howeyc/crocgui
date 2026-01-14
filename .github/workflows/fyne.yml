@@ -577,7 +577,7 @@ jobs:
             cat "$MANIFEST_PATH"
             sed -i 's/android:minSdkVersion="15"/android:minSdkVersion="21"/g' "$MANIFEST_PATH"
             echo "  Verification in AndroidManifest.xml:"
-            grep "minSdkVersion" "$MANIFEST_PATH"
+            grep "minSdkVersion" "$MANIFEST_PATH" || true
 
             if [ ! -f "$APKTOOL_YAML" ]; then
               echo "  ERROR: apktool.yml not found in decoded APK!"
@@ -587,7 +587,7 @@ jobs:
             cat "$APKTOOL_YAML"
             sed -i 's/minSdkVersion: .*/minSdkVersion: "21"/g' "$APKTOOL_YAML"
             echo "  Verification in apktool.yml:"
-            grep "minSdkVersion" "$APKTOOL_YAML"
+            grep "minSdkVersion" "$APKTOOL_YAML" || true
 
             NEW_APK="${ORIGINAL_APK%.apk}-patched.apk"
             echo "  Rebuilding APK..."
