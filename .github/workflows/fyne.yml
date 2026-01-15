@@ -462,7 +462,7 @@ jobs:
       # Step 6.2: Install Fyne CLI
       - name: Install Fyne CLI
         run: |
-          cd  $GITHUB_WORKSPACE/workspace/tools/cmd/fyne"
+          cd  $GITHUB_WORKSPACE/workspace/tools/cmd/fyne
           go install
 
       # Step 7: Build the application using fyne package for Android targets
