@@ -465,6 +465,17 @@ jobs:
           cd  $GITHUB_WORKSPACE/workspace/tools/cmd/fyne
           go install
 
+      # Step 6.3: Set up JDK 17
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      # Step 6.4: Set up JDK 17
+      - name: Verify keytool
+        run: keytool -help
+
       # Step 7: Build the application using fyne package for Android targets
       - name: Build with fyne package for Android targets
         run: |
