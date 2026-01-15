@@ -37,7 +37,7 @@ func aboutTabItem(a fyne.App, _ fyne.Window) *container.TabItem {
 
 	licenseReader := bytes.NewBufferString(crocguiLicense + thirdPartyLicenses)
 	currentLicense := ""
-	currentLibrary := "croc"
+	currentLibrary := CROC
 	scanner := bufio.NewScanner(licenseReader)
 
 	for scanner.Scan() {
@@ -76,10 +76,10 @@ func aboutTabItem(a fyne.App, _ fyne.Window) *container.TabItem {
 		w.Show()
 	})
 
-	crocHyperlink := widget.NewHyperlink(fmt.Sprintf("%s/%s/%s", GH, "schollz", "croc"), nil)
-	crocHyperlink.SetURLFromString(fmt.Sprintf("https://%s/%s/%s/releases/latest", GH, "schollz", "croc"))
-	fromHyperlink := widget.NewHyperlink(fmt.Sprintf("%s/%s/%s v%s.%d", GH, FORKfrom, CG, FORKfromVersion, FORKfromBuild), nil)
-	fromHyperlink.SetURLFromString(fmt.Sprintf("https://%s/%s/%s/releases/tag/v%s", GH, FORKfrom, CG, FORKfromVersion))
+	crocHyperlink := widget.NewHyperlink(fmt.Sprintf("%s/%s/%s", GH, SCHOLLZ, CROC), nil)
+	crocHyperlink.SetURLFromString(fmt.Sprintf("https://%s/%s/%s/releases/latest", GH, SCHOLLZ, CROC))
+	fromHyperlink := widget.NewHyperlink(fmt.Sprintf("%s/%s/%s v%s.%d", GH, FORKfrom, "crocgui", FORKfromVersion, FORKfromBuild), nil)
+	fromHyperlink.SetURLFromString(fmt.Sprintf("https://%s/%s/%s/releases/tag/v%s", GH, FORKfrom, "crocgui", FORKfromVersion))
 	oldHyperlink := widget.NewHyperlink(fmt.Sprintf("%s/%s/%s v%s.%d", GH, FORKto, CG, md.Version, md.Build), nil)
 	oldHyperlink.SetURLFromString(fmt.Sprintf("https://%s/%s/%s/releases/tag/v%s", GH, FORKto, CG, md.Version))
 	newHyperlink := widget.NewHyperlink("", nil)

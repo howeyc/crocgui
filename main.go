@@ -30,7 +30,6 @@ import (
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
-	"fyne.io/fyne/v2/lang"
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 )
@@ -38,26 +37,29 @@ import (
 const (
 	EMULATE                = time.Second * 0
 	CROC_SECRET            = "CROC_SECRET"
+	CROC                   = "croc"
+	STDIN                  = CROC + "-stdin-"
+	CROCDEBUGLOG           = CROC + "debuglog.txt"
+	SCHOLLZ                = "schollz"
 	TOTP                   = "TOTP-" + CROC_SECRET
 	DOTZIP                 = ".zip"
 	ZhangHai               = "content://me.zhanghai.android.files.file_provider/"
 	Ghisler                = "content://com.ghisler.files/"
-	SEND                   = "crocgui-send"
-	RECV                   = "crocgui-recv"
+	CG                     = "crocgui"
+	SEND                   = CG + "-send"
+	RECV                   = CG + "-recv"
 	MIME_TYPE_DIR          = "vnd.android.document/directory"
 	MIME_TYPE_OCTET_STREAM = "application/octet-stream"
 	ID                     = "com.github.howeyc.crocgui"
 	LastFolder             = "fyne:fileDialogLastFolder"
 	DEFAULT                = "default"
 	NONDEFAULT             = "non-default: "
-	STDIN                  = "croc-stdin-"
 	DEFAULT_RELAY          = "croc.schollz.com"
 	DEFAULT_RELAY6         = "croc6.schollz.com"
 	DEFAULT_PORT           = 9009
 	TRANSFERS              = 5
 	DEFAULT_PASSPHRASE     = "pass123"
 	REFUSING               = "refusing files"
-	CROCDEBUGLOG           = "crocdebuglog.txt"
 
 	// cmd/c "set LOGGER=trace&crocgui.exe"
 	// LOGGER=trace crocgui
@@ -67,7 +69,6 @@ const (
 	FORKfromBuild   = 40
 	FORKto          = "abakum"
 	GH              = "github.com"
-	CG              = "crocgui"
 )
 
 const (
@@ -143,10 +144,6 @@ var (
 	code      = os.Getenv("CROC_SECRET")
 	AppClosed string
 	GUI       = syscall.Stdout == 0 && syscall.Stderr == 0 //for windowsgui
-	FORK      = fmt.Sprintf("%s/%s/%s v1.11.5.40\n"+
-		"%s/%s/%s",
-		GH, FORKfrom, CG,
-		GH, FORKto, CG)
 )
 
 func main() {
@@ -227,19 +224,17 @@ func main() {
 		setOut(GUI)
 	}
 
-	w := a.NewWindow("croc")
+	w := a.NewWindow(CROC)
 
 	w.SetCloseIntercept(func() {
 		log.Debug("CloseIntercept")
 		cleanup(w)
 	})
 
-	systemLocale := lang.SystemLocale()
-	systemLang := systemLocale.String()
-	log.Info(systemLang)
+	log.Info(langCode)
 	// Defaults
 	a.Preferences().SetString("lang",
-		a.Preferences().StringWithFallback("lang", systemLang))
+		a.Preferences().StringWithFallback("lang", langCode))
 	a.Preferences().SetString("relay-address",
 		a.Preferences().StringWithFallback("relay-address", DEFAULT_RELAY))
 	// a.Preferences().SetString("relay-password",
