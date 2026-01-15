@@ -1,14 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest
     xmlns:android="http://schemas.android.com/apk/res/android"
-    android:versionCode="1228"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:versionCode="1239"
     android:versionName="1.11.38"
     package="com.github.howeyc.crocgui">
 
     <!--
     <uses-sdk
         android:minSdkVersion="21"
-        android:targetSdkVersion="34" /> 
+        android:targetSdkVersion="35" /> 
     -->
 
     <application
@@ -17,135 +18,88 @@
         <activity
             android:name="org.golang.app.GoNativeActivity"
             android:exported="true"
-            android:configChanges="keyboardHidden|orientation|screenSize|screenLayout|uiMode"
+            android:configChanges="keyboard|keyboardHidden|orientation|screenSize|screenLayout|uiMode"
             android:excludeFromRecents="true"
             android:label="Croc"
             android:launchMode="singleTop"
             android:theme="@android:style/Theme.Light">
-
+            
             <meta-data
                 android:name="android.app.lib_name"
                 android:value="croc" />
 
             <intent-filter>
-
-                <action
-                    android:name="android.intent.action.MAIN" />
-
-                <category
-                    android:name="android.intent.category.LAUNCHER" />
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
+            <!-- Обработка открытия файлов -->
             <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:mimeType="*/*" />
+                <data android:scheme="file" />
 
-                <action
-                    android:name="android.intent.action.VIEW" />
-
-                <category
-                    android:name="android.intent.category.DEFAULT" />
-
-                <category
-                    android:name="android.intent.category.BROWSABLE" />
-
-                <data
-                    android:mimeType="*/*" />
-
-                <data
-                    android:scheme="file" />
-
-                <data
-                    android:scheme="content" />
+                <data android:scheme="content" />
             </intent-filter>
 
+            <!-- Прием файлов через "Поделиться" -->
             <intent-filter>
-
-                <action
-                    android:name="android.intent.action.SEND" />
-
-                <category
-                    android:name="android.intent.category.DEFAULT" />
-
-                <data
-                    android:mimeType="*/*" />
-            </intent-filter>
-
-            <intent-filter>
-
-                <action
-                    android:name="android.intent.action.SEND_MULTIPLE" />
-
-                <category
-                    android:name="android.intent.category.DEFAULT" />
-
-                <data
-                    android:mimeType="*/*" />
+                <action android:name="android.intent.action.SEND" />
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="*/*" />
             </intent-filter>
         </activity>
 
-        <queries>
-
-            <intent>
-
-                <action
-                    android:name="android.intent.action.GET_CONTENT" />
-
-                <data
-                    android:mimeType="*/*" />
-            </intent>
-
-            <intent>
-
-                <action
-                    android:name="android.intent.action.OPEN_DOCUMENT" />
-
-                <data
-                    android:mimeType="*/*" />
-            </intent>
-
-            <intent>
-
-                <action
-                    android:name="android.intent.action.CREATE_DOCUMENT" />
-
-                <data
-                    android:mimeType="*/*" />
-            </intent>
-
-            <intent>
-
-                <action
-                    android:name="android.intent.action.ACTION_OPEN_DOCUMENT_TREE" />
-            </intent>
-
-            <package
-                android:name="com.android.documentsui" />
-        </queries>
     </application>
 
-    <uses-permission
-        android:name="android.permission.INTERNET" />
+    <queries>
+        <!-- 1. Находит все приложения, которые умеют выдавать контент (включая файловые менеджеры) -->
+        <intent>
+            <action android:name="android.intent.action.GET_CONTENT" />
+            <category android:name="android.intent.category.DEFAULT" />
+            <category android:name="android.intent.category.OPENABLE" />
+            <data android:mimeType="*/*" />
+        </intent>
 
+        <!-- 2. Находит сторонние приложения-хранилища (Documents Providers) -->
+        <intent>
+            <action android:name="android.intent.action.OPEN_DOCUMENT" />
+            <data android:mimeType="*/*" />
+        </intent>
+
+        <!-- 3. Позволяет системе найти приложения для сохранения файла -->
+        <intent>
+            <action android:name="android.intent.action.CREATE_DOCUMENT" />
+            <data android:mimeType="*/*" />
+        </intent>
+
+        <!-- 4. Позволяет найти приложения с интерфейсом выбора папок -->
+        <intent>
+            <action android:name="android.intent.action.OPEN_DOCUMENT_TREE" />
+        </intent>
+    </queries>
+
+    <!-- Разрешения -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- <uses-permission android:name="android.permission.POST_NOTIFICATIONS" /> -->
+    
+    <!-- Доступ к файлам (Legacy для старых версий) -->
     <uses-permission
         android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="29" />
-
     <uses-permission
         android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
+    
+    <!-- Современный доступ к медиа (Android 13+) -->
+    <!--
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED" />
+     -->
 
-    <uses-permission
-        android:name="android.permission.READ_MEDIA_IMAGES" />
-
-    <uses-permission
-        android:name="android.permission.READ_MEDIA_VIDEO" />
-
-    <uses-permission
-        android:name="android.permission.READ_MEDIA_AUDIO" />
-
-    <uses-permission
-        android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED"
-        android:maxSdkVersion="33" />
-
-    <uses-permission
-        android:name="android.permission.POST_NOTIFICATIONS" />
 </manifest>

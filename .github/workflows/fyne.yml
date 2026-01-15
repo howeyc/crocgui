@@ -472,10 +472,6 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      # Step 6.4: Set up JDK 17
-      - name: Verify keytool
-        run: keytool -help
-
       # Step 7: Build the application using fyne package for Android targets
       - name: Build with fyne package for Android targets
         run: |
@@ -505,7 +501,6 @@ jobs:
           # Define the targets as a bash array
           TARGETS=("android/arm" "android/arm64" "android/386" "android/amd64")
           
-          ls -la $ANDROID_HOME/platforms
           # Loop through each target
           for target in "${TARGETS[@]}"; do
             echo "Building for target: $target"

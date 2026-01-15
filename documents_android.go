@@ -121,14 +121,15 @@ static jboolean isIntentSupported(JNIEnv* env, jobject context, jobject intent) 
     return result;
 }
 
-// Вспомогательная функция для создания Intent
 static jobject createIntent(JNIEnv* env, const char* action, const char* mime_type) {
+    // 1. Find the Intent class
     jclass intent_class = (*env)->FindClass(env, "android/content/Intent");
     if (intent_class == NULL) {
         LogD("C: ERROR - Failed to find Intent class");
         return NULL;
     }
 
+    // 2. Get the constructor Intent(String action)
     jmethodID intent_constructor = (*env)->GetMethodID(env, intent_class, "<init>", "(Ljava/lang/String;)V");
     if (intent_constructor == NULL) {
         LogD("C: ERROR - Failed to get Intent constructor");
@@ -136,6 +137,7 @@ static jobject createIntent(JNIEnv* env, const char* action, const char* mime_ty
         return NULL;
     }
 
+    // 3. Create the Intent object
     jstring action_str = (*env)->NewStringUTF(env, action);
     jobject intent = (*env)->NewObject(env, intent_class, intent_constructor, action_str);
     (*env)->DeleteLocalRef(env, action_str);
@@ -146,6 +148,26 @@ static jobject createIntent(JNIEnv* env, const char* action, const char* mime_ty
         return NULL;
     }
 
+    // 4. Add Categories (CRITICAL for API 30-36 Package Visibility)
+    // Most file managers and system pickers require CATEGORY_DEFAULT to be explicitly set
+    // to be discovered by queryIntentActivities.
+    jmethodID add_category = (*env)->GetMethodID(env, intent_class, "addCategory", "(Ljava/lang/String;)Landroid/content/Intent;");
+    if (add_category != NULL) {
+        // CATEGORY_DEFAULT: Necessary for the Intent to be resolved by PackageManager
+        jstring cat_default = (*env)->NewStringUTF(env, "android.intent.category.DEFAULT");
+        (*env)->CallObjectMethod(env, intent, add_category, cat_default);
+        (*env)->DeleteLocalRef(env, cat_default);
+
+        // CATEGORY_OPENABLE: Required for GET_CONTENT/OPEN_DOCUMENT to ensure
+        // the returned URI can be opened as a stream (essential for croc file transfer)
+        jstring cat_openable = (*env)->NewStringUTF(env, "android.intent.category.OPENABLE");
+        (*env)->CallObjectMethod(env, intent, add_category, cat_openable);
+        (*env)->DeleteLocalRef(env, cat_openable);
+    } else {
+        LogD("C: WARNING - Failed to get addCategory method");
+    }
+
+    // 5. Set MIME type if provided
     if (mime_type != NULL) {
         jmethodID set_type = (*env)->GetMethodID(env, intent_class, "setType", "(Ljava/lang/String;)Landroid/content/Intent;");
         if (set_type != NULL) {
@@ -157,6 +179,7 @@ static jobject createIntent(JNIEnv* env, const char* action, const char* mime_ty
         }
     }
 
+    // Clean up local reference to the class
     (*env)->DeleteLocalRef(env, intent_class);
     return intent;
 }
