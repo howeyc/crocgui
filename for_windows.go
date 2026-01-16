@@ -2,6 +2,19 @@
 
 package main
 
+/*
+#include <stdlib.h>
+#include <stdio.h>
+
+// Обработчик для Stack Protector
+void __stack_chk_fail(void) { exit(1); }
+void* __stack_chk_guard = NULL;
+
+// Обработчик для Fortify Source
+void __chk_fail(void) { exit(1); }
+*/
+import "C"
+
 import (
 	"os"
 )

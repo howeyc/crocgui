@@ -30,6 +30,7 @@ import (
 	"fyne.io/fyne/v2/app"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/lang"
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 )
@@ -231,6 +232,7 @@ func main() {
 		cleanup(w)
 	})
 
+	langCode = lang.SystemLocale().String()
 	log.Info(langCode)
 	// Defaults
 	a.Preferences().SetString("lang",

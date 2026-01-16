@@ -11,6 +11,7 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
+	"github.com/BurntSushi/toml"
 	log "github.com/schollz/logger"
 )
 
@@ -23,12 +24,14 @@ var crocguiLicense string
 //go:embed third-party-licenses.txt
 var thirdPartyLicenses string
 
+//go:embed FyneApp.toml
+var fyneApp string
+
 func aboutTabItem(a fyne.App, _ fyne.Window) *container.TabItem {
 	longdescbytes, _ := metadata.ReadFile(fmt.Sprintf("metadata/%s/full_description.txt", langCode))
 	longdesc := string(longdescbytes)
 	longdesc = strings.ReplaceAll(longdesc, "<b>", "")
 	longdesc = strings.ReplaceAll(longdesc, "</b>", "")
-	md := a.Metadata()
 	aboutInfo := widget.NewLabel(longdesc)
 	aboutInfo.Wrapping = fyne.TextWrapWord
 
@@ -78,10 +81,15 @@ func aboutTabItem(a fyne.App, _ fyne.Window) *container.TabItem {
 
 	crocHyperlink := widget.NewHyperlink(fmt.Sprintf("%s/%s/%s", GH, SCHOLLZ, CROC), nil)
 	crocHyperlink.SetURLFromString(fmt.Sprintf("https://%s/%s/%s/releases/latest", GH, SCHOLLZ, CROC))
-	fromHyperlink := widget.NewHyperlink(fmt.Sprintf("%s/%s/%s v%s.%d", GH, FORKfrom, "crocgui", FORKfromVersion, FORKfromBuild), nil)
+
+	fromHyperlink := widget.NewHyperlink(fmt.Sprintf("%s/%s/%s v%s_%d", GH, FORKfrom, "crocgui", FORKfromVersion, FORKfromBuild), nil)
 	fromHyperlink.SetURLFromString(fmt.Sprintf("https://%s/%s/%s/releases/tag/v%s", GH, FORKfrom, "crocgui", FORKfromVersion))
-	oldHyperlink := widget.NewHyperlink(fmt.Sprintf("%s/%s/%s v%s.%d", GH, FORKto, CG, md.Version, md.Build), nil)
-	oldHyperlink.SetURLFromString(fmt.Sprintf("https://%s/%s/%s/releases/tag/v%s", GH, FORKto, CG, md.Version))
+
+	ve, bu, errVb := VersionBuild(a, fyneApp)
+	oldHyperlink := widget.NewHyperlink(fmt.Sprintf("%s/%s/%s v%s_%d", GH, FORKto, CG, ve, bu), nil)
+	oldHyperlink.SetURLFromString(fmt.Sprintf("https://%s/%s/%s/releases/tag/v%s", GH, FORKto, CG, ve))
+	oldHyperlink.Hidden = errVb != nil
+
 	newHyperlink := widget.NewHyperlink("", nil)
 	newHyperlink.Hidden = true
 
@@ -100,7 +108,7 @@ func aboutTabItem(a fyne.App, _ fyne.Window) *container.TabItem {
 	OnSelectedReload[4] = func() {
 		go func() {
 			latestVersion, err := Latest(FORKto, CG)
-			currentVersion := fmt.Sprintf("v%s", md.Version)
+			currentVersion := fmt.Sprintf("v%s", ve)
 			log.Debugf("%s %s %v", currentVersion, latestVersion, err)
 
 			if err != nil || newHyperlink == nil || latestVersion == currentVersion {
@@ -148,4 +156,75 @@ func (t *tightVBoxLayout) MinSize(objects []fyne.CanvasObject) fyne.Size {
 		}
 	}
 	return fyne.NewSize(width, height)
+}
+
+// FyneApp describes the top level metadata for building a fyne application
+type FyneApp struct {
+	Website     string `toml:",omitempty"`
+	Description string `toml:",omitempty"`
+	Details     AppDetails
+	Development map[string]string `toml:",omitempty"`
+	Release     map[string]string `toml:",omitempty"`
+	Source      *AppSource        `toml:",omitempty"`
+	CanOpen     *CanOpen          `toml:",omitempty"`
+	LinuxAndBSD *LinuxAndBSD      `toml:",omitempty"`
+	Languages   []string          `toml:",omitempty"`
+	Migrations  map[string]bool   `toml:",omitempty"`
+}
+
+// AppDetails describes the build information, this group may be OS or arch specific
+type AppDetails struct {
+	Icon     string `toml:",omitempty"`
+	Name, ID string `toml:",omitempty"`
+	Version  string `toml:",omitempty"`
+	Build    int    `toml:",omitempty"`
+}
+
+type AppSource struct {
+	Repo, Dir string `toml:",omitempty"`
+}
+
+// LinuxAndBSD describes specific metadata for desktop files on Linux and BSD.
+type LinuxAndBSD struct {
+	GenericName string   `toml:",omitempty"`
+	Categories  []string `toml:",omitempty"`
+	Comment     string   `toml:",omitempty"`
+	Keywords    []string `toml:",omitempty"`
+	ExecParams  string   `toml:",omitempty"`
+}
+
+// CanOpen represents a selection of file types (mime etc) that this application can open.
+type CanOpen struct {
+	MimeTypes string `toml:",omitempty"`
+}
+
+// VersionBuild возвращает строку с версией и билдом
+// Приоритет: метаданные приложения > переданный FyneApp.toml (только при Build <= 1)
+func VersionBuild(a fyne.App, fallback string) (string, int, error) {
+	md := a.Metadata()
+
+	version := md.Version
+	build := md.Build
+
+	if build > 1 {
+		return version, build, nil
+	}
+
+	if fallback == "" {
+		return "", 0, fmt.Errorf("no fallback")
+	}
+
+	var data FyneApp
+	if _, err := toml.Decode(fallback, &data); err != nil {
+		return "", 0, err
+	}
+
+	version = data.Details.Version
+	if version == "" {
+		return "", 0, fmt.Errorf("no version")
+	}
+
+	build = data.Details.Build
+
+	return version, build, nil
 }

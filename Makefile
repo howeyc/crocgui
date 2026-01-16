@@ -95,7 +95,8 @@ linux:
 windows: 
 	#sudo apt-get install gcc-mingw-w64-x86-64
 	#go install fyne.io/tools/cmd/fyne@latest
-	CC=x86_64-w64-mingw32-gcc fyne package -os windows --release
+	#CC=x86_64-w64-mingw32-gcc fyne package -os windows --release
+	CC=x86_64-w64-mingw32-gcc fyne release -os windows -certificate croc.p12 -profile "croc" -developer "CN=croc" -password "$(CERT_PASS)"
 
 windowsgui:
 	#GOOS=windows GOARCH=amd64 CGO_ENABLED=1 CC=x86_64-w64-mingw32-gcc go build -ldflags="-s -H windowsgui" -tags=opengl
