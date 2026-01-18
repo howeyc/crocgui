@@ -205,9 +205,17 @@ jobs:
           go-version: '1.24'
           cache-dependency-path: ${{ github.workspace }}/workspace/crocgui/go.sum
 
+      - name: Checkout tools dependency
+        uses: actions/checkout@v4
+        with:
+          repository: abakum/tools
+          ref: main
+          path: workspace/tools
+
       - name: Install Fyne CLI
         run: |
-          go install fyne.io/tools/cmd/fyne@latest
+          cd  $GITHUB_WORKSPACE/workspace/tools/cmd/fyne
+          go install
 
       - name: Decode and place P12 Certificate
         shell: pwsh
@@ -217,7 +225,6 @@ jobs:
           Write-Host "Saving certificate to: $certPath"
 
           try {
-              # Декодируем Base64 и сохраняем файл
               $certBytes = [System.Convert]::FromBase64String("${{ secrets.P12_BASE64 }}")
               [System.IO.File]::WriteAllBytes($certPath, $certBytes)
               Write-Host "Certificate successfully saved. File size: $($certBytes.Length) bytes"
@@ -237,23 +244,9 @@ jobs:
             throw "Certificate file not found at: $certPath"
           }
           
-          Write-Host "Building AppX package for x64 (2026)..."
+          Write-Host "Building AppX package for x64"
           
-          $sdkRoot = "C:\Program Files (x86)\Windows Kits\10\bin"
-          # Get the latest SDK version
-          $latestVersion = Get-ChildItem -Path $sdkRoot -Filter "10.*" -Directory | Sort-Object Name -Descending | Select-Object -First 1
-
-          # Correction: properly construct the path to makeappx.exe
-          $makeAppxPath = Join-Path $latestVersion.FullName "x64\makeappx.exe"
-
-          if (-not (Test-Path $makeAppxPath)) {
-              throw "Could not find makeappx.exe at path: $makeAppxPath"
-          }
-
-          $env:PATH = "$($latestVersion.FullName)\x64;" + $env:PATH
-          $env:WindowsSdkBinPath = "$($latestVersion.FullName)\x64"
-
-          Write-Host "Using SDK from: $($latestVersion.FullName)\x64"
+          $env:GOARCH = "amd64"
           
           fyne release --os windows `
             -certificate "$certPath" `
