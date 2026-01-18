@@ -237,32 +237,37 @@ jobs:
             throw "Certificate file not found at: $certPath"
           }
           
-          Write-Host "Building AppX package for x64..."
+          Write-Host "Building AppX package for x64 (2026)..."
           
-          $env:GOARCH = "amd64"
+          # 1. Dynamically find the latest Windows SDK x64 bin directory
           $sdkRoot = "C:\Program Files (x86)\Windows Kits\10\bin"
-
           $latestVersion = Get-ChildItem -Path $sdkRoot -Filter "10.*" | Sort-Object Name -Descending | Select-Object -First 1
           $x64BinPath = Join-Path $latestVersion.FullName "x64"
           
           if (-not (Test-Path "$x64BinPath\makeappx.exe")) {
-              throw "not find makeappx.exe by: $x64BinPath"
+              throw "Could not find makeappx.exe in: $x64BinPath"
           }
 
-          $env:PATH = "$x64BinPath;" + $env:PATH
+          # 2. Set environment variables
+          # Fyne CLI uses WindowsSdkBinPath as a base and appends '\makeappx.exe' internally.
+          # We provide the directory path ONLY.
           $env:WindowsSdkBinPath = $x64BinPath
+          $env:GOARCH = "amd64"
           
-          Write-Host "Use SDK from: $x64BinPath"
-
-          # Build the AppX package using fyne release command
-          fyne release --os windows  `
+          # Prepend SDK path to system PATH to ensure x64 tools are prioritized over ARM64
+          $env:PATH = "$x64BinPath;" + $env:PATH
+          
+          Write-Host "Using SDK from: $env:WindowsSdkBinPath"
+          
+          # 3. Execute Fyne release command
+          # Using only -password as it covers both keystore and certificate for P12 files
+          fyne release --os windows `
             -certificate "$certPath" `
             -profile "croc" `
             -developer "CN=croc" `
-            -keystore-pass "${{ secrets.P12_PASSWORD }}" `
             -password "${{ secrets.P12_PASSWORD }}"
           
-          Write-Host "Contents after build:"
+          Write-Host "Post-build workspace contents:"
           Get-ChildItem
           
           if (-not (Test-Path "crocgui.appx")) {
