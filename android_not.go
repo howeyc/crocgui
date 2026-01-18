@@ -62,6 +62,7 @@ func sendNotification(a fyne.App, title, content string) {
 
 func LogD(string)         {}
 func excludeFromRecents() {}
+func finish()             {}
 
 func hasChild(uri fyne.URI) (isDir bool, childCount int, err error) {
 	return storageChild(uri)
@@ -262,3 +263,7 @@ func setModTime(uri fyne.URI, mtime time.Time) error {
 	}
 	return os.Chtimes(uri.Path(), time.Time{}, mtime)
 }
+
+func ctxHandle() string          { return "" }
+func startActivity()             {}
+func HasStoragePermission() bool { return false }

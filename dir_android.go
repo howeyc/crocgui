@@ -2745,6 +2745,13 @@ func IsDirectory(uri fyne.URI) bool {
 	if uri == nil {
 		return false
 	}
+	if uri.Scheme() == "file" {
+		if fi, err := os.Stat(uri.Path()); err == nil {
+			ok := fi.IsDir()
+			// log.Debugf("-------------IsDir() %v", ok)
+			return ok
+		}
+	}
 	switch MimeType(uri) {
 	case MIME_TYPE_DIR:
 		// log.Debug("-------------MIME_TYPE_DIR true")
@@ -2760,8 +2767,8 @@ func IsDirectory(uri fyne.URI) bool {
 		fallthrough
 	case "":
 		// отсутствуют права
-		_, err := countChild(uri)
-		// log.Debugf("-------------countChild %d error: %v %v", c, err, err == nil)
+		c, err := countChild(uri)
+		log.Debugf("countChild %d error: %v %v", c, err, err == nil)
 		return err == nil
 	default:
 		// log.Debug("-------------false")

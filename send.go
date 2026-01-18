@@ -851,30 +851,55 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 	cosED = append(cosED, treeButton)
 
 	if isAndroid {
+		oH := ""
+		mH := ""
 		a.Lifecycle().SetOnExitedForeground(func() {
-			log.Debug("ExitedForeground")
-			saveAccordionState()
+			log.Debug("ExitedForeground " + wHandle(w))
 			if !notFinish {
-				excludeFromRecents()
+				finish()
 			}
 		})
 		a.Lifecycle().SetOnStopped(func() {
-			log.Debug("Stopped")
+			log.Debug("Stopped " + wHandle(w))
+			saveAccordionState()
 		})
 		a.Lifecycle().SetOnStarted(func() {
-			log.Debug("Started")
+			log.Debug("Started " + wHandle(w))
+			oH = wHandle(w)
 		})
 		a.Lifecycle().SetOnEnteredForeground(func() {
+			log.Debug("EnteredForeground " + wHandle(w))
 			notFinish = false
-			log.Debug("EnteredForeground")
 			close(uriFromIntent)
 			uriFromIntent = make(chan string, 100)
 
 			close(textFromIntent)
 			textFromIntent = make(chan string, 100)
 			go func() {
+				tt := time.NewTicker(time.Millisecond * 777)
+				defer tt.Stop()
 				for {
 					select {
+					case <-tt.C:
+						// В Андроид 9 если нажать Хоум или кнопку Недавние
+						// то ни один из хуков lifecycle не сработает.
+						// Если выбрать не crocgui а потом выбрать crocgui
+						// то crocgui зависнет.
+						// Чтоб это предотвратить ослеживаем смену хэндла окна w
+						// и в этот момент открепляем и пркреаляем активность к w
+						nH := wHandle(w)
+						if oH != nH {
+							s := fmt.Sprintf("mH %s wH %s-> nH %s", mH, oH, nH)
+							log.Debug(s)
+
+							if mH != oH {
+								finish()
+								time.Sleep(time.Millisecond * 777)
+								startActivity()
+								return
+							}
+							oH = nH
+						}
 					case <-done:
 						log.Debug("done")
 						return
@@ -928,12 +953,88 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 						}
 						log.Debugf("uri %s", u)
 						log.Debugf("apiLevel %d", apiLevel())
+						name := uriBase(u)
+						dst := join(name)
+						if u.Scheme() == "file" {
+							// TotalCommander до Андроида 12
+							// может посылать каталоги
+							if !HasStoragePermission() {
+								RequestStoragePermission()
+								NewToast(w, lp("Allow access to read")+": "+name).Show()
+								return
+							}
+							fe := addEntry(dst, nil)
+							if fe == nil {
+								continue
+							}
+							if fi, err := os.Stat(u.Path()); err == nil {
+								if fi.IsDir() {
+									go func() {
+										var wg sync.WaitGroup
+										log.Debugf("copyFiles: %v",
+											copyFiles(storage.NewFileURI(u.Path()), dst, func(u fyne.URI, dstPath string) error {
+												src := u.Path()
+												rel, err := filepath.Rel(join(), dstPath)
+												if err != nil {
+													rel = dstPath
+												}
+												feCopy := addEntry(dstPath, func(d *widget.Button, p *widget.ProgressBar, l *widget.Label) {
+													l.SetText(rel)
+												})
+												if feCopy == nil {
+													return nil
+												}
+												// }
+												wg.Add(1)
+												CopyFileProgress(src, dstPath, feCopy, func(err error) {
+													defer wg.Done()
+													if err != nil {
+														log.Errorf("copy %s %s: %v", src, dstPath, err)
+														removeEntry(dstPath, feCopy, true)
+														return
+													}
+
+													if _, err := os.Stat(dstPath); err != nil {
+														// не закэшировал
+														log.Errorf("stat %s: %v", dstPath, err)
+													} else {
+														// закэшировал
+														log.Debugf("copy %s %s", src, dstPath)
+													}
+												})
+												return nil
+											}))
+										select {
+										case <-done:
+										default:
+											wg.Wait()
+											log.Debugf("copyFiles done")
+										}
+									}()
+									continue
+								}
+								CopyFileProgress(u.Path(), dst, fe, func(err error) {
+									if err != nil {
+										log.Errorf("copy %s %s: %s", u, dst, err)
+										removeEntry(dst, fe, true)
+										return
+									}
+
+									if _, err := os.Stat(dst); err != nil {
+										log.Errorf("stat %s: %v", dst, err)
+										removeEntry(dst, fe, true)
+									} else {
+										log.Errorf("copy %s %s", u, dst)
+									}
+								})
+								continue
+							}
+						}
 
 						if IsDirectory(u) {
 							continue
 						}
-						name := uriBase(u)
-						dst := join(name)
+
 						source, err := Reader(u)
 						if err != nil {
 							log.Errorf("reader: %v", err)
@@ -963,6 +1064,8 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 				}
 			}()
 			processIntent()
+			mH = wHandle(w)
+			log.Debug("mainH " + mH)
 		})
 	} else {
 		if !GUI {
@@ -1835,4 +1938,12 @@ func def(a fyne.App) (p, r, r6, ps, s, h string) {
 	s = defs(socks5, a.Preferences().String("socks5"))
 	h = defs(connect, a.Preferences().String("connect"))
 	return
+}
+
+func wHandle(w fyne.Window) string {
+	s := fmt.Sprintf("%+v", w)
+	if i := strings.Index(s, "handle:"); i != -1 {
+		return strings.TrimSuffix(s[i+7:], "}")
+	}
+	return ""
 }

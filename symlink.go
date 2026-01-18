@@ -43,7 +43,7 @@ func Symlink(oldname string, newname string) error {
 
 func Readlink(name string) (string, error) {
 	if isMobile {
-		log.Debugf("Readlink: mobile device, skipping %s", name)
+		// log.Debugf("Readlink: mobile device, skipping %s", name)
 		return "", fmt.Errorf("isMobile")
 	}
 

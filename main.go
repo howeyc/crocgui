@@ -232,6 +232,10 @@ func main() {
 		cleanup(w)
 	})
 
+	w.SetOnClosed(func() {
+		log.Debug("Сlosed")
+	})
+
 	langCode = lang.SystemLocale().String()
 	log.Info(langCode)
 	// Defaults

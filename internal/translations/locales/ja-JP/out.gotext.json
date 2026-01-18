@@ -5,7 +5,7 @@
             "id": "License Info",
             "message": "License Info",
             "translation": "ライセンス情報",
-            "position": "crocgui/about.go:68:38"
+            "position": "crocgui/about.go:72:38"
         },
         {
             "id": "Export full log",
@@ -23,7 +23,7 @@
             "id": "App closed. Tap to start.",
             "message": "App closed. Tap to start.",
             "translation": "アプリが終了しました。タップして起動してください。",
-            "position": "crocgui/main.go:256:16"
+            "position": "crocgui/main.go:319:16"
         },
         {
             "id": "Cancel",
@@ -59,31 +59,31 @@
             "id": "Receive cancelled.",
             "message": "Receive cancelled.",
             "translation": "受信がキャンセルされました。",
-            "position": "crocgui/recv.go:656:34"
+            "position": "crocgui/recv.go:665:34"
         },
         {
             "id": "Receiving file",
             "message": "Receiving file",
             "translation": "ファイルを受信中",
-            "position": "crocgui/recv.go:679:27"
+            "position": "crocgui/recv.go:688:27"
         },
         {
             "id": "Send cancelled.",
             "message": "Send cancelled.",
             "translation": "送信がキャンセルされました。",
-            "position": "crocgui/recv.go:754:36"
+            "position": "crocgui/recv.go:763:36"
         },
         {
             "id": "Received",
             "message": "Received",
             "translation": "受信しました",
-            "position": "crocgui/recv.go:761:46"
+            "position": "crocgui/recv.go:770:46"
         },
         {
             "id": "Receive",
             "message": "Receive",
             "translation": "受信",
-            "position": "crocgui/recv.go:1039:38"
+            "position": "crocgui/recv.go:1047:38"
         },
         {
             "id": "Empty name",
@@ -107,25 +107,31 @@
             "id": "Have them not press the Download yet",
             "message": "Have them not press the Download yet",
             "translation": "まだ「ダウンロード」を押さないでください",
-            "position": "crocgui/send.go:699:24"
+            "position": "crocgui/send.go:703:24"
         },
         {
             "id": "Have them press the Download now",
             "message": "Have them press the Download now",
             "translation": "今「ダウンロード」を押してください",
-            "position": "crocgui/send.go:763:28"
+            "position": "crocgui/send.go:767:28"
         },
         {
             "id": "Sending file",
             "message": "Sending file",
             "translation": "ファイルを送信中",
-            "position": "crocgui/send.go:774:57"
+            "position": "crocgui/send.go:778:57"
         },
         {
             "id": "Sent file",
             "message": "Sent file",
             "translation": "ファイルを送信しました",
-            "position": "crocgui/send.go:824:47"
+            "position": "crocgui/send.go:828:47"
+        },
+        {
+            "id": "Allow access to read",
+            "message": "Allow access to read",
+            "translation": "読み取りへのアクセスを許可",
+            "position": "crocgui/send.go:963:23"
         },
         {
             "id": "Hide",

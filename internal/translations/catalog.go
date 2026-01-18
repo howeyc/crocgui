@@ -44,256 +44,267 @@ func init() {
 }
 
 var messageKeyToIndex = map[string]int{
+	"Allow access to read":                 21,
 	"App closed. Tap to start.":            3,
-	"Appearance":                           42,
-	"Ask the sender for their address":     23,
+	"Appearance":                           43,
+	"Ask the sender for their address":     24,
 	"Cancel":                               4,
-	"Config":                               32,
-	"Configs":                              31,
-	"Connect to local senders only":        24,
-	"Disable Compression":                  40,
-	"Disable Multiplexing":                 39,
+	"Config":                               33,
+	"Configs":                              32,
+	"Connect to local senders only":        25,
+	"Disable Compression":                  41,
+	"Disable Multiplexing":                 40,
 	"Download":                             6,
 	"Empty name":                           14,
 	"Export full log":                      1,
-	"File path CSV parts":                  38,
-	"Font":                                 29,
+	"File path CSV parts":                  39,
+	"Font":                                 30,
 	"Have them not press the Download yet": 17,
 	"Have them press the Download now":     18,
-	"Hide":                                 21,
-	"If value like 0IP then it used as --ip IP": 34,
-	"Language":            27,
+	"Hide":                                 22,
+	"If value like 0IP then it used as --ip IP": 35,
+	"Language":            28,
 	"Last item of list":   15,
 	"License Info":        0,
-	"Logo":                30,
-	"Name":                35,
-	"Network Local":       44,
-	"Overwrite":           25,
+	"Logo":                31,
+	"Name":                36,
+	"Network Local":       45,
+	"Overwrite":           26,
 	"Pick a file to send": 16,
 	"Receive":             13,
 	"Receive cancelled.":  9,
 	"Received":            12,
 	"Receiving file":      10,
-	"Relay":               43,
-	"Restore":             26,
+	"Relay":               44,
+	"Restore":             27,
 	"Saved all files to":  2,
 	"Secret must be longer than 5 characters": 7,
 	"Send":                                   8,
 	"Send cancelled.":                        11,
-	"Send only via relay":                    22,
+	"Send only via relay":                    23,
 	"Sending file":                           19,
 	"Sent file":                              20,
-	"Storage Options":                        45,
-	"Theme":                                  28,
-	"Transfer Options":                       46,
-	"UnZip files":                            36,
-	"Value may be file with value":           33,
+	"Storage Options":                        46,
+	"Theme":                                  29,
+	"Transfer Options":                       47,
+	"UnZip files":                            37,
+	"Value may be file with value":           34,
 	"Wait for them before pressing Download": 5,
-	"Zip folders":                            37,
-	"speed e.g. 500k":                        41,
+	"Zip folders":                            38,
+	"speed e.g. 500k":                        42,
 }
 
-var en_USIndex = []uint32{ // 48 elements
+var en_USIndex = []uint32{ // 49 elements
 	// Entry 0 - 1F
 	0x00000000, 0x0000000d, 0x0000001d, 0x00000030,
 	0x0000004a, 0x00000051, 0x00000078, 0x00000081,
 	0x000000a9, 0x000000ae, 0x000000c1, 0x000000d0,
 	0x000000e0, 0x000000e9, 0x000000f1, 0x000000fc,
 	0x0000010e, 0x00000122, 0x00000147, 0x00000168,
-	0x00000175, 0x0000017f, 0x00000184, 0x00000198,
-	0x000001b9, 0x000001d7, 0x000001e1, 0x000001e9,
-	0x000001f2, 0x000001f8, 0x000001fd, 0x00000202,
+	0x00000175, 0x0000017f, 0x00000194, 0x00000199,
+	0x000001ad, 0x000001ce, 0x000001ec, 0x000001f6,
+	0x000001fe, 0x00000207, 0x0000020d, 0x00000212,
 	// Entry 20 - 3F
-	0x0000020a, 0x00000211, 0x0000022e, 0x00000258,
-	0x0000025d, 0x00000269, 0x00000275, 0x00000289,
-	0x0000029e, 0x000002b2, 0x000002c2, 0x000002cd,
-	0x000002d3, 0x000002e1, 0x000002f1, 0x00000302,
-} // Size: 216 bytes
+	0x00000217, 0x0000021f, 0x00000226, 0x00000243,
+	0x0000026d, 0x00000272, 0x0000027e, 0x0000028a,
+	0x0000029e, 0x000002b3, 0x000002c7, 0x000002d7,
+	0x000002e2, 0x000002e8, 0x000002f6, 0x00000306,
+	0x00000317,
+} // Size: 220 bytes
 
-const en_USData string = "" + // Size: 770 bytes
+const en_USData string = "" + // Size: 791 bytes
 	"\x02License Info\x02Export full log\x02Saved all files to\x02App closed." +
 	" Tap to start.\x02Cancel\x02Wait for them before pressing Download\x02Do" +
 	"wnload\x02Secret must be longer than 5 characters\x02Send\x02Receive can" +
 	"celled.\x02Receiving file\x02Send cancelled.\x02Received\x02Receive\x02E" +
 	"mpty name\x02Last item of list\x02Pick a file to send\x02Have them not p" +
 	"ress the Download yet\x02Have them press the Download now\x02Sending fil" +
-	"e\x02Sent file\x02Hide\x02Send only via relay\x02Ask the sender for thei" +
-	"r address\x02Connect to local senders only\x02Overwrite\x02Restore\x02La" +
-	"nguage\x02Theme\x02Font\x02Logo\x02Configs\x02Config\x02Value may be fil" +
-	"e with value\x02If value like 0IP then it used as --ip IP\x02Name\x02UnZ" +
-	"ip files\x02Zip folders\x02File path CSV parts\x02Disable Multiplexing" +
-	"\x02Disable Compression\x02speed e.g. 500k\x02Appearance\x02Relay\x02Net" +
-	"work Local\x02Storage Options\x02Transfer Options"
+	"e\x02Sent file\x02Allow access to read\x02Hide\x02Send only via relay" +
+	"\x02Ask the sender for their address\x02Connect to local senders only" +
+	"\x02Overwrite\x02Restore\x02Language\x02Theme\x02Font\x02Logo\x02Configs" +
+	"\x02Config\x02Value may be file with value\x02If value like 0IP then it " +
+	"used as --ip IP\x02Name\x02UnZip files\x02Zip folders\x02File path CSV p" +
+	"arts\x02Disable Multiplexing\x02Disable Compression\x02speed e.g. 500k" +
+	"\x02Appearance\x02Relay\x02Network Local\x02Storage Options\x02Transfer " +
+	"Options"
 
-var ja_JPIndex = []uint32{ // 48 elements
+var ja_JPIndex = []uint32{ // 49 elements
 	// Entry 0 - 1F
 	0x00000000, 0x00000016, 0x0000003b, 0x0000006a,
 	0x000000b6, 0x000000c6, 0x00000103, 0x00000116,
 	0x00000157, 0x0000015e, 0x00000189, 0x000001a2,
 	0x000001cd, 0x000001e0, 0x000001e7, 0x000001fa,
 	0x00000216, 0x00000238, 0x00000275, 0x000002a9,
-	0x000002c2, 0x000002e4, 0x000002ee, 0x00000307,
-	0x0000032c, 0x00000351, 0x0000035b, 0x00000362,
-	0x00000369, 0x00000373, 0x00000380, 0x00000387,
+	0x000002c2, 0x000002e4, 0x0000030c, 0x00000316,
+	0x0000032f, 0x00000354, 0x00000379, 0x00000383,
+	0x0000038a, 0x00000391, 0x0000039b, 0x000003a8,
 	// Entry 20 - 3F
-	0x00000391, 0x00000398, 0x000003cf, 0x00000409,
-	0x00000410, 0x00000422, 0x00000432, 0x00000451,
-	0x0000046d, 0x00000480, 0x00000496, 0x0000049d,
-	0x000004a7, 0x000004c6, 0x000004dc, 0x000004f2,
-} // Size: 216 bytes
+	0x000003af, 0x000003b9, 0x000003c0, 0x000003f7,
+	0x00000431, 0x00000438, 0x0000044a, 0x0000045a,
+	0x00000479, 0x00000495, 0x000004a8, 0x000004be,
+	0x000004c5, 0x000004cf, 0x000004ee, 0x00000504,
+	0x0000051a,
+} // Size: 220 bytes
 
-const ja_JPData string = "" + // Size: 1266 bytes
+const ja_JPData string = "" + // Size: 1306 bytes
 	"\x02ライセンス情報\x02完全なログをエクスポート\x02すべてのファイルを保存しました:\x02アプリが終了しました。タップして起動してく" +
 	"ださい。\x02キャンセル\x02「ダウンロード」を押す前に待ってください\x02ダウンロード\x02シークレットは5文字以上である必要があ" +
 	"ります\x02送信\x02受信がキャンセルされました。\x02ファイルを受信中\x02送信がキャンセルされました。\x02受信しました" +
 	"\x02受信\x02名前が空です\x02リストの最後の項目\x02ファイルを選択して送信\x02まだ「ダウンロード」を押さないでください\x02" +
-	"今「ダウンロード」を押してください\x02ファイルを送信中\x02ファイルを送信しました\x02非表示\x02リレーのみで送信\x02送信者" +
-	"にアドレスを尋ねる\x02ローカル送信者のみに接続\x02上書き\x02復元\x02言語\x02テーマ\x02フォント\x02ロゴ\x02設" +
-	"定群\x02設定\x02値はファイルパスを含む場合があります\x020IPのような値は --ip IP として使用されます\x02名前" +
-	"\x02UnZipファイル\x02Zipフォルダ\x02ファイルパスCSVパーツ\x02多重化を無効にする\x02圧縮を無効化\x02速度（例:" +
-	" 500k）\x02外観\x02リレー\x02ローカルネットワーク\x02保存オプション\x02転送オプション"
+	"今「ダウンロード」を押してください\x02ファイルを送信中\x02ファイルを送信しました\x02読み取りへのアクセスを許可\x02非表示" +
+	"\x02リレーのみで送信\x02送信者にアドレスを尋ねる\x02ローカル送信者のみに接続\x02上書き\x02復元\x02言語\x02テーマ" +
+	"\x02フォント\x02ロゴ\x02設定群\x02設定\x02値はファイルパスを含む場合があります\x020IPのような値は --ip IP と" +
+	"して使用されます\x02名前\x02UnZipファイル\x02Zipフォルダ\x02ファイルパスCSVパーツ\x02多重化を無効にする" +
+	"\x02圧縮を無効化\x02速度（例: 500k）\x02外観\x02リレー\x02ローカルネットワーク\x02保存オプション\x02転送オプシ" +
+	"ョン"
 
-var ru_RUIndex = []uint32{ // 48 elements
+var ru_RUIndex = []uint32{ // 49 elements
 	// Entry 0 - 1F
 	0x00000000, 0x0000002e, 0x0000004e, 0x00000069,
 	0x000000b6, 0x000000c7, 0x00000104, 0x00000115,
 	0x0000015a, 0x00000163, 0x00000184, 0x00000193,
 	0x000001b0, 0x000001bf, 0x000001ca, 0x000001de,
 	0x0000020d, 0x00000223, 0x0000025e, 0x00000294,
-	0x000002a3, 0x000002b0, 0x000002bd, 0x000002e0,
-	0x00000316, 0x00000345, 0x0000035e, 0x00000377,
-	0x00000380, 0x00000389, 0x00000394, 0x000003a3,
+	0x000002a3, 0x000002b0, 0x000002d6, 0x000002e3,
+	0x00000306, 0x0000033c, 0x0000036b, 0x00000384,
+	0x0000039d, 0x000003a6, 0x000003af, 0x000003ba,
 	// Entry 20 - 3F
-	0x000003b2, 0x000003bf, 0x000003f1, 0x00000424,
-	0x0000042b, 0x0000043c, 0x00000451, 0x00000478,
-	0x000004a6, 0x000004ba, 0x000004f4, 0x000004fb,
-	0x0000050e, 0x0000052a, 0x0000053d, 0x00000548,
-} // Size: 216 bytes
+	0x000003c9, 0x000003d8, 0x000003e5, 0x00000417,
+	0x0000044a, 0x00000451, 0x00000462, 0x00000477,
+	0x0000049e, 0x000004cc, 0x000004e0, 0x0000051a,
+	0x00000521, 0x00000534, 0x00000550, 0x00000563,
+	0x0000056e,
+} // Size: 220 bytes
 
-const ru_RUData string = "" + // Size: 1352 bytes
+const ru_RUData string = "" + // Size: 1390 bytes
 	"\x02Лицензионная информация\x02Сохранить журнал\x02Сохранил всё в\x02При" +
 	"ложение закрыто. Нажми чтоб запустить.\x02Отменить\x02Ждите прежде чем " +
 	"нажать Получить\x02Получить\x02Секрет должен быть длиннее 5 символов" +
 	"\x02Дать\x02Отмена получения.\x02Получаю\x02Отмена посылки.\x02Получил" +
 	"\x02Взять\x02Пустое имя\x02Последний элемент списка\x02Что послать\x02По" +
 	"ка пусть не нажимают Получить\x02Теперь пусть нажмут Получить\x02Посыла" +
-	"ю\x02Послал\x02Скрыть\x02Не давать локально\x02Спросить адрес у отправи" +
-	"теля\x02Получать только локально\x02Перезаписать\x02Восстановить\x02Язы" +
-	"к\x02Тема\x02Шрифт\x02Логотип\x02Конфиги\x02Конфиг\x02Значение может бы" +
-	"ть файлом\x02Значение типа 0IP значит --ip IP\x02Имя\x02UnZip Файлы\x02" +
-	"Zip каталоги\x02CSV части путей файлов\x02Без мультиплексирования\x02Без" +
-	" сжатия\x02скорость передачи (например 500k)\x02Вид\x02Посредник\x02Лока" +
-	"льная сеть\x02Хранилище\x02Обмен"
+	"ю\x02Послал\x02Позвольте прочитать\x02Скрыть\x02Не давать локально\x02С" +
+	"просить адрес у отправителя\x02Получать только локально\x02Перезаписать" +
+	"\x02Восстановить\x02Язык\x02Тема\x02Шрифт\x02Логотип\x02Конфиги\x02Конфи" +
+	"г\x02Значение может быть файлом\x02Значение типа 0IP значит --ip IP\x02" +
+	"Имя\x02UnZip Файлы\x02Zip каталоги\x02CSV части путей файлов\x02Без мул" +
+	"ьтиплексирования\x02Без сжатия\x02скорость передачи (например 500k)\x02" +
+	"Вид\x02Посредник\x02Локальная сеть\x02Хранилище\x02Обмен"
 
-var tr_TRIndex = []uint32{ // 48 elements
+var tr_TRIndex = []uint32{ // 49 elements
 	// Entry 0 - 1F
 	0x00000000, 0x00000011, 0x00000027, 0x00000049,
 	0x00000076, 0x0000007d, 0x000000a6, 0x000000ad,
 	0x000000da, 0x000000e2, 0x000000f5, 0x00000106,
 	0x0000011e, 0x00000127, 0x0000012a, 0x00000135,
 	0x0000014a, 0x00000168, 0x00000185, 0x000001a0,
-	0x000001b4, 0x000001c6, 0x000001cc, 0x000001ec,
-	0x00000208, 0x0000022c, 0x00000239, 0x00000245,
-	0x00000249, 0x0000024e, 0x00000259, 0x0000025e,
+	0x000001b4, 0x000001c6, 0x000001e5, 0x000001eb,
+	0x0000020b, 0x00000227, 0x0000024b, 0x00000258,
+	0x00000264, 0x00000268, 0x0000026d, 0x00000278,
 	// Entry 20 - 3F
-	0x00000270, 0x0000027f, 0x0000029d, 0x000002cd,
-	0x000002d3, 0x000002e4, 0x000002f4, 0x0000030f,
-	0x00000333, 0x0000035a, 0x0000036c, 0x00000377,
-	0x0000037d, 0x00000387, 0x0000039d, 0x000003b3,
-} // Size: 216 bytes
+	0x0000027d, 0x0000028f, 0x0000029e, 0x000002bc,
+	0x000002ec, 0x000002f2, 0x00000303, 0x00000313,
+	0x0000032e, 0x00000352, 0x00000379, 0x0000038b,
+	0x00000396, 0x0000039c, 0x000003a6, 0x000003bc,
+	0x000003d2,
+} // Size: 220 bytes
 
-const tr_TRData string = "" + // Size: 947 bytes
+const tr_TRData string = "" + // Size: 978 bytes
 	"\x02Lisans Bilgileri\x02Tam logu dışa aktar\x02Tüm dosyalar şuraya kayde" +
 	"dildi:\x02Uygulama kapandı. Başlatmak için dokunun.\x02İptal\x02İndir'e " +
 	"basmadan önce onları bekleyin\x02İndir\x02Gizli anahtar 5 karakterden uz" +
 	"un olmalıdır\x02Gönder\x02Alma iptal edildi.\x02Dosya alınıyor\x02Gönder" +
 	"me iptal edildi.\x02Alındı\x02Al\x02İsim boş\x02Listenin son öğesi\x02Gö" +
 	"nderilecek dosyayı seçin\x02Henüz İndir'e basmasınlar\x02Şimdi İndir'e b" +
-	"assınlar\x02Dosya gönderiliyor\x02Dosya gönderildi\x02Gizle\x02Sadece rö" +
-	"le üzerinden gönder\x02Göndericiden adresini iste\x02Sadece yerel gönder" +
-	"icilere bağlan\x02Üzerine Yaz\x02Geri Yükle\x02Dil\x02Tema\x02Yazı Tipi" +
-	"\x02Logo\x02Yapılandırmalar\x02Yapılandırma\x02Değer dosya yolu içerebil" +
-	"ir\x020IP gibi bir değer --ip IP olarak kullanılır\x02İsim\x02UnZip Dosy" +
-	"aları\x02Zip Klasörleri\x02Dosya Yolu CSV Parçaları\x02Çoğullamayı Devre" +
-	" Dışı Bırak\x02Sıkıştırmayı Devre Dışı Bırak\x02hız (örn: 500k)\x02Görün" +
-	"üm\x02Röle\x02Yerel Ağ\x02Depolama Seçenekleri\x02Transfer Seçenekleri"
+	"assınlar\x02Dosya gönderiliyor\x02Dosya gönderildi\x02Okumak için erişim" +
+	"e izin ver\x02Gizle\x02Sadece röle üzerinden gönder\x02Göndericiden adre" +
+	"sini iste\x02Sadece yerel göndericilere bağlan\x02Üzerine Yaz\x02Geri Yü" +
+	"kle\x02Dil\x02Tema\x02Yazı Tipi\x02Logo\x02Yapılandırmalar\x02Yapılandır" +
+	"ma\x02Değer dosya yolu içerebilir\x020IP gibi bir değer --ip IP olarak k" +
+	"ullanılır\x02İsim\x02UnZip Dosyaları\x02Zip Klasörleri\x02Dosya Yolu CSV" +
+	" Parçaları\x02Çoğullamayı Devre Dışı Bırak\x02Sıkıştırmayı Devre Dışı Bı" +
+	"rak\x02hız (örn: 500k)\x02Görünüm\x02Röle\x02Yerel Ağ\x02Depolama Seçene" +
+	"kleri\x02Transfer Seçenekleri"
 
-var zh_CNIndex = []uint32{ // 48 elements
+var zh_CNIndex = []uint32{ // 49 elements
 	// Entry 0 - 1F
 	0x00000000, 0x00000010, 0x00000023, 0x0000003c,
 	0x0000005e, 0x00000065, 0x00000086, 0x0000008d,
 	0x000000aa, 0x000000b1, 0x000000c4, 0x000000d7,
 	0x000000ea, 0x000000f4, 0x000000fb, 0x00000108,
 	0x0000011b, 0x00000134, 0x00000152, 0x0000016d,
-	0x00000180, 0x00000190, 0x00000197, 0x000001ad,
-	0x000001c6, 0x000001df, 0x000001e6, 0x000001ed,
-	0x000001f4, 0x000001fb, 0x00000202, 0x00000209,
+	0x00000180, 0x00000190, 0x000001a3, 0x000001aa,
+	0x000001c0, 0x000001d9, 0x000001f2, 0x000001f9,
+	0x00000200, 0x00000207, 0x0000020e, 0x00000215,
 	// Entry 20 - 3F
-	0x00000213, 0x0000021a, 0x00000236, 0x00000259,
-	0x00000260, 0x0000026d, 0x0000027b, 0x00000293,
-	0x000002a6, 0x000002b3, 0x000002c9, 0x000002d0,
-	0x000002d7, 0x000002e4, 0x000002f1, 0x000002fe,
-} // Size: 216 bytes
+	0x0000021c, 0x00000226, 0x0000022d, 0x00000249,
+	0x0000026c, 0x00000273, 0x00000280, 0x0000028e,
+	0x000002a6, 0x000002b9, 0x000002c6, 0x000002dc,
+	0x000002e3, 0x000002ea, 0x000002f7, 0x00000304,
+	0x00000311,
+} // Size: 220 bytes
 
-const zh_CNData string = "" + // Size: 766 bytes
+const zh_CNData string = "" + // Size: 785 bytes
 	"\x02许可证信息\x02导出完整日志\x02所有文件已保存至\x02应用已关闭。点击启动。\x02取消\x02在按\x22下载\x22之前等待" +
 	"他们\x02下载\x02密码必须长于5个字符\x02发送\x02接收已取消。\x02正在接收文件\x02发送已取消。\x02已接收\x02接" +
 	"收\x02名称为空\x02列表最后一项\x02选择要发送的文件\x02让他们先不要按\x22下载\x22\x02现在让他们按\x22下载" +
-	"\x22\x02正在发送文件\x02已发送文件\x02隐藏\x02仅通过中继发送\x02向发送者询问地址\x02仅连接本地发送者\x02覆盖" +
-	"\x02恢复\x02语言\x02主题\x02字体\x02徽标\x02配置集\x02配置\x02值可能包含文件路径\x02如果值为 0IP 则用作" +
-	" --ip IP\x02名称\x02UnZip 文件\x02Zip 文件夹\x02文件路径 CSV 部分\x02禁用多路复用\x02禁用压缩" +
-	"\x02速度 (例如: 500k)\x02外观\x02中继\x02本地网络\x02存储选项\x02传输选项"
+	"\x22\x02正在发送文件\x02已发送文件\x02允许读取权限\x02隐藏\x02仅通过中继发送\x02向发送者询问地址\x02仅连接本地发" +
+	"送者\x02覆盖\x02恢复\x02语言\x02主题\x02字体\x02徽标\x02配置集\x02配置\x02值可能包含文件路径\x02如果" +
+	"值为 0IP 则用作 --ip IP\x02名称\x02UnZip 文件\x02Zip 文件夹\x02文件路径 CSV 部分\x02禁用多路" +
+	"复用\x02禁用压缩\x02速度 (例如: 500k)\x02外观\x02中继\x02本地网络\x02存储选项\x02传输选项"
 
-var zh_HKIndex = []uint32{ // 48 elements
+var zh_HKIndex = []uint32{ // 49 elements
 	// Entry 0 - 1F
 	0x00000000, 0x00000010, 0x00000023, 0x0000003c,
 	0x00000064, 0x0000006b, 0x0000008c, 0x00000093,
 	0x000000b0, 0x000000b7, 0x000000ca, 0x000000dd,
 	0x000000f0, 0x000000fa, 0x00000101, 0x0000010e,
 	0x00000121, 0x0000013a, 0x00000158, 0x00000173,
-	0x00000186, 0x00000196, 0x0000019d, 0x000001b3,
-	0x000001cc, 0x000001e5, 0x000001ec, 0x000001f3,
-	0x000001fa, 0x00000201, 0x00000208, 0x0000020f,
+	0x00000186, 0x00000196, 0x000001a9, 0x000001b0,
+	0x000001c6, 0x000001df, 0x000001f8, 0x000001ff,
+	0x00000206, 0x0000020d, 0x00000214, 0x0000021b,
 	// Entry 20 - 3F
-	0x00000219, 0x00000220, 0x0000023c, 0x0000025f,
-	0x00000266, 0x00000273, 0x00000281, 0x00000299,
-	0x000002ac, 0x000002b9, 0x000002cf, 0x000002d6,
-	0x000002dd, 0x000002ea, 0x000002f7, 0x00000304,
-} // Size: 216 bytes
+	0x00000222, 0x0000022c, 0x00000233, 0x0000024f,
+	0x00000272, 0x00000279, 0x00000286, 0x00000294,
+	0x000002ac, 0x000002bf, 0x000002cc, 0x000002e2,
+	0x000002e9, 0x000002f0, 0x000002fd, 0x0000030a,
+	0x00000317,
+} // Size: 220 bytes
 
-const zh_HKData string = "" + // Size: 772 bytes
+const zh_HKData string = "" + // Size: 791 bytes
 	"\x02許可證資訊\x02匯出完整記錄\x02所有檔案已儲存至\x02應用程式已關閉。點擊啟動。\x02取消\x02在按\x22下載\x22之前" +
 	"等待他們\x02下載\x02密碼必須長於5個字符\x02傳送\x02接收已取消。\x02正在接收檔案\x02傳送已取消。\x02已接收" +
 	"\x02接收\x02名稱為空\x02列表最後一項\x02選擇要傳送的檔案\x02讓他們先不要按\x22下載\x22\x02現在讓他們按\x22下" +
-	"載\x22\x02正在傳送檔案\x02已傳送檔案\x02隱藏\x02僅透過轉發發送\x02向發送者詢問地址\x02僅連接本地發送者\x02覆" +
-	"蓋\x02恢復\x02語言\x02主題\x02字型\x02標誌\x02配置集\x02配置\x02值可能包含檔案路徑\x02如果值為 0IP " +
-	"則用作 --ip IP\x02名稱\x02UnZip 檔案\x02Zip 檔案夾\x02檔案路徑 CSV 部分\x02停用多工處理\x02停" +
-	"用壓縮\x02速度 (例如: 500k)\x02外觀\x02轉發\x02本地網絡\x02儲存選項\x02傳輸選項"
+	"載\x22\x02正在傳送檔案\x02已傳送檔案\x02允許讀取權限\x02隱藏\x02僅透過轉發發送\x02向發送者詢問地址\x02僅連接" +
+	"本地發送者\x02覆蓋\x02恢復\x02語言\x02主題\x02字型\x02標誌\x02配置集\x02配置\x02值可能包含檔案路徑" +
+	"\x02如果值為 0IP 則用作 --ip IP\x02名稱\x02UnZip 檔案\x02Zip 檔案夾\x02檔案路徑 CSV 部分\x02" +
+	"停用多工處理\x02停用壓縮\x02速度 (例如: 500k)\x02外觀\x02轉發\x02本地網絡\x02儲存選項\x02傳輸選項"
 
-var zh_TWIndex = []uint32{ // 48 elements
+var zh_TWIndex = []uint32{ // 49 elements
 	// Entry 0 - 1F
 	0x00000000, 0x0000000d, 0x00000020, 0x00000039,
 	0x00000061, 0x00000068, 0x00000089, 0x00000090,
 	0x000000ad, 0x000000b4, 0x000000c7, 0x000000da,
 	0x000000ed, 0x000000f7, 0x000000fe, 0x0000010b,
 	0x0000011e, 0x00000137, 0x00000155, 0x00000170,
-	0x00000183, 0x00000193, 0x0000019a, 0x000001b0,
-	0x000001c9, 0x000001e2, 0x000001e9, 0x000001f0,
-	0x000001f7, 0x000001fe, 0x00000205, 0x0000020c,
+	0x00000183, 0x00000193, 0x000001a6, 0x000001ad,
+	0x000001c3, 0x000001dc, 0x000001f5, 0x000001fc,
+	0x00000203, 0x0000020a, 0x00000211, 0x00000218,
 	// Entry 20 - 3F
-	0x00000216, 0x0000021d, 0x00000239, 0x00000259,
-	0x00000260, 0x0000026d, 0x0000027b, 0x00000293,
-	0x000002a6, 0x000002b3, 0x000002c9, 0x000002d0,
-	0x000002d7, 0x000002e4, 0x000002f1, 0x000002fe,
-} // Size: 216 bytes
+	0x0000021f, 0x00000229, 0x00000230, 0x0000024c,
+	0x0000026c, 0x00000273, 0x00000280, 0x0000028e,
+	0x000002a6, 0x000002b9, 0x000002c6, 0x000002dc,
+	0x000002e3, 0x000002ea, 0x000002f7, 0x00000304,
+	0x00000311,
+} // Size: 220 bytes
 
-const zh_TWData string = "" + // Size: 766 bytes
+const zh_TWData string = "" + // Size: 785 bytes
 	"\x02授權資訊\x02匯出完整記錄\x02所有檔案已儲存至\x02應用程式已關閉。點擊啟動。\x02取消\x02在按\x22下載\x22之前等" +
 	"待他們\x02下載\x02密碼必須長於5個字元\x02傳送\x02接收已取消。\x02正在接收檔案\x02傳送已取消。\x02已接收\x02" +
 	"接收\x02名稱為空\x02列表最後一項\x02選擇要傳送的檔案\x02讓他們先不要按\x22下載\x22\x02現在讓他們按\x22下載" +
-	"\x22\x02正在傳送檔案\x02已傳送檔案\x02隱藏\x02僅透過轉發傳送\x02向傳送者詢問地址\x02僅連線本地傳送者\x02覆寫" +
-	"\x02還原\x02語言\x02主題\x02字型\x02標誌\x02設定集\x02設定\x02值可能包含檔案路徑\x02若值為 0IP 則用作 " +
-	"--ip IP\x02名稱\x02UnZip 檔案\x02Zip 資料夾\x02檔案路徑 CSV 部分\x02停用多工處理\x02停用壓縮" +
-	"\x02速度 (例如: 500k)\x02外觀\x02轉發\x02本地網路\x02儲存選項\x02傳輸選項"
+	"\x22\x02正在傳送檔案\x02已傳送檔案\x02允許讀取權限\x02隱藏\x02僅透過轉發傳送\x02向傳送者詢問地址\x02僅連線本地傳" +
+	"送者\x02覆寫\x02還原\x02語言\x02主題\x02字型\x02標誌\x02設定集\x02設定\x02值可能包含檔案路徑\x02若值" +
+	"為 0IP 則用作 --ip IP\x02名稱\x02UnZip 檔案\x02Zip 資料夾\x02檔案路徑 CSV 部分\x02停用多工處" +
+	"理\x02停用壓縮\x02速度 (例如: 500k)\x02外觀\x02轉發\x02本地網路\x02儲存選項\x02傳輸選項"
 
-	// Total table size 8151 bytes (7KiB); checksum: 27693359
+	// Total table size 8366 bytes (8KiB); checksum: FD4DB987

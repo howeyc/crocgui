@@ -5,7 +5,7 @@
             "id": "License Info",
             "message": "License Info",
             "translation": "许可证信息",
-            "position": "crocgui/about.go:68:38"
+            "position": "crocgui/about.go:72:38"
         },
         {
             "id": "Export full log",
@@ -23,7 +23,7 @@
             "id": "App closed. Tap to start.",
             "message": "App closed. Tap to start.",
             "translation": "应用已关闭。点击启动。",
-            "position": "crocgui/main.go:256:16"
+            "position": "crocgui/main.go:319:16"
         },
         {
             "id": "Cancel",
@@ -59,31 +59,31 @@
             "id": "Receive cancelled.",
             "message": "Receive cancelled.",
             "translation": "接收已取消。",
-            "position": "crocgui/recv.go:656:34"
+            "position": "crocgui/recv.go:665:34"
         },
         {
             "id": "Receiving file",
             "message": "Receiving file",
             "translation": "正在接收文件",
-            "position": "crocgui/recv.go:679:27"
+            "position": "crocgui/recv.go:688:27"
         },
         {
             "id": "Send cancelled.",
             "message": "Send cancelled.",
             "translation": "发送已取消。",
-            "position": "crocgui/recv.go:754:36"
+            "position": "crocgui/recv.go:763:36"
         },
         {
             "id": "Received",
             "message": "Received",
             "translation": "已接收",
-            "position": "crocgui/recv.go:761:46"
+            "position": "crocgui/recv.go:770:46"
         },
         {
             "id": "Receive",
             "message": "Receive",
             "translation": "接收",
-            "position": "crocgui/recv.go:1039:38"
+            "position": "crocgui/recv.go:1047:38"
         },
         {
             "id": "Empty name",
@@ -107,25 +107,31 @@
             "id": "Have them not press the Download yet",
             "message": "Have them not press the Download yet",
             "translation": "让他们先不要按\"下载\"",
-            "position": "crocgui/send.go:699:24"
+            "position": "crocgui/send.go:703:24"
         },
         {
             "id": "Have them press the Download now",
             "message": "Have them press the Download now",
             "translation": "现在让他们按\"下载\"",
-            "position": "crocgui/send.go:763:28"
+            "position": "crocgui/send.go:767:28"
         },
         {
             "id": "Sending file",
             "message": "Sending file",
             "translation": "正在发送文件",
-            "position": "crocgui/send.go:774:57"
+            "position": "crocgui/send.go:778:57"
         },
         {
             "id": "Sent file",
             "message": "Sent file",
             "translation": "已发送文件",
-            "position": "crocgui/send.go:824:47"
+            "position": "crocgui/send.go:828:47"
+        },
+        {
+            "id": "Allow access to read",
+            "message": "Allow access to read",
+            "translation": "允许读取权限",
+            "position": "crocgui/send.go:963:23"
         },
         {
             "id": "Hide",

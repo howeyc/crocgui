@@ -113,9 +113,15 @@ func (t *Toast) hideWithAnimation(startPos fyne.Position) {
 		case <-done:
 			return
 		case <-time.After(AnimationDuration + 50*time.Millisecond):
-			fyne.Do(t.popup.Hide)
+			fyne.Do(func() {
+				t.popup.Hide()
+				t.window.RequestFocus()
+			})
 		case <-t.done:
-			fyne.Do(t.popup.Hide)
+			fyne.Do(func() {
+				t.popup.Hide()
+				t.window.RequestFocus()
+			})
 		}
 	}()
 }
@@ -167,6 +173,9 @@ func (t *Toast) Show() {
 
 		select {
 		case <-t.done:
+			fyne.Do(func() {
+				t.window.RequestFocus()
+			})
 			return
 
 		case <-time.After(visibleTime):
@@ -176,6 +185,7 @@ func (t *Toast) Show() {
 						t.hideWithAnimation(endPos)
 					} else {
 						t.popup.Hide()
+						t.window.RequestFocus()
 					}
 				})
 			}

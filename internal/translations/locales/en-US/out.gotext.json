@@ -7,7 +7,7 @@
             "translation": "License Info",
             "translatorComment": "Copied from source.",
             "fuzzy": true,
-            "position": "crocgui/about.go:68:38"
+            "position": "crocgui/about.go:72:38"
         },
         {
             "id": "Export full log",
@@ -31,7 +31,7 @@
             "translation": "App closed. Tap to start.",
             "translatorComment": "Copied from source.",
             "fuzzy": true,
-            "position": "crocgui/main.go:256:16"
+            "position": "crocgui/main.go:319:16"
         },
         {
             "id": "Cancel",
@@ -79,7 +79,7 @@
             "translation": "Receive cancelled.",
             "translatorComment": "Copied from source.",
             "fuzzy": true,
-            "position": "crocgui/recv.go:656:34"
+            "position": "crocgui/recv.go:665:34"
         },
         {
             "id": "Receiving file",
@@ -87,7 +87,7 @@
             "translation": "Receiving file",
             "translatorComment": "Copied from source.",
             "fuzzy": true,
-            "position": "crocgui/recv.go:679:27"
+            "position": "crocgui/recv.go:688:27"
         },
         {
             "id": "Send cancelled.",
@@ -95,7 +95,7 @@
             "translation": "Send cancelled.",
             "translatorComment": "Copied from source.",
             "fuzzy": true,
-            "position": "crocgui/recv.go:754:36"
+            "position": "crocgui/recv.go:763:36"
         },
         {
             "id": "Received",
@@ -103,7 +103,7 @@
             "translation": "Received",
             "translatorComment": "Copied from source.",
             "fuzzy": true,
-            "position": "crocgui/recv.go:761:46"
+            "position": "crocgui/recv.go:770:46"
         },
         {
             "id": "Receive",
@@ -111,7 +111,7 @@
             "translation": "Receive",
             "translatorComment": "Copied from source.",
             "fuzzy": true,
-            "position": "crocgui/recv.go:1039:38"
+            "position": "crocgui/recv.go:1047:38"
         },
         {
             "id": "Empty name",
@@ -143,7 +143,7 @@
             "translation": "Have them not press the Download yet",
             "translatorComment": "Copied from source.",
             "fuzzy": true,
-            "position": "crocgui/send.go:699:24"
+            "position": "crocgui/send.go:703:24"
         },
         {
             "id": "Have them press the Download now",
@@ -151,7 +151,7 @@
             "translation": "Have them press the Download now",
             "translatorComment": "Copied from source.",
             "fuzzy": true,
-            "position": "crocgui/send.go:763:28"
+            "position": "crocgui/send.go:767:28"
         },
         {
             "id": "Sending file",
@@ -159,7 +159,7 @@
             "translation": "Sending file",
             "translatorComment": "Copied from source.",
             "fuzzy": true,
-            "position": "crocgui/send.go:774:57"
+            "position": "crocgui/send.go:778:57"
         },
         {
             "id": "Sent file",
@@ -167,7 +167,15 @@
             "translation": "Sent file",
             "translatorComment": "Copied from source.",
             "fuzzy": true,
-            "position": "crocgui/send.go:824:47"
+            "position": "crocgui/send.go:828:47"
+        },
+        {
+            "id": "Allow access to read",
+            "message": "Allow access to read",
+            "translation": "Allow access to read",
+            "translatorComment": "Copied from source.",
+            "fuzzy": true,
+            "position": "crocgui/send.go:963:23"
         },
         {
             "id": "Hide",
