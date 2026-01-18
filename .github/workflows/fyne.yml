@@ -214,7 +214,7 @@ jobs:
 
       - name: Install Fyne CLI
         run: |
-          cd  $GITHUB_WORKSPACE/workspace/tools/cmd/fyne
+          cd "${{ github.workspace }}\workspace\tools\cmd\fyne"
           go install
 
       - name: Decode and place P12 Certificate
@@ -245,7 +245,7 @@ jobs:
           }
           
           Write-Host "Building AppX package for x64"
-          
+
           $env:GOARCH = "amd64"
           
           fyne release --os windows `
