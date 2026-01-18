@@ -38,10 +38,11 @@ on:
 # Define the jobs for the workflow
 jobs:
   # Job to build the application for Windows target
-  build-exe:
+  build-mingw:
     # Run only if 'all' or 'exe' is selected
-    if: ${{ github.event.inputs.build_target == 'all' || github.event.inputs.build_target == 'exe' }}
-    runs-on: ubuntu-latest # Runs on Ubuntu to use MinGW cross-compiler
+    # if: ${{ github.event.inputs.build_target == 'all' || github.event.inputs.build_target == 'exe' }}
+    if: false
+    runs-on: ubuntu-latest
     steps:
       # Step 1: Checkout the main repository directly into workspace/crocgui
       - name: Checkout main repository (crocgui)
@@ -118,103 +119,148 @@ jobs:
           name: windows-amd64-build
           path: ${{ github.workspace }}/workspace/crocgui/crocgui.exe
           retention-days: 7
-          if-no-files-found: error
+          if-no-files-found: erros
 
-jobs:
   # Job to build the application for Windows target
-  build-appx:
-    # Run only if 'all' or 'appx' is selected
-    if: ${{ github.event.inputs.build_target == 'all' || github.event.inputs.build_target == 'appx' }}
+  build-exe:
+    if: ${{ github.event.inputs.build_target == 'all' || github.event.inputs.build_target == 'exe' }}
     runs-on: windows-latest
     steps:
-      # Step 1: Checkout the main repository directly into workspace/crocgui
       - name: Checkout main repository (crocgui)
         uses: actions/checkout@v4
         with:
-          path: workspace/crocgui # Checkout directly into the desired workspace subdirectory
+          path: workspace/crocgui
 
-      # Step 2: Checkout the croc dependency repository directly into workspace/croc
       - name: Checkout croc dependency
         uses: actions/checkout@v4
         with:
           repository: abakum/croc
           ref: main
-          path: workspace/croc # Checkout directly into the desired workspace subdirectory
+          path: workspace/croc
 
-      # Step 3: Checkout the peerdiscovery dependency repository directly into workspace/peerdiscovery
       - name: Checkout peerdiscovery dependency
         uses: actions/checkout@v4
         with:
           repository: abakum/peerdiscovery
           ref: main
-          path: workspace/peerdiscovery # Checkout directly into the desired workspace subdirectory
+          path: workspace/peerdiscovery
 
-      # Step 4: Install Go
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
           go-version: '1.24'
-          # Cache dependencies based on go.sum file
           cache-dependency-path: ${{ github.workspace }}/workspace/crocgui/go.sum
 
-      # Step 5: Install MinGW-w64 cross-compiler for Windows builds
-      - name: Install MinGW-w64 cross-compiler
-        if: false
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y gcc-mingw-w64-x86-64
-
-      # Step 6: Install Fyne CLI
       - name: Install Fyne CLI
         run: |
           go install fyne.io/tools/cmd/fyne@latest
 
-      - name: Decode P12 Certificate
-        shell: pwsh
-        env:
-          P12_BASE64: ${{ secrets.P12_BASE64 }}
+      - name: Build Windows executable
+        shell: cmd
         run: |
-          # Декодируем сертификат из секретов в файл
-          if (-not $env:P12_BASE64) { throw "Secret P12_BASE64 is missing!" }
-          $certBytes = [System.Convert]::FromBase64String($env:P12_BASE64)
-          [System.IO.File]::WriteAllBytes("${{ github.workspace }}\croc.p12", $certBytes)
+          cd "%GITHUB_WORKSPACE%\workspace\crocgui"
+          echo Building crocgui.exe...
+          fyne package --os windows --release
+          if not exist "crocgui.exe" (
+            echo ERROR: crocgui.exe was not created!
+            exit 1
+          )
+          dir
 
-
-      # Step 7: Build the application using fyne package for Windows
-      - name: Build with fyne for Windows
-        run: |
-          cd $GITHUB_WORKSPACE/workspace/crocgui
-          
-          echo "Building for Windows amd64 using MinGW-w64..."
-          
-          # Set environment variables for cross-compilation
-          export CGO_ENABLED=1
-          export GOOS=windows
-          export GOARCH=amd64
-          export CC=x86_64-w64-mingw32-gcc
-          
-          # Use fyne package to build the Windows executable
-          fyne release --os windows -certificate "croc.p12" -profile "croc" -developer "CN=croc" -password "${{ secrets.P12_PASSWORD }}"
-          echo "Contents of current directory after build:"
-          ls -la .
-          
-          # Verify the .appx file was created
-          if [ ! -f "crocgui.appx" ]; then
-              echo "ERROR: fyne package did not create crocgui.appx"
-              exit 1
-          fi
-          
-
-      # Step 8: Upload the built .exe as an artifact
       - name: Upload Windows artifact
-        if: success() || failure()
         uses: actions/upload-artifact@v4
         with:
-          name: windows-amd64-build
-          path: ${{ github.workspace }}/workspace/crocgui/crocgui.appx
+          name: windows-exe-build
+          path: ${{ github.workspace }}/workspace/crocgui/crocgui.exe
           retention-days: 7
           if-no-files-found: error
 
+  # Job to build the application for Windows target
+  build-appx:
+    if: ${{ github.event.inputs.build_target == 'all' || github.event.inputs.build_target == 'appx' }}
+    runs-on: windows-latest
+    steps:
+      - name: Checkout main repository (crocgui)
+        uses: actions/checkout@v4
+        with:
+          path: workspace/crocgui
+
+      - name: Checkout croc dependency
+        uses: actions/checkout@v4
+        with:
+          repository: abakum/croc
+          ref: main
+          path: workspace/croc
+
+      - name: Checkout peerdiscovery dependency
+        uses: actions/checkout@v4
+        with:
+          repository: abakum/peerdiscovery
+          ref: main
+          path: workspace/peerdiscovery
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+          cache-dependency-path: ${{ github.workspace }}/workspace/crocgui/go.sum
+
+      - name: Install Fyne CLI
+        run: |
+          go install fyne.io/tools/cmd/fyne@latest
+
+      - name: Decode and place P12 Certificate
+        shell: pwsh
+        run: |
+          $certPath = "${{ github.workspace }}\workspace\crocgui\croc.p12"
+          
+          Write-Host "Saving certificate to: $certPath"
+
+          try {
+              # Декодируем Base64 и сохраняем файл
+              $certBytes = [System.Convert]::FromBase64String("${{ secrets.P12_BASE64 }}")
+              [System.IO.File]::WriteAllBytes($certPath, $certBytes)
+              Write-Host "Certificate successfully saved. File size: $($certBytes.Length) bytes"
+          }
+          catch {
+              Write-Error "::error title=Certificate Decode Failed::Failed to decode or save certificate. Ensure P12_BASE64 contains valid base64 data. $_"
+              exit 1
+          }
+
+      - name: Build Windows AppX package
+        shell: pwsh
+        run: |
+          cd "${{ github.workspace }}\workspace\crocgui"
+          
+          $certPath = "croc.p12"
+          if (-not (Test-Path $certPath)) {
+            throw "Certificate file not found at: $certPath"
+          }
+          
+          Write-Host "Building AppX package..."
+          
+          # Build the AppX package using fyne release command
+          fyne release --os windows `
+            -certificate "$certPath" `
+            -profile "croc" `
+            -developer "CN=croc" `
+            -password "${{ secrets.P12_PASSWORD }}"
+          
+          Write-Host "Contents after build:"
+          Get-ChildItem
+          
+          if (-not (Test-Path "crocgui.appx")) {
+            throw "ERROR: crocgui.appx was not created!"
+          }
+
+      - name: Upload AppX artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-appx-build
+          path: ${{ github.workspace }}/workspace/crocgui/crocgui.appx
+          retention-days: 7
+          if-no-files-found: error  # Исправлена опечатка 'erros'
+          
   # Job to build the application for Linux target
   build-linux:
     # Run only if 'all' or 'linux' is selected
