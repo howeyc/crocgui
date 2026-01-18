@@ -830,7 +830,7 @@ jobs:
     # Run only if 'all' is selected
     if: ${{ github.event.inputs.build_target == 'all' }}
     # This job waits for all build jobs to finish
-    needs: [build-windows, build-linux, build-macos-amd64, build-macos-arm64, build-android]
+    needs: [build-exe, build-appx, build-linux, build-macos-amd64, build-macos-arm64, build-android]
     runs-on: ubuntu-latest
     steps:
       # Step 1: Checkout the repository to access FyneApp.toml
