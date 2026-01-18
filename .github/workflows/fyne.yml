@@ -237,13 +237,29 @@ jobs:
             throw "Certificate file not found at: $certPath"
           }
           
-          Write-Host "Building AppX package..."
+          Write-Host "Building AppX package for x64..."
           
+          $env:GOARCH = "amd64"
+          $sdkRoot = "C:\Program Files (x86)\Windows Kits\10\bin"
+
+          $latestVersion = Get-ChildItem -Path $sdkRoot -Filter "10.*" | Sort-Object Name -Descending | Select-Object -First 1
+          $x64BinPath = Join-Path $latestVersion.FullName "x64"
+          
+          if (-not (Test-Path "$x64BinPath\makeappx.exe")) {
+              throw "not find makeappx.exe by: $x64BinPath"
+          }
+
+          $env:PATH = "$x64BinPath;" + $env:PATH
+          $env:WindowsSdkBinPath = $x64BinPath
+          
+          Write-Host "Use SDK from: $x64BinPath"
+
           # Build the AppX package using fyne release command
-          fyne release --os windows `
+          fyne release --os windows  `
             -certificate "$certPath" `
             -profile "croc" `
             -developer "CN=croc" `
+            -keystore-pass "${{ secrets.P12_PASSWORD }}" `
             -password "${{ secrets.P12_PASSWORD }}"
           
           Write-Host "Contents after build:"
@@ -259,7 +275,7 @@ jobs:
           name: windows-appx-build
           path: ${{ github.workspace }}/workspace/crocgui/crocgui.appx
           retention-days: 7
-          if-no-files-found: error  # Исправлена опечатка 'erros'
+          if-no-files-found: error
           
   # Job to build the application for Linux target
   build-linux:
