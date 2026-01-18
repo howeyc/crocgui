@@ -239,28 +239,22 @@ jobs:
           
           Write-Host "Building AppX package for x64 (2026)..."
           
-          # 1. Dynamically find the latest Windows SDK x64 bin directory
           $sdkRoot = "C:\Program Files (x86)\Windows Kits\10\bin"
-          $latestVersion = Get-ChildItem -Path $sdkRoot -Filter "10.*" | Sort-Object Name -Descending | Select-Object -First 1
-          $x64BinPath = Join-Path $latestVersion.FullName "x64"
-          
-          if (-not (Test-Path "$x64BinPath\makeappx.exe")) {
-              throw "Could not find makeappx.exe in: $x64BinPath"
+          # Get the latest SDK version
+          $latestVersion = Get-ChildItem -Path $sdkRoot -Filter "10.*" -Directory | Sort-Object Name -Descending | Select-Object -First 1
+
+          # Correction: properly construct the path to makeappx.exe
+          $makeAppxPath = Join-Path $latestVersion.FullName "x64\makeappx.exe"
+
+          if (-not (Test-Path $makeAppxPath)) {
+              throw "Could not find makeappx.exe at path: $makeAppxPath"
           }
 
-          # 2. Set environment variables
-          # Fyne CLI uses WindowsSdkBinPath as a base and appends '\makeappx.exe' internally.
-          # We provide the directory path ONLY.
-          $env:WindowsSdkBinPath = $x64BinPath
-          $env:GOARCH = "amd64"
+          $env:PATH = "$($latestVersion.FullName)\x64;" + $env:PATH
+          $env:WindowsSdkBinPath = "$($latestVersion.FullName)\x64"
+
+          Write-Host "Using SDK from: $($latestVersion.FullName)\x64"
           
-          # Prepend SDK path to system PATH to ensure x64 tools are prioritized over ARM64
-          $env:PATH = "$x64BinPath;" + $env:PATH
-          
-          Write-Host "Using SDK from: $env:WindowsSdkBinPath"
-          
-          # 3. Execute Fyne release command
-          # Using only -password as it covers both keystore and certificate for P12 files
           fyne release --os windows `
             -certificate "$certPath" `
             -profile "croc" `
