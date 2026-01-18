@@ -251,7 +251,7 @@ jobs:
           fyne release --os windows `
             -certificate "$certPath" `
             -profile "croc" `
-            -developer "CN=croc" `
+            -developer "${{ secrets.SUBJECT }}" `
             -password "${{ secrets.P12_PASSWORD }}"
           
           Write-Host "Post-build workspace contents:"
