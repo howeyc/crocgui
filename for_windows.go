@@ -13,7 +13,7 @@ void* __stack_chk_guard = NULL;
 // Обработчик для Fortify Source
 void __chk_fail(void) { exit(1); }
 */
-import "C"
+// import "C"
 
 import (
 	"os"
