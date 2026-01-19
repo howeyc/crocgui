@@ -132,7 +132,6 @@ jobs:
             --keystore "${{ github.workspace }}/workspace/crocgui/croc.jks" \
             --storepass "${{ secrets.KEYSTORE_PASSWORD }}" \
             --alias "croc" \
-            --hashAlgorithm SHA-256 \
             --tsaurl "http://timestamp.sectigo.com" \
             "${{ github.workspace }}/workspace/crocgui/crocgui.exe"
 
