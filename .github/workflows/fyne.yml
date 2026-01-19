@@ -111,19 +111,30 @@ jobs:
           echo "Contents of current directory after build:"
           ls -la .
 
+      - name: Set up Java
+        if: false
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
       - name: Decode Keystore
         run: |
+          mkdir -p "${{ github.workspace }}/workspace/crocgui"
           echo "${{ secrets.ANDROID_SIGNING_KEY }}" | base64 -d > "${{ github.workspace }}/workspace/crocgui/croc.jks"
-          
-      - name: Sign with Jsign
-        uses: ebourg/jsign-action@v6.0
-        with:
-          file: "${{ github.workspace }}/workspace/crocgui/crocgui.exe"
-          keystore: "${{ github.workspace }}/workspace/crocgui/croc.jks"
-          alias: 'croc'
-          storepass: ${{ secrets.KEYSTORE_PASSWORD }}
-          hashAlgorithm: 'SHA-256'
-          tsaurl: 'http://timestamp.sectigo.com'
+
+      - name: Download Jsign
+        run: wget https://github.com/ebourg/jsign/releases/download/7.4/jsign-7.4.jar
+
+      - name: Sign
+        run: |
+          java -jar jsign-7.4.jar \
+            --keystore "${{ github.workspace }}/workspace/crocgui/croc.jks" \
+            --storepass "${{ secrets.KEYSTORE_PASSWORD }}" \
+            --alias "croc" \
+            --hashAlgorithm SHA-256 \
+            --tsaurl "http://timestamp.sectigo.com" \
+            "${{ github.workspace }}/workspace/crocgui/crocgui.exe"
 
       # Step 8: Upload the built .exe as an artifact
       - name: Upload Windows artifact
