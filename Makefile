@@ -95,8 +95,23 @@ linux:
 windows: 
 	#sudo apt-get install gcc-mingw-w64-x86-64
 	#go install fyne.io/tools/cmd/fyne@latest
-	#CC=x86_64-w64-mingw32-gcc fyne package -os windows --release
-	CC=x86_64-w64-mingw32-gcc fyne release -os windows -certificate croc.p12 -profile "croc" -developer "CN=croc" -password "$(CERT_PASS)"
+	#CC=x86_64-w64-mingw32-gcc fyne release -os windows -certificate croc.p12 -profile "croc" -developer "CN=croc, OU=Personal, O=Konstantin Abakumov, L=Millerovo, ST=Rostov Oblast, C=RU" -password "$(CERT_PASS)"
+	CC=x86_64-w64-mingw32-gcc fyne package -os windows --release
+
+signexe:
+	#sudo apt-get update;sudo apt-get install osslsigncode
+	osslsigncode sign -pkcs12 croc.p12 -pass "$(CERT_PASS)" \
+		-n "croc" \
+		-t http://timestamp.digicert.com \
+		-in crocgui.exe -out crocgui-signed.exe
+
+signappx: 
+	osslsigncode sign -pkcs12 croc.p12 -pass "$(CERT_PASS)" \
+		-appx \
+		-n "croc" \
+		-t http://timestamp.digicert.com \
+		-in crocgui.appx -out crocgui-signed.appx
+
 
 windowsgui:
 	#GOOS=windows GOARCH=amd64 CGO_ENABLED=1 CC=x86_64-w64-mingw32-gcc go build -ldflags="-s -H windowsgui" -tags=opengl
