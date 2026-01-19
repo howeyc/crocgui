@@ -28,8 +28,7 @@ on:
         type: choice
         options:
           - all
-          - exe
-          - appx
+          - windows
           - linux
           - macos-amd64
           - macos-arm64
@@ -38,171 +37,8 @@ on:
 # Define the jobs for the workflow
 jobs:
   # Job to build the application for Windows target
-  build-exe:
-    # Run only if 'all' or 'exe' is selected
-    if: ${{ github.event.inputs.build_target == 'all' || github.event.inputs.build_target == 'exe' }}
-    #if: false
-    runs-on: ubuntu-latest
-    steps:
-      # Step 1: Checkout the main repository directly into workspace/crocgui
-      - name: Checkout main repository (crocgui)
-        uses: actions/checkout@v4
-        with:
-          path: workspace/crocgui # Checkout directly into the desired workspace subdirectory
-
-      # Step 2: Checkout the croc dependency repository directly into workspace/croc
-      - name: Checkout croc dependency
-        uses: actions/checkout@v4
-        with:
-          repository: abakum/croc
-          ref: main
-          path: workspace/croc # Checkout directly into the desired workspace subdirectory
-
-      # Step 3: Checkout the peerdiscovery dependency repository directly into workspace/peerdiscovery
-      - name: Checkout peerdiscovery dependency
-        uses: actions/checkout@v4
-        with:
-          repository: abakum/peerdiscovery
-          ref: main
-          path: workspace/peerdiscovery # Checkout directly into the desired workspace subdirectory
-
-      # Step 4: Install Go
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.24'
-          # Cache dependencies based on go.sum file
-          cache-dependency-path: ${{ github.workspace }}/workspace/crocgui/go.sum
-
-      # Step 5: Install MinGW-w64 cross-compiler for Windows builds
-      - name: Install MinGW-w64 cross-compiler
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y gcc-mingw-w64-x86-64
-
-      # Step 6: Install Fyne CLI
-      - name: Install Fyne CLI
-        run: |
-          go install fyne.io/tools/cmd/fyne@latest
-
-      # Step 7: Build the application using fyne package for Windows
-      - name: Build with fyne for Windows
-        run: |
-          cd $GITHUB_WORKSPACE/workspace/crocgui
-          
-          echo "Building for Windows amd64 using MinGW-w64..."
-          
-          # Set environment variables for cross-compilation
-          export CGO_ENABLED=1
-          export GOOS=windows
-          export GOARCH=amd64
-          export CC=x86_64-w64-mingw32-gcc
-          
-          # Use fyne package to build the Windows executable
-          fyne package --os windows --release
-          
-          # Verify the .exe file was created
-          if [ ! -f "crocgui.exe" ]; then
-              echo "ERROR: fyne package did not create crocgui.exe"
-              ls -la .
-              exit 1
-          fi
-          
-          echo "Contents of current directory after build:"
-          ls -la .
-
-      - name: Set up Java
-        if: false
-        uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-
-      - name: Decode Keystore
-        run: |
-          mkdir -p "${{ github.workspace }}/workspace/crocgui"
-          echo "${{ secrets.ANDROID_SIGNING_KEY }}" | base64 -d > "${{ github.workspace }}/workspace/crocgui/croc.jks"
-
-      - name: Download Jsign
-        run: wget https://github.com/ebourg/jsign/releases/download/7.4/jsign-7.4.jar
-
-      - name: Sign
-        run: |
-          java -jar jsign-7.4.jar \
-            --keystore "${{ github.workspace }}/workspace/crocgui/croc.jks" \
-            --storepass "${{ secrets.KEYSTORE_PASSWORD }}" \
-            --alias "croc" \
-            --tsaurl "http://timestamp.sectigo.com" \
-            "${{ github.workspace }}/workspace/crocgui/crocgui.exe"
-
-      # Step 8: Upload the built .exe as an artifact
-      - name: Upload Windows artifact
-        if: success() || failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: windows-amd64-build
-          path: ${{ github.workspace }}/workspace/crocgui/crocgui.exe
-          retention-days: 7
-          if-no-files-found: error
-
-  # Job to build the application for Windows target
-  build-exe0:
-    #if: ${{ github.event.inputs.build_target == 'all' || github.event.inputs.build_target == 'exe' }}
-    if: false
-    runs-on: windows-latest
-    steps:
-      - name: Checkout main repository (crocgui)
-        uses: actions/checkout@v4
-        with:
-          path: workspace/crocgui
-
-      - name: Checkout croc dependency
-        uses: actions/checkout@v4
-        with:
-          repository: abakum/croc
-          ref: main
-          path: workspace/croc
-
-      - name: Checkout peerdiscovery dependency
-        uses: actions/checkout@v4
-        with:
-          repository: abakum/peerdiscovery
-          ref: main
-          path: workspace/peerdiscovery
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.24'
-          cache-dependency-path: ${{ github.workspace }}/workspace/crocgui/go.sum
-
-      - name: Install Fyne CLI
-        run: |
-          go install fyne.io/tools/cmd/fyne@latest
-
-      - name: Build Windows executable
-        shell: cmd
-        run: |
-          cd "%GITHUB_WORKSPACE%\workspace\crocgui"
-          echo Building crocgui.exe...
-          fyne package --os windows --release
-          if not exist "crocgui.exe" (
-            echo ERROR: crocgui.exe was not created!
-            exit 1
-          )
-          dir
-
-      - name: Upload Windows artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: windows-exe-build
-          path: ${{ github.workspace }}/workspace/crocgui/crocgui.exe
-          retention-days: 7
-          if-no-files-found: error
-
-  # Job to build the application for Windows target
-  build-appx:
-    if: ${{ github.event.inputs.build_target == 'all' || github.event.inputs.build_target == 'appx' }}
+  build-windows:
+    if: ${{ github.event.inputs.build_target == 'all' || github.event.inputs.build_target == 'windows' }}
     runs-on: windows-latest
     steps:
       - name: Checkout main repository (crocgui)
@@ -286,11 +122,14 @@ jobs:
             throw "ERROR: crocgui.appx was not created!"
           }
 
-      - name: Upload AppX artifact
+      - name: Upload windows artifact
         uses: actions/upload-artifact@v4
         with:
-          name: windows-appx-build
-          path: ${{ github.workspace }}/workspace/crocgui/crocgui.appx
+          name: windows-build
+          path: |
+            ${{ github.workspace }}/workspace/crocgui/crocgui.exe
+            ${{ github.workspace }}/workspace/crocgui/crocgui.appx
+            ${{ github.workspace }}/workspace/crocgui/croc.cer
           retention-days: 7
           if-no-files-found: error
           
@@ -964,7 +803,7 @@ jobs:
             App Version read from `FyneApp.toml`.
 
             ### Included Platforms & Files:
-            - **Windows (x86_64)**: Executable `crocgui.exe`
+            - **Windows (x86_64)**: Executable `crocgui.exe`, `crocgui.appx`, `croc.cer`
             - **Linux (x86_64)**: `.tar.xz` archive and `.deb` package  
             - **macOS**: `.dmg` files for Apple Silicon (`crocgui-arm64.dmg`) and Intel (`crocgui-amd64.dmg`)
             - **Android**: APK files for ARM64, ARM, x86_64, x86 architectures
@@ -975,6 +814,7 @@ jobs:
             - **Linux**: `brew install --formula abakum/tap/crocgui`
             - **Linux**: `sudo dpkg -i crocgui_*_amd64.deb`
             - **Windows**: `scoop bucket add abakum https://github.com/abakum/homebrew-tap && scoop install crocgui`
+            - **Windows**: As Administrator once `certutil -addstore -f "Root" croc.cer` then as user `crocgui.appx`
 
             ### Manual Installation:
 

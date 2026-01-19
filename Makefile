@@ -98,6 +98,10 @@ windows:
 	#CC=x86_64-w64-mingw32-gcc fyne release -os windows -certificate croc.p12 -profile "croc" -developer "CN=croc, OU=Personal, O=Konstantin Abakumov, L=Millerovo, ST=Rostov Oblast, C=RU" -password "$(CERT_PASS)"
 	CC=x86_64-w64-mingw32-gcc fyne package -os windows --release
 
+releasew: 
+	CC=x86_64-w64-mingw32-gcc fyne release -os windows -certificate croc.p12 -profile "croc" -developer "CN=croc, OU=Personal, O=Konstantin Abakumov, L=Millerovo, ST=Rostov Oblast, C=RU" -password "$(CERT_PASS)"
+
+
 signexe:
 	#sudo apt-get update;sudo apt-get install osslsigncode
 	osslsigncode sign -pkcs12 croc.p12 -pass "$(CERT_PASS)" \
