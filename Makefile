@@ -80,6 +80,18 @@ emulator:
 adb:
 	adb install crocgui.apk
 
+apk:
+	apkanalyzer manifest print crocgui.apk
+
+aapt:
+	aapt2 dump badging crocgui.apk
+
+apksigner:
+	apksigner verify -v --print-certs crocgui.apk
+
+align:
+	zipalign -c -p -v 16 crocgui.apk
+	
 logcat:
 	adb logcat|grep "croc    :"
 
@@ -95,7 +107,6 @@ linux:
 windows: 
 	#sudo apt-get install gcc-mingw-w64-x86-64
 	#go install fyne.io/tools/cmd/fyne@latest
-	#CC=x86_64-w64-mingw32-gcc fyne release -os windows -certificate croc.p12 -profile "croc" -developer "CN=croc, OU=Personal, O=Konstantin Abakumov, L=Millerovo, ST=Rostov Oblast, C=RU" -password "$(CERT_PASS)"
 	CC=x86_64-w64-mingw32-gcc fyne package -os windows --release
 
 releasew: 

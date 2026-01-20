@@ -2,7 +2,7 @@
 <manifest
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
-    android:versionCode="1359"
+    android:versionCode="1384"
     android:versionName="1.11.39"
     package="com.github.howeyc.crocgui">
 
@@ -21,6 +21,7 @@
             android:configChanges="keyboard|keyboardHidden|orientation|screenSize|screenLayout|uiMode"
             android:label="Croc"
             android:launchMode="singleTop"
+            android:autoRemoveFromRecents="true"
             android:theme="@android:style/Theme.Light">
             
             <meta-data
@@ -70,11 +71,6 @@
         </intent>
     </queries>
     <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission
-        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
-        android:maxSdkVersion="29" />
-    <uses-permission
-        android:name="android.permission.READ_EXTERNAL_STORAGE"
-        android:maxSdkVersion="32" />
-
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
 </manifest>

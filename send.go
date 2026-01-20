@@ -26,6 +26,7 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/data/binding"
 	"fyne.io/fyne/v2/dialog"
+	"fyne.io/fyne/v2/driver/mobile"
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/storage"
 	"fyne.io/fyne/v2/theme"
@@ -853,23 +854,36 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 	if isAndroid {
 		oH := ""
 		mH := ""
+		// Если получили файл или текст то исключаем из Недавних
+		// Одни файловые менеджеры это делают сами
+		// другим надо помогать
+		excludeRecents := false
 		a.Lifecycle().SetOnExitedForeground(func() {
 			log.Debug("ExitedForeground " + wHandle(w))
 			if !notFinish {
-				finish()
+				if excludeRecents {
+					// Для Андроида 9 это просто finish
+					excludeFromRecents()
+				} else {
+					if mobileDriver, ok := a.Driver().(mobile.Driver); ok {
+						mobileDriver.GoBack()
+					}
+					// finish()
+				}
 			}
 		})
 		a.Lifecycle().SetOnStopped(func() {
-			log.Debug("Stopped " + wHandle(w))
+			// log.Debug("Stopped " + wHandle(w))
 			saveAccordionState()
 		})
 		a.Lifecycle().SetOnStarted(func() {
-			log.Debug("Started " + wHandle(w))
+			// log.Debug("Started " + wHandle(w))
 			oH = wHandle(w)
 		})
 		a.Lifecycle().SetOnEnteredForeground(func() {
-			log.Debug("EnteredForeground " + wHandle(w))
+			// log.Debug("EnteredForeground " + wHandle(w))
 			notFinish = false
+			excludeRecents = false
 			close(uriFromIntent)
 			uriFromIntent = make(chan string, 100)
 
@@ -889,10 +903,8 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 						// и в этот момент открепляем и пркреаляем активность к w
 						nH := wHandle(w)
 						if oH != nH {
-							s := fmt.Sprintf("mH %s wH %s-> nH %s", mH, oH, nH)
-							log.Debug(s)
-
 							if mH != oH {
+								log.Errorf("mH %s wH %s-> nH %s", mH, oH, nH)
 								finish()
 								time.Sleep(time.Millisecond * 777)
 								startActivity()
@@ -909,6 +921,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 							notFinish = true
 							return
 						}
+						excludeRecents = true
 						if entry.Disabled() {
 							log.Debug("doneProcessIntent Sending")
 							return
@@ -941,6 +954,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 							log.Debug("doneProcessIntent")
 							return
 						}
+						excludeRecents = true
 						if entry.Disabled() {
 							log.Debug("Sending")
 							log.Debug("doneProcessIntent")
@@ -1057,7 +1071,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 								log.Errorf("stat %s: %v", dst, err)
 								removeEntry(dst, fe, true)
 							} else {
-								log.Errorf("copy %s %s", u, dst)
+								log.Infof("copy %s %s", u, dst)
 							}
 						})
 					}
@@ -1065,7 +1079,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 			}()
 			processIntent()
 			mH = wHandle(w)
-			log.Debug("mainH " + mH)
+			// log.Debug("mainH " + mH)
 		})
 	} else {
 		if !GUI {

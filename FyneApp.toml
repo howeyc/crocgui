@@ -1,9 +1,14 @@
+Website = "https://github.com/abakum/crocgui/releases"
+
 [Details]
 Icon = "Icon.png"
 Name = "crocgui"
 ID = "com.github.howeyc.crocgui"
 Version = "1.11.39"
-Build = 1367
+Build = 1389
+
+[Source]
+Repo = "https://github.com/abakum/crocgui"
 
 [LinuxAndBSD]
 GenericName = "GUI for croc"

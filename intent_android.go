@@ -230,7 +230,7 @@ static void processIntent(JNIEnv* env, jobject activity) {
     int isView = 0;
     int isSendMultiple = 0;
     int isMain = 0;
-    int hasValidData = 0; // Флаг для отслеживания успешной обработки
+    int hasValidData = 0;
 
     activity_class = (*env)->GetObjectClass(env, activity);
     if (activity_class == NULL) {
@@ -458,11 +458,11 @@ static void processIntent(JNIEnv* env, jobject activity) {
             if (hasValidData) {
                 setResult(env, activity, RESULT_OK);
                 LogD("C: ClipData processing complete - setting RESULT_OK");
-                jmethodID setAction = (*env)->GetMethodID(env, intent_class, "setAction", "(Ljava/lang/String;)Landroid/content/Intent;");
-                if (setAction != NULL) {
-                    (*env)->CallObjectMethod(env, intent, setAction, NULL);
-                    LogD("C: Intent action cleared to prevent duplication");
-                }
+                // jmethodID setAction = (*env)->GetMethodID(env, intent_class, "setAction", "(Ljava/lang/String;)Landroid/content/Intent;");
+                // if (setAction != NULL) {
+                //     (*env)->CallObjectMethod(env, intent, setAction, NULL);
+                //     LogD("C: Intent action cleared to prevent duplication");
+                // }
             } else {
                 setResult(env, activity, RESULT_CANCELED);
                 LogD("C: ClipData processing complete - no valid data, setting RESULT_CANCELED");
@@ -679,11 +679,11 @@ static void processIntent(JNIEnv* env, jobject activity) {
                         if (hasValidData) {
                             setResult(env, activity, RESULT_OK);
                             LogD("C: SEND_MULTIPLE processing complete - setting RESULT_OK");
-                            jmethodID setAction = (*env)->GetMethodID(env, intent_class, "setAction", "(Ljava/lang/String;)Landroid/content/Intent;");
-                            if (setAction != NULL) {
-                                (*env)->CallObjectMethod(env, intent, setAction, NULL);
-                                LogD("C: Intent action cleared to prevent duplication");
-                            }
+                            // jmethodID setAction = (*env)->GetMethodID(env, intent_class, "setAction", "(Ljava/lang/String;)Landroid/content/Intent;");
+                            // if (setAction != NULL) {
+                            //     (*env)->CallObjectMethod(env, intent, setAction, NULL);
+                            //     LogD("C: Intent action cleared to prevent duplication");
+                            // }
                         } else {
                             setResult(env, activity, RESULT_CANCELED);
                             LogD("C: SEND_MULTIPLE processing complete - no valid data, setting RESULT_CANCELED");
