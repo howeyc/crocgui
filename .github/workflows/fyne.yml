@@ -386,11 +386,19 @@ jobs:
               ls -la .
               exit 1
           fi
-          
+
+          sync
+          sleep 2
+          TEMP_DIR=$(mktemp -d)
+          cp -R "$APP_NAME" "$TEMP_DIR/"
+          hdiutil detach "/Volumes/crocgui-arm64" || true
+
           # Create DMG file using hdiutil (macOS utility)
           echo "Creating DMG for $APP_NAME"
           DMG_NAME="crocgui-arm64.dmg"
-          hdiutil create -srcfolder "$APP_NAME" -volname "crocgui-arm64" -ov -format UDZO "$DMG_NAME"
+          rm -f "$DMG_NAME"  || true
+          #hdiutil create -srcfolder "$APP_NAME" -volname "crocgui-arm64" -ov -format UDZO "$DMG_NAME"
+          hdiutil create -srcfolder "$TEMP_DIR/$APP_NAME" -volname "crocgui-arm64" -ov -format UDZO "$DMG_NAME"
           
           # Verify DMG was created
           if [ ! -f "$DMG_NAME" ]; then
@@ -401,7 +409,8 @@ jobs:
           
           echo "Contents of current directory after DMG creation:"
           ls -la *.dmg
-
+          rm -rf "$TEMP_DIR" || true
+ 
       # Step 7: Upload the built .dmg file as an artifact
       - name: Upload macOS arm64 artifact
         if: success() || failure()
