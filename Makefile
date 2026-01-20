@@ -90,7 +90,7 @@ apksigner:
 	apksigner verify -v --print-certs crocgui.apk
 
 align:
-	zipalign -c -p -v 16 crocgui.apk
+	$(ANDROID_HOME)/build-tools/35.0.0/zipalign -c -p -v 4 crocgui.apk
 	
 logcat:
 	adb logcat|grep "croc    :"

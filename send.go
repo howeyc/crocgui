@@ -26,7 +26,6 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/data/binding"
 	"fyne.io/fyne/v2/dialog"
-	"fyne.io/fyne/v2/driver/mobile"
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/storage"
 	"fyne.io/fyne/v2/theme"
@@ -856,7 +855,8 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 		mH := ""
 		// Если получили файл или текст то исключаем из Недавних
 		// Одни файловые менеджеры это делают сами
-		// другим надо помогать
+		// другим типа totalcommander надо помогать
+		// но у меня не получилось
 		excludeRecents := false
 		a.Lifecycle().SetOnExitedForeground(func() {
 			log.Debug("ExitedForeground " + wHandle(w))
@@ -865,10 +865,10 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 					// Для Андроида 9 это просто finish
 					excludeFromRecents()
 				} else {
-					if mobileDriver, ok := a.Driver().(mobile.Driver); ok {
-						mobileDriver.GoBack()
-					}
-					// finish()
+					// if md, ok := a.Driver().(mobile.Driver); ok && md != nil {
+					// 	md.GoBack()
+					// }
+					finish()
 				}
 			}
 		})

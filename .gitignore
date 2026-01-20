@@ -47,3 +47,4 @@ debug
 /tmp/
 *.jks
 /*.idsig
+*.p12

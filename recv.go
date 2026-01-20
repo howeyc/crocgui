@@ -790,7 +790,7 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 	})
 	cosED = append(cosED, treeButton)
 
-	saveAllButton := widget.NewButtonWithIcon("", theme.DocumentSaveIcon(), func() {
+	saveAllButton := widget.NewButtonWithIcon("", theme.FolderOpenIcon(), func() {
 		ShowFilesSave()
 	})
 	cosED = append(cosED, saveAllButton)

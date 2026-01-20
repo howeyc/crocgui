@@ -814,7 +814,7 @@ jobs:
             - **Linux**: `brew install --formula abakum/tap/crocgui`
             - **Linux**: `sudo dpkg -i crocgui_*_amd64.deb`
             - **Windows**: `scoop bucket add abakum https://github.com/abakum/homebrew-tap && scoop install crocgui`
-            - **Windows**: As Administrator once `certutil -addstore -f "Root" croc.cer` then as user `crocgui.appx`
+            - **Windows**: As Administrator run once `certutil -addstore -f "Root" croc.cer` then as user `crocgui.appx`
 
             ### Manual Installation:
 
