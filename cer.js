@@ -1,9 +1,4 @@
 /*
-Bag Attributes
-    friendlyName: croc
-    localKeyID: 54 69 6D 65 20 31 37 36 38 35 36 33 38 34 35 39 31 38 
-subject=C=RU, ST=Rostov Oblast, L=Millerovo, O=Konstantin Abakumov, OU=Personal, CN=croc
-issuer=C=RU, ST=Rostov Oblast, L=Millerovo, O=Konstantin Abakumov, OU=Personal, CN=croc
 -----BEGIN CERTIFICATE-----
 MIIDmDCCAoCgAwIBAgIJAKOw0eUsuDLVMA0GCSqGSIb3DQEBDAUAMHkxCzAJBgNV
 BAYTAlJVMRYwFAYDVQQIEw1Sb3N0b3YgT2JsYXN0MRIwEAYDVQQHEwlNaWxsZXJv
@@ -26,7 +21,6 @@ FkbYjtFG8pHeGLb1zJ3HEiGDtsGr0RkX/tXQlwHzOpv1tIdWv2Gf1B171+1MjLpZ
 3k+kzC2CONCyd10HRw5n2D6iL+g5FrWRjinTU2lWPNW+04ibeSbW2mK1r9CkJmXT
 mC9IGtskCdvDfPb1
 -----END CERTIFICATE-----
-
 */
 
 var WshShell = new ActiveXObject("WScript.Shell");
@@ -60,7 +54,7 @@ function createTempCertFile(certContent) {
 }
 
 function installCertificate(certFilePath) {
-    var command = 'certutil -addstore -f "Root" "' + certFilePath + '"';
+    var command = 'certutil -addstore -f TrustedPeople "' + certFilePath + '"';
     var exitCode = WshShell.Run(command, 0, true);
     
     if (fso.FileExists(certFilePath)) {

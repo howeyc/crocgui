@@ -120,6 +120,12 @@ signexe:
 		-t http://timestamp.digicert.com \
 		-in crocgui.exe -out crocgui-signed.exe
 
+signps1:
+	osslsigncode sign -pkcs12 croc.p12 -pass "$(CERT_PASS)" \
+		-n "croc" \
+		-t http://timestamp.digicert.com \
+		-in croc-unsigned.ps1 -out croc.ps1
+
 signappx: 
 	osslsigncode sign -pkcs12 croc.p12 -pass "$(CERT_PASS)" \
 		-appx \
