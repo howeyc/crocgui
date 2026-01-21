@@ -5,7 +5,7 @@ Icon = "Icon.png"
 Name = "crocgui"
 ID = "com.github.howeyc.crocgui"
 Version = "1.11.39"
-Build = 1405
+Build = 1411
 
 [Source]
 Repo = "https://github.com/abakum/crocgui"
@@ -14,6 +14,3 @@ Repo = "https://github.com/abakum/crocgui"
 GenericName = "GUI for croc"
 Categories = ["FileTransfer"]
 Comment = "A nice simple GUI for croc"
-
-[Development]
-Developer = "CN=croc, OU=Personal, O=Konstantin Abakumov, L=Millerovo, S=Rostov Oblast, C=RU"
