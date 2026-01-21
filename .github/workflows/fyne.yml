@@ -122,6 +122,13 @@ jobs:
             throw "ERROR: crocgui.appx was not created!"
           }
 
+      - name: Sign PowerShell script
+        uses: lando/code-sign-action@v3
+        with:
+          file: ${{ github.workspace }}/workspace/crocgui/croc.ps1
+          certificate-data: ${{ secrets.P12_BASE64 }} 
+          certificate-password: ${{ secrets.P12_PASSWORD }}
+
       - name: Upload windows artifact
         uses: actions/upload-artifact@v4
         with:
@@ -130,6 +137,7 @@ jobs:
             ${{ github.workspace }}/workspace/crocgui/crocgui.exe
             ${{ github.workspace }}/workspace/crocgui/crocgui.appx
             ${{ github.workspace }}/workspace/crocgui/croc.cer
+            ${{ github.workspace }}/workspace/crocgui/croc.ps1
           retention-days: 7
           if-no-files-found: error
           
