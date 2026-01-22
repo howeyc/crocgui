@@ -111,7 +111,16 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 	}
 
 	cbButton := widget.NewButtonWithIcon("", theme.ContentCopyIcon(), func() {
-		a.Clipboard().SetContent(entry.Text)
+		a.Clipboard().SetContent(toURI(
+			entry.Text,
+			relayName(a),
+			a.Preferences().String("relay-address"),
+			a.Preferences().String("relay6"),
+			a.Preferences().String("relay-ports"),
+			a.Preferences().String("relay-password"),
+			a.Preferences().String("socks5"),
+			a.Preferences().String("connect"),
+		))
 	})
 
 	secretButton := widget.NewButtonWithIcon("", theme.ViewRefreshIcon(), func() {
@@ -959,6 +968,21 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 							log.Debug("Sending")
 							log.Debug("doneProcessIntent")
 							return
+						}
+
+						if st, ne, as, a6, ps, pd, s5, ct, err := fromURI(uriString); err == nil {
+							// a.Preferences().SetString("secret", st)
+							fyne.Do(func() {
+								entry.SetText(st)
+								setRelayName(a, ne)
+								a.Preferences().SetString("relay-address", as)
+								a.Preferences().SetString("relay6", a6)
+								a.Preferences().SetString("relay-ports", ps)
+								a.Preferences().SetString("relay-password", pd)
+								a.Preferences().SetString("socks5", s5)
+								a.Preferences().SetString("connect", ct)
+							})
+							continue
 						}
 						u, err := storage.ParseURI(uriString)
 						if err != nil {

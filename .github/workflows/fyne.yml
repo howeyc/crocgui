@@ -130,7 +130,7 @@ jobs:
             ${{ github.workspace }}/workspace/crocgui/crocgui.exe
             ${{ github.workspace }}/workspace/crocgui/crocgui.appx
             ${{ github.workspace }}/workspace/crocgui/croc.cer
-            ${{ github.workspace }}/workspace/crocgui/cert.exe
+            ${{ github.workspace }}/workspace/crocgui/cmd/I_trust_the_signer_of_this/I_trust_the_signer_of_this.exe
           retention-days: 7
           if-no-files-found: error
           

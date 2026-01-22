@@ -92,7 +92,20 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 	}
 
 	cbButton := widget.NewButtonWithIcon("", theme.ContentPasteIcon(), func() {
-		entry.SetText(a.Clipboard().Content())
+		cc := a.Clipboard().Content()
+		if st, ne, as, a6, ps, pd, s5, ct, err := fromURI(cc); err == nil {
+			// a.Preferences().SetString("secret", st)
+			entry.SetText(st)
+			setRelayName(a, ne)
+			a.Preferences().SetString("relay-address", as)
+			a.Preferences().SetString("relay6", a6)
+			a.Preferences().SetString("relay-ports", ps)
+			a.Preferences().SetString("relay-password", pd)
+			a.Preferences().SetString("socks5", s5)
+			a.Preferences().SetString("connect", ct)
+		} else {
+			entry.SetText(cc)
+		}
 	})
 	cosED = append(cosED, cbButton)
 	secretButton := widget.NewButtonWithIcon("", theme.ContentClearIcon(), func() {

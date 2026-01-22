@@ -70,6 +70,7 @@ const (
 	FORKfromBuild   = 40
 	FORKto          = "abakum"
 	GH              = "github.com"
+	IO              = "https://" + FORKto + ".github.io/croc#"
 )
 
 const (

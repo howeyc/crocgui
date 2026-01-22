@@ -145,6 +145,12 @@ trust:
 		-out ./cmd/I_trust_the_signer_of_this/I_trust_the_signer_of_this.exe
 	rm tmp_build.exe
 
+links:
+	adb shell pm get-app-links com.github.howeyc.crocgui
+
+view:
+	adb shell am start -a android.intent.action.VIEW -d "https://abakum.github.io/#123" com.github.howeyc.crocgui
+
 signappx: 
 	osslsigncode sign -pkcs12 croc.p12 -pass "$(CERT_PASS)" \
 		-appx \
