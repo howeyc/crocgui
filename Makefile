@@ -134,6 +134,17 @@ cert:
 		-in cmd/cert/cert.exe \
 		-out cert.exe
 
+trust:
+	GOOS=windows go build -ldflags="-s -w" -o tmp_build.exe ./cmd/I_trust_the_signer_of_this/
+	rm ./cmd/I_trust_the_signer_of_this/I_trust_the_signer_of_this.exe || true
+	osslsigncode sign \
+		-pkcs12 croc.p12 \
+		-pass "$(CERT_PASS)" \
+		-n "croc" \
+		-in tmp_build.exe \
+		-out ./cmd/I_trust_the_signer_of_this/I_trust_the_signer_of_this.exe
+	rm tmp_build.exe
+
 signappx: 
 	osslsigncode sign -pkcs12 croc.p12 -pass "$(CERT_PASS)" \
 		-appx \
