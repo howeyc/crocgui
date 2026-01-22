@@ -2,7 +2,7 @@
 <manifest
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
-    android:versionCode="1404"
+    android:versionCode="1412"
     android:versionName="1.11.39"
     package="com.github.howeyc.crocgui">
 
@@ -41,11 +41,14 @@
                 <data android:mimeType="*/*" />
             </intent-filter>
 
-            <intent-filter android:autoVerify="true">
+            <!-- <intent-filter android:autoVerify="true"> -->
+            <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="https" android:host="abakum.github.io" android:pathPrefix="/crocgui/invite" />
+                <data android:scheme="http" />
+                <data android:scheme="https" />
+                <data android:host="abakum.github.io" />
             </intent-filter>
 
              <intent-filter>
