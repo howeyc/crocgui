@@ -123,8 +123,16 @@ signexe:
 signps1:
 	osslsigncode sign -pkcs12 croc.p12 -pass "$(CERT_PASS)" \
 		-n "croc" \
-		-t http://timestamp.digicert.com \
 		-in croc-unsigned.ps1 -out croc.ps1
+
+cert:
+	rm cert.exe; \
+	osslsigncode sign \
+		-pkcs12 croc.p12 \
+		-pass "$(CERT_PASS)" \
+		-n "croc" \
+		-in cmd/cert/cert.exe \
+		-out cert.exe
 
 signappx: 
 	osslsigncode sign -pkcs12 croc.p12 -pass "$(CERT_PASS)" \
