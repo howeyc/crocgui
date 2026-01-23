@@ -1,11 +1,19 @@
 package main
 
 import (
+	"bytes"
 	"encoding/base64"
 	"fmt"
 	"strings"
+	"time"
 
+	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/canvas"
+	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/dialog"
+	"fyne.io/fyne/v2/widget"
 	log "github.com/schollz/logger"
+	"github.com/skip2/go-qrcode"
 )
 
 func fromURI(u string) (st, ne, as, a6, ps, pd, s5, ct string, err error) {
@@ -14,16 +22,20 @@ func fromURI(u string) (st, ne, as, a6, ps, pd, s5, ct string, err error) {
 		return
 	}
 
-	base64Str := strings.TrimPrefix(u, IO)
-	decoded, err := base64.RawURLEncoding.DecodeString(base64Str)
+	fragment := strings.TrimPrefix(u, IO)
+	log.Debug(fragment)
+	decoded, err := base64.RawURLEncoding.DecodeString(fragment)
+	log.Debug(string(decoded))
 	if err != nil {
-		decoded, err = base64.StdEncoding.DecodeString(base64Str)
+		decoded, err = base64.StdEncoding.DecodeString(fragment)
+		log.Error(string(decoded))
 		if err != nil {
 			return
 		}
 	}
 
 	str := strings.TrimRight(string(decoded), "\n")
+	//log.Debug(str)
 	ss := strings.Split(str, "\n")
 	for i, s := range ss {
 		switch i {
@@ -47,8 +59,7 @@ func fromURI(u string) (st, ne, as, a6, ps, pd, s5, ct string, err error) {
 			return
 		}
 	}
-	log.Debug("st, ne, as, a6, ps, pd, s5, ct")
-	log.Debug("%v", ss)
+	log.Debugf("%v", ss)
 
 	return
 }
@@ -65,4 +76,72 @@ func toURI(ss ...string) (u string) {
 	u = strings.TrimRight(u, "\n")
 	log.Debug(IO + u)
 	return IO + base64.RawURLEncoding.EncodeToString([]byte(u))
+}
+func showQR(a fyne.App, w fyne.Window, text string) {
+	if text == "" {
+		text = a.Clipboard().Content()
+		if text == "" {
+			log.Error("empty clipboard")
+			return
+		}
+	}
+
+	var pngData []byte
+	pngData, err := qrcode.Encode(text, qrcode.High, 256)
+	if err != nil {
+		log.Error(err)
+		return
+	}
+
+	img := canvas.NewImageFromReader(bytes.NewReader(pngData), "qr.png")
+	img.SetMinSize(fyne.NewSize(256, 256))
+	img.FillMode = canvas.ImageFillContain
+
+	label := widget.NewLabel(text)
+	label.Wrapping = fyne.TextWrapBreak
+
+	content := container.NewVBox(
+		label,
+		img,
+	)
+
+	d := dialog.NewCustom("Deep link", "Ok", content, w)
+	d.Resize(fyne.NewSize(300, 0))
+	d.Show()
+	go func() {
+		timer := time.NewTimer(time.Second * 7)
+		defer timer.Stop()
+
+		select {
+		case <-timer.C:
+			d.Hide()
+		case <-done:
+			return
+		}
+	}()
+
+}
+
+func fromClipboard(a fyne.App, w fyne.Window, st, ne, as, a6, ps, pd, s5, ct string) {
+	info := fmt.Sprintf(
+		"code:\t%s\n%s:\t%s\nrelay:\t%s\nrelay6:\t%s\nports:\t%s\npass:\t%s\nsocks5:\t%s\nconnect:\t%s",
+		st, lp("Name"), ne, as, a6, ps, pd, s5, ct,
+	)
+	label := widget.NewLabel(info)
+	label.Wrapping = fyne.TextWrapWord
+
+	d := dialog.NewCustom("Deep link", "Ok", label, w)
+	d.Resize(fyne.NewSize(300, 0))
+	d.Show()
+	go func() {
+		timer := time.NewTimer(time.Second * 3)
+		defer timer.Stop()
+
+		select {
+		case <-timer.C:
+			d.Hide()
+		case <-done:
+			return
+		}
+	}()
 }

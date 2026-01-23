@@ -2,8 +2,8 @@
 <manifest
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
-    android:versionCode="1414"
-    android:versionName="1.11.39"
+    android:versionCode="1417"
+    android:versionName="1.11.40"
     package="com.github.howeyc.crocgui">
 
     <!--
@@ -35,20 +35,20 @@
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
+                <!-- <category android:name="android.intent.category.BROWSABLE" /> -->
                 <data android:scheme="file" />
                 <data android:scheme="content" />
                 <data android:mimeType="*/*" />
             </intent-filter>
 
-            <!-- <intent-filter android:autoVerify="true"> -->
+            <!-- <intent-filter android:autoVerify="true"> -->            
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="https" />
-                <data android:host="abakum.github.io" />
-                <data android:pathPrefix="/croc" />
+                <data android:scheme="https"
+                    android:host="abakum.github.io"
+                    android:pathPattern="/croc.*" />                
             </intent-filter>
 
              <intent-filter>

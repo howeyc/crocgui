@@ -111,16 +111,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 	}
 
 	cbButton := widget.NewButtonWithIcon("", theme.ContentCopyIcon(), func() {
-		a.Clipboard().SetContent(toURI(
-			entry.Text,
-			relayName(a),
-			a.Preferences().String("relay-address"),
-			a.Preferences().String("relay6"),
-			a.Preferences().String("relay-ports"),
-			a.Preferences().String("relay-password"),
-			a.Preferences().String("socks5"),
-			a.Preferences().String("connect"),
-		))
+		showQR(a, w, setClipboard(entry.Text, a))
 	})
 
 	secretButton := widget.NewButtonWithIcon("", theme.ViewRefreshIcon(), func() {
@@ -772,6 +763,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 								totalMax += fi.Size
 							}
 							log.Debugf("totalMax %d", totalMax)
+							setClipboard(opt.SharedSecret, a)
 							fyne.Do(func() {
 								toplineW.SetText(lp("Have them press the Download now"))
 								NewToast(w, lp("Have them press the Download now")).Show()
@@ -843,7 +835,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 		}() //go
 		// +12 go routines
 		log.Warnf("NumGoroutine %d", runtime.NumGoroutine())
-		a.Clipboard().SetContent(entry.Text)
+		//		a.Clipboard().SetContent(entry.Text)
 	}) // mainButton
 	cosED = append(cosED, mainButton)
 
@@ -971,10 +963,9 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 						}
 
 						if st, ne, as, a6, ps, pd, s5, ct, err := fromURI(uriString); err == nil {
-							// a.Preferences().SetString("secret", st)
 							fyne.Do(func() {
 								entry.SetText(st)
-								setRelayName(a, ne)
+								a.Preferences().SetString("new-relay", ne)
 								a.Preferences().SetString("relay-address", as)
 								a.Preferences().SetString("relay6", a6)
 								a.Preferences().SetString("relay-ports", ps)
@@ -1984,4 +1975,19 @@ func wHandle(w fyne.Window) string {
 		return strings.TrimSuffix(s[i+7:], "}")
 	}
 	return ""
+}
+
+func setClipboard(code string, a fyne.App) (text string) {
+	text = toURI(
+		code,
+		relayName(a),
+		a.Preferences().String("relay-address"),
+		a.Preferences().String("relay6"),
+		a.Preferences().String("relay-ports"),
+		a.Preferences().String("relay-password"),
+		a.Preferences().String("socks5"),
+		a.Preferences().String("connect"),
+	)
+	a.Clipboard().SetContent(text)
+	return
 }

@@ -151,7 +151,8 @@ func createRelaySelector(a fyne.App, w fyne.Window,
 	})
 
 	// Создаем поле ввода для имени нового посредника
-	nameEntry = widget.NewEntry()
+	nameBinding := binding.BindPreferenceString("new-relay", a.Preferences())
+	nameEntry = widget.NewEntryWithData(nameBinding)
 	nameEntry.SetText("")
 
 	// Функция добавления/обновления посредника
@@ -192,6 +193,7 @@ func createRelaySelector(a fyne.App, w fyne.Window,
 		updateRelaySelector()
 		nameEntry.SetText("")
 		NewToast(w, "Ok").Show()
+		setClipboard("", a)
 	}
 
 	// Обработка нажатия Enter в поле ввода
