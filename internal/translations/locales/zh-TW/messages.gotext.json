@@ -8,6 +8,24 @@
             "position": "crocgui/about.go:72:38"
         },
         {
+            "id": "Set up Deep Link handling",
+            "message": "Set up Deep Link handling",
+            "translation": "設定Deep Link處理",
+            "position": "crocgui/applinks.go:103:44"
+        },
+        {
+            "id": "Click the Deep Link to test. If a browser opens, setup is required. If the app restarts, it's OK.",
+            "message": "Click the Deep Link to test. If a browser opens, setup is required. If the app restarts, it's OK.",
+            "translation": "點擊Deep Link進行測試。如果瀏覽器開啟，則需要設定。如果應用程式重新啟動，則表示正常。",
+            "position": "crocgui/applinks.go:107:29"
+        },
+        {
+            "id": "Name",
+            "message": "Name",
+            "translation": "名稱",
+            "position": "crocgui/applinks.go:161:9"
+        },
+        {
             "id": "Export full log",
             "message": "Export full log",
             "translation": "匯出完整記錄",
@@ -23,7 +41,7 @@
             "id": "App closed. Tap to start.",
             "message": "App closed. Tap to start.",
             "translation": "應用程式已關閉。點擊啟動。",
-            "position": "crocgui/main.go:319:16"
+            "position": "crocgui/main.go:320:16"
         },
         {
             "id": "Cancel",
@@ -41,61 +59,61 @@
             "id": "Download",
             "message": "Download",
             "translation": "下載",
-            "position": "crocgui/recv.go:537:42"
+            "position": "crocgui/recv.go:550:42"
         },
         {
             "id": "Secret must be longer than 5 characters",
             "message": "Secret must be longer than 5 characters",
             "translation": "密碼必須長於5個字元",
-            "position": "crocgui/recv.go:540:18"
+            "position": "crocgui/recv.go:553:18"
         },
         {
             "id": "Send",
             "message": "Send",
             "translation": "傳送",
-            "position": "crocgui/recv.go:545:35"
+            "position": "crocgui/recv.go:558:35"
         },
         {
             "id": "Receive cancelled.",
             "message": "Receive cancelled.",
             "translation": "接收已取消。",
-            "position": "crocgui/recv.go:665:34"
+            "position": "crocgui/recv.go:678:34"
         },
         {
             "id": "Receiving file",
             "message": "Receiving file",
             "translation": "正在接收檔案",
-            "position": "crocgui/recv.go:688:27"
+            "position": "crocgui/recv.go:701:27"
         },
         {
             "id": "Send cancelled.",
             "message": "Send cancelled.",
             "translation": "傳送已取消。",
-            "position": "crocgui/recv.go:763:36"
+            "position": "crocgui/recv.go:776:36"
         },
         {
             "id": "Received",
             "message": "Received",
             "translation": "已接收",
-            "position": "crocgui/recv.go:770:46"
+            "position": "crocgui/recv.go:783:46"
         },
         {
             "id": "Receive",
             "message": "Receive",
             "translation": "接收",
-            "position": "crocgui/recv.go:1047:38"
+            "position": "crocgui/recv.go:1060:38"
         },
         {
             "id": "Empty name",
             "message": "Empty name",
             "translation": "名稱為空",
-            "position": "crocgui/relays.go:164:18"
+            "position": "crocgui/relays.go:165:18"
         },
         {
             "id": "Last item of list",
             "message": "Last item of list",
             "translation": "列表最後一項",
-            "position": "crocgui/relays.go:234:18"
+            "position": "crocgui/relays.go:236:18"
         },
         {
             "id": "Pick a file to send",
@@ -113,25 +131,25 @@
             "id": "Have them press the Download now",
             "message": "Have them press the Download now",
             "translation": "現在讓他們按\"下載\"",
-            "position": "crocgui/send.go:767:28"
+            "position": "crocgui/send.go:768:28"
         },
         {
             "id": "Sending file",
             "message": "Sending file",
             "translation": "正在傳送檔案",
-            "position": "crocgui/send.go:778:57"
+            "position": "crocgui/send.go:779:57"
         },
         {
             "id": "Sent file",
             "message": "Sent file",
             "translation": "已傳送檔案",
-            "position": "crocgui/send.go:828:47"
+            "position": "crocgui/send.go:829:47"
         },
         {
             "id": "Allow access to read",
             "message": "Allow access to read",
             "translation": "允許讀取權限",
-            "position": "crocgui/send.go:963:23"
+            "position": "crocgui/send.go:992:23"
         },
         {
             "id": "Hide",
@@ -216,12 +234,6 @@
             "message": "If value like 0IP then it used as --ip IP",
             "translation": "若值為 0IP 則用作 --ip IP",
             "position": "crocgui/settings.go:368:24"
-        },
-        {
-            "id": "Name",
-            "message": "Name",
-            "translation": "名稱",
-            "position": "crocgui/settings.go:372:24"
         },
         {
             "id": "UnZip files",

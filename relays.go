@@ -193,7 +193,7 @@ func createRelaySelector(a fyne.App, w fyne.Window,
 		updateRelaySelector()
 		nameEntry.SetText("")
 		NewToast(w, "Ok").Show()
-		setClipboard("", a)
+		// setClipboard("", a)
 	}
 
 	// Обработка нажатия Enter в поле ввода

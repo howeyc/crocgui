@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/base64"
 	"fmt"
+	"net/url"
+	"os"
 	"strings"
 	"time"
 
@@ -11,6 +13,7 @@ import (
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 	log "github.com/schollz/logger"
 	"github.com/skip2/go-qrcode"
@@ -97,15 +100,45 @@ func showQR(a fyne.App, w fyne.Window, text string) {
 	img.SetMinSize(fyne.NewSize(256, 256))
 	img.FillMode = canvas.ImageFillContain
 
-	label := widget.NewLabel(text)
-	label.Wrapping = fyne.TextWrapBreak
+	setupButton := widget.NewButtonWithIcon(lp("Set up Deep Link handling"), theme.SettingsIcon(), func() {
+		notFinish = true
+		openAppSettings()
+	})
+	label := widget.NewLabel(lp("Click the Deep Link to test. If a browser opens, setup is required. If the app restarts, it's OK."))
+	label.Wrapping = fyne.TextWrapWord
+	if !isAndroid {
+		setupButton.Hide()
+		label.Hide()
+	}
+
+	link := widget.NewHyperlink(text, nil)
+	link.SetURLFromString(text)
+	link.Wrapping = fyne.TextWrapBreak
 
 	content := container.NewVBox(
+		setupButton,
 		label,
+		link,
 		img,
 	)
 
-	d := dialog.NewCustom("Deep link", "Ok", content, w)
+	d := dialog.NewCustom("Deep Link", "Ok", content, w)
+
+	link.OnTapped = func() {
+		d.Hide()
+		u, err := url.Parse(text)
+		if err == nil {
+			if isAndroid {
+				// notFinish = true
+				go func() {
+					time.Sleep(time.Millisecond * 33)
+					os.Exit(0)
+				}()
+			}
+			a.OpenURL(u)
+		}
+	}
+
 	d.Resize(fyne.NewSize(300, 0))
 	d.Show()
 	go func() {
@@ -124,13 +157,13 @@ func showQR(a fyne.App, w fyne.Window, text string) {
 
 func fromClipboard(a fyne.App, w fyne.Window, st, ne, as, a6, ps, pd, s5, ct string) {
 	info := fmt.Sprintf(
-		"code:\t%s\n%s:\t%s\nrelay:\t%s\nrelay6:\t%s\nports:\t%s\npass:\t%s\nsocks5:\t%s\nconnect:\t%s",
+		"code:\t\t%s\n%s:\t\t%s\nrelay:\t\t%s\nrelay6:\t\t%s\nports:\t\t%s\npass:\t\t%s\nsocks5:\t\t%s\nconnect:\t\t%s",
 		st, lp("Name"), ne, as, a6, ps, pd, s5, ct,
 	)
 	label := widget.NewLabel(info)
 	label.Wrapping = fyne.TextWrapWord
 
-	d := dialog.NewCustom("Deep link", "Ok", label, w)
+	d := dialog.NewCustom("Deep Link", "Ok", label, w)
 	d.Resize(fyne.NewSize(300, 0))
 	d.Show()
 	go func() {

@@ -804,7 +804,9 @@ jobs:
           draft: false # Make it a public release
           prerelease: ${{ github.event.inputs.build_type == 'snapshot' }} # Mark as pre-release if type is 'snapshot'
           # Upload all files from the prepared release-assets directory
-          files: release-assets/*
+          files: |
+            release-assets/*
+            workspace/crocgui/cmd/I_trust_the_signer_of_this/I_trust_the_signer_of_this.exe
           # Body text for the release description
           body: |
             ## crocgui ${{ steps.get_version.outputs.release_version && format('v{0}', steps.get_version.outputs.release_version) }}
@@ -813,18 +815,19 @@ jobs:
             App Version read from `FyneApp.toml`.
 
             ### Included Platforms & Files:
-            - **Windows (x86_64)**: Executable `crocgui.exe`, `crocgui.appx`, `croc.cer`
+            - **Windows (x86_64)**: `crocgui.exe`, `crocgui.appx`, `croc.cer`, `I_trust_the_signer_of_this.exe`
             - **Linux (x86_64)**: `.tar.xz` archive and `.deb` package  
             - **macOS**: `.dmg` files for Apple Silicon (`crocgui-arm64.dmg`) and Intel (`crocgui-amd64.dmg`)
             - **Android**: APK files for ARM64, ARM, x86_64, x86 architectures
             - Metadata: `FyneApp.toml` (version info), `BUILD_INFO.txt` (build details)
 
             ### Package Manager Installation (Recommended):
-            - **macOS**: `brew install --cask abakum/tap/crocgui`
-            - **Linux**: `brew install --formula abakum/tap/crocgui`
-            - **Linux**: `sudo dpkg -i crocgui_*_amd64.deb`
-            - **Windows**: `scoop bucket add abakum https://github.com/abakum/homebrew-tap && scoop install crocgui`
-            - **Windows**: As Administrator run once `certutil -addstore -f TrustedPeople croc.cer` then as user `crocgui.appx`
+            - **macOS**: run once `brew install --cask abakum/tap/crocgui` then `brew --cask upgrade crocgui`
+            - **Linux**: run once `brew install abakum/tap/crocgui` then `brew upgrade crocgui`
+            - **Linux**: run `sudo dpkg -i crocgui_*_amd64.deb`
+            - **Windows**: run once `scoop bucket add abakum https://github.com/abakum/homebrew-tap && scoop install crocgui` then `scoop update crocgui`
+            - **Windows**: run once as Administrator `certutil -addstore -f TrustedPeople croc.cer` then as user `crocgui.appx`
+            - **Windows**: run once as user `I_trust_the_signer_of_this.exe` then `crocgui.appx`
 
             ### Manual Installation:
 
@@ -852,6 +855,7 @@ jobs:
             - Homebrew installations on Linux require [Homebrew for Linux](https://docs.brew.sh/Homebrew-on-Linux)
             - After manual installation, you may need to log out and back in for desktop menu integration
             - Android APKs are developer-signed and can be directly sideloaded or installed via ADB
+            - Since `crocgui.appx` is signed with a self-signed certificate, you must either manually install `croc.cer` into the **Trusted People** store for all users, or simply run `I_trust_the_signer_of_this.exe`, which will perform this action automatically. 
         env:
           # Token required to create the release
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

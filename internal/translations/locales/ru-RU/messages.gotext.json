@@ -8,6 +8,24 @@
             "position": "crocgui/about.go:72:38"
         },
         {
+            "id": "Set up Deep Link handling",
+            "message": "Set up Deep Link handling",
+            "translation": "Настроить открытие ссылок в приложении",
+            "position": "crocgui/applinks.go:103:44"
+        },
+        {
+            "id": "Click the Deep Link to test. If a browser opens, setup is required. If the app restarts, it's OK.",
+            "message": "Click the Deep Link to test. If a browser opens, setup is required. If the app restarts, it's OK.",
+            "translation": "Кликните на ссылку для проверки. Если она откроется в браузере нужна перенастройка иначе приложение перезапустится.",
+            "position": "crocgui/applinks.go:107:29"
+        },
+        {
+            "id": "Name",
+            "message": "Name",
+            "translation": "Имя",
+            "position": "crocgui/applinks.go:161:9"
+        },
+        {
             "id": "Export full log",
             "message": "Export full log",
             "translation": "Сохранить журнал",
@@ -23,7 +41,7 @@
             "id": "App closed. Tap to start.",
             "message": "App closed. Tap to start.",
             "translation": "Приложение закрыто. Нажми чтоб запустить.",
-            "position": "crocgui/main.go:319:16"
+            "position": "crocgui/main.go:320:16"
         },
         {
             "id": "Cancel",
@@ -41,61 +59,61 @@
             "id": "Download",
             "message": "Download",
             "translation": "Получить",
-            "position": "crocgui/recv.go:537:42"
+            "position": "crocgui/recv.go:550:42"
         },
         {
             "id": "Secret must be longer than 5 characters",
             "message": "Secret must be longer than 5 characters",
             "translation": "Секрет должен быть длиннее 5 символов",
-            "position": "crocgui/recv.go:540:18"
+            "position": "crocgui/recv.go:553:18"
         },
         {
             "id": "Send",
             "message": "Send",
             "translation": "Дать",
-            "position": "crocgui/recv.go:545:35"
+            "position": "crocgui/recv.go:558:35"
         },
         {
             "id": "Receive cancelled.",
             "message": "Receive cancelled.",
             "translation": "Отмена получения.",
-            "position": "crocgui/recv.go:665:34"
+            "position": "crocgui/recv.go:678:34"
         },
         {
             "id": "Receiving file",
             "message": "Receiving file",
             "translation": "Получаю",
-            "position": "crocgui/recv.go:688:27"
+            "position": "crocgui/recv.go:701:27"
         },
         {
             "id": "Send cancelled.",
             "message": "Send cancelled.",
             "translation": "Отмена посылки.",
-            "position": "crocgui/recv.go:763:36"
+            "position": "crocgui/recv.go:776:36"
         },
         {
             "id": "Received",
             "message": "Received",
             "translation": "Получил",
-            "position": "crocgui/recv.go:770:46"
+            "position": "crocgui/recv.go:783:46"
         },
         {
             "id": "Receive",
             "message": "Receive",
             "translation": "Взять",
-            "position": "crocgui/recv.go:1047:38"
+            "position": "crocgui/recv.go:1060:38"
         },
         {
             "id": "Empty name",
             "message": "Empty name",
             "translation": "Пустое имя",
-            "position": "crocgui/relays.go:164:18"
+            "position": "crocgui/relays.go:165:18"
         },
         {
             "id": "Last item of list",
             "message": "Last item of list",
             "translation": "Последний элемент списка",
-            "position": "crocgui/relays.go:234:18"
+            "position": "crocgui/relays.go:236:18"
         },
         {
             "id": "Pick a file to send",
@@ -113,25 +131,25 @@
             "id": "Have them press the Download now",
             "message": "Have them press the Download now",
             "translation": "Теперь пусть нажмут Получить",
-            "position": "crocgui/send.go:767:28"
+            "position": "crocgui/send.go:768:28"
         },
         {
             "id": "Sending file",
             "message": "Sending file",
             "translation": "Посылаю",
-            "position": "crocgui/send.go:778:57"
+            "position": "crocgui/send.go:779:57"
         },
         {
             "id": "Sent file",
             "message": "Sent file",
             "translation": "Послал",
-            "position": "crocgui/send.go:828:47"
+            "position": "crocgui/send.go:829:47"
         },
         {
             "id": "Allow access to read",
             "message": "Allow access to read",
             "translation": "Позвольте прочитать",
-            "position": "crocgui/send.go:963:23"
+            "position": "crocgui/send.go:992:23"
         },
         {
             "id": "Hide",
@@ -216,12 +234,6 @@
             "message": "If value like 0IP then it used as --ip IP",
             "translation": "Значение типа 0IP значит --ip IP",
             "position": "crocgui/settings.go:368:24"
-        },
-        {
-            "id": "Name",
-            "message": "Name",
-            "translation": "Имя",
-            "position": "crocgui/settings.go:372:24"
         },
         {
             "id": "UnZip files",

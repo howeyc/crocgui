@@ -8,6 +8,24 @@
             "position": "crocgui/about.go:72:38"
         },
         {
+            "id": "Set up Deep Link handling",
+            "message": "Set up Deep Link handling",
+            "translation": "Deep Link処理を設定",
+            "position": "crocgui/applinks.go:103:44"
+        },
+        {
+            "id": "Click the Deep Link to test. If a browser opens, setup is required. If the app restarts, it's OK.",
+            "message": "Click the Deep Link to test. If a browser opens, setup is required. If the app restarts, it's OK.",
+            "translation": "テストするにはDeep Linkをクリックしてください。ブラウザが開く場合は設定が必要です。アプリが再起動する場合は問題ありません。",
+            "position": "crocgui/applinks.go:107:29"
+        },
+        {
+            "id": "Name",
+            "message": "Name",
+            "translation": "名前",
+            "position": "crocgui/applinks.go:161:9"
+        },
+        {
             "id": "Export full log",
             "message": "Export full log",
             "translation": "完全なログをエクスポート",
@@ -23,7 +41,7 @@
             "id": "App closed. Tap to start.",
             "message": "App closed. Tap to start.",
             "translation": "アプリが終了しました。タップして起動してください。",
-            "position": "crocgui/main.go:319:16"
+            "position": "crocgui/main.go:320:16"
         },
         {
             "id": "Cancel",
@@ -41,61 +59,61 @@
             "id": "Download",
             "message": "Download",
             "translation": "ダウンロード",
-            "position": "crocgui/recv.go:537:42"
+            "position": "crocgui/recv.go:550:42"
         },
         {
             "id": "Secret must be longer than 5 characters",
             "message": "Secret must be longer than 5 characters",
             "translation": "シークレットは5文字以上である必要があります",
-            "position": "crocgui/recv.go:540:18"
+            "position": "crocgui/recv.go:553:18"
         },
         {
             "id": "Send",
             "message": "Send",
             "translation": "送信",
-            "position": "crocgui/recv.go:545:35"
+            "position": "crocgui/recv.go:558:35"
         },
         {
             "id": "Receive cancelled.",
             "message": "Receive cancelled.",
             "translation": "受信がキャンセルされました。",
-            "position": "crocgui/recv.go:665:34"
+            "position": "crocgui/recv.go:678:34"
         },
         {
             "id": "Receiving file",
             "message": "Receiving file",
             "translation": "ファイルを受信中",
-            "position": "crocgui/recv.go:688:27"
+            "position": "crocgui/recv.go:701:27"
         },
         {
             "id": "Send cancelled.",
             "message": "Send cancelled.",
             "translation": "送信がキャンセルされました。",
-            "position": "crocgui/recv.go:763:36"
+            "position": "crocgui/recv.go:776:36"
         },
         {
             "id": "Received",
             "message": "Received",
             "translation": "受信しました",
-            "position": "crocgui/recv.go:770:46"
+            "position": "crocgui/recv.go:783:46"
         },
         {
             "id": "Receive",
             "message": "Receive",
             "translation": "受信",
-            "position": "crocgui/recv.go:1047:38"
+            "position": "crocgui/recv.go:1060:38"
         },
         {
             "id": "Empty name",
             "message": "Empty name",
             "translation": "名前が空です",
-            "position": "crocgui/relays.go:164:18"
+            "position": "crocgui/relays.go:165:18"
         },
         {
             "id": "Last item of list",
             "message": "Last item of list",
             "translation": "リストの最後の項目",
-            "position": "crocgui/relays.go:234:18"
+            "position": "crocgui/relays.go:236:18"
         },
         {
             "id": "Pick a file to send",
@@ -113,25 +131,25 @@
             "id": "Have them press the Download now",
             "message": "Have them press the Download now",
             "translation": "今「ダウンロード」を押してください",
-            "position": "crocgui/send.go:767:28"
+            "position": "crocgui/send.go:768:28"
         },
         {
             "id": "Sending file",
             "message": "Sending file",
             "translation": "ファイルを送信中",
-            "position": "crocgui/send.go:778:57"
+            "position": "crocgui/send.go:779:57"
         },
         {
             "id": "Sent file",
             "message": "Sent file",
             "translation": "ファイルを送信しました",
-            "position": "crocgui/send.go:828:47"
+            "position": "crocgui/send.go:829:47"
         },
         {
             "id": "Allow access to read",
             "message": "Allow access to read",
             "translation": "読み取りへのアクセスを許可",
-            "position": "crocgui/send.go:963:23"
+            "position": "crocgui/send.go:992:23"
         },
         {
             "id": "Hide",
@@ -216,12 +234,6 @@
             "message": "If value like 0IP then it used as --ip IP",
             "translation": "0IPのような値は --ip IP として使用されます",
             "position": "crocgui/settings.go:368:24"
-        },
-        {
-            "id": "Name",
-            "message": "Name",
-            "translation": "名前",
-            "position": "crocgui/settings.go:372:24"
         },
         {
             "id": "UnZip files",
