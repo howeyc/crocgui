@@ -100,11 +100,11 @@ func showQR(a fyne.App, w fyne.Window, text string) {
 	img.SetMinSize(fyne.NewSize(256, 256))
 	img.FillMode = canvas.ImageFillContain
 
-	setupButton := widget.NewButtonWithIcon(lp("Set up Deep Link handling"), theme.SettingsIcon(), func() {
+	setupButton := widget.NewButtonWithIcon("Deep Link", theme.SettingsIcon(), func() {
 		notFinish = true
 		openAppSettings()
 	})
-	label := widget.NewLabel(lp("Click the Deep Link to test. If a browser opens, setup is required. If the app restarts, it's OK."))
+	label := widget.NewLabel(lp("Click the link below to test. If a browser opens, setup is required. If the app restarts, it's OK."))
 	label.Wrapping = fyne.TextWrapWord
 	if !isAndroid {
 		setupButton.Hide()
@@ -131,7 +131,7 @@ func showQR(a fyne.App, w fyne.Window, text string) {
 			if isAndroid {
 				// notFinish = true
 				go func() {
-					time.Sleep(time.Millisecond * 33)
+					time.Sleep(time.Millisecond * 7)
 					os.Exit(0)
 				}()
 			}
@@ -160,10 +160,18 @@ func fromClipboard(a fyne.App, w fyne.Window, st, ne, as, a6, ps, pd, s5, ct str
 		"code:\t\t%s\n%s:\t\t%s\nrelay:\t\t%s\nrelay6:\t\t%s\nports:\t\t%s\npass:\t\t%s\nsocks5:\t\t%s\nconnect:\t\t%s",
 		st, lp("Name"), ne, as, a6, ps, pd, s5, ct,
 	)
+
+	by := "https://markusfisch.de/BinaryEye"
+	binaryEye := widget.NewHyperlink(by, nil)
+	binaryEye.SetURLFromString(by)
+
 	label := widget.NewLabel(info)
 	label.Wrapping = fyne.TextWrapWord
 
-	d := dialog.NewCustom("Deep Link", "Ok", label, w)
+	d := dialog.NewCustom("Deep Link", "Ok", container.NewVBox(
+		binaryEye,
+		label,
+	), w)
 	d.Resize(fyne.NewSize(300, 0))
 	d.Show()
 	go func() {

@@ -8,15 +8,15 @@
             "position": "crocgui/about.go:72:38"
         },
         {
-            "id": "Set up Deep Link handling",
-            "message": "Set up Deep Link handling",
-            "translation": "設定Deep Link處理",
-            "position": "crocgui/applinks.go:103:44"
+            "id": "App info",
+            "message": "App info",
+            "translation": "應用程式資訊",
+            "position": "crocgui/about.go:95:40"
         },
         {
-            "id": "Click the Deep Link to test. If a browser opens, setup is required. If the app restarts, it's OK.",
-            "message": "Click the Deep Link to test. If a browser opens, setup is required. If the app restarts, it's OK.",
-            "translation": "點擊Deep Link進行測試。如果瀏覽器開啟，則需要設定。如果應用程式重新啟動，則表示正常。",
+            "id": "Click the link below to test. If a browser opens, setup is required. If the app restarts, it's OK.",
+            "message": "Click the link below to test. If a browser opens, setup is required. If the app restarts, it's OK.",
+            "translation": "點擊下方鏈接進行測試。如果瀏覽器打開，則需要設定。如果應用程式重啟，則沒有問題。",
             "position": "crocgui/applinks.go:107:29"
         },
         {
@@ -149,7 +149,7 @@
             "id": "Allow access to read",
             "message": "Allow access to read",
             "translation": "允許讀取權限",
-            "position": "crocgui/send.go:992:23"
+            "position": "crocgui/send.go:996:23"
         },
         {
             "id": "Hide",

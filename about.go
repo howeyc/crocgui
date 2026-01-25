@@ -92,9 +92,15 @@ func aboutTabItem(a fyne.App, _ fyne.Window) *container.TabItem {
 
 	newHyperlink := widget.NewHyperlink("", nil)
 	newHyperlink.Hidden = true
+	appInfo := widget.NewButtonWithIcon(lp("App info"), theme.InfoIcon(), func() {
+		notFinish = true
+		openAppInfo()
+	})
+	appInfo.Hidden = !isAndroid
 
 	ti := container.NewTabItemWithIcon(ZeroWidthJoiner, theme.InfoIcon(), //lp("About")
 		container.NewVScroll(container.NewVBox(
+			appInfo,
 			container.New(&tightVBoxLayout{},
 				crocHyperlink,
 				fromHyperlink,

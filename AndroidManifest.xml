@@ -2,7 +2,7 @@
 <manifest
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
-    android:versionCode="1447"
+    android:versionCode="1470"
     android:versionName="1.11.40"
     package="com.github.howeyc.crocgui">
 
@@ -43,6 +43,7 @@
 
             <!-- <intent-filter android:autoVerify="true"> -->            
             <intent-filter>
+                <action android:name="com.google.android.gms.actions.SCAN_QR_CODE" />
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
@@ -51,7 +52,7 @@
                     android:pathPattern="/croc.*" />                
             </intent-filter>
 
-             <intent-filter>
+            <intent-filter>
                 <action android:name="android.intent.action.SEND" />
                 <action android:name="android.intent.action.SEND_MULTIPLE" />
                 <category android:name="android.intent.category.DEFAULT" />

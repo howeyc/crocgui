@@ -264,7 +264,7 @@ func setModTime(uri fyne.URI, mtime time.Time) error {
 	return os.Chtimes(uri.Path(), time.Time{}, mtime)
 }
 
-func ctxHandle() string          { return "" }
 func startActivity()             {}
 func HasStoragePermission() bool { return false }
 func openAppSettings()           {}
+func openAppInfo()               {}

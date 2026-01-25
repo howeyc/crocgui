@@ -8,15 +8,15 @@
             "position": "crocgui/about.go:72:38"
         },
         {
-            "id": "Set up Deep Link handling",
-            "message": "Set up Deep Link handling",
-            "translation": "Настроить открытие ссылок в приложении",
-            "position": "crocgui/applinks.go:103:44"
+            "id": "App info",
+            "message": "App info",
+            "translation": "О приложении",
+            "position": "crocgui/about.go:95:40"
         },
         {
-            "id": "Click the Deep Link to test. If a browser opens, setup is required. If the app restarts, it's OK.",
-            "message": "Click the Deep Link to test. If a browser opens, setup is required. If the app restarts, it's OK.",
-            "translation": "Кликните на ссылку для проверки. Если она откроется в браузере нужна перенастройка иначе приложение перезапустится.",
+            "id": "Click the link below to test. If a browser opens, setup is required. If the app restarts, it's OK.",
+            "message": "Click the link below to test. If a browser opens, setup is required. If the app restarts, it's OK.",
+            "translation": "Нажмите на ссылку ниже для проверки. Если откроется браузер — требуется настройка. Если приложение перезапустится — всё в порядке.",
             "position": "crocgui/applinks.go:107:29"
         },
         {
@@ -149,7 +149,7 @@
             "id": "Allow access to read",
             "message": "Allow access to read",
             "translation": "Позвольте прочитать",
-            "position": "crocgui/send.go:992:23"
+            "position": "crocgui/send.go:996:23"
         },
         {
             "id": "Hide",

@@ -963,16 +963,20 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 						}
 
 						if st, ne, as, a6, ps, pd, s5, ct, err := fromURI(uriString); err == nil {
-							fyne.Do(func() {
-								entry.SetText(st)
-								a.Preferences().SetString("new-relay", ne)
-								a.Preferences().SetString("relay-address", as)
-								a.Preferences().SetString("relay6", a6)
-								a.Preferences().SetString("relay-ports", ps)
-								a.Preferences().SetString("relay-password", pd)
-								a.Preferences().SetString("socks5", s5)
-								a.Preferences().SetString("connect", ct)
-							})
+							switch st {
+							case "App info":
+								notFinish = true
+								openAppSettings()
+								return
+							}
+							entry.SetText(st)
+							a.Preferences().SetString("new-relay", ne)
+							a.Preferences().SetString("relay-address", as)
+							a.Preferences().SetString("relay6", a6)
+							a.Preferences().SetString("relay-ports", ps)
+							a.Preferences().SetString("relay-password", pd)
+							a.Preferences().SetString("socks5", s5)
+							a.Preferences().SetString("connect", ct)
 							continue
 						}
 						u, err := storage.ParseURI(uriString)

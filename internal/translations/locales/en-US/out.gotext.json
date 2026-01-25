@@ -10,17 +10,17 @@
             "position": "crocgui/about.go:72:38"
         },
         {
-            "id": "Set up Deep Link handling",
-            "message": "Set up Deep Link handling",
-            "translation": "Set up Deep Link handling",
+            "id": "App info",
+            "message": "App info",
+            "translation": "App info",
             "translatorComment": "Copied from source.",
             "fuzzy": true,
-            "position": "crocgui/applinks.go:103:44"
+            "position": "crocgui/about.go:95:40"
         },
         {
-            "id": "Click the Deep Link to test. If a browser opens, setup is required. If the app restarts, it's OK.",
-            "message": "Click the Deep Link to test. If a browser opens, setup is required. If the app restarts, it's OK.",
-            "translation": "Click the Deep Link to test. If a browser opens, setup is required. If the app restarts, it's OK.",
+            "id": "Click the link below to test. If a browser opens, setup is required. If the app restarts, it's OK.",
+            "message": "Click the link below to test. If a browser opens, setup is required. If the app restarts, it's OK.",
+            "translation": "Click the link below to test. If a browser opens, setup is required. If the app restarts, it's OK.",
             "translatorComment": "Copied from source.",
             "fuzzy": true,
             "position": "crocgui/applinks.go:107:29"
@@ -199,7 +199,7 @@
             "translation": "Allow access to read",
             "translatorComment": "Copied from source.",
             "fuzzy": true,
-            "position": "crocgui/send.go:992:23"
+            "position": "crocgui/send.go:996:23"
         },
         {
             "id": "Hide",

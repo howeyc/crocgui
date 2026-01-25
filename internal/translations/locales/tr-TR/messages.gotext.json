@@ -8,15 +8,15 @@
             "position": "crocgui/about.go:72:38"
         },
         {
-            "id": "Set up Deep Link handling",
-            "message": "Set up Deep Link handling",
-            "translation": "Deep Link işlemeyi ayarla",
-            "position": "crocgui/applinks.go:103:44"
+            "id": "App info",
+            "message": "App info",
+            "translation": "Uygulama bilgisi",
+            "position": "crocgui/about.go:95:40"
         },
         {
-            "id": "Click the Deep Link to test. If a browser opens, setup is required. If the app restarts, it's OK.",
-            "message": "Click the Deep Link to test. If a browser opens, setup is required. If the app restarts, it's OK.",
-            "translation": "Test etmek için Deep Link'e tıklayın. Bir tarayıcı açılırsa kurulum gereklidir. Uygulama yeniden başlarsa sorun yoktur.",
+            "id": "Click the link below to test. If a browser opens, setup is required. If the app restarts, it's OK.",
+            "message": "Click the link below to test. If a browser opens, setup is required. If the app restarts, it's OK.",
+            "translation": "Test etmek için aşağıdaki bağlantıya tıklayın. Bir tarayıcı açılırsa, kurulum gereklidir. Uygulama yeniden başlarsa, sorun yoktur.",
             "position": "crocgui/applinks.go:107:29"
         },
         {
@@ -149,7 +149,7 @@
             "id": "Allow access to read",
             "message": "Allow access to read",
             "translation": "Okumak için erişime izin ver",
-            "position": "crocgui/send.go:992:23"
+            "position": "crocgui/send.go:996:23"
         },
         {
             "id": "Hide",
