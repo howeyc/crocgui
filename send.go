@@ -1980,18 +1980,3 @@ func wHandle(w fyne.Window) string {
 	}
 	return ""
 }
-
-func setClipboard(code string, a fyne.App) (text string) {
-	text = toURI(
-		code,
-		relayName(a),
-		a.Preferences().String("relay-address"),
-		a.Preferences().String("relay6"),
-		a.Preferences().String("relay-ports"),
-		a.Preferences().String("relay-password"),
-		a.Preferences().String("socks5"),
-		a.Preferences().String("connect"),
-	)
-	a.Clipboard().SetContent(text)
-	return
-}

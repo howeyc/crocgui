@@ -91,6 +91,9 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 		entry.SetText(entryText)
 	}
 
+	qrButton := widget.NewButtonWithIcon("", theme.ViewFullScreenIcon(), scanner)
+	qrButton.Hidden = !isAndroid
+
 	cbButton := widget.NewButtonWithIcon("", theme.ContentPasteIcon(), func() {
 		cc := a.Clipboard().Content()
 		if st, ne, as, a6, ps, pd, s5, ct, err := fromURI(cc); err == nil {
@@ -107,6 +110,7 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 			entry.SetText(cc)
 		}
 	})
+
 	cosED = append(cosED, cbButton)
 	secretButton := widget.NewButtonWithIcon("", theme.ContentClearIcon(), func() {
 		fyne.Do(func() {
@@ -1039,7 +1043,7 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 		topline,
 		container.NewBorder(
 			nil, nil,
-			container.NewHBox(cbButton, secretButton),
+			container.NewHBox(qrButton, cbButton, secretButton),
 			nil,
 			entry,
 		),

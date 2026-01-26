@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"embed"
 	"fmt"
+	"net/url"
 	"strings"
 
 	"fyne.io/fyne/v2"
@@ -94,8 +95,37 @@ func aboutTabItem(a fyne.App, _ fyne.Window) *container.TabItem {
 	newHyperlink.Hidden = true
 	appInfo := widget.NewButtonWithIcon(lp("App info"), theme.InfoIcon(), func() {
 		notFinish = true
-		openAppInfo()
+
+		intents := []string{
+			// 1. САМЫЙ ПРАВИЛЬНЫЙ (Стандарт Android 11-16)
+			// Используем dat= вместо data= и убираем //
+			"intent:#Intent;action=android.settings.APPLICATION_DETAILS_SETTINGS;dat=package:" + ID + ";end",
+
+			// 2. Упрощенный системный вызов
+			"package:" + ID,
+
+			// 3. Формат с флагами (0x10000000 — это FLAG_ACTIVITY_NEW_TASK, полезно для лаунчера)
+			"intent:#Intent;action=android.settings.APPLICATION_DETAILS_SETTINGS;dat=package:" + ID + ";f=0x10000000;end",
+
+			// 4. Старый формат (иногда нужен для старых версий библиотек)
+			"intent://#Intent;action=android.settings.APPLICATION_DETAILS_SETTINGS;dat=package:" + ID + ";end",
+		}
+
+		for _, intent := range intents {
+			log.Debugf("intent: %s", intent)
+			if err := OpenURL(intent); err == nil {
+				return
+			}
+			return
+			if u, err := url.Parse(intent); err == nil {
+				if err := a.OpenURL(u); err == nil {
+					log.Debug("Успешно открыты настройки приложения")
+					return
+				}
+			}
+		}
 	})
+
 	appInfo.Hidden = !isAndroid
 
 	ti := container.NewTabItemWithIcon(ZeroWidthJoiner, theme.InfoIcon(), //lp("About")

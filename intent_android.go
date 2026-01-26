@@ -826,6 +826,48 @@ cleanup:
     if (contextClass) (*env)->DeleteLocalRef(env, contextClass);
     if (versionClass) (*env)->DeleteLocalRef(env, versionClass);
 }
+
+// Измените сигнатуру: теперь принимаем const char* вместо jstring
+static jboolean openIntent(JNIEnv *env, jobject activity, const char *intentUriChars) {
+    jclass intentClass = NULL;
+    jclass contextClass = NULL;
+    jobject intent = NULL;
+    jboolean success = JNI_FALSE;
+    jstring intentUriString = NULL;
+
+    // Конвертируем C-строку в jstring внутри C
+    intentUriString = (*env)->NewStringUTF(env, intentUriChars);
+    if (caseException(env, "NewStringUTF")) goto cleanup;
+
+    intentClass = (*env)->FindClass(env, "android/content/Intent");
+    if (caseException(env, "FindClass Intent")) goto cleanup;
+
+    jmethodID parseUriMethod = (*env)->GetStaticMethodID(env, intentClass, "parseUri", "(Ljava/lang/String;I)Landroid/content/Intent;");
+    intent = (*env)->CallStaticObjectMethod(env, intentClass, parseUriMethod, intentUriString, (jint)1);
+    if (caseException(env, "parseUri") || !intent) goto cleanup;
+
+    jmethodID addFlagsMethod = (*env)->GetMethodID(env, intentClass, "addFlags", "(I)Landroid/content/Intent;");
+    if (addFlagsMethod) {
+        (*env)->CallObjectMethod(env, intent, addFlagsMethod, (jint)0x10000000);
+    }
+
+    contextClass = (*env)->GetObjectClass(env, activity);
+    jmethodID startActivityMethod = (*env)->GetMethodID(env, contextClass, "startActivity", "(Landroid/content/Intent;)V");
+    (*env)->CallVoidMethod(env, activity, startActivityMethod, intent);
+
+    if (!caseException(env, "startActivity")) {
+        success = JNI_TRUE;
+    }
+
+cleanup:
+    // Удаляем локальную ссылку на строку, созданную в C
+    if (intentUriString) (*env)->DeleteLocalRef(env, intentUriString);
+    if (intent) (*env)->DeleteLocalRef(env, intent);
+    if (intentClass) (*env)->DeleteLocalRef(env, intentClass);
+    if (contextClass) (*env)->DeleteLocalRef(env, contextClass);
+    return success;
+}
+
 */
 import "C"
 import (
@@ -1010,6 +1052,37 @@ func openAppInfo() {
 		)
 
 		log.Debug("C.openAppInfo completed")
+		return nil
+	})
+}
+
+// OpenURL запускает строку интента на Android.
+// Поддерживает форматы:
+// - intent:#Intent;action=...;dat=...;f=...;end
+// - package:com.android.settings
+// - https://google.com
+func OpenURL(intentStr string) error {
+	return driver.RunNative(func(ctx interface{}) error {
+		ac, ok := ctx.(*driver.AndroidContext)
+		if !ok {
+			return fmt.Errorf("failed to get AndroidContext")
+		}
+
+		env := (*C.JNIEnv)(unsafe.Pointer(ac.Env))
+
+		// Просто передаем C-строку
+		cStr := C.CString(intentStr)
+		defer C.free(unsafe.Pointer(cStr))
+
+		res := C.openIntent(
+			env,
+			(C.jobject)(unsafe.Pointer(ac.Ctx)),
+			cStr,
+		)
+
+		if res == C.JNI_FALSE {
+			return fmt.Errorf("intent failed: %s", intentStr)
+		}
 		return nil
 	})
 }

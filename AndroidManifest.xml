@@ -2,7 +2,7 @@
 <manifest
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
-    android:versionCode="1470"
+    android:versionCode="1475"
     android:versionName="1.11.40"
     package="com.github.howeyc.crocgui">
 
@@ -81,6 +81,36 @@
         <intent>
             <action android:name="android.intent.action.OPEN_DOCUMENT_TREE" />
         </intent>
+
+        <intent>
+            <action android:name="com.google.android.gms.actions.SCAN_QR_CODE" />
+        </intent>
+        <intent>
+            <action android:name="com.google.zxing.client.android.SCAN" />
+            <category android:name="android.intent.category.DEFAULT" />
+        </intent>
+        <intent>
+            <action android:name="com.samsung.android.app.opticalreader.SCAN" />
+        </intent>
+        <intent>
+            <action android:name="com.huawei.scanner.action.SCAN" />
+        </intent>
+        <intent>
+            <action android:name="com.huawei.hms.actions.scanservice.SCAN" />
+        </intent>
+        <intent>
+            <action android:name="com.vivo.scanner.SCAN" />
+        </intent>
+
+        <package android:name="com.xiaomi.scanner" />
+        <package android:name="com.samsung.android.app.opticalreader" />
+        <package android:name="com.huawei.scanner" />
+        <package android:name="com.oplus.scanner" />
+        <package android:name="com.coloros.scanner" />
+        <package android:name="com.vivo.scanner" />
+        <package android:name="de.markusfisch.android.binaryeye" />
+        <package android:name="com.example.barcodescanner" />
+        <package android:name="com.google.zxing.client.android" />
     </queries>
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />

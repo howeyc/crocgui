@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"encoding/base64"
 	"fmt"
+	"net"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -15,6 +17,8 @@ import (
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
+	"github.com/schollz/croc/v10/src/tcp"
+	"github.com/schollz/croc/v10/src/utils"
 	log "github.com/schollz/logger"
 	"github.com/skip2/go-qrcode"
 )
@@ -147,7 +151,7 @@ func showQR(a fyne.App, w fyne.Window, text string) {
 
 		select {
 		case <-timer.C:
-			d.Hide()
+			fyne.Do(d.Hide)
 		case <-done:
 			return
 		}
@@ -161,15 +165,10 @@ func fromClipboard(a fyne.App, w fyne.Window, st, ne, as, a6, ps, pd, s5, ct str
 		st, lp("Name"), ne, as, a6, ps, pd, s5, ct,
 	)
 
-	by := "https://markusfisch.de/BinaryEye"
-	binaryEye := widget.NewHyperlink(by, nil)
-	binaryEye.SetURLFromString(by)
-
 	label := widget.NewLabel(info)
 	label.Wrapping = fyne.TextWrapWord
 
 	d := dialog.NewCustom("Deep Link", "Ok", container.NewVBox(
-		binaryEye,
 		label,
 	), w)
 	d.Resize(fyne.NewSize(300, 0))
@@ -180,9 +179,101 @@ func fromClipboard(a fyne.App, w fyne.Window, st, ne, as, a6, ps, pd, s5, ct str
 
 		select {
 		case <-timer.C:
-			d.Hide()
+			fyne.Do(d.Hide)
 		case <-done:
 			return
 		}
 	}()
+}
+
+func setClipboard(code string, a fyne.App) (text string) {
+	name := a.Preferences().String("new-relay")
+	if name == "" {
+		name = relayName(a)
+	}
+	relayAddress := a.Preferences().String("relay-address")
+	if host := a.Preferences().String("host"); host != "" && host != "..." {
+		// Если включен локальный посредник
+		log.Debugf("host %s", host)
+		relayAddress = host
+		if publicIP, err := utils.PublicIP(); err == nil {
+			log.Debugf("public IP %s", publicIP)
+			ports := a.Preferences().String("relay-ports")
+			if ports == "" {
+				ports = strconv.Itoa(DEFAULT_PORT)
+			} else {
+				ports = strings.Split(ports, ",")[0]
+			}
+			address := net.JoinHostPort(publicIP, ports)
+			if err := tcp.PingServer(address); err == nil {
+				// Если виден снаружи
+				relayAddress = publicIP
+				log.Infof("croc IP %s", relayAddress)
+			} else {
+				// Оставляем локальный IP
+				log.Debugf("could not ping: %+v", err)
+			}
+		}
+	}
+	text = toURI(
+		code,
+		name,
+		relayAddress,
+		a.Preferences().String("relay6"),
+		a.Preferences().String("relay-ports"),
+		a.Preferences().String("relay-password"),
+		a.Preferences().String("socks5"),
+		a.Preferences().String("connect"),
+	)
+	a.Clipboard().SetContent(text)
+	return
+}
+
+func scanner() {
+	// Иерархия 2026: Бренды -> Google GMS -> Сообщество -> Маркет
+	links := []string{
+		// 1. XIAOMI / REDMI / POCO
+		"intent://#Intent;component=com.xiaomi.scanner/.app.ScanActivity;end",
+
+		// 2. SAMSUNG (Optical Reader / Quick Scan)
+		"intent://#Intent;action=com.samsung.android.app.opticalreader.SCAN;package=com.samsung.android.app.opticalreader;end",
+
+		// 3. HUAWEI / HONOR (AI Lens)
+		"intent://#Intent;action=com.huawei.scanner.action.SCAN;package=com.huawei.scanner;end",
+		"intent://#Intent;action=com.huawei.hms.actions.scanservice.SCAN;package=com.huawei.scanner;end",
+
+		// 4. GOOGLE GMS (Самый быстрый нативный сканер в Google Play Services)
+		"intent://#Intent;action=com.google.android.gms.actions.SCAN_QR_CODE;package=com.google.android.gms;end",
+
+		// 5. GOOGLE LENS (Универсальный fallback для всех Android с GMS)
+		"googlelens://v1/",
+
+		// 6. OPPO / REALME / ONEPLUS (ColorOS/Oplus)
+		"intent://#Intent;component=com.oplus.scanner/.ScanActivity;end",
+		"intent://#Intent;component=com.coloros.scanner/.ScanActivity;end",
+
+		// 7. VIVO / IQOO
+		"intent://#Intent;action=com.vivo.scanner.SCAN;package=com.vivo.scanner;end",
+
+		// 8. BINARY EYE
+		"intent://scan/#Intent;scheme=binaryeye;package=de.markusfisch.android.binaryeye;end",
+
+		// 9. ZXING
+		"intent://#Intent;action=com.google.zxing.client.android.SCAN;package=com.example.barcodescanner;end",
+
+		// 10. ОБЩИЙ ИНТЕНТ
+		"intent://#Intent;action=com.google.zxing.client.android.SCAN;category=android.intent.category.DEFAULT;end",
+		"market://search?q=pname:de.markusfisch.android.binaryeye",
+	}
+
+	for _, s := range links {
+		u, err := url.Parse(s)
+		if err != nil {
+			continue
+		}
+		if err := fyne.CurrentApp().OpenURL(u); err == nil {
+			log.Debugf("find %s", s)
+			return
+		}
+	}
 }

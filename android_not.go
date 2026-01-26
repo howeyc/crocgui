@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -268,3 +269,11 @@ func startActivity()             {}
 func HasStoragePermission() bool { return false }
 func openAppSettings()           {}
 func openAppInfo()               {}
+
+func OpenURL(s string) error {
+	if u, err := url.Parse(s); err == nil {
+		return fyne.CurrentApp().OpenURL(u)
+	} else {
+		return err
+	}
+}
