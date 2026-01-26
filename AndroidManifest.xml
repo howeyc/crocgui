@@ -2,7 +2,7 @@
 <manifest
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
-    android:versionCode="1475"
+    android:versionCode="1498"
     android:versionName="1.11.40"
     package="com.github.howeyc.crocgui">
 
@@ -101,7 +101,11 @@
         <intent>
             <action android:name="com.vivo.scanner.SCAN" />
         </intent>
-
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="googlelens" />
+        </intent>
+        <package android:name="com.google.android.googlequicksearchbox" />
         <package android:name="com.xiaomi.scanner" />
         <package android:name="com.samsung.android.app.opticalreader" />
         <package android:name="com.huawei.scanner" />

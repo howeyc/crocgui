@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"embed"
 	"fmt"
-	"net/url"
 	"strings"
 
 	"fyne.io/fyne/v2"
@@ -96,34 +95,20 @@ func aboutTabItem(a fyne.App, _ fyne.Window) *container.TabItem {
 	appInfo := widget.NewButtonWithIcon(lp("App info"), theme.InfoIcon(), func() {
 		notFinish = true
 
-		intents := []string{
-			// 1. САМЫЙ ПРАВИЛЬНЫЙ (Стандарт Android 11-16)
-			// Используем dat= вместо data= и убираем //
-			"intent:#Intent;action=android.settings.APPLICATION_DETAILS_SETTINGS;dat=package:" + ID + ";end",
+		// intent := fmt.Sprintf("intent:%s#Intent;"+
+		// 	"action=%s;"+
+		// 	"component=%s;"+
+		// 	"S.package=%s;end",
+		// 	"",
+		// 	"android.settings.APPLICATION_DETAILS_SETTINGS",
+		// 	"com.android.settings/.applications.InstalledAppDetails",
+		// 	ID)
 
-			// 2. Упрощенный системный вызов
-			"package:" + ID,
-
-			// 3. Формат с флагами (0x10000000 — это FLAG_ACTIVITY_NEW_TASK, полезно для лаунчера)
-			"intent:#Intent;action=android.settings.APPLICATION_DETAILS_SETTINGS;dat=package:" + ID + ";f=0x10000000;end",
-
-			// 4. Старый формат (иногда нужен для старых версий библиотек)
-			"intent://#Intent;action=android.settings.APPLICATION_DETAILS_SETTINGS;dat=package:" + ID + ";end",
-		}
-
-		for _, intent := range intents {
-			log.Debugf("intent: %s", intent)
-			if err := OpenURL(intent); err == nil {
-				return
-			}
-			return
-			if u, err := url.Parse(intent); err == nil {
-				if err := a.OpenURL(u); err == nil {
-					log.Debug("Успешно открыты настройки приложения")
-					return
-				}
-			}
-		}
+		// if err := OpenURL(intent); err == nil {
+		// 	log.Debug(intent)
+		// 	return
+		// }
+		openAppInfo()
 	})
 
 	appInfo.Hidden = !isAndroid

@@ -233,47 +233,48 @@ func scanner() {
 	// Иерархия 2026: Бренды -> Google GMS -> Сообщество -> Маркет
 	links := []string{
 		// 1. XIAOMI / REDMI / POCO
-		"intent://#Intent;component=com.xiaomi.scanner/.app.ScanActivity;end",
+		"intent://#Intent;component=com.xiaomi.scanner/.app.ScanActivity;launchFlags=0x40000000;end",
 
 		// 2. SAMSUNG (Optical Reader / Quick Scan)
-		"intent://#Intent;action=com.samsung.android.app.opticalreader.SCAN;package=com.samsung.android.app.opticalreader;end",
+		// "intent://#Intent;action=com.samsung.android.app.opticalreader.SCAN;package=com.samsung.android.app.opticalreader;end",
 
 		// 3. HUAWEI / HONOR (AI Lens)
-		"intent://#Intent;action=com.huawei.scanner.action.SCAN;package=com.huawei.scanner;end",
-		"intent://#Intent;action=com.huawei.hms.actions.scanservice.SCAN;package=com.huawei.scanner;end",
+		// "intent://#Intent;action=com.huawei.scanner.action.SCAN;package=com.huawei.scanner;end",
+		// "intent://#Intent;action=com.huawei.hms.actions.scanservice.SCAN;package=com.huawei.scanner;end",
 
-		// 4. GOOGLE GMS (Самый быстрый нативный сканер в Google Play Services)
-		"intent://#Intent;action=com.google.android.gms.actions.SCAN_QR_CODE;package=com.google.android.gms;end",
+		// 4. GOOGLE
+		// "intent://#Intent;action=com.google.android.gms.actions.SCAN_QR_CODE;end", //;package=com.google.android.gms
+		// "intent://scan/#Intent;scheme=zxing;action=com.google.zxing.client.android.SCAN;end",
+		// "intent://scan/#Intent;scheme=zxing;action=com.google.zxing.client.android.SCAN;category=android.intent.category.DEFAULT;end",
 
-		// 5. GOOGLE LENS (Универсальный fallback для всех Android с GMS)
-		"googlelens://v1/",
+		// 5. GOOGLE LENS
+		// "googlelens://v1/",
 
 		// 6. OPPO / REALME / ONEPLUS (ColorOS/Oplus)
-		"intent://#Intent;component=com.oplus.scanner/.ScanActivity;end",
-		"intent://#Intent;component=com.coloros.scanner/.ScanActivity;end",
+		// "intent://#Intent;component=com.oplus.scanner/.ScanActivity;end",
+		// "intent://#Intent;component=com.coloros.scanner/.ScanActivity;end",
 
 		// 7. VIVO / IQOO
-		"intent://#Intent;action=com.vivo.scanner.SCAN;package=com.vivo.scanner;end",
+		// "intent://#Intent;action=com.vivo.scanner.SCAN;package=com.vivo.scanner;end",
 
 		// 8. BINARY EYE
-		"intent://scan/#Intent;scheme=binaryeye;package=de.markusfisch.android.binaryeye;end",
+		"intent://scan/#Intent;scheme=binaryeye;package=de.markusfisch.android.binaryeye;launchFlags=0x40000000;end",
 
 		// 9. ZXING
-		"intent://#Intent;action=com.google.zxing.client.android.SCAN;package=com.example.barcodescanner;end",
+		// "intent://#Intent;action=com.google.zxing.client.android.SCAN;package=com.example.barcodescanner;end",
 
 		// 10. ОБЩИЙ ИНТЕНТ
-		"intent://#Intent;action=com.google.zxing.client.android.SCAN;category=android.intent.category.DEFAULT;end",
-		"market://search?q=pname:de.markusfisch.android.binaryeye",
+		// "intent://#Intent;action=com.google.zxing.client.android.SCAN;category=android.intent.category.DEFAULT;end",
+		// "market://search?q=pname:de.markusfisch.android.binaryeye",
 	}
 
+	notFinish = true
 	for _, s := range links {
-		u, err := url.Parse(s)
-		if err != nil {
-			continue
-		}
-		if err := fyne.CurrentApp().OpenURL(u); err == nil {
+		log.Debug(s)
+		if err := OpenURL(s); err == nil {
 			log.Debugf("find %s", s)
 			return
 		}
 	}
+	notFinish = false
 }

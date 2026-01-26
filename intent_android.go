@@ -203,56 +203,42 @@ static void processIntent(JNIEnv* env, jobject activity) {
         jint flags = (*env)->CallIntMethod(env, intent, getFlags);
         LogD("C: INTENT FLAGS: 0x%x", flags);
 
-        if (flags & 0x10000000) LogD("C: [0x10000000] NEW_TASK");
-
-        if (flags & 0x08000000) LogD("C: [0x08000000] SINGLE_TOP");
-        if (flags & 0x04000000) LogD("C: [0x04000000] CLEAR_TOP");
-        if (flags & 0x02000000) LogD("C: [0x02000000] FORWARD_RESULT");
-        if (flags & 0x01000000) LogD("C: [0x01000000] PREVIOUS_IS_TOP");
-
-        if (flags & 0x00800000) LogD("C: [0x00800000] EXCLUDE_FROM_RECENTS");
-        if (flags & 0x00400000) LogD("C: [0x00400000] NO_HISTORY");
-        if (flags & 0x00200000) LogD("C: [0x00200000] RESET_TASK_IF_NEEDED");
-        if (flags & 0x00100000) LogD("C: [0x00100000] LAUNCHED_FROM_HISTORY");
-
-        if (flags & 0x00080000) LogD("C: [0x00080000] CLEAR_TASK");
-        if (flags & 0x00040000) LogD("C: [0x00040000] MULTIPLE_TASK");
-        if (flags & 0x00020000) LogD("C: [0x00020000] REORDER_TO_FRONT");
-        if (flags & 0x00010000) LogD("C: [0x00010000] NO_ANIMATION");
-
-        if (flags & 0x00008000) LogD("C: [0x00008000] TASK_ON_HOME");
-        if (flags & 0x00004000) LogD("C: [0x00004000] NO_USER_ACTION");
-        if (flags & 0x00002000) LogD("C: [0x00002000] BROUGHT_TO_FRONT");
-        if (flags & 0x00001000) LogD("C: [0x00001000] RECEIVER_REGISTERED_ONLY");
-
-        if (flags & 0x00000080) LogD("C: [0x00000080] RETAIN_IN_RECENTS");
-        if (flags & 0x00000040) LogD("C: [0x00000040] LAUNCH_ADJACENT");
-        if (flags & 0x00000020) LogD("C: [0x00000020] MATCH_EXTERNAL");
-        if (flags & 0x00000010) LogD("C: [0x00000010] REQUIRE_NON_BROWSER");
-
-        if (flags & 0x00000800) LogD("C: [0x00000800] RELAUNCHED_FROM_HISTORY");
-        if (flags & 0x00000400) LogD("C: [0x00000400] FLAG_RECEIVER_NO_ABORT");
-        if (flags & 0x00000200) LogD("C: [0x00000200] RECEIVER_VISIBLE_TO_INSTANT_APPS");
-        if (flags & 0x00000100) LogD("C: [0x00000100] DIRECT_BOOT_AUTO");
-
-        if (flags & 0x00000008) LogD("C: [0x00000008] REQUIRE_DEFAULT");
-        if (flags & 0x00000004) LogD("C: [0x00000004] RECEIVER_NO_ABORT");
-        if (flags & 0x00000002) LogD("C: [0x00000002] RECEIVER_REGISTERED_ONLY_BEFORE_BOOT");
-        if (flags & 0x00000001) LogD("C: [0x00000001] RECEIVER_REPLACE_PENDING");
+        if ((flags & 0x40000000) != 0) LogD("C: [0x40000000] NO_HISTORY");
+        if ((flags & 0x20000000) != 0) LogD("C: [0x20000000] SINGLE_TOP");
+        if ((flags & 0x10000000) != 0) LogD("C: [0x10000000] NEW_TASK");
+        if ((flags & 0x08000000) != 0) LogD("C: [0x08000000] MULTIPLE_TASK");
+        if ((flags & 0x04000000) != 0) LogD("C: [0x04000000] CLEAR_TOP");
+        if ((flags & 0x02000000) != 0) LogD("C: [0x02000000] FORWARD_RESULT");
+        if ((flags & 0x01000000) != 0) LogD("C: [0x01000000] PREVIOUS_IS_TOP");
+        if ((flags & 0x00800000) != 0) LogD("C: [0x00800000] EXCLUDE_FROM_RECENTS");
+        if ((flags & 0x00400000) != 0) LogD("C: [0x00400000] BROUGHT_TO_FRONT");
+        if ((flags & 0x00200000) != 0) LogD("C: [0x00200000] RESET_TASK_IF_NEEDED");
+        if ((flags & 0x00100000) != 0) LogD("C: [0x00100000] LAUNCHED_FROM_HISTORY");
+        if ((flags & 0x00080000) != 0) LogD("C: [0x00080000] NEW_DOCUMENT / CLEAR_WHEN_TASK_RESET");
+        if ((flags & 0x00040000) != 0) LogD("C: [0x00040000] NO_USER_ACTION");
+        if ((flags & 0x00020000) != 0) LogD("C: [0x00020000] REORDER_TO_FRONT");
+        if ((flags & 0x00010000) != 0) LogD("C: [0x00010000] NO_ANIMATION");
+        if ((flags & 0x00008000) != 0) LogD("C: [0x00008000] CLEAR_TASK");
+        if ((flags & 0x00004000) != 0) LogD("C: [0x00004000] TASK_ON_HOME");
+        if ((flags & 0x00002000) != 0) LogD("C: [0x00002000] RETAIN_IN_RECENTS");
+        if ((flags & 0x00001000) != 0) LogD("C: [0x00001000] LAUNCH_ADJACENT");
+        if ((flags & 0x00000800) != 0) LogD("C: [0x00000800] MATCH_EXTERNAL");
+        if ((flags & 0x00000400) != 0) LogD("C: [0x00000400] REQUIRE_NON_BROWSER");
+        if ((flags & 0x00000200) != 0) LogD("C: [0x00000200] REQUIRE_DEFAULT");
 
         if (flags & 0x00100000) { // LAUNCHED_FROM_HISTORY
             LogD("C: Skipping: Activity launched from history");
             goto cleanup;
         }
-        if (flags & 0x00002000) { // BROUGHT_TO_FRONT
+        if (flags & 0x00400000) { // BROUGHT_TO_FRONT
             LogD("C: Skipping: Activity brought to front");
             goto cleanup;
         }
 
-        if (flags & 0x00000800) { // RELAUNCHED_FROM_HISTORY
-            LogD("C: Skipping: Activity relaunched from history (Android 15+)");
-            goto cleanup;
-        }
+        // if (flags & 0x00000800) { // RELAUNCHED_FROM_HISTORY
+        //     LogD("C: Skipping: Activity relaunched from history (Android 15+)");
+        //     goto cleanup;
+        // }
     }
 
     // Получаем Action интента
@@ -846,10 +832,10 @@ static jboolean openIntent(JNIEnv *env, jobject activity, const char *intentUriC
     intent = (*env)->CallStaticObjectMethod(env, intentClass, parseUriMethod, intentUriString, (jint)1);
     if (caseException(env, "parseUri") || !intent) goto cleanup;
 
-    jmethodID addFlagsMethod = (*env)->GetMethodID(env, intentClass, "addFlags", "(I)Landroid/content/Intent;");
-    if (addFlagsMethod) {
-        (*env)->CallObjectMethod(env, intent, addFlagsMethod, (jint)0x10000000);
-    }
+    // jmethodID addFlagsMethod = (*env)->GetMethodID(env, intentClass, "addFlags", "(I)Landroid/content/Intent;");
+    // if (addFlagsMethod) {
+    //     (*env)->CallObjectMethod(env, intent, addFlagsMethod, (jint)0x10000000);
+    // }
 
     contextClass = (*env)->GetObjectClass(env, activity);
     jmethodID startActivityMethod = (*env)->GetMethodID(env, contextClass, "startActivity", "(Landroid/content/Intent;)V");
