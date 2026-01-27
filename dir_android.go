@@ -1,4 +1,4 @@
-//go:build android
+//go:build ignore
 
 // dir_android.go
 package main

@@ -106,7 +106,20 @@ func showQR(a fyne.App, w fyne.Window, text string) {
 
 	setupButton := widget.NewButtonWithIcon("Deep Link", theme.SettingsIcon(), func() {
 		notFinish = true
-		openAppSettings()
+		//openAppSettings()
+		for _, s := range []string{
+			"android.settings.APP_OPEN_BY_DEFAULT_SETTINGS",
+			"android.settings.APPLICATION_DETAILS_SETTINGS",
+		} {
+			intent := fmt.Sprintf(
+				"intent:%s#Intent;scheme=package;action=%s;end",
+				ID, s,
+			)
+			if err := OpenURL(intent); err == nil {
+				log.Debug(intent)
+				return
+			}
+		}
 	})
 	label := widget.NewLabel(lp("Click the link below to test. If a browser opens, setup is required. If the app restarts, it's OK."))
 	label.Wrapping = fyne.TextWrapWord
@@ -230,20 +243,28 @@ func setClipboard(code string, a fyne.App) (text string) {
 }
 
 func scanner() {
+	//<action android:name="miui.intent.action.scanbarcode" />
+	//<action android:name="miui.intent.action.scanner" />
+	//<action android:name="miui.intent.action.scanbusinesscard"
 	// Иерархия 2026: Бренды -> Google GMS -> Сообщество -> Маркет
 	links := []string{
+		"intent:#Intent;action=android.intent.action.MAIN;category=android.intent.category.LAUNCHER;component=com.google.ar.lens/com.google.vr.apps.ornament.app.lens.LensLauncherActivity;end",
+		//"intent:#Intent;action=android.intent.action.MAIN;category=android.intent.category.LAUNCHER;package=com.google.ar.lens;end",
 		// 1. XIAOMI / REDMI / POCO
-		"intent://#Intent;component=com.xiaomi.scanner/.app.ScanActivity;launchFlags=0x40000000;end",
+		// "intent:#Intent;component=com.xiaomi.scanner/.app.ScanActivity;launchFlags=0x40000000;end",
+		"intent:#Intent;action=miui.intent.action.scanner;launchFlags=0x40000000;end",
+		//intent://com.xiaomi.scanner/main#Intent;scheme=scanner;launchFlags=0x40000000;end
+		//scanner://com.xiaomi.scanner/main
 
 		// 2. SAMSUNG (Optical Reader / Quick Scan)
-		// "intent://#Intent;action=com.samsung.android.app.opticalreader.SCAN;package=com.samsung.android.app.opticalreader;end",
+		// "intent:#Intent;action=com.samsung.android.app.opticalreader.SCAN;package=com.samsung.android.app.opticalreader;end",
 
 		// 3. HUAWEI / HONOR (AI Lens)
-		// "intent://#Intent;action=com.huawei.scanner.action.SCAN;package=com.huawei.scanner;end",
-		// "intent://#Intent;action=com.huawei.hms.actions.scanservice.SCAN;package=com.huawei.scanner;end",
+		// "intent:#Intent;action=com.huawei.scanner.action.SCAN;package=com.huawei.scanner;end",
+		// "intent:#Intent;action=com.huawei.hms.actions.scanservice.SCAN;package=com.huawei.scanner;end",
 
 		// 4. GOOGLE
-		// "intent://#Intent;action=com.google.android.gms.actions.SCAN_QR_CODE;end", //;package=com.google.android.gms
+		// "intent:#Intent;action=com.google.android.gms.actions.SCAN_QR_CODE;end", //;package=com.google.android.gms
 		// "intent://scan/#Intent;scheme=zxing;action=com.google.zxing.client.android.SCAN;end",
 		// "intent://scan/#Intent;scheme=zxing;action=com.google.zxing.client.android.SCAN;category=android.intent.category.DEFAULT;end",
 
@@ -251,20 +272,19 @@ func scanner() {
 		// "googlelens://v1/",
 
 		// 6. OPPO / REALME / ONEPLUS (ColorOS/Oplus)
-		// "intent://#Intent;component=com.oplus.scanner/.ScanActivity;end",
-		// "intent://#Intent;component=com.coloros.scanner/.ScanActivity;end",
+		// "intent:#Intent;component=com.oplus.scanner/.ScanActivity;end",
+		// "intent:#Intent;component=com.coloros.scanner/.ScanActivity;end",
 
 		// 7. VIVO / IQOO
-		// "intent://#Intent;action=com.vivo.scanner.SCAN;package=com.vivo.scanner;end",
+		// "intent:#Intent;action=com.vivo.scanner.SCAN;package=com.vivo.scanner;end",
 
 		// 8. BINARY EYE
-		"intent://scan/#Intent;scheme=binaryeye;package=de.markusfisch.android.binaryeye;launchFlags=0x40000000;end",
+		//"intent://scan/#Intent;scheme=binaryeye;package=de.markusfisch.android.binaryeye;launchFlags=0x60000000;end",
+		fmt.Sprintf("intent://markusfisch.de/BinaryEye?ret=%s#Intent;scheme=https;package=de.markusfisch.android.binaryeye;launchFlags=0x60000000;end",
+			url.QueryEscape("{RESULT}")),
 
-		// 9. ZXING
-		// "intent://#Intent;action=com.google.zxing.client.android.SCAN;package=com.example.barcodescanner;end",
-
-		// 10. ОБЩИЙ ИНТЕНТ
-		// "intent://#Intent;action=com.google.zxing.client.android.SCAN;category=android.intent.category.DEFAULT;end",
+		// 10. ZXING
+		// "intent:#Intent;action=com.google.zxing.client.android.SCAN;category=android.intent.category.DEFAULT;end",
 		// "market://search?q=pname:de.markusfisch.android.binaryeye",
 	}
 
@@ -278,3 +298,9 @@ func scanner() {
 	}
 	notFinish = false
 }
+
+// http://markusfisch.de/BinaryEye?ret=http%3A%2F%2Fexample.com%2F%3Fresult%3D{RESULT}
+// https://github.com/markusfisch/BinaryEye
+// "binaryeye://scan"
+// "intent://scan/#Intent;scheme=binaryeye;package=de.markusfisch.android.binaryeye;launchFlags=0x10000000;end"
+//

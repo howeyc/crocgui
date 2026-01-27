@@ -1,16 +1,19 @@
-//go:build ignore
+//go:build android
 
+// process_intent_android.go
+// func processIntent(){}
+// func receiveURIFromIntent(uri *C.char){}
+// func receiveTextFromIntent(text *C.char){}
 package main
 
 /*
 #include <jni.h>
-#include <stdlib.h>
-#include <string.h>
 #include <android/log.h>
-#include <sys/stat.h>
-#include <errno.h>
+#include <string.h>
+#include <stdlib.h>
 
 #define LogD(...) __android_log_print(ANDROID_LOG_DEBUG, "croc", __VA_ARGS__)
+
 static const jint RESULT_OK = -1;
 static const jint RESULT_CANCELED = 0;
 
@@ -22,7 +25,7 @@ static jboolean caseException(JNIEnv* env, const char* context) {
         (*env)->ExceptionClear(env);
         return JNI_TRUE; // Было исключение
     }
-    return JNI_FALSE; // Не было исключения
+    return JNI_FALSE; // Не было исключение
 }
 
 // receiveURIFromIntent и receiveTextFromIntent для обработки интентов
@@ -32,7 +35,7 @@ void receiveTextFromIntent(char* text);
 // Функция для установки результата активности
 static void setResult(JNIEnv* env, jobject activity, jint resultCode) {
     jclass activity_class = NULL;
-    jmethodID setResult = NULL;
+    jmethodID setResultMethod = NULL;
 
     activity_class = (*env)->GetObjectClass(env, activity);
     if (activity_class == NULL) {
@@ -40,114 +43,15 @@ static void setResult(JNIEnv* env, jobject activity, jint resultCode) {
         return;
     }
 
-    setResult = (*env)->GetMethodID(env, activity_class, "setResult", "(I)V");
-    if (setResult == NULL) {
+    setResultMethod = (*env)->GetMethodID(env, activity_class, "setResult", "(I)V");
+    if (setResultMethod == NULL) {
         LogD("C: ERROR - Failed to get setResult method");
         goto cleanup;
     }
 
     LogD("C: Setting result: %d", resultCode);
 
-    (*env)->CallVoidMethod(env, activity, setResult, resultCode);
-
-cleanup:
-    if (activity_class) {
-        (*env)->DeleteLocalRef(env, activity_class);
-    }
-}
-
-// Функция для завершения активности
-static void finish(JNIEnv* env, jobject activity) {
-    jclass activity_class = NULL;
-    jmethodID finishMethod = NULL;
-
-    activity_class = (*env)->GetObjectClass(env, activity);
-    if (activity_class == NULL) {
-        LogD("C: ERROR - Failed to get activity class for finish");
-        return;
-    }
-
-    finishMethod = (*env)->GetMethodID(env, activity_class, "finish", "()V");
-    if (finishMethod == NULL) {
-        LogD("C: ERROR - Failed to get finish method");
-        goto cleanup;
-    }
-
-    LogD("C: Finishing activity");
-    (*env)->CallVoidMethod(env, activity, finishMethod);
-
-cleanup:
-    if (activity_class) {
-        (*env)->DeleteLocalRef(env, activity_class);
-    }
-}
-
-// Функция для исключения активности из недавних приложений
-static void excludeFromRecents(JNIEnv* env, jobject activity) {
-    jclass activity_class = NULL;
-    jmethodID finishAndRemoveTask = NULL;
-    jmethodID finishAffinity = NULL;
-    jmethodID finishMethod = NULL;
-
-    jclass buildVersionClass = NULL;
-    jfieldID sdkIntField = NULL;
-    jint sdkInt = 0;
-
-    // Получаем версию Android SDK
-    buildVersionClass = (*env)->FindClass(env, "android/os/Build$VERSION");
-    if (buildVersionClass != NULL) {
-        sdkIntField = (*env)->GetStaticFieldID(env, buildVersionClass, "SDK_INT", "I");
-        if (sdkIntField != NULL) {
-            sdkInt = (*env)->GetStaticIntField(env, buildVersionClass, sdkIntField);
-        }
-        (*env)->DeleteLocalRef(env, buildVersionClass);
-    }
-
-    LogD("C: Android SDK: %d", sdkInt);
-
-    activity_class = (*env)->GetObjectClass(env, activity);
-    if (activity_class == NULL) {
-        LogD("C: ERROR - Failed to get activity class for excludeFromRecents");
-        return;
-    }
-
-    if (sdkInt >= 29) {
-        // Android 10+ - используем finishAndRemoveTask
-        finishAndRemoveTask = (*env)->GetMethodID(env, activity_class, "finishAndRemoveTask", "()V");
-        if (finishAndRemoveTask != NULL) {
-            LogD("C: Using finishAndRemoveTask (Android 10+)");
-
-            // Безопасный вызов с обработкой исключений
-            (*env)->CallVoidMethod(env, activity, finishAndRemoveTask);
-            if (caseException(env, "finishAndRemoveTask")) {
-                LogD("C: finishAndRemoveTask failed, falling back to finish()");
-                // Fallback
-                finishMethod = (*env)->GetMethodID(env, activity_class, "finish", "()V");
-                if (finishMethod != NULL) {
-                    (*env)->CallVoidMethod(env, activity, finishMethod);
-                    caseException(env, "finish fallback");
-                }
-            }
-        } else {
-            LogD("C: finishAndRemoveTask not available");
-            // Fallback to finish()
-            finishMethod = (*env)->GetMethodID(env, activity_class, "finish", "()V");
-            if (finishMethod != NULL) {
-                (*env)->CallVoidMethod(env, activity, finishMethod);
-                caseException(env, "finish");
-            }
-        }
-    } else {
-        // Android 9 и ниже
-        LogD("C: Using finish() for Android < 10");
-        finishMethod = (*env)->GetMethodID(env, activity_class, "finish", "()V");
-        if (finishMethod != NULL) {
-            (*env)->CallVoidMethod(env, activity, finishMethod);
-            caseException(env, "finish for Android < 10");
-        } else {
-            LogD("C: ERROR - No finish method found!");
-        }
-    }
+    (*env)->CallVoidMethod(env, activity, setResultMethod, resultCode);
 
 cleanup:
     if (activity_class) {
@@ -270,6 +174,7 @@ static void processIntent(JNIEnv* env, jobject activity) {
 
     if (isMain) {
         LogD("C: MAIN intent - starting main app");
+        receiveTextFromIntent(strdup(""));
         goto cleanup;
     }
 
@@ -627,238 +532,9 @@ cleanup:
         (*env)->DeleteLocalRef(env, intent);
     }
 }
-
-// Упрощенная версия - всегда использует класс текущей активности
-static void startActivitySimple(JNIEnv* env, jobject activity) {
-    jclass activityClass = NULL;
-    jclass intentClass = NULL;
-    jobject intent = NULL;
-
-    activityClass = (*env)->GetObjectClass(env, activity);
-    if (activityClass == NULL) {
-        LogD("C: ERROR - Failed to get activity class");
-        return;
-    }
-
-    intentClass = (*env)->FindClass(env, "android/content/Intent");
-    if (intentClass == NULL) {
-        LogD("C: ERROR - Failed to find Intent class");
-        goto cleanup_activity;
-    }
-
-    // Создаем Intent для текущего класса активности
-    jmethodID newIntent = (*env)->GetMethodID(env, intentClass, "<init>", "(Landroid/content/Context;Ljava/lang/Class;)V");
-    if (newIntent == NULL) {
-        LogD("C: ERROR - Failed to get Intent constructor");
-        goto cleanup_intent;
-    }
-
-    intent = (*env)->NewObject(env, intentClass, newIntent, activity, activityClass);
-    if (intent == NULL) {
-        LogD("C: ERROR - Failed to create Intent");
-        goto cleanup_intent;
-    }
-
-    LogD("C: Intent created successfully");
-
-    // Устанавливаем флаги для перезапуска
-    jmethodID setFlags = (*env)->GetMethodID(env, intentClass, "setFlags", "(I)Landroid/content/Intent;");
-    if (setFlags != NULL) {
-        (*env)->CallObjectMethod(env, intent, setFlags, 0x20000000 | 0x10000000 | 0x04000000); // SINGLE_TOP | NEW_TASK | CLEAR_TOP
-        LogD("C: Flags set: SINGLE_TOP | NEW_TASK | CLEAR_TOP");
-        caseException(env, "setFlags");
-    }
-
-    // Запускаем активность
-    jmethodID startActivity = (*env)->GetMethodID(env, activityClass, "startActivity", "(Landroid/content/Intent;)V");
-    if (startActivity != NULL) {
-        LogD("C: Starting activity");
-        (*env)->CallVoidMethod(env, activity, startActivity, intent);
-        caseException(env, "startActivity");
-        LogD("C: Activity started successfully");
-    } else {
-        LogD("C: ERROR - Failed to get startActivity method");
-    }
-
-    // Освобождение ресурсов
-    if (intent) {
-        (*env)->DeleteLocalRef(env, intent);
-    }
-
-cleanup_intent:
-    if (intentClass) {
-        (*env)->DeleteLocalRef(env, intentClass);
-    }
-
-cleanup_activity:
-    if (activityClass) {
-        (*env)->DeleteLocalRef(env, activityClass);
-    }
-}
-
-static void openAppSettings(JNIEnv *env, jobject activity) {
-    jclass versionClass = NULL, contextClass = NULL, uriClass = NULL, intentClass = NULL;
-    jstring packageName = NULL, uriString = NULL, actionJString = NULL;
-    jobject uri = NULL, intent = NULL;
-
-    LogD("C: Starting openAppSettings");
-
-    // 1. Получаем версию API
-    versionClass = (*env)->FindClass(env, "android/os/Build$VERSION");
-    if (caseException(env, "FindClass Build$VERSION")) return;
-
-    jfieldID sdkIntFieldID = (*env)->GetStaticFieldID(env, versionClass, "SDK_INT", "I");
-    jint sdkInt = (*env)->GetStaticIntField(env, versionClass, sdkIntFieldID);
-    LogD("C: Android SDK_INT: %d", sdkInt);
-
-    const char *actionStr = (sdkInt >= 31)
-        ? "android.settings.APP_OPEN_BY_DEFAULT_SETTINGS"
-        : "android.settings.APPLICATION_DETAILS_SETTINGS";
-
-    // 2. Получаем Package Name
-    contextClass = (*env)->GetObjectClass(env, activity);
-    jmethodID getPkgMethod = (*env)->GetMethodID(env, contextClass, "getPackageName", "()Ljava/lang/String;");
-    packageName = (jstring)(*env)->CallObjectMethod(env, activity, getPkgMethod);
-    if (caseException(env, "getPackageName")) goto cleanup;
-
-    // 3. Формируем URI
-    uriClass = (*env)->FindClass(env, "android/net/Uri");
-    jmethodID parseMethod = (*env)->GetStaticMethodID(env, uriClass, "parse", "(Ljava/lang/String;)Landroid/net/Uri;");
-
-    const char *pkgChars = (*env)->GetStringUTFChars(env, packageName, NULL);
-    char uriBuf[512];
-    snprintf(uriBuf, sizeof(uriBuf), "package:%s", pkgChars);
-    (*env)->ReleaseStringUTFChars(env, packageName, pkgChars);
-
-    uriString = (*env)->NewStringUTF(env, uriBuf);
-    uri = (*env)->CallStaticObjectMethod(env, uriClass, parseMethod, uriString);
-    if (caseException(env, "Uri.parse")) goto cleanup;
-
-    // 4. Создаем Intent
-    intentClass = (*env)->FindClass(env, "android/content/Intent");
-    jmethodID intentConstructor = (*env)->GetMethodID(env, intentClass, "<init>", "(Ljava/lang/String;Landroid/net/Uri;)V");
-    actionJString = (*env)->NewStringUTF(env, actionStr);
-    intent = (*env)->NewObject(env, intentClass, intentConstructor, actionJString, uri);
-    if (caseException(env, "New Intent")) goto cleanup;
-
-    // 5. Запускаем Activity
-    jmethodID startActivity = (*env)->GetMethodID(env, contextClass, "startActivity", "(Landroid/content/Intent;)V");
-    if (startActivity) {
-        (*env)->CallVoidMethod(env, activity, startActivity, intent);
-        caseException(env, "startActivity");
-        LogD("C: Settings activity started");
-    }
-
-cleanup:
-    if (actionJString) (*env)->DeleteLocalRef(env, actionJString);
-    if (intent) (*env)->DeleteLocalRef(env, intent);
-    if (intentClass) (*env)->DeleteLocalRef(env, intentClass);
-    if (uri) (*env)->DeleteLocalRef(env, uri);
-    if (uriString) (*env)->DeleteLocalRef(env, uriString);
-    if (uriClass) (*env)->DeleteLocalRef(env, uriClass);
-    if (packageName) (*env)->DeleteLocalRef(env, packageName);
-    if (contextClass) (*env)->DeleteLocalRef(env, contextClass);
-    if (versionClass) (*env)->DeleteLocalRef(env, versionClass);
-}
-
-static void openAppInfo(JNIEnv *env, jobject activity) {
-    jclass versionClass = NULL, contextClass = NULL, uriClass = NULL, intentClass = NULL;
-    jstring packageName = NULL, uriString = NULL, actionJString = NULL;
-    jobject uri = NULL, intent = NULL;
-
-    LogD("C: Starting openAppInfo");
-
-    const char *actionStr = "android.settings.APPLICATION_DETAILS_SETTINGS";
-
-    // 2. Получаем Package Name
-    contextClass = (*env)->GetObjectClass(env, activity);
-    jmethodID getPkgMethod = (*env)->GetMethodID(env, contextClass, "getPackageName", "()Ljava/lang/String;");
-    packageName = (jstring)(*env)->CallObjectMethod(env, activity, getPkgMethod);
-    if (caseException(env, "getPackageName")) goto cleanup;
-
-    // 3. Формируем URI
-    uriClass = (*env)->FindClass(env, "android/net/Uri");
-    jmethodID parseMethod = (*env)->GetStaticMethodID(env, uriClass, "parse", "(Ljava/lang/String;)Landroid/net/Uri;");
-
-    const char *pkgChars = (*env)->GetStringUTFChars(env, packageName, NULL);
-    char uriBuf[512];
-    snprintf(uriBuf, sizeof(uriBuf), "package:%s", pkgChars);
-    (*env)->ReleaseStringUTFChars(env, packageName, pkgChars);
-
-    uriString = (*env)->NewStringUTF(env, uriBuf);
-    uri = (*env)->CallStaticObjectMethod(env, uriClass, parseMethod, uriString);
-    if (caseException(env, "Uri.parse")) goto cleanup;
-
-    // 4. Создаем Intent
-    intentClass = (*env)->FindClass(env, "android/content/Intent");
-    jmethodID intentConstructor = (*env)->GetMethodID(env, intentClass, "<init>", "(Ljava/lang/String;Landroid/net/Uri;)V");
-    actionJString = (*env)->NewStringUTF(env, actionStr);
-    intent = (*env)->NewObject(env, intentClass, intentConstructor, actionJString, uri);
-    if (caseException(env, "New Intent")) goto cleanup;
-
-    // 5. Запускаем Activity
-    jmethodID startActivity = (*env)->GetMethodID(env, contextClass, "startActivity", "(Landroid/content/Intent;)V");
-    if (startActivity) {
-        (*env)->CallVoidMethod(env, activity, startActivity, intent);
-        caseException(env, "startActivity");
-        LogD("C: Settings activity started");
-    }
-
-cleanup:
-    if (actionJString) (*env)->DeleteLocalRef(env, actionJString);
-    if (intent) (*env)->DeleteLocalRef(env, intent);
-    if (intentClass) (*env)->DeleteLocalRef(env, intentClass);
-    if (uri) (*env)->DeleteLocalRef(env, uri);
-    if (uriString) (*env)->DeleteLocalRef(env, uriString);
-    if (uriClass) (*env)->DeleteLocalRef(env, uriClass);
-    if (packageName) (*env)->DeleteLocalRef(env, packageName);
-    if (contextClass) (*env)->DeleteLocalRef(env, contextClass);
-    if (versionClass) (*env)->DeleteLocalRef(env, versionClass);
-}
-
-static jboolean openIntent(JNIEnv *env, jobject activity, const char *intentUriChars) {
-    jclass intentClass = NULL;
-    jclass contextClass = NULL;
-    jobject intent = NULL;
-    jboolean success = JNI_FALSE;
-    jstring intentUriString = NULL;
-
-    intentUriString = (*env)->NewStringUTF(env, intentUriChars);
-    if (caseException(env, "NewStringUTF")) goto cleanup;
-
-    intentClass = (*env)->FindClass(env, "android/content/Intent");
-    if (caseException(env, "FindClass Intent")) goto cleanup;
-
-    jmethodID parseUriMethod = (*env)->GetStaticMethodID(env, intentClass, "parseUri", "(Ljava/lang/String;I)Landroid/content/Intent;");
-    intent = (*env)->CallStaticObjectMethod(env, intentClass, parseUriMethod, intentUriString, (jint)1);
-    if (caseException(env, "parseUri") || !intent) goto cleanup;
-
-    // jmethodID addFlagsMethod = (*env)->GetMethodID(env, intentClass, "addFlags", "(I)Landroid/content/Intent;");
-    // if (addFlagsMethod) {
-    //     (*env)->CallObjectMethod(env, intent, addFlagsMethod, (jint)0x10000000);
-    // }
-
-    contextClass = (*env)->GetObjectClass(env, activity);
-    jmethodID startActivityMethod = (*env)->GetMethodID(env, contextClass, "startActivity", "(Landroid/content/Intent;)V");
-    (*env)->CallVoidMethod(env, activity, startActivityMethod, intent);
-
-    if (!caseException(env, "startActivity")) {
-        success = JNI_TRUE;
-    }
-
-cleanup:
-    if (intentUriString) (*env)->DeleteLocalRef(env, intentUriString);
-    if (intent) (*env)->DeleteLocalRef(env, intent);
-    if (intentClass) (*env)->DeleteLocalRef(env, intentClass);
-    if (contextClass) (*env)->DeleteLocalRef(env, contextClass);
-    return success;
-}
-
 */
 import "C"
 import (
-	"fmt"
-	"time"
 	"unsafe"
 
 	"fyne.io/fyne/v2/driver"
@@ -900,170 +576,6 @@ func processIntent() {
 		)
 
 		log.Debug("C.processIntent completed")
-		return nil
-	})
-}
-
-func setResult(ok bool) {
-	driver.RunNative(func(ctx interface{}) error {
-		ac := ctx.(*driver.AndroidContext)
-
-		var resultCode C.jint
-		if ok {
-			resultCode = -1 // RESULT_OK
-		} else {
-			resultCode = 0 // RESULT_CANCELED
-		}
-
-		log.Debugf("Calling C.setResult with code: %d", resultCode)
-
-		C.setResult(
-			(*C.JNIEnv)(unsafe.Pointer(ac.Env)),
-			(C.jobject)(unsafe.Pointer(ac.Ctx)),
-			resultCode,
-		)
-
-		log.Debug("C.setResult completed")
-		return nil
-	})
-}
-
-// Это не закрывает приложение a и не закрывает окно w
-// Просто открепляет окно w от активности  org.golang.app.GoNativeActivity
-func finish() {
-	driver.RunNative(func(ctx interface{}) error {
-		ac := ctx.(*driver.AndroidContext)
-		log.Debug("Calling C.finish")
-
-		C.finish(
-			(*C.JNIEnv)(unsafe.Pointer(ac.Env)),
-			(C.jobject)(unsafe.Pointer(ac.Ctx)),
-		)
-
-		log.Debug("C.finish completed")
-		return nil
-	})
-}
-
-// excludeFromRecents исключает приложение из списка недавних
-func excludeFromRecents() {
-	driver.RunNative(func(ctx interface{}) error {
-		ac := ctx.(*driver.AndroidContext)
-		log.Debug("Calling C.excludeFromRecents")
-
-		C.excludeFromRecents(
-			(*C.JNIEnv)(unsafe.Pointer(ac.Env)),
-			(C.jobject)(unsafe.Pointer(ac.Ctx)),
-		)
-
-		log.Debug("C.excludeFromRecents completed")
-		return nil
-	})
-}
-
-// Это просто связывает окно w
-// c активностью org.golang.app.GoNativeActivity
-func startActivity() {
-	driver.RunNative(func(ctx interface{}) error {
-		ac := ctx.(*driver.AndroidContext)
-
-		log.Debug("Calling C.startActivitySimple")
-
-		// Используем упрощенную версию
-		C.startActivitySimple(
-			(*C.JNIEnv)(unsafe.Pointer(ac.Env)),
-			(C.jobject)(unsafe.Pointer(ac.Ctx)),
-		)
-
-		log.Debug("C.startActivitySimple completed")
-		return nil
-	})
-}
-
-func start() {
-	// excludeFromRecents()
-	finish()
-	sendNotification(nil, "Croc", AppClosed)
-	time.Sleep(300 * time.Millisecond)
-	startActivity()
-}
-
-func aContextString() string {
-	var result string
-
-	driver.RunNative(func(ctx interface{}) error {
-		ac := ctx.(*driver.AndroidContext)
-
-		if ac == nil {
-			return nil
-		}
-
-		// Все три значения в одном формате
-		acPtr := uintptr(unsafe.Pointer(ac))
-		result = fmt.Sprintf("ac:%d Env:%d Ctx:%d", acPtr, ac.Env, ac.Ctx)
-
-		return nil
-	})
-
-	return result
-}
-
-func openAppSettings() {
-	driver.RunNative(func(ctx interface{}) error {
-		ac := ctx.(*driver.AndroidContext)
-
-		log.Debug("Calling C.openAppSettings")
-
-		// Вызываем JNI функцию, которая сама определит API и нужный Intent
-		C.openAppSettings(
-			(*C.JNIEnv)(unsafe.Pointer(ac.Env)),
-			(C.jobject)(unsafe.Pointer(ac.Ctx)),
-		)
-
-		log.Debug("C.openAppSettings completed")
-		return nil
-	})
-}
-
-func openAppInfo() {
-	driver.RunNative(func(ctx interface{}) error {
-		ac := ctx.(*driver.AndroidContext)
-
-		log.Debug("Calling C.openAppInfo")
-
-		// Вызываем JNI функцию, которая сама определит API и нужный Intent
-		C.openAppInfo(
-			(*C.JNIEnv)(unsafe.Pointer(ac.Env)),
-			(C.jobject)(unsafe.Pointer(ac.Ctx)),
-		)
-
-		log.Debug("C.openAppInfo completed")
-		return nil
-	})
-}
-
-// OpenURL запускает строку интента на Android.
-func OpenURL(intentStr string) error {
-	return driver.RunNative(func(ctx interface{}) error {
-		ac, ok := ctx.(*driver.AndroidContext)
-		if !ok {
-			return fmt.Errorf("failed to get AndroidContext")
-		}
-
-		env := (*C.JNIEnv)(unsafe.Pointer(ac.Env))
-
-		cStr := C.CString(intentStr)
-		defer C.free(unsafe.Pointer(cStr))
-
-		res := C.openIntent(
-			env,
-			(C.jobject)(unsafe.Pointer(ac.Ctx)),
-			cStr,
-		)
-
-		if res == C.JNI_FALSE {
-			return fmt.Errorf("intent failed: %s", intentStr)
-		}
 		return nil
 	})
 }

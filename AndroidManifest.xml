@@ -2,7 +2,7 @@
 <manifest
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
-    android:versionCode="1498"
+    android:versionCode="1504"
     android:versionName="1.11.40"
     package="com.github.howeyc.crocgui">
 

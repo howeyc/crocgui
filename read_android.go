@@ -339,13 +339,16 @@ import "C"
 
 import (
 	"errors"
+	"fmt"
 	"io"
+	"strings"
 	"unsafe"
 
 	log "github.com/schollz/logger"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/driver"
+	"fyne.io/fyne/v2/storage"
 )
 
 // BufferedDocumentReader для потокового чтения больших файлов
@@ -533,4 +536,62 @@ func (b *BufferedDocumentReader) Close() error {
 // URI возвращает URI документа
 func (b *BufferedDocumentReader) URI() fyne.URI {
 	return b.uri
+}
+
+func Reader(u fyne.URI) (r fyne.URIReadCloser, err error) {
+	if u == nil {
+		err = fmt.Errorf("uri is nul")
+		return
+	}
+	// if u.Scheme() == "content" {
+	// 	return reader(u)
+	// }
+	if !canRead(u) {
+		err = fmt.Errorf("uri not readable")
+		return
+	}
+	return storage.Reader(u)
+}
+
+func canRead(uri fyne.URI) bool {
+	if uri == nil {
+		return false
+	}
+	switch MimeType(uri) {
+	case MIME_TYPE_DIR:
+		return false
+	case MIME_TYPE_OCTET_STREAM:
+		if strings.HasPrefix(uri.String(), ZhangHai) {
+			size, sizeErr := getSize(uri)
+			if sizeErr == nil && size == 4096 {
+				return false // иначе storage.CanRead  вернёт syscall.EISDIR и крэшит
+			}
+		}
+	}
+	ok, err := storage.CanRead(uri)
+	if err != nil {
+		log.Errorf("canRead: %v", err)
+		return false
+	}
+	if !ok {
+		return false
+	}
+	if false {
+		log.Debug("CanRead %s", uri)
+
+		r, err := storage.Reader(uri)
+		if err != nil {
+			log.Errorf("reader: %v", err)
+			return false
+		}
+		defer r.Close()
+
+		p := make([]byte, 1)
+		_, err = r.Read(p)
+		if err != nil {
+			log.Errorf("read: %v", err)
+			return false
+		}
+	}
+	return true
 }

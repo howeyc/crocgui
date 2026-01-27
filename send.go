@@ -901,7 +901,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 						// Если выбрать не crocgui а потом выбрать crocgui
 						// то crocgui зависнет.
 						// Чтоб это предотвратить ослеживаем смену хэндла окна w
-						// и в этот момент открепляем и пркреаляем активность к w
+						// и в этот момент открепляем и прикрепляем активность к w
 						nH := wHandle(w)
 						if oH != nH {
 							if mH != oH {
@@ -917,7 +917,12 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 						log.Debug("done")
 						return
 					case text := <-textFromIntent:
+						if !IsTaskRoot() {
+							log.Debug("!IsTaskRoot excludeFromRecents")
+							excludeFromRecents()
+						}
 						if text == "" {
+							// Ошибка обработки Намерения или Главная или из Недавних
 							log.Debug("doneProcessIntent notFinish")
 							notFinish = true
 							return
@@ -951,6 +956,10 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 						showPage() //textFromIntent
 
 					case uriString := <-uriFromIntent:
+						if !IsTaskRoot() {
+							log.Debug("!IsTaskRoot excludeFromRecents")
+							excludeFromRecents()
+						}
 						if uriString == "" {
 							log.Debug("doneProcessIntent")
 							return
@@ -966,7 +975,20 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 							switch st {
 							case "App info":
 								notFinish = true
-								openAppSettings()
+								for _, s := range []string{
+									"android.settings.APP_OPEN_BY_DEFAULT_SETTINGS",
+									"android.settings.APPLICATION_DETAILS_SETTINGS",
+								} {
+									intent := fmt.Sprintf(
+										"intent:%s#Intent;scheme=package;action=%s;launchFlags=0x60000000;end",
+										ID, s,
+									)
+									if err := OpenURL(intent); err == nil {
+										log.Debug(intent)
+										return
+									}
+								}
+								//	openAppSettings()
 								return
 							}
 							entry.SetText(st)
