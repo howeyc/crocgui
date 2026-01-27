@@ -864,7 +864,8 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 			if !notFinish {
 				if excludeRecents {
 					// Для Андроида 9 это просто finish
-					excludeFromRecents()
+					// excludeFromRecents()
+					finish()
 				} else {
 					// if md, ok := a.Driver().(mobile.Driver); ok && md != nil {
 					// 	md.GoBack()
@@ -874,17 +875,17 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 			}
 		})
 		a.Lifecycle().SetOnStopped(func() {
-			// log.Debug("Stopped " + wHandle(w))
+			log.Debug("Stopped " + wHandle(w))
 			saveAccordionState()
 		})
 		a.Lifecycle().SetOnStarted(func() {
-			// log.Debug("Started " + wHandle(w))
+			log.Debug("Started " + wHandle(w))
 			oH = wHandle(w)
 		})
 		a.Lifecycle().SetOnEnteredForeground(func() {
-			// log.Debug("EnteredForeground " + wHandle(w))
+			log.Debug("EnteredForeground " + wHandle(w))
 			notFinish = false
-			excludeRecents = false
+			// excludeRecents = false
 			close(uriFromIntent)
 			uriFromIntent = make(chan string, 100)
 
@@ -917,17 +918,17 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 						log.Debug("done")
 						return
 					case text := <-textFromIntent:
-						if !IsTaskRoot() {
-							log.Debug("!IsTaskRoot excludeFromRecents")
-							excludeFromRecents()
-						}
+						// if !IsTaskRoot() {
+						// 	log.Debug("!IsTaskRoot excludeFromRecents")
+						// 	excludeFromRecents()
+						// }
 						if text == "" {
 							// Ошибка обработки Намерения или Главная или из Недавних
 							log.Debug("doneProcessIntent notFinish")
 							notFinish = true
 							return
 						}
-						excludeRecents = true
+						// excludeRecents = true
 						if entry.Disabled() {
 							log.Debug("doneProcessIntent Sending")
 							return
@@ -956,10 +957,10 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 						showPage() //textFromIntent
 
 					case uriString := <-uriFromIntent:
-						if !IsTaskRoot() {
-							log.Debug("!IsTaskRoot excludeFromRecents")
-							excludeFromRecents()
-						}
+						// if !IsTaskRoot() {
+						// 	log.Debug("!IsTaskRoot excludeFromRecents")
+						// 	excludeFromRecents()
+						// }
 						if uriString == "" {
 							log.Debug("doneProcessIntent")
 							return

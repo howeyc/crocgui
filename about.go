@@ -106,8 +106,8 @@ func aboutTabItem(a fyne.App, _ fyne.Window) *container.TabItem {
 		//MANAGE_DEFAULT_APPS_SETTINGS
 		//NOTIFICATION_SETTINGS
 		intent := fmt.Sprintf(
-			"intent:%s#Intent;scheme=package;action=%s;launchFlags=0x60000000;end",
-			ID, "android.settings.APPLICATION_DETAILS_SETTINGS",
+			"intent:%s#Intent;scheme=package;action=%s;launchFlags=%s;end",
+			ID, "android.settings.APPLICATION_DETAILS_SETTINGS", "0x23000000",
 		)
 		if err := OpenURL(intent); err == nil {
 			log.Debug(intent)

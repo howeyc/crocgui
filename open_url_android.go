@@ -39,10 +39,10 @@ static jboolean openIntent(JNIEnv *env, jobject activity, const char *intentUriC
     intent = (*env)->CallStaticObjectMethod(env, intentClass, parseUriMethod, intentUriString, (jint)1);
     if (caseException(env, "parseUri") || !intent) goto cleanup;
 
-    jmethodID addFlagsMethod = (*env)->GetMethodID(env, intentClass, "addFlags", "(I)Landroid/content/Intent;");
-    if (addFlagsMethod) {
-        (*env)->CallObjectMethod(env, intent, addFlagsMethod, (jint)0x10000000);
-    }
+    // jmethodID addFlagsMethod = (*env)->GetMethodID(env, intentClass, "addFlags", "(I)Landroid/content/Intent;");
+    // if (addFlagsMethod) {
+    //     (*env)->CallObjectMethod(env, intent, addFlagsMethod, (jint)0x10000000);
+    // }
 
     contextClass = (*env)->GetObjectClass(env, activity);
     jmethodID startActivityMethod = (*env)->GetMethodID(env, contextClass, "startActivity", "(Landroid/content/Intent;)V");

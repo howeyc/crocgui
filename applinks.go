@@ -242,17 +242,19 @@ func setClipboard(code string, a fyne.App) (text string) {
 	return
 }
 
+// view 0x23000003
+// send 0x1b080001
 func scanner() {
 	//<action android:name="miui.intent.action.scanbarcode" />
 	//<action android:name="miui.intent.action.scanner" />
 	//<action android:name="miui.intent.action.scanbusinesscard"
 	// Иерархия 2026: Бренды -> Google GMS -> Сообщество -> Маркет
 	links := []string{
-		"intent:#Intent;action=android.intent.action.MAIN;category=android.intent.category.LAUNCHER;component=com.google.ar.lens/com.google.vr.apps.ornament.app.lens.LensLauncherActivity;end",
-		//"intent:#Intent;action=android.intent.action.MAIN;category=android.intent.category.LAUNCHER;package=com.google.ar.lens;end",
+		// + "intent:#Intent;action=android.intent.action.MAIN;category=android.intent.category.LAUNCHER;component=com.google.ar.lens/com.google.vr.apps.ornament.app.lens.LensLauncherActivity;launchFlags=0x33000000;end",
+		// -"intent:#Intent;action=android.intent.action.MAIN;category=android.intent.category.LAUNCHER;package=com.google.ar.lens;launchFlags=0x33000000;end",
 		// 1. XIAOMI / REDMI / POCO
 		// "intent:#Intent;component=com.xiaomi.scanner/.app.ScanActivity;launchFlags=0x40000000;end",
-		"intent:#Intent;action=miui.intent.action.scanner;launchFlags=0x40000000;end",
+		// +"intent:#Intent;action=miui.intent.action.scanner;launchFlags=0x33000000;end",
 		//intent://com.xiaomi.scanner/main#Intent;scheme=scanner;launchFlags=0x40000000;end
 		//scanner://com.xiaomi.scanner/main
 
@@ -268,9 +270,6 @@ func scanner() {
 		// "intent://scan/#Intent;scheme=zxing;action=com.google.zxing.client.android.SCAN;end",
 		// "intent://scan/#Intent;scheme=zxing;action=com.google.zxing.client.android.SCAN;category=android.intent.category.DEFAULT;end",
 
-		// 5. GOOGLE LENS
-		// "googlelens://v1/",
-
 		// 6. OPPO / REALME / ONEPLUS (ColorOS/Oplus)
 		// "intent:#Intent;component=com.oplus.scanner/.ScanActivity;end",
 		// "intent:#Intent;component=com.coloros.scanner/.ScanActivity;end",
@@ -280,23 +279,28 @@ func scanner() {
 
 		// 8. BINARY EYE
 		//"intent://scan/#Intent;scheme=binaryeye;package=de.markusfisch.android.binaryeye;launchFlags=0x60000000;end",
-		fmt.Sprintf("intent://markusfisch.de/BinaryEye?ret=%s#Intent;scheme=https;package=de.markusfisch.android.binaryeye;launchFlags=0x60000000;end",
-			url.QueryEscape("{RESULT}")),
+		// + fmt.Sprintf("intent://markusfisch.de/BinaryEye#Intent;scheme=https;package=de.markusfisch.android.binaryeye;launchFlags=%s;end",
+		// 	"0x33000000"),
+
+		//+ fmt.Sprintf("intent://markusfisch.de/BinaryEye?ret=%s#Intent;scheme=https;package=de.markusfisch.android.binaryeye;launchFlags=%s;end",
+		// 	url.QueryEscape("{RESULT}"), "0x33000000"),
 
 		// 10. ZXING
-		// "intent:#Intent;action=com.google.zxing.client.android.SCAN;category=android.intent.category.DEFAULT;end",
+		// +"intent:#Intent;action=com.google.zxing.client.android.SCAN;category=android.intent.category.DEFAULT;launchFlags=0x33000000;end",
+		"intent://search?q=pname:de.markusfisch.android.binaryeye#Intent;scheme=market;launchFlags=0x33000000;end",
 		// "market://search?q=pname:de.markusfisch.android.binaryeye",
 	}
 
-	notFinish = true
+	// notFinish = true
 	for _, s := range links {
 		log.Debug(s)
 		if err := OpenURL(s); err == nil {
 			log.Debugf("find %s", s)
+			excludeFromRecents()
 			return
 		}
 	}
-	notFinish = false
+	// notFinish = false
 }
 
 // http://markusfisch.de/BinaryEye?ret=http%3A%2F%2Fexample.com%2F%3Fresult%3D{RESULT}

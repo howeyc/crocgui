@@ -132,18 +132,18 @@ static void processIntent(JNIEnv* env, jobject activity) {
 
         if (flags & 0x00100000) { // LAUNCHED_FROM_HISTORY
             LogD("C: Skipping: Activity launched from history");
-            receiveTextFromIntent(strdup(""));
+            // receiveTextFromIntent(strdup(""));
             goto cleanup;
         }
         if (flags & 0x00400000) { // BROUGHT_TO_FRONT
             LogD("C: Skipping: Activity brought to front");
-            receiveTextFromIntent(strdup(""));
+            // receiveTextFromIntent(strdup(""));
             goto cleanup;
         }
 
         if (flags & 0x00000800) { // RELAUNCHED_FROM_HISTORY
             LogD("C: Skipping: Activity relaunched from history (Android 15+)");
-            receiveTextFromIntent(strdup(""));
+            // receiveTextFromIntent(strdup(""));
             goto cleanup;
         }
     }
@@ -174,7 +174,7 @@ static void processIntent(JNIEnv* env, jobject activity) {
 
     if (isMain) {
         LogD("C: MAIN intent - starting main app");
-        receiveTextFromIntent(strdup(""));
+        // receiveTextFromIntent(strdup(""));
         goto cleanup;
     }
 

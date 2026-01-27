@@ -277,3 +277,4 @@ func OpenURL(s string) error {
 		return err
 	}
 }
+func IsTaskRoot() bool { return false }
