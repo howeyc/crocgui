@@ -23,6 +23,170 @@ import (
 	"github.com/skip2/go-qrcode"
 )
 
+// Флаги активности (Activity Flags)
+const (
+	// Если установлен, новая activity не сохраняется в стеке истории.
+	// Как только пользователь уходит от неё, activity завершается.
+	FLAG_ACTIVITY_NO_HISTORY = 0x40000000
+
+	// Если установлен, activity не будет запущена, если она уже работает
+	// на вершине стека истории.
+	FLAG_ACTIVITY_SINGLE_TOP = 0x20000000
+
+	// Если установлен, эта activity станет началом новой задачи
+	// в этом стеке истории.
+	FLAG_ACTIVITY_NEW_TASK = 0x10000000
+
+	// Используется для создания новой задачи и запуска activity в нее.
+	// Всегда используется вместе с FLAG_ACTIVITY_NEW_DOCUMENT или FLAG_ACTIVITY_NEW_TASK.
+	FLAG_ACTIVITY_MULTIPLE_TASK = 0x08000000
+
+	// Если установлен, и запускаемая activity уже работает в текущей задаче,
+	// то вместо запуска нового экземпляра все другие activity поверх неё
+	// будут закрыты.
+	FLAG_ACTIVITY_CLEAR_TOP = 0x04000000
+
+	// Если установлен и этот intent используется для запуска новой activity
+	// из существующей, то цель ответа существующей activity будет
+	// передана новой activity.
+	FLAG_ACTIVITY_FORWARD_RESULT = 0x02000000
+
+	// Если установлен и этот intent используется для запуска новой activity
+	// из существующей, текущая activity не будет считаться верхней
+	// для решения о доставке нового intent.
+	FLAG_ACTIVITY_PREVIOUS_IS_TOP = 0x01000000
+
+	// Если установлен, новая activity не сохраняется в списке недавно
+	// запущенных activities.
+	FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS = 0x00800000
+
+	// Этот флаг обычно не устанавливается кодом приложения, а устанавливается
+	// системой, как описано в документации launchMode для singleTask.
+	FLAG_ACTIVITY_BROUGHT_TO_FRONT = 0x00400000
+
+	// Если установлен, и эта activity либо запускается в новой задаче,
+	// либо выводится наверх существующей задачи, то она будет запущена
+	// как главная дверь задачи.
+	FLAG_ACTIVITY_RESET_TASK_IF_NEEDED = 0x00200000
+
+	// Этот флаг устанавливается системой, если эта activity запускается из истории.
+	FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY = 0x00100000
+
+	// Устаревший флаг, начиная с API 21 работает идентично
+	// FLAG_ACTIVITY_NEW_DOCUMENT.
+	FLAG_ACTIVITY_CLEAR_WHEN_TASK_RESET = 0x00080000
+
+	// Используется для открытия документа в новой задаче, корнем которой
+	// является activity, запущенная этим Intent.
+	FLAG_ACTIVITY_NEW_DOCUMENT = FLAG_ACTIVITY_CLEAR_WHEN_TASK_RESET
+
+	// Если установлен, этот флаг предотвратит нормальный вызов
+	// onUserLeaveHint у текущей передней activity перед её приостановкой.
+	FLAG_ACTIVITY_NO_USER_ACTION = 0x00040000
+
+	// Если установлен в Intent, переданном в startActivity(),
+	// этот флаг вызовет перемещение запускаемой activity на вершину
+	// стека истории её задачи, если она уже работает.
+	FLAG_ACTIVITY_REORDER_TO_FRONT = 0x00020000
+
+	// Если установлен в Intent, переданном в startActivity(),
+	// этот флаг предотвратит применение системой анимации перехода
+	// activity к следующему состоянию activity.
+	FLAG_ACTIVITY_NO_ANIMATION = 0x00010000
+
+	// Если установлен в Intent, переданном в startActivity(),
+	// этот флаг вызовет очистку любой существующей задачи, связанной
+	// с activity, перед запуском activity.
+	FLAG_ACTIVITY_CLEAR_TASK = 0x00008000
+
+	// Если установлен в Intent, переданном в startActivity(),
+	// этот флаг поместит новую задачу поверх текущей домашней задачи.
+	FLAG_ACTIVITY_TASK_ON_HOME = 0x00004000
+
+	// Позволяет документу, созданному FLAG_ACTIVITY_NEW_DOCUMENT,
+	// оставаться в списке недавних задач после закрытия пользователем.
+	FLAG_ACTIVITY_RETAIN_IN_RECENTS = 0x00002000
+
+	// Этот флаг используется только для разделенного многозадачного режима.
+	// Новая activity будет отображаться рядом с запускающей её activity.
+	FLAG_ACTIVITY_LAUNCH_ADJACENT = 0x00001000
+
+	// Если установлен в Intent, переданном в startActivity(),
+	// этот флаг попытается запустить мгновенное приложение, если на устройстве
+	// нет полного приложения, которое уже может обработать intent.
+	FLAG_ACTIVITY_MATCH_EXTERNAL = 0x00000800
+
+	// Если установлен в intent, переданном в startActivity(),
+	// этот флаг запустит intent только если он разрешается в результат,
+	// который не является браузером.
+	FLAG_ACTIVITY_REQUIRE_NON_BROWSER = 0x00000400
+
+	// Если установлен в intent, переданном в startActivity(),
+	// этот флаг запустит intent только если он разрешается в единственный результат.
+	FLAG_ACTIVITY_REQUIRE_DEFAULT = 0x00000200
+)
+
+// Другие флаги Intent
+const (
+	// Если установлен, получатель этого Intent получит разрешение на
+	// выполнение операций чтения URI в данных Intent.
+	FLAG_GRANT_READ_URI_PERMISSION = 0x00000001
+
+	// Если установлен, получатель этого Intent получит разрешение на
+	// выполнение операций записи URI в данных Intent.
+	FLAG_GRANT_WRITE_URI_PERMISSION = 0x00000002
+
+	// Может быть установлен вызывающим для указания, что этот Intent исходит
+	// из фоновой операции, а не от прямого взаимодействия с пользователем.
+	FLAG_FROM_BACKGROUND = 0x00000004
+
+	// Флаг для отладки: при установке, во время разрешения этого intent
+	// будут выводиться сообщения журнала.
+	FLAG_DEBUG_LOG_RESOLUTION = 0x00000008
+
+	// Если установлен, этот intent не будет соответствовать компонентам в пакетах,
+	// которые в данный момент остановлены.
+	FLAG_EXCLUDE_STOPPED_PACKAGES = 0x00000010
+
+	// Если установлен, этот intent всегда будет соответствовать компонентам в пакетах,
+	// которые в данный момент остановлены.
+	FLAG_INCLUDE_STOPPED_PACKAGES = 0x00000020
+
+	// В сочетании с FLAG_GRANT_READ_URI_PERMISSION и/или
+	// FLAG_GRANT_WRITE_URI_PERMISSION, предоставление прав доступа к URI может быть
+	// сохранено после перезагрузки устройства.
+	FLAG_GRANT_PERSISTABLE_URI_PERMISSION = 0x00000040
+
+	// В сочетании с FLAG_GRANT_READ_URI_PERMISSION и/или
+	// FLAG_GRANT_WRITE_URI_PERMISSION, предоставление прав доступа к URI
+	// применяется к любому URI, который является префиксным совпадением.
+	FLAG_GRANT_PREFIX_URI_PERMISSION = 0x00000080
+
+	// Флаг для автоматического сопоставления intents на основе их осведомленности
+	// о Direct Boot и текущего состояния пользователя.
+	FLAG_DIRECT_BOOT_AUTO = 0x00000100
+
+	// Устаревший алиас для FLAG_DIRECT_BOOT_AUTO
+	FLAG_DEBUG_TRIAGED_MISSING = FLAG_DIRECT_BOOT_AUTO
+
+	// Внутренний флаг, указывающий, что эфемерные приложения не должны
+	// учитываться при разрешении intent.
+	FLAG_IGNORE_EPHEMERAL = 0x80000000
+
+	APPLICATION_DETAILS_SETTINGS = "android.settings.APPLICATION_DETAILS_SETTINGS"
+	APP_OPEN_BY_DEFAULT_SETTINGS = "android.settings.APP_OPEN_BY_DEFAULT_SETTINGS"
+)
+
+func flagActivity(flags ...int) string {
+	var result int = 0
+
+	for _, flag := range flags {
+		result |= flag
+	}
+
+	return fmt.Sprintf("0x%08X", result)
+}
+
 func fromURI(u string) (st, ne, as, a6, ps, pd, s5, ct string, err error) {
 	if len(u) <= len(IO) || !strings.HasPrefix(u, IO) {
 		err = fmt.Errorf("not IO")
@@ -105,21 +269,26 @@ func showQR(a fyne.App, w fyne.Window, text string) {
 	img.FillMode = canvas.ImageFillContain
 
 	setupButton := widget.NewButtonWithIcon("Deep Link", theme.SettingsIcon(), func() {
+		intent := &Intent{
+			Data:   ID,
+			Scheme: "package",
+			Flags: flagActivity(
+				FLAG_ACTIVITY_SINGLE_TOP,
+				FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS,
+			),
+		}
 		notFinish = true
-		//openAppSettings()
-		for _, s := range []string{
-			"android.settings.APP_OPEN_BY_DEFAULT_SETTINGS",
-			"android.settings.APPLICATION_DETAILS_SETTINGS",
+		for _, i := range []string{
+			APP_OPEN_BY_DEFAULT_SETTINGS,
+			APPLICATION_DETAILS_SETTINGS,
 		} {
-			intent := fmt.Sprintf(
-				"intent:%s#Intent;scheme=package;action=%s;end",
-				ID, s,
-			)
-			if err := OpenURL(intent); err == nil {
+			intent.SetAction(i)
+			if err := OpenURL(intent.String()); err == nil {
 				log.Debug(intent)
 				return
 			}
 		}
+		notFinish = false
 	})
 	label := widget.NewLabel(lp("Click the link below to test. If a browser opens, setup is required. If the app restarts, it's OK."))
 	label.Wrapping = fyne.TextWrapWord
@@ -143,6 +312,36 @@ func showQR(a fyne.App, w fyne.Window, text string) {
 
 	link.OnTapped = func() {
 		d.Hide()
+
+		intent := &Intent{
+			Data:   strings.TrimPrefix(link.URL.String(), link.URL.Scheme+":"),
+			Scheme: link.URL.Scheme,
+			Flags: flagActivity(
+				FLAG_ACTIVITY_SINGLE_TOP,
+				FLAG_ACTIVITY_REQUIRE_NON_BROWSER,
+			),
+		}
+		s := intent.String()
+		notFinish = true
+		log.Debug(s)
+		if err := OpenURL(s); err == nil {
+			NewToast(w, "OK").Show()
+			return
+		}
+		NewToast(w, "Deep Link setup is required").Show()
+		// Браузер
+		intent.SetFlags(flagActivity(
+			FLAG_ACTIVITY_NEW_TASK,
+			FLAG_ACTIVITY_SINGLE_TOP,
+			FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS,
+		))
+		s = intent.String()
+		log.Debug(s)
+		if err := OpenURL(s); err != nil {
+			log.Errorf("%v", err)
+		}
+		notFinish = false
+		return
 		u, err := url.Parse(text)
 		if err == nil {
 			if isAndroid {
@@ -164,6 +363,9 @@ func showQR(a fyne.App, w fyne.Window, text string) {
 
 		select {
 		case <-timer.C:
+			if d == nil {
+				return
+			}
 			fyne.Do(d.Hide)
 		case <-done:
 			return
@@ -244,58 +446,47 @@ func setClipboard(code string, a fyne.App) (text string) {
 
 // view 0x23000003
 // send 0x1b080001
+// 0x33000000
 func scanner() {
 	//<action android:name="miui.intent.action.scanbarcode" />
 	//<action android:name="miui.intent.action.scanner" />
 	//<action android:name="miui.intent.action.scanbusinesscard"
 	// Иерархия 2026: Бренды -> Google GMS -> Сообщество -> Маркет
-	links := []string{
-		// + "intent:#Intent;action=android.intent.action.MAIN;category=android.intent.category.LAUNCHER;component=com.google.ar.lens/com.google.vr.apps.ornament.app.lens.LensLauncherActivity;launchFlags=0x33000000;end",
-		// -"intent:#Intent;action=android.intent.action.MAIN;category=android.intent.category.LAUNCHER;package=com.google.ar.lens;launchFlags=0x33000000;end",
-		// 1. XIAOMI / REDMI / POCO
-		// "intent:#Intent;component=com.xiaomi.scanner/.app.ScanActivity;launchFlags=0x40000000;end",
-		// +"intent:#Intent;action=miui.intent.action.scanner;launchFlags=0x33000000;end",
-		//intent://com.xiaomi.scanner/main#Intent;scheme=scanner;launchFlags=0x40000000;end
-		//scanner://com.xiaomi.scanner/main
-
-		// 2. SAMSUNG (Optical Reader / Quick Scan)
-		// "intent:#Intent;action=com.samsung.android.app.opticalreader.SCAN;package=com.samsung.android.app.opticalreader;end",
-
-		// 3. HUAWEI / HONOR (AI Lens)
-		// "intent:#Intent;action=com.huawei.scanner.action.SCAN;package=com.huawei.scanner;end",
-		// "intent:#Intent;action=com.huawei.hms.actions.scanservice.SCAN;package=com.huawei.scanner;end",
-
-		// 4. GOOGLE
-		// "intent:#Intent;action=com.google.android.gms.actions.SCAN_QR_CODE;end", //;package=com.google.android.gms
-		// "intent://scan/#Intent;scheme=zxing;action=com.google.zxing.client.android.SCAN;end",
-		// "intent://scan/#Intent;scheme=zxing;action=com.google.zxing.client.android.SCAN;category=android.intent.category.DEFAULT;end",
-
-		// 6. OPPO / REALME / ONEPLUS (ColorOS/Oplus)
-		// "intent:#Intent;component=com.oplus.scanner/.ScanActivity;end",
-		// "intent:#Intent;component=com.coloros.scanner/.ScanActivity;end",
-
-		// 7. VIVO / IQOO
-		// "intent:#Intent;action=com.vivo.scanner.SCAN;package=com.vivo.scanner;end",
-
-		// 8. BINARY EYE
-		//"intent://scan/#Intent;scheme=binaryeye;package=de.markusfisch.android.binaryeye;launchFlags=0x60000000;end",
-		// + fmt.Sprintf("intent://markusfisch.de/BinaryEye#Intent;scheme=https;package=de.markusfisch.android.binaryeye;launchFlags=%s;end",
-		// 	"0x33000000"),
-
-		//+ fmt.Sprintf("intent://markusfisch.de/BinaryEye?ret=%s#Intent;scheme=https;package=de.markusfisch.android.binaryeye;launchFlags=%s;end",
-		// 	url.QueryEscape("{RESULT}"), "0x33000000"),
-
-		// 10. ZXING
-		// +"intent:#Intent;action=com.google.zxing.client.android.SCAN;category=android.intent.category.DEFAULT;launchFlags=0x33000000;end",
-		"intent://search?q=pname:de.markusfisch.android.binaryeye#Intent;scheme=market;launchFlags=0x33000000;end",
-		// "market://search?q=pname:de.markusfisch.android.binaryeye",
+	intents := []*Intent{
+		// XIAOMI / REDMI / POCO
+		&Intent{Action: "miui.intent.action.scanner"},
+		// SAMSUNG
+		&Intent{Action: "com.samsung.android.app.opticalreader.SCAN"},
+		// OPPO / REALME / ONEPLUS (ColorOS/Oplus)
+		&Intent{Component: "com.oplus.scanner/.ScanActivity"},
+		// ColorOS
+		&Intent{Component: "com.coloros.scanner/.ScanActivity"},
+		// VIVO / IQOO
+		&Intent{Action: "com.vivo.scanner.SCAN"},
+		// BINARY EYE
+		&Intent{Data: "//markusfisch.de/BinaryEye?ret=" + url.QueryEscape("{RESULT}"), Scheme: "https", Package: "de.markusfisch.android.binaryeye"},
+		//&Intent{Data: "//scan/", Scheme: "binaryeye"},
+		// ZXING
+		&Intent{Action: "com.google.zxing.client.android.SCAN", Categories: []string{CATEGORY_DEFAULT}},
+		// Google Lens
+		&Intent{Component: "com.google.ar.lens/com.google.vr.apps.ornament.app.lens.LensLauncherActivity"},
+		// BINARY EYE market
+		&Intent{Data: "//details?id=de.markusfisch.android.binaryeye", Scheme: "market", Package: "com.android.vending"},
 	}
-
-	// notFinish = true
-	for _, s := range links {
-		log.Debug(s)
+	for _, i := range intents {
+		i.Flags = flagActivity(
+			FLAG_ACTIVITY_NEW_TASK,
+			FLAG_ACTIVITY_NO_HISTORY,
+			FLAG_ACTIVITY_SINGLE_TOP,
+			FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS,
+			FLAG_ACTIVITY_REQUIRE_NON_BROWSER,
+			FLAG_ACTIVITY_CLEAR_TOP,
+			FLAG_ACTIVITY_CLEAR_TASK,
+		)
+		s := i.String()
+		log.Debugf("%s", s)
 		if err := OpenURL(s); err == nil {
-			log.Debugf("find %s", s)
+			log.Debugf("find^^^^^^^^^^^^^^^^^^")
 			excludeFromRecents()
 			return
 		}
@@ -303,8 +494,348 @@ func scanner() {
 	// notFinish = false
 }
 
-// http://markusfisch.de/BinaryEye?ret=http%3A%2F%2Fexample.com%2F%3Fresult%3D{RESULT}
-// https://github.com/markusfisch/BinaryEye
-// "binaryeye://scan"
-// "intent://scan/#Intent;scheme=binaryeye;package=de.markusfisch.android.binaryeye;launchFlags=0x10000000;end"
-//
+// Intent represents an abstract description of an operation to be performed.
+// All fields are defined as strings to simplify the Go implementation.
+type Intent struct {
+	// Action - The general action to be performed (e.g., ACTION_VIEW, ACTION_EDIT)
+	Action string
+
+	// Data - The data to operate on, expressed as a URI string
+	Data string
+
+	// Type - Explicit MIME type of the intent data
+	Type string
+
+	// Package - Target package name for the intent
+	Package string
+
+	// Component - Explicit component name (e.g., "com.example/.MainActivity")
+	Component string
+
+	// Categories - Set of categories for the intent
+	Categories []string
+
+	// Flags - Launch flags for the intent (stored as string but represents integer flags)
+	Flags string
+
+	// Scheme - URI scheme part
+	Scheme string
+
+	// SourceBounds - Rectangle bounds as string (e.g., "0,0,100,100")
+	SourceBounds string
+
+	// Identifier - Intent identifier
+	Identifier string
+
+	// Extras - Additional data as key-value pairs
+	Extras map[string]ExtraValue
+
+	// Selector - Optional selector intent
+	Selector *Intent
+}
+
+// ExtraValue represents a typed extra value in the intent
+type ExtraValue struct {
+	Type  string // Type: "S", "B", "i", "l", "f", "d", "b", "c", "s"
+	Value string // String representation of the value
+}
+
+// Common intent actions (from Android Intent class)
+const (
+	ACTION_VIEW   = "android.intent.action.VIEW"
+	ACTION_EDIT   = "android.intent.action.EDIT"
+	ACTION_MAIN   = "android.intent.action.MAIN"
+	ACTION_DIAL   = "android.intent.action.DIAL"
+	ACTION_CALL   = "android.intent.action.CALL"
+	ACTION_SEND   = "android.intent.action.SEND"
+	ACTION_SEARCH = "android.intent.action.SEARCH"
+)
+
+// Common intent categories
+const (
+	CATEGORY_DEFAULT     = "android.intent.category.DEFAULT"
+	CATEGORY_BROWSABLE   = "android.intent.category.BROWSABLE"
+	CATEGORY_LAUNCHER    = "android.intent.category.LAUNCHER"
+	CATEGORY_HOME        = "android.intent.category.HOME"
+	CATEGORY_ALTERNATIVE = "android.intent.category.ALTERNATIVE"
+)
+
+// NewIntent creates a new Intent with default VIEW action
+func NewIntent() *Intent {
+	return &Intent{
+		Action:     ACTION_VIEW,
+		Extras:     make(map[string]ExtraValue),
+		Categories: []string{},
+	}
+}
+
+// SetAction sets the action for the intent
+func (i *Intent) SetAction(action string) *Intent {
+	i.Action = action
+	return i
+}
+
+// SetData sets the data URI for the intent
+func (i *Intent) SetData(data string) *Intent {
+	i.Data = data
+	return i
+}
+
+// SetType sets the MIME type for the intent
+func (i *Intent) SetType(typeStr string) *Intent {
+	i.Type = typeStr
+	return i
+}
+
+// SetPackage sets the target package name
+func (i *Intent) SetPackage(pkg string) *Intent {
+	i.Package = pkg
+	return i
+}
+
+// SetComponent sets the component name
+func (i *Intent) SetComponent(component string) *Intent {
+	i.Component = component
+	return i
+}
+
+// AddCategory adds a category to the intent
+func (i *Intent) AddCategory(category string) *Intent {
+	i.Categories = append(i.Categories, category)
+	return i
+}
+
+// SetFlags sets the launch flags (as string representation of integer)
+func (i *Intent) SetFlags(flags string) *Intent {
+	i.Flags = flags
+	return i
+}
+
+// SetScheme sets the URI scheme
+func (i *Intent) SetScheme(scheme string) *Intent {
+	i.Scheme = scheme
+	return i
+}
+
+// PutExtra adds an extra value to the intent
+func (i *Intent) PutExtra(key string, value ExtraValue) *Intent {
+	if i.Extras == nil {
+		i.Extras = make(map[string]ExtraValue)
+	}
+	i.Extras[key] = value
+	return i
+}
+
+// PutStringExtra adds a string extra
+func (i *Intent) PutStringExtra(key, value string) *Intent {
+	return i.PutExtra(key, ExtraValue{Type: "S", Value: value})
+}
+
+// PutIntExtra adds an integer extra
+func (i *Intent) PutIntExtra(key string, value int) *Intent {
+	return i.PutExtra(key, ExtraValue{Type: "i", Value: fmt.Sprintf("%d", value)})
+}
+
+// PutBoolExtra adds a boolean extra
+func (i *Intent) PutBoolExtra(key string, value bool) *Intent {
+	return i.PutExtra(key, ExtraValue{Type: "B", Value: fmt.Sprintf("%t", value)})
+}
+
+// String returns the intent as a string in the format: "intent:#Intent;package=my;end"
+// This mimics the Android Intent.toUri(URI_INTENT_SCHEME) format
+func (i *Intent) String() string {
+	var parts []string
+
+	// Start with intent scheme
+	result := "intent:"
+
+	// Add data part if present
+	if i.Data != "" {
+		result += i.Data
+	}
+
+	// Add Intent parameters section
+	result += "#Intent;"
+
+	// Add action
+	if i.Action != "" && i.Action != ACTION_VIEW {
+		parts = append(parts, fmt.Sprintf("action=%s", i.Action))
+	}
+
+	// Add categories
+	for _, category := range i.Categories {
+		parts = append(parts, fmt.Sprintf("category=%s", category))
+	}
+
+	// Add type
+	if i.Type != "" {
+		parts = append(parts, fmt.Sprintf("type=%s", i.Type))
+	}
+
+	// Add identifier
+	if i.Identifier != "" {
+		parts = append(parts, fmt.Sprintf("identifier=%s", i.Identifier))
+	}
+
+	// Add launch flags
+	if i.Flags != "" {
+		parts = append(parts, fmt.Sprintf("launchFlags=%s", i.Flags))
+	}
+
+	// Add package
+	if i.Package != "" {
+		parts = append(parts, fmt.Sprintf("package=%s", i.Package))
+	}
+
+	// Add component
+	if i.Component != "" {
+		parts = append(parts, fmt.Sprintf("component=%s", i.Component))
+	}
+
+	// Add scheme
+	if i.Scheme != "" {
+		parts = append(parts, fmt.Sprintf("scheme=%s", i.Scheme))
+	}
+
+	// Add source bounds
+	if i.SourceBounds != "" {
+		parts = append(parts, fmt.Sprintf("sourceBounds=%s", i.SourceBounds))
+	}
+
+	// Add extras
+	if i.Extras != nil {
+		for key, extra := range i.Extras {
+			// Determine the type prefix based on the ExtraValue.Type
+			typePrefix := ""
+			switch extra.Type {
+			case "S":
+				typePrefix = "S."
+			case "B":
+				typePrefix = "B."
+			case "b":
+				typePrefix = "b."
+			case "c":
+				typePrefix = "c."
+			case "d":
+				typePrefix = "d."
+			case "f":
+				typePrefix = "f."
+			case "i":
+				typePrefix = "i."
+			case "l":
+				typePrefix = "l."
+			case "s":
+				typePrefix = "s."
+			default:
+				typePrefix = "S." // Default to string
+			}
+			parts = append(parts, fmt.Sprintf("%s%s=%s", typePrefix, key, extra.Value))
+		}
+	}
+
+	// Add selector if present (simplified - in real implementation would be more complex)
+	if i.Selector != nil {
+		parts = append(parts, "SEL")
+		// Note: Selector would have its own parameters in a full implementation
+	}
+
+	// Combine all parts
+	if len(parts) > 0 {
+		result += strings.Join(parts, ";") + ";"
+	}
+
+	// End marker
+	result += "end"
+
+	return result
+}
+
+// ParseUri parses a URI string into an Intent (simplified version)
+// This is a basic implementation based on the Java parseUriInternal method
+func ParseUri(uri string) (*Intent, error) {
+	intent := NewIntent()
+
+	// Check for android-app scheme
+	if strings.HasPrefix(uri, "android-app:") {
+		// Simplified handling for android-app scheme
+		intent.SetPackage(strings.TrimPrefix(uri, "android-app://"))
+		intent.SetAction(ACTION_MAIN)
+		return intent, nil
+	}
+
+	// Check for intent scheme
+	if strings.HasPrefix(uri, "intent:") {
+		// Find the #Intent; part
+		hashIndex := strings.LastIndex(uri, "#")
+		if hashIndex == -1 {
+			// Simple intent URI without parameters
+			dataPart := strings.TrimPrefix(uri, "intent:")
+			if dataPart != "" {
+				intent.SetData(dataPart)
+			}
+			return intent, nil
+		}
+
+		// Parse intent with parameters
+		dataPart := uri[:hashIndex]
+		if dataPart != "" && dataPart != "intent:" {
+			intent.SetData(strings.TrimPrefix(dataPart, "intent:"))
+		}
+
+		// Parse parameters (simplified)
+		paramPart := uri[hashIndex:]
+		if strings.HasPrefix(paramPart, "#Intent;") {
+			// Remove #Intent; and ;end
+			paramPart = strings.TrimPrefix(paramPart, "#Intent;")
+			paramPart = strings.TrimSuffix(paramPart, ";end")
+
+			// Split parameters
+			params := strings.Split(paramPart, ";")
+			for _, param := range params {
+				if param == "" {
+					continue
+				}
+
+				// Parse key-value pair
+				parts := strings.SplitN(param, "=", 2)
+				if len(parts) != 2 {
+					continue
+				}
+
+				key := parts[0]
+				value := parts[1]
+
+				// Handle different parameter types
+				switch key {
+				case "action":
+					intent.SetAction(value)
+				case "package":
+					intent.SetPackage(value)
+				case "component":
+					intent.SetComponent(value)
+				case "type":
+					intent.SetType(value)
+				case "scheme":
+					intent.SetScheme(value)
+				case "launchFlags":
+					intent.SetFlags(value)
+				case "category":
+					intent.AddCategory(value)
+				default:
+					// Handle extras (simplified)
+					if len(key) > 2 && key[1] == '.' {
+						// This is an extra (e.g., "S.name", "i.id")
+						extraType := string(key[0])
+						extraKey := key[2:]
+						intent.PutExtra(extraKey, ExtraValue{Type: extraType, Value: value})
+					}
+				}
+			}
+		}
+	} else {
+		// Regular URI - treat as VIEW action
+		intent.SetData(uri)
+	}
+
+	return intent, nil
+}

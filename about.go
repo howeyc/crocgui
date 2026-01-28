@@ -93,26 +93,25 @@ func aboutTabItem(a fyne.App, _ fyne.Window) *container.TabItem {
 	newHyperlink := widget.NewHyperlink("", nil)
 	newHyperlink.Hidden = true
 	appInfo := widget.NewButtonWithIcon(lp("App info"), theme.InfoIcon(), func() {
+		intent := &Intent{
+			Data:   ID,
+			Scheme: "package",
+			Action: APPLICATION_DETAILS_SETTINGS,
+			Flags: flagActivity(
+				//				FLAG_ACTIVITY_NO_HISTORY,
+				FLAG_ACTIVITY_SINGLE_TOP,
+				//FLAG_ACTIVITY_FORWARD_RESULT,
+				//FLAG_ACTIVITY_PREVIOUS_IS_TOP,
+				FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS,
+			),
+		}
+		s := intent.String()
 		notFinish = true
-		// intent := fmt.Sprintf("intent:%s#Intent;"+
-		// 	"action=%s;"+
-		// 	"component=%s;"+
-		// 	"S.package=%s;end",
-		// 	"",
-		// 	"android.settings.APPLICATION_DETAILS_SETTINGS",
-		// 	"com.android.settings/.applications.InstalledAppDetails",
-		// 	ID)
-
-		//MANAGE_DEFAULT_APPS_SETTINGS
-		//NOTIFICATION_SETTINGS
-		intent := fmt.Sprintf(
-			"intent:%s#Intent;scheme=package;action=%s;launchFlags=%s;end",
-			ID, "android.settings.APPLICATION_DETAILS_SETTINGS", "0x23000000",
-		)
-		if err := OpenURL(intent); err == nil {
-			log.Debug(intent)
+		if err := OpenURL(s); err == nil {
+			log.Debug(s)
 			return
 		}
+		notFinish = false
 		//openAppInfo()
 	})
 	appInfo.Hidden = !isAndroid

@@ -13,6 +13,40 @@ package main
 #include <stdlib.h>
 
 #define LogD(...) __android_log_print(ANDROID_LOG_DEBUG, "croc", __VA_ARGS__)
+#define FLAG_GRANT_READ_URI_PERMISSION         0x00000001
+#define FLAG_GRANT_WRITE_URI_PERMISSION        0x00000002
+#define FLAG_FROM_BACKGROUND                   0x00000004
+#define FLAG_DEBUG_LOG_RESOLUTION              0x00000008
+#define FLAG_EXCLUDE_STOPPED_PACKAGES          0x00000010
+#define FLAG_INCLUDE_STOPPED_PACKAGES          0x00000020
+#define FLAG_GRANT_PERSISTABLE_URI_PERMISSION  0x00000040
+#define FLAG_GRANT_PREFIX_URI_PERMISSION       0x00000080
+#define FLAG_DIRECT_BOOT_AUTO                  0x00000100
+#define FLAG_DEBUG_TRIAGED_MISSING             FLAG_DIRECT_BOOT_AUTO
+#define FLAG_IGNORE_EPHEMERAL                  0x80000000
+#define FLAG_ACTIVITY_NO_HISTORY               0x40000000
+#define FLAG_ACTIVITY_SINGLE_TOP               0x20000000
+#define FLAG_ACTIVITY_NEW_TASK                 0x10000000
+#define FLAG_ACTIVITY_MULTIPLE_TASK            0x08000000
+#define FLAG_ACTIVITY_CLEAR_TOP                0x04000000
+#define FLAG_ACTIVITY_FORWARD_RESULT           0x02000000
+#define FLAG_ACTIVITY_PREVIOUS_IS_TOP          0x01000000
+#define FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS     0x00800000
+#define FLAG_ACTIVITY_BROUGHT_TO_FRONT         0x00400000
+#define FLAG_ACTIVITY_RESET_TASK_IF_NEEDED     0x00200000
+#define FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY    0x00100000
+#define FLAG_ACTIVITY_CLEAR_WHEN_TASK_RESET    0x00080000
+#define FLAG_ACTIVITY_NEW_DOCUMENT             FLAG_ACTIVITY_CLEAR_WHEN_TASK_RESET
+#define FLAG_ACTIVITY_NO_USER_ACTION           0x00040000
+#define FLAG_ACTIVITY_REORDER_TO_FRONT         0x00020000
+#define FLAG_ACTIVITY_NO_ANIMATION             0x00010000
+#define FLAG_ACTIVITY_CLEAR_TASK               0x00008000
+#define FLAG_ACTIVITY_TASK_ON_HOME             0x00004000
+#define FLAG_ACTIVITY_RETAIN_IN_RECENTS        0x00002000
+#define FLAG_ACTIVITY_LAUNCH_ADJACENT          0x00001000
+#define FLAG_ACTIVITY_MATCH_EXTERNAL           0x00000800
+#define FLAG_ACTIVITY_REQUIRE_NON_BROWSER      0x00000400
+#define FLAG_ACTIVITY_REQUIRE_DEFAULT          0x00000200
 
 static const jint RESULT_OK = -1;
 static const jint RESULT_CANCELED = 0;
@@ -107,6 +141,8 @@ static void processIntent(JNIEnv* env, jobject activity) {
         jint flags = (*env)->CallIntMethod(env, intent, getFlags);
         LogD("C: INTENT FLAGS: 0x%x", flags);
 
+        // launchFlags
+        if ((flags & 0x80000000) != 0) LogD("C: [0x80000000] IGNORE_EPHEMERAL");
         if ((flags & 0x40000000) != 0) LogD("C: [0x40000000] NO_HISTORY");
         if ((flags & 0x20000000) != 0) LogD("C: [0x20000000] SINGLE_TOP");
         if ((flags & 0x10000000) != 0) LogD("C: [0x10000000] NEW_TASK");
@@ -118,7 +154,7 @@ static void processIntent(JNIEnv* env, jobject activity) {
         if ((flags & 0x00400000) != 0) LogD("C: [0x00400000] BROUGHT_TO_FRONT");
         if ((flags & 0x00200000) != 0) LogD("C: [0x00200000] RESET_TASK_IF_NEEDED");
         if ((flags & 0x00100000) != 0) LogD("C: [0x00100000] LAUNCHED_FROM_HISTORY");
-        if ((flags & 0x00080000) != 0) LogD("C: [0x00080000] NEW_DOCUMENT / CLEAR_WHEN_TASK_RESET");
+        if ((flags & 0x00080000) != 0) LogD("C: [0x00080000] CLEAR_WHEN_TASK_RESET / NEW_DOCUMENT");
         if ((flags & 0x00040000) != 0) LogD("C: [0x00040000] NO_USER_ACTION");
         if ((flags & 0x00020000) != 0) LogD("C: [0x00020000] REORDER_TO_FRONT");
         if ((flags & 0x00010000) != 0) LogD("C: [0x00010000] NO_ANIMATION");
@@ -129,6 +165,15 @@ static void processIntent(JNIEnv* env, jobject activity) {
         if ((flags & 0x00000800) != 0) LogD("C: [0x00000800] MATCH_EXTERNAL");
         if ((flags & 0x00000400) != 0) LogD("C: [0x00000400] REQUIRE_NON_BROWSER");
         if ((flags & 0x00000200) != 0) LogD("C: [0x00000200] REQUIRE_DEFAULT");
+        if ((flags & 0x00000100) != 0) LogD("C: [0x00000100] DIRECT_BOOT_AUTO");
+        if ((flags & 0x00000080) != 0) LogD("C: [0x00000080] GRANT_PREFIX_URI_PERMISSION");
+        if ((flags & 0x00000040) != 0) LogD("C: [0x00000040] GRANT_PERSISTABLE_URI_PERMISSION");
+        if ((flags & 0x00000020) != 0) LogD("C: [0x00000020] INCLUDE_STOPPED_PACKAGES");
+        if ((flags & 0x00000010) != 0) LogD("C: [0x00000010] EXCLUDE_STOPPED_PACKAGES");
+        if ((flags & 0x00000008) != 0) LogD("C: [0x00000008] DEBUG_LOG_RESOLUTION");
+        if ((flags & 0x00000004) != 0) LogD("C: [0x00000004] FROM_BACKGROUND");
+        if ((flags & 0x00000002) != 0) LogD("C: [0x00000002] GRANT_WRITE_URI_PERMISSION");
+        if ((flags & 0x00000001) != 0) LogD("C: [0x00000001] GRANT_READ_URI_PERMISSION");
 
         if (flags & 0x00100000) { // LAUNCHED_FROM_HISTORY
             LogD("C: Skipping: Activity launched from history");
