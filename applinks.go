@@ -446,13 +446,15 @@ func setClipboard(code string, a fyne.App) (text string) {
 
 // view 0x23000003
 // send 0x1b080001
-// 0x33000000
 func scanner() {
-	//<action android:name="miui.intent.action.scanbarcode" />
-	//<action android:name="miui.intent.action.scanner" />
-	//<action android:name="miui.intent.action.scanbusinesscard"
-	// Иерархия 2026: Бренды -> Google GMS -> Сообщество -> Маркет
 	intents := []*Intent{
+		// BINARY EYE
+		&Intent{Data: "//scan/", Scheme: "binaryeye"},
+		// Google Lens
+		&Intent{Component: "com.google.ar.lens/com.google.vr.apps.ornament.app.lens.LensLauncherActivity"},
+		// ZXING
+		&Intent{Action: "com.google.zxing.client.android.SCAN", Categories: []string{CATEGORY_DEFAULT}},
+
 		// XIAOMI / REDMI / POCO
 		&Intent{Action: "miui.intent.action.scanner"},
 		// SAMSUNG
@@ -463,19 +465,15 @@ func scanner() {
 		&Intent{Component: "com.coloros.scanner/.ScanActivity"},
 		// VIVO / IQOO
 		&Intent{Action: "com.vivo.scanner.SCAN"},
-		// BINARY EYE
-		&Intent{Data: "//markusfisch.de/BinaryEye?ret=" + url.QueryEscape("{RESULT}"), Scheme: "https", Package: "de.markusfisch.android.binaryeye"},
-		//&Intent{Data: "//scan/", Scheme: "binaryeye"},
-		// ZXING
-		&Intent{Action: "com.google.zxing.client.android.SCAN", Categories: []string{CATEGORY_DEFAULT}},
-		// Google Lens
-		&Intent{Component: "com.google.ar.lens/com.google.vr.apps.ornament.app.lens.LensLauncherActivity"},
-		// BINARY EYE market
-		&Intent{Data: "//details?id=de.markusfisch.android.binaryeye", Scheme: "market", Package: "com.android.vending"},
+
+		// market
+		&Intent{Data: "//details?id=com.google.ar.lens", Scheme: "market"},
+		&Intent{Data: "//details?id=de.markusfisch.android.binaryeye", Scheme: "market"}, //, Package: "com.android.vending"
 	}
+	notFinish = false
 	for _, i := range intents {
 		i.Flags = flagActivity(
-			FLAG_ACTIVITY_NEW_TASK,
+			// FLAG_ACTIVITY_NEW_TASK,
 			FLAG_ACTIVITY_NO_HISTORY,
 			FLAG_ACTIVITY_SINGLE_TOP,
 			FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS,
@@ -487,11 +485,10 @@ func scanner() {
 		log.Debugf("%s", s)
 		if err := OpenURL(s); err == nil {
 			log.Debugf("find^^^^^^^^^^^^^^^^^^")
-			excludeFromRecents()
+			// excludeFromRecents()
 			return
 		}
 	}
-	// notFinish = false
 }
 
 // Intent represents an abstract description of an operation to be performed.
