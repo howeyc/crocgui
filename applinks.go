@@ -5,8 +5,6 @@ import (
 	"encoding/base64"
 	"fmt"
 	"net"
-	"net/url"
-	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -256,6 +254,9 @@ func showQR(a fyne.App, w fyne.Window, text string) {
 			return
 		}
 	}
+	link := widget.NewHyperlink(text, nil)
+	link.SetURLFromString(text)
+	link.Wrapping = fyne.TextWrapBreak
 
 	var pngData []byte
 	pngData, err := qrcode.Encode(text, qrcode.High, 256)
@@ -268,45 +269,89 @@ func showQR(a fyne.App, w fyne.Window, text string) {
 	img.SetMinSize(fyne.NewSize(256, 256))
 	img.FillMode = canvas.ImageFillContain
 
-	setupButton := widget.NewButtonWithIcon("Deep Link", theme.SettingsIcon(), func() {
-		intent := &Intent{
-			Data:   ID,
-			Scheme: "package",
-			Flags: flagActivity(
-				FLAG_ACTIVITY_SINGLE_TOP,
-				FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS,
-			),
-		}
-		notFinish = true
-		for _, i := range []string{
-			APP_OPEN_BY_DEFAULT_SETTINGS,
-			APPLICATION_DETAILS_SETTINGS,
-		} {
-			intent.SetAction(i)
-			if err := OpenURL(intent.String()); err == nil {
-				log.Debug(intent)
-				return
-			}
-		}
-		notFinish = false
-	})
-	label := widget.NewLabel(lp("Click the link below to test. If a browser opens, setup is required. If the app restarts, it's OK."))
-	label.Wrapping = fyne.TextWrapWord
-	if !isAndroid {
-		setupButton.Hide()
-		label.Hide()
-	}
-
-	link := widget.NewHyperlink(text, nil)
-	link.SetURLFromString(text)
-	link.Wrapping = fyne.TextWrapBreak
-
 	content := container.NewVBox(
-		setupButton,
-		label,
 		link,
 		img,
+		widget.NewSeparator(),
 	)
+	if isAndroid {
+		// Нажмите Deep Link выше для пробы.
+		labelT := widget.NewLabel(lp("Click the Deep Link above to test."))
+		labelT.Wrapping = fyne.TextWrapWord
+		labelT.Alignment = fyne.TextAlignCenter
+
+		// Если откроется браузер:
+		labelL := widget.NewLabel(lp("If a browser opens then:"))
+		labelL.Wrapping = fyne.TextWrapWord
+		labelL.Alignment = fyne.TextAlignTrailing
+		// Разрешить
+		setupButton := widget.NewButtonWithIcon("Allow\nabakum.github.io", theme.SettingsIcon(), func() {
+			intent := &Intent{
+				Data:   ID,
+				Scheme: "package",
+				Flags: flagActivity(
+					FLAG_ACTIVITY_SINGLE_TOP,
+					FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS,
+				),
+			}
+			notFinish = true
+			for _, i := range []string{
+				APP_OPEN_BY_DEFAULT_SETTINGS,
+				APPLICATION_DETAILS_SETTINGS,
+			} {
+				intent.SetAction(i)
+				if err := OpenURL(intent.String()); err == nil {
+					log.Debug(intent)
+					return
+				}
+			}
+			notFinish = false
+		})
+		scanSelect := widget.NewSelect([]string{
+			"binaryeye",
+			"lens",
+			"zxing",
+			"miui",
+			"samsung",
+			"oplus",
+			"vivo",
+		}, func(sel string) {
+			a.Preferences().SetString("scanner", sel)
+		})
+
+		if sel := a.Preferences().String("scanner"); sel != "" {
+			scanSelect.SetSelected(sel)
+		} else {
+			scanSelect.SetSelectedIndex(0)
+		}
+
+		// Сканируйте QRы сканером:
+		qrButton := widget.NewButtonWithIcon(lp("Scan QRs\n with scanner:"), theme.ViewFullScreenIcon(), scanner)
+
+		// Или используте ⛶ на странице ⤓
+		labelB := widget.NewLabel(lp("Or use ⛶ on page ⤓"))
+		labelB.Wrapping = fyne.TextWrapWord
+		labelB.Alignment = fyne.TextAlignCenter
+
+		content.Add(container.NewVBox(
+			container.NewBorder(
+				labelT,
+				nil,
+				nil,
+				setupButton,
+				labelL,
+			),
+			widget.NewSeparator(),
+			container.NewBorder(
+				nil,
+				labelB,
+				qrButton,
+				nil,
+				scanSelect,
+			),
+			widget.NewSeparator(),
+		))
+	}
 
 	d := dialog.NewCustom("Deep Link", "Ok", content, w)
 
@@ -328,7 +373,6 @@ func showQR(a fyne.App, w fyne.Window, text string) {
 			NewToast(w, "OK").Show()
 			return
 		}
-		NewToast(w, "Deep Link setup is required").Show()
 		// Браузер
 		intent.SetFlags(flagActivity(
 			FLAG_ACTIVITY_NEW_TASK,
@@ -341,18 +385,6 @@ func showQR(a fyne.App, w fyne.Window, text string) {
 			log.Errorf("%v", err)
 		}
 		notFinish = false
-		return
-		u, err := url.Parse(text)
-		if err == nil {
-			if isAndroid {
-				// notFinish = true
-				go func() {
-					time.Sleep(time.Millisecond * 7)
-					os.Exit(0)
-				}()
-			}
-			a.OpenURL(u)
-		}
 	}
 
 	d.Resize(fyne.NewSize(300, 0))
@@ -372,33 +404,6 @@ func showQR(a fyne.App, w fyne.Window, text string) {
 		}
 	}()
 
-}
-
-func fromClipboard(a fyne.App, w fyne.Window, st, ne, as, a6, ps, pd, s5, ct string) {
-	info := fmt.Sprintf(
-		"code:\t\t%s\n%s:\t\t%s\nrelay:\t\t%s\nrelay6:\t\t%s\nports:\t\t%s\npass:\t\t%s\nsocks5:\t\t%s\nconnect:\t\t%s",
-		st, lp("Name"), ne, as, a6, ps, pd, s5, ct,
-	)
-
-	label := widget.NewLabel(info)
-	label.Wrapping = fyne.TextWrapWord
-
-	d := dialog.NewCustom("Deep Link", "Ok", container.NewVBox(
-		label,
-	), w)
-	d.Resize(fyne.NewSize(300, 0))
-	d.Show()
-	go func() {
-		timer := time.NewTimer(time.Second * 3)
-		defer timer.Stop()
-
-		select {
-		case <-timer.C:
-			fyne.Do(d.Hide)
-		case <-done:
-			return
-		}
-	}()
 }
 
 func setClipboard(code string, a fyne.App) (text string) {
@@ -461,31 +466,46 @@ func scanner() {
 		&Intent{Action: "com.samsung.android.app.opticalreader.SCAN"},
 		// OPPO / REALME / ONEPLUS (ColorOS/Oplus)
 		&Intent{Component: "com.oplus.scanner/.ScanActivity"},
-		// ColorOS
-		&Intent{Component: "com.coloros.scanner/.ScanActivity"},
 		// VIVO / IQOO
 		&Intent{Action: "com.vivo.scanner.SCAN"},
-
-		// market
-		&Intent{Data: "//details?id=com.google.ar.lens", Scheme: "market"},
-		&Intent{Data: "//details?id=de.markusfisch.android.binaryeye", Scheme: "market"}, //, Package: "com.android.vending"
 	}
 	notFinish = false
+	flags := flagActivity(
+		// FLAG_ACTIVITY_NEW_TASK,
+		FLAG_ACTIVITY_NO_HISTORY,
+		FLAG_ACTIVITY_SINGLE_TOP,
+		FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS,
+		FLAG_ACTIVITY_REQUIRE_NON_BROWSER,
+		FLAG_ACTIVITY_CLEAR_TOP,
+		FLAG_ACTIVITY_CLEAR_TASK,
+	)
+	find := false
+	sel := fyne.CurrentApp().Preferences().String("scanner")
+	switch sel {
+	case "binaryeye":
+		intents = append(intents, &Intent{Data: "//details?id=com.google.ar.lens", Scheme: "market"})
+		fallthrough
+	case "lens":
+		intents = append(intents, &Intent{Data: "//details?id=de.markusfisch.android.binaryeye", Scheme: "market"})
+		fallthrough
+	default:
+		intents = append(intents, &Intent{Data: "//details?id=la.droid.qr.priva", Scheme: "market"})
+	}
 	for _, i := range intents {
-		i.Flags = flagActivity(
-			// FLAG_ACTIVITY_NEW_TASK,
-			FLAG_ACTIVITY_NO_HISTORY,
-			FLAG_ACTIVITY_SINGLE_TOP,
-			FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS,
-			FLAG_ACTIVITY_REQUIRE_NON_BROWSER,
-			FLAG_ACTIVITY_CLEAR_TOP,
-			FLAG_ACTIVITY_CLEAR_TASK,
-		)
+		i.Flags = flags
 		s := i.String()
+		// Пропускаем до выбранного
+		// остальные это фолбэки
+		switch {
+		case find:
+		case strings.Contains(s, sel):
+			find = true
+		default:
+			continue
+		}
 		log.Debugf("%s", s)
 		if err := OpenURL(s); err == nil {
-			log.Debugf("find^^^^^^^^^^^^^^^^^^")
-			// excludeFromRecents()
+			log.Debugf("find^^^")
 			return
 		}
 	}

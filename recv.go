@@ -105,10 +105,11 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 			a.Preferences().SetString("relay-password", pd)
 			a.Preferences().SetString("socks5", s5)
 			a.Preferences().SetString("connect", ct)
-			fromClipboard(a, w, st, ne, as, a6, ps, pd, s5, ct)
+			cc = fmt.Sprintf("%s %s: %s", lp("Relay"), lp("Name"), ne)
 		} else {
 			entry.SetText(cc)
 		}
+		NewToast(w, cc).Show()
 	})
 
 	cosED = append(cosED, cbButton)
