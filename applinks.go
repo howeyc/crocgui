@@ -7,7 +7,6 @@ import (
 	"net"
 	"strconv"
 	"strings"
-	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
@@ -328,8 +327,8 @@ func showQR(a fyne.App, w fyne.Window, text string) {
 		// Сканируйте QRы сканером:
 		qrButton := widget.NewButtonWithIcon(lp("Scan QRs\n with scanner:"), theme.ViewFullScreenIcon(), scanner)
 
-		// Или используте ⛶ на странице ⤓
-		labelB := widget.NewLabel(lp("Or use ⛶ on page ⤓"))
+		// Или на странице [⤓] используте ⛶
+		labelB := widget.NewLabel(lp("Or on page [⤓] use ⛶"))
 		labelB.Wrapping = fyne.TextWrapWord
 		labelB.Alignment = fyne.TextAlignCenter
 
@@ -389,20 +388,20 @@ func showQR(a fyne.App, w fyne.Window, text string) {
 
 	d.Resize(fyne.NewSize(300, 0))
 	d.Show()
-	go func() {
-		timer := time.NewTimer(time.Second * 7)
-		defer timer.Stop()
+	// go func() {
+	// 	timer := time.NewTimer(time.Second * 7)
+	// 	defer timer.Stop()
 
-		select {
-		case <-timer.C:
-			if d == nil {
-				return
-			}
-			fyne.Do(d.Hide)
-		case <-done:
-			return
-		}
-	}()
+	// 	select {
+	// 	case <-timer.C:
+	// 		if d == nil {
+	// 			return
+	// 		}
+	// 		fyne.Do(d.Hide)
+	// 	case <-done:
+	// 		return
+	// 	}
+	// }()
 
 }
 
@@ -455,8 +454,10 @@ func scanner() {
 	intents := []*Intent{
 		// BINARY EYE
 		&Intent{Data: "//scan/", Scheme: "binaryeye"},
+		&Intent{Data: "//details?id=de.markusfisch.android.binaryeye", Scheme: "market"},
 		// Google Lens
 		&Intent{Component: "com.google.ar.lens/com.google.vr.apps.ornament.app.lens.LensLauncherActivity"},
+		&Intent{Data: "//details?id=com.google.ar.lens", Scheme: "market"},
 		// ZXING
 		&Intent{Action: "com.google.zxing.client.android.SCAN", Categories: []string{CATEGORY_DEFAULT}},
 
@@ -471,8 +472,8 @@ func scanner() {
 	}
 	notFinish = false
 	flags := flagActivity(
-		// FLAG_ACTIVITY_NEW_TASK,
-		FLAG_ACTIVITY_NO_HISTORY,
+		FLAG_ACTIVITY_NEW_TASK,
+		// FLAG_ACTIVITY_NO_HISTORY,
 		FLAG_ACTIVITY_SINGLE_TOP,
 		FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS,
 		FLAG_ACTIVITY_REQUIRE_NON_BROWSER,
@@ -481,16 +482,6 @@ func scanner() {
 	)
 	find := false
 	sel := fyne.CurrentApp().Preferences().String("scanner")
-	switch sel {
-	case "binaryeye":
-		intents = append(intents, &Intent{Data: "//details?id=com.google.ar.lens", Scheme: "market"})
-		fallthrough
-	case "lens":
-		intents = append(intents, &Intent{Data: "//details?id=de.markusfisch.android.binaryeye", Scheme: "market"})
-		fallthrough
-	default:
-		intents = append(intents, &Intent{Data: "//details?id=la.droid.qr.priva", Scheme: "market"})
-	}
 	for _, i := range intents {
 		i.Flags = flags
 		s := i.String()
