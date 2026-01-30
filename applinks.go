@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"net"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -313,6 +314,7 @@ func showQR(a fyne.App, w fyne.Window, text string) {
 			"samsung",
 			"oplus",
 			"vivo",
+			"abakum",
 		}, func(sel string) {
 			a.Preferences().SetString("scanner", sel)
 		})
@@ -468,6 +470,8 @@ func scanner() {
 		&Intent{Component: "com.oplus.scanner/.ScanActivity"},
 		// VIVO / IQOO
 		&Intent{Action: "com.vivo.scanner.SCAN"},
+		// html5-qrcode
+		&Intent{Scheme: "https", Data: "//abakum.github.io/scan/"},
 	}
 	notFinish = false
 	flags := flagActivity(
@@ -480,7 +484,8 @@ func scanner() {
 		FLAG_ACTIVITY_CLEAR_TASK,
 	)
 	find := false
-	sel := fyne.CurrentApp().Preferences().String("scanner")
+	a := fyne.CurrentApp()
+	sel := a.Preferences().String("scanner")
 	for _, i := range intents {
 		i.Flags = flags
 		s := i.String()
@@ -490,6 +495,21 @@ func scanner() {
 		case find:
 		case strings.Contains(s, sel):
 			find = true
+			if sel == "abakum" {
+				u, _ := url.Parse("https://abakum.github.io/scan/")
+				a.OpenURL(u)
+				return
+				i.Flags = flagActivity(
+					FLAG_ACTIVITY_NEW_TASK,
+				// FLAG_ACTIVITY_NO_HISTORY,
+				// FLAG_ACTIVITY_SINGLE_TOP,
+				// FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS,
+				// FLAG_ACTIVITY_REQUIRE_NON_BROWSER,
+				// FLAG_ACTIVITY_CLEAR_TOP,
+				// FLAG_ACTIVITY_CLEAR_TASK,
+				)
+				s = i.String()
+			}
 		default:
 			continue
 		}
