@@ -47,8 +47,8 @@ const (
 	ZhangHai               = "content://me.zhanghai.android.files.file_provider/"
 	Ghisler                = "content://com.ghisler.files/"
 	CG                     = "crocgui"
-	SEND                   = CG + "-send"
-	RECV                   = CG + "-recv"
+	SEND                   = "send"
+	RECV                   = "recv"
 	MIME_TYPE_DIR          = "vnd.android.document/directory"
 	MIME_TYPE_OCTET_STREAM = "application/octet-stream"
 	ID                     = "com.github.howeyc.crocgui"
@@ -149,8 +149,11 @@ var (
 )
 
 func main() {
+	a := app.NewWithID(ID)
+
 	wd, _ = os.Getwd()
-	tempDir = os.TempDir()
+	//tempDir = os.TempDir()
+	tempDir = a.Storage().RootURI().Path()
 	var (
 		crocdebuglog *os.File
 		err          error
@@ -184,8 +187,6 @@ func main() {
 		"[error]\t", "",
 	)
 	logOutput = newLogWriter()
-
-	a := app.NewWithID(ID)
 
 	setOut := func(gui bool) {
 		if crocdebuglog == nil {
@@ -226,6 +227,7 @@ func main() {
 		setOut(GUI)
 	}
 
+	log.Info(tempDir)
 	w := a.NewWindow(CROC)
 
 	w.SetCloseIntercept(func() {
