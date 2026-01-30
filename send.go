@@ -454,9 +454,10 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 	os.MkdirAll(join(), 0700)
 
 	reload = func() {
+		lsrMap := make(map[string]bool)
 		prefixs := []string{}
 		p, n := lsr(join())
-		// log.Debugf("lsr %v", n)
+		log.Debugf("lsr %v", n)
 		for _, path := range p {
 			ext := filepath.Ext(path)
 			if strings.ToLower(ext) == DOTZIP {
@@ -475,10 +476,11 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 			}
 			for _, prefix := range prefixs {
 				if strings.HasPrefix(path, prefix) {
-					log.Debugf("continue %s %s", path, prefix)
+					lsrMap[path] = false
 					continue loop
 				}
 			}
+			lsrMap[path] = true
 			addEntry(path, func(d *widget.Button, p *widget.ProgressBar,
 
 				l *widget.Label) {
@@ -493,10 +495,19 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 		}
 
 		forEachFileEntry(&fileentries, func(path string, fe *fyne.Container) {
-			if _, err := os.Stat(path); err != nil {
-				log.Debugf("removeEntry %s", path)
-				removeEntry(path, fe, false)
+			need, exist := lsrMap[path]
+			switch {
+			case !need:
+				log.Debugf("removeEntry in zip: %s", path)
+			case exist:
+				return
+			default:
+				if _, err := os.Stat(path); err == nil {
+					return
+				}
+				log.Debugf("removeEntry: %s", path)
 			}
+			removeEntry(path, fe, true)
 		})
 	}
 	OnSelectedReload[0] = reload

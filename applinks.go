@@ -249,30 +249,29 @@ func showQR(a fyne.App, w fyne.Window, text string) {
 	if text == "" {
 		text = a.Clipboard().Content()
 		if text == "" {
+			NewToast(w, "empty clipboard").Show()
 			log.Error("empty clipboard")
 			return
 		}
 	}
-	link := widget.NewHyperlink(text, nil)
-	link.SetURLFromString(text)
-	link.Wrapping = fyne.TextWrapBreak
+	content := container.NewVBox()
 
-	var pngData []byte
 	pngData, err := qrcode.Encode(text, qrcode.High, 256)
 	if err != nil {
 		log.Error(err)
-		return
+	} else {
+		QR := canvas.NewImageFromReader(bytes.NewReader(pngData), "qr.png")
+		QR.SetMinSize(fyne.NewSize(256, 256))
+		QR.FillMode = canvas.ImageFillContain
+		content.Add(QR)
 	}
 
-	img := canvas.NewImageFromReader(bytes.NewReader(pngData), "qr.png")
-	img.SetMinSize(fyne.NewSize(256, 256))
-	img.FillMode = canvas.ImageFillContain
+	link := widget.NewHyperlink(text, nil)
+	link.SetURLFromString(text)
+	link.Wrapping = fyne.TextWrapBreak
+	content.Add(link)
+	content.Add(widget.NewSeparator())
 
-	content := container.NewVBox(
-		link,
-		img,
-		widget.NewSeparator(),
-	)
 	if isAndroid {
 		// Нажмите Deep Link выше для пробы.
 		labelT := widget.NewLabel(lp("Click the Deep Link above to test."))
