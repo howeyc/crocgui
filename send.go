@@ -852,7 +852,15 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 	cosED = append(cosED, mainButton)
 
 	treeButton := widget.NewButtonWithIcon("", theme.VisibilityIcon(), func() {
-		ft := fileTreeShow(storage.NewFileURI(join()), a)
+		u := storage.NewFileURI(join())
+		if !isMobile {
+			if err := OpenURL(u.String()); err == nil {
+				return
+			} else {
+				log.Errorf("OpenURL: %v", err)
+			}
+		}
+		ft := fileTreeShow(u, a)
 		if ft != nil {
 			ft.OnSelected = func(uid widget.TreeNodeID) {
 				selected(uid, func(err error) {
@@ -987,21 +995,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 						if st, ne, as, a6, ps, pd, s5, ct, err := fromURI(uriString); err == nil {
 							switch st {
 							case "App info":
-								notFinish = true
-								for _, s := range []string{
-									"android.settings.APP_OPEN_BY_DEFAULT_SETTINGS",
-									"android.settings.APPLICATION_DETAILS_SETTINGS",
-								} {
-									intent := fmt.Sprintf(
-										"intent:%s#Intent;scheme=package;action=%s;launchFlags=0x60000000;end",
-										ID, s,
-									)
-									if err := OpenURL(intent); err == nil {
-										log.Debug(intent)
-										return
-									}
-								}
-								//	openAppSettings()
+								idActions(ID, APP_OPEN_BY_DEFAULT_SETTINGS, APPLICATION_DETAILS_SETTINGS)
 								return
 							}
 							entry.SetText(st)

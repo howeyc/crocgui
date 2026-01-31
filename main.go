@@ -70,7 +70,10 @@ const (
 	FORKfromBuild   = 40
 	FORKto          = "abakum"
 	GH              = "github.com"
-	IO              = "https://" + FORKto + ".github.io/croc#"
+	HTTPS           = "https"
+	GHP             = FORKto + ".github.io"
+	IO              = HTTPS + "://" + GHP + "/croc#"
+	SCAN            = "//" + GHP + "/scan/"
 )
 
 const (
@@ -137,15 +140,33 @@ var (
 	// CROC_DEBUG=1 crocgui
 	crocDebug = os.Getenv("CROC_DEBUG") != ""
 
-	pass      = os.Getenv("CROC_PASS")
-	relay4    = os.Getenv("CROC_RELAY")
-	relay6    = os.Getenv("CROC_RELAY6")
-	ports0    = strings.Join(makePorts(0, 0), ",")
-	socks5    = os.Getenv("SOCKS5_PROXY")
-	connect   = os.Getenv("HTTP_PROXY")
-	code      = os.Getenv("CROC_SECRET")
-	AppClosed string
-	GUI       = syscall.Stdout == 0 && syscall.Stderr == 0 //for windowsgui
+	pass        = os.Getenv("CROC_PASS")
+	relay4      = os.Getenv("CROC_RELAY")
+	relay6      = os.Getenv("CROC_RELAY6")
+	ports0      = strings.Join(makePorts(0, 0), ",")
+	socks5      = os.Getenv("SOCKS5_PROXY")
+	connect     = os.Getenv("HTTP_PROXY")
+	code        = os.Getenv("CROC_SECRET")
+	AppClosed   string
+	GUI         = syscall.Stdout == 0 && syscall.Stderr == 0 //for windowsgui
+	NON_BROWSER = flagActivity(
+		FLAG_ACTIVITY_NEW_TASK,
+		// FLAG_ACTIVITY_NO_HISTORY,
+		FLAG_ACTIVITY_SINGLE_TOP,
+		FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS,
+		FLAG_ACTIVITY_REQUIRE_NON_BROWSER,
+		FLAG_ACTIVITY_CLEAR_TOP,
+		FLAG_ACTIVITY_CLEAR_TASK,
+	)
+	BROWSER = flagActivity(
+		FLAG_ACTIVITY_NEW_TASK,
+		// FLAG_ACTIVITY_NO_HISTORY,
+		FLAG_ACTIVITY_SINGLE_TOP,
+		FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS,
+		// FLAG_ACTIVITY_REQUIRE_NON_BROWSER,
+		FLAG_ACTIVITY_CLEAR_TOP,
+		FLAG_ACTIVITY_CLEAR_TASK,
+	)
 )
 
 func main() {

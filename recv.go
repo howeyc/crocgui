@@ -92,7 +92,6 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 	}
 
 	qrButton := widget.NewButtonWithIcon("", theme.ViewFullScreenIcon(), scanner)
-	qrButton.Hidden = !isAndroid
 
 	cbButton := widget.NewButtonWithIcon("", theme.ContentPasteIcon(), func() {
 		cc := a.Clipboard().Content()
@@ -809,7 +808,15 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 	cosED = append(cosED, mainButton)
 
 	treeButton := widget.NewButtonWithIcon("", theme.VisibilityIcon(), func() {
-		ft := fileTreeShow(storage.NewFileURI(join()), a)
+		u := storage.NewFileURI(join())
+		if !isMobile {
+			if err := OpenURL(u.String()); err == nil {
+				return
+			} else {
+				log.Errorf("OpenURL: %v", err)
+			}
+		}
+		ft := fileTreeShow(u, a)
 		if ft != nil {
 			ft.OnSelected = func(uid widget.TreeNodeID) {
 				selected(uid, func(err error) {

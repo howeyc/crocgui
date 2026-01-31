@@ -5,7 +5,6 @@ import (
 	"encoding/base64"
 	"fmt"
 	"net"
-	"net/url"
 	"strconv"
 	"strings"
 
@@ -13,6 +12,7 @@ import (
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
+	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 	"github.com/schollz/croc/v10/src/tcp"
@@ -267,15 +267,28 @@ func showQR(a fyne.App, w fyne.Window, text string) {
 		content.Add(QR)
 	}
 
-	link := widget.NewHyperlink(text, nil)
+	cbLabel := container.NewHBox(
+		layout.NewSpacer(),
+		widget.NewIcon(theme.ContentCopyIcon()),
+		widget.NewLabel(lp("Copied to clipboard:")),
+		layout.NewSpacer(),
+	)
+	content.Add(cbLabel)
+
+	hlt := text
+	if len(text) > 77 {
+		hlt = text[:77] + "..."
+	}
+	link := widget.NewHyperlink(hlt, nil)
 	link.SetURLFromString(text)
 	link.Wrapping = fyne.TextWrapBreak
 	content.Add(link)
+
 	content.Add(widget.NewSeparator())
 
 	if isAndroid {
 		// Нажмите Deep Link выше для пробы.
-		labelT := widget.NewLabel(lp("Click the Deep Link above to test."))
+		labelT := widget.NewLabel(lp("Click the Deep Link above to test"))
 		labelT.Wrapping = fyne.TextWrapWord
 		labelT.Alignment = fyne.TextAlignCenter
 
@@ -284,37 +297,30 @@ func showQR(a fyne.App, w fyne.Window, text string) {
 		labelL.Wrapping = fyne.TextWrapWord
 		labelL.Alignment = fyne.TextAlignTrailing
 		// Разрешить
-		setupButton := widget.NewButtonWithIcon("Allow\nabakum.github.io", theme.SettingsIcon(), func() {
-			intent := &Intent{
-				Data:   ID,
-				Scheme: "package",
-				Flags: flagActivity(
-					FLAG_ACTIVITY_SINGLE_TOP,
-					FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS,
-				),
-			}
-			notFinish = true
-			for _, i := range []string{
-				APP_OPEN_BY_DEFAULT_SETTINGS,
-				APPLICATION_DETAILS_SETTINGS,
-			} {
-				intent.SetAction(i)
-				if err := OpenURL(intent.String()); err == nil {
-					log.Debug(intent)
-					return
-				}
-			}
-			notFinish = false
+		setupButton := widget.NewButtonWithIcon(lp("Allow")+"\n"+GHP, theme.SettingsIcon(), func() {
+			idActions(ID, APP_OPEN_BY_DEFAULT_SETTINGS, APPLICATION_DETAILS_SETTINGS)
 		})
 		scanSelect := widget.NewSelect([]string{
-			"binaryeye",
-			"lens",
-			"zxing",
-			"miui",
-			"samsung",
-			"oplus",
-			"vivo",
-			"abakum",
+			"Default html5-QRcode",
+			"miUI Xiaomi",
+			"Samsung",
+			"OPlus",
+
+			"BinaryEye",
+			"Lens Google",
+			"ZXing",
+
+			"Chrome Google",
+			"sBrowser Samsung",
+			".mi. Xiaomi",
+			"Huawei",
+
+			"Yandex lite",
+			"Opera mini",
+			"Microsoft",
+			"UCMobile",
+
+			"Firefox",
 		}, func(sel string) {
 			a.Preferences().SetString("scanner", sel)
 		})
@@ -323,15 +329,11 @@ func showQR(a fyne.App, w fyne.Window, text string) {
 			scanSelect.SetSelected(sel)
 		} else {
 			scanSelect.SetSelectedIndex(0)
+			a.Preferences().SetString("scanner", scanSelect.Selected)
 		}
 
-		// Сканируйте QRы сканером:
-		qrButton := widget.NewButtonWithIcon(lp("Scan QRs\n with scanner:"), theme.ViewFullScreenIcon(), scanner)
-
-		// Или на странице [⤓] используте ⛶
-		labelB := widget.NewLabel(lp("Or on page [⤓] use ⛶"))
-		labelB.Wrapping = fyne.TextWrapWord
-		labelB.Alignment = fyne.TextAlignCenter
+		// Сканируйте QRы используя:
+		qrButton := widget.NewButtonWithIcon(lp("Scan QRs with:"), theme.ViewFullScreenIcon(), scanner)
 
 		content.Add(container.NewVBox(
 			container.NewBorder(
@@ -344,7 +346,7 @@ func showQR(a fyne.App, w fyne.Window, text string) {
 			widget.NewSeparator(),
 			container.NewBorder(
 				nil,
-				labelB,
+				nil,
 				qrButton,
 				nil,
 				scanSelect,
@@ -352,6 +354,23 @@ func showQR(a fyne.App, w fyne.Window, text string) {
 			widget.NewSeparator(),
 		))
 	}
+	labelB := container.NewHBox(
+		layout.NewSpacer(),
+		widget.NewLabel(lp("Use")),
+		widget.NewIcon(theme.ViewFullScreenIcon()),
+		widget.NewLabel(lp("on page")),
+		widget.NewIcon(theme.DownloadIcon()),
+	)
+	if !isAndroid {
+		labelB.Add(widget.NewLabel(lp("as link:")))
+
+		scan := widget.NewHyperlink(lp("Scan QR"), nil)
+		scan.SetURLFromString(HTTPS + ":" + SCAN)
+		scan.OnTapped = scanner
+		labelB.Add(scan)
+	}
+	labelB.Add(layout.NewSpacer())
+	content.Add(labelB)
 
 	d := dialog.NewCustom("Deep Link", "Ok", content, w)
 
@@ -373,12 +392,7 @@ func showQR(a fyne.App, w fyne.Window, text string) {
 			NewToast(w, "OK").Show()
 			return
 		}
-		// Браузер
-		intent.SetFlags(flagActivity(
-			FLAG_ACTIVITY_NEW_TASK,
-			FLAG_ACTIVITY_SINGLE_TOP,
-			FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS,
-		))
+		intent.SetFlags(BROWSER)
 		s = intent.String()
 		log.Debug(s)
 		if err := OpenURL(s); err != nil {
@@ -452,15 +466,15 @@ func setClipboard(code string, a fyne.App) (text string) {
 // view 0x23000003
 // send 0x1b080001
 func scanner() {
+	if !isAndroid {
+		s := HTTPS + ":" + SCAN
+		err := OpenURL(s)
+		log.Debugf("%s: %v", s, err)
+		return
+	}
 	intents := []*Intent{
-		// BINARY EYE
-		&Intent{Data: "//scan/", Scheme: "binaryeye"},
-		&Intent{Data: "//details?id=de.markusfisch.android.binaryeye", Scheme: "market"},
-		// Google Lens
-		&Intent{Component: "com.google.ar.lens/com.google.vr.apps.ornament.app.lens.LensLauncherActivity"},
-		&Intent{Data: "//details?id=com.google.ar.lens", Scheme: "market"},
-		// ZXING
-		&Intent{Action: "com.google.zxing.client.android.SCAN", Categories: []string{CATEGORY_DEFAULT}},
+		// html5-qrcode
+		&Intent{Categories: []string{CATEGORY_DEFAULT, CATEGORY_BROWSABLE}},
 
 		// XIAOMI / REDMI / POCO
 		&Intent{Action: "miui.intent.action.scanner"},
@@ -468,46 +482,46 @@ func scanner() {
 		&Intent{Action: "com.samsung.android.app.opticalreader.SCAN"},
 		// OPPO / REALME / ONEPLUS (ColorOS/Oplus)
 		&Intent{Component: "com.oplus.scanner/.ScanActivity"},
-		// VIVO / IQOO
-		&Intent{Action: "com.vivo.scanner.SCAN"},
-		// html5-qrcode
-		&Intent{Scheme: "https", Data: "//abakum.github.io/scan/"},
+
+		// BINARY EYE
+		&Intent{Data: "//scan/", Scheme: "binaryeye"},
+		&Intent{Data: "//details?id=de.markusfisch.android.binaryeye", Scheme: "market"},
+		// Google Lens
+		&Intent{Component: "com.google.ar.lens/com.google.vr.apps.ornament.app.lens.LensLauncherActivity"},
+		&Intent{Data: "//details?id=com.google.ar.lens", Scheme: "market"},
+		// ZXING
+		&Intent{Action: "com.google.zxing.client.android.SCAN"},
+
+		&Intent{Package: "com.android.chrome", Categories: []string{CATEGORY_BROWSABLE}},
+		&Intent{Package: "com.sec.android.app.sbrowser", Categories: []string{CATEGORY_BROWSABLE}},
+		&Intent{Package: "com.mi.globalbrowser", Categories: []string{CATEGORY_BROWSABLE}},
+		&Intent{Package: "com.huawei.browser", Categories: []string{CATEGORY_BROWSABLE}},
+
+		&Intent{Package: "com.yandex.browser.lite", Categories: []string{CATEGORY_BROWSABLE}},
+		&Intent{Package: "com.opera.mini.native", Categories: []string{CATEGORY_BROWSABLE}},
+		&Intent{Package: "com.microsoft.emmx", Categories: []string{CATEGORY_BROWSABLE}},
+		&Intent{Package: "com.UCMobile.intl", Categories: []string{CATEGORY_BROWSABLE}},
+
+		&Intent{Package: "org.mozilla.firefox", Categories: []string{CATEGORY_BROWSABLE}},
 	}
 	notFinish = false
-	flags := flagActivity(
-		FLAG_ACTIVITY_NEW_TASK,
-		// FLAG_ACTIVITY_NO_HISTORY,
-		FLAG_ACTIVITY_SINGLE_TOP,
-		FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS,
-		FLAG_ACTIVITY_REQUIRE_NON_BROWSER,
-		FLAG_ACTIVITY_CLEAR_TOP,
-		FLAG_ACTIVITY_CLEAR_TASK,
-	)
 	find := false
 	a := fyne.CurrentApp()
 	sel := a.Preferences().String("scanner")
+	key := strings.ToLower(strings.Fields(sel)[0])
 	for _, i := range intents {
-		i.Flags = flags
+		i.Flags = NON_BROWSER
 		s := i.String()
 		// Пропускаем до выбранного
 		// остальные это фолбэки
 		switch {
 		case find:
-		case strings.Contains(s, sel):
+		case strings.Contains(strings.ToLower(s), key):
 			find = true
-			if sel == "abakum" {
-				u, _ := url.Parse("https://abakum.github.io/scan/")
-				a.OpenURL(u)
-				return
-				i.Flags = flagActivity(
-					FLAG_ACTIVITY_NEW_TASK,
-				// FLAG_ACTIVITY_NO_HISTORY,
-				// FLAG_ACTIVITY_SINGLE_TOP,
-				// FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS,
-				// FLAG_ACTIVITY_REQUIRE_NON_BROWSER,
-				// FLAG_ACTIVITY_CLEAR_TOP,
-				// FLAG_ACTIVITY_CLEAR_TASK,
-				)
+			if strings.Contains(s, CATEGORY_BROWSABLE) {
+				i.Scheme = HTTPS
+				i.Data = SCAN
+				i.Flags = BROWSER
 				s = i.String()
 			}
 		default:
@@ -865,4 +879,24 @@ func ParseUri(uri string) (*Intent, error) {
 	}
 
 	return intent, nil
+}
+
+func idActions(id string, actions ...string) {
+	intent := &Intent{
+		Data:   id,
+		Scheme: "package",
+		Flags: flagActivity(
+			FLAG_ACTIVITY_SINGLE_TOP,
+			FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS,
+		),
+	}
+	notFinish = true
+	for _, i := range actions {
+		intent.SetAction(i)
+		if err := OpenURL(intent.String()); err == nil {
+			log.Debug(intent)
+			return
+		}
+	}
+	notFinish = false
 }
