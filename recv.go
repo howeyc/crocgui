@@ -91,7 +91,7 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 		entry.SetText(entryText)
 	}
 
-	qrButton := widget.NewButtonWithIcon("", theme.ViewFullScreenIcon(), scanner)
+	qrButton := widget.NewButtonWithIcon("", theme.ViewFullScreenIcon(), func() { scanner(a, w) })
 
 	cbButton := widget.NewButtonWithIcon("", theme.ContentPasteIcon(), func() {
 		cc := a.Clipboard().Content()

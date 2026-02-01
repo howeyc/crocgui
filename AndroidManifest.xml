@@ -2,7 +2,7 @@
 <manifest
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
-    android:versionCode="1608"
+    android:versionCode="1626"
     android:versionName="1.11.41"
     package="com.github.howeyc.crocgui">
 
@@ -85,17 +85,14 @@
             <data android:scheme="https" />
         </intent>
 
-        <package android:name="com.android.chrome" />            <!-- Google Chrome (5млрд+) -->
-        <package android:name="com.sec.android.app.sbrowser" />  <!-- Samsung Internet (1млрд+) -->
-        <package android:name="com.mi.globalbrowser" />          <!-- Xiaomi Mi Browser -->
-        <package android:name="com.huawei.browser" />          
+        <package android:name="com.android.chrome" />
+        <package android:name="mark.via.gp" />
+        <package android:name="com.sec.android.app.sbrowser" />  <!-- Samsung -->
 
-        <package android:name="com.yandex.browser.lite" />       <!-- Яндекс.Браузер -->
-        <package android:name="com.opera.mini.native" />         <!-- Opera Mini -->
+        <package android:name="com.opera.mini.native" />
         <package android:name="com.microsoft.emmx" />            <!-- Microsoft Edge -->
-        <package android:name="com.UCMobile.intl" />             <!-- UC Browser -->
 
-        <package android:name="org.mozilla.firefox" />           <!-- Firefox -->
+        <package android:name="org.mozilla.firefox" />
     </queries>
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />

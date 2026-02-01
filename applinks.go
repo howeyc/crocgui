@@ -5,13 +5,13 @@ import (
 	"encoding/base64"
 	"fmt"
 	"net"
+	"slices"
 	"strconv"
 	"strings"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
-	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
@@ -246,7 +246,22 @@ func toURI(ss ...string) (u string) {
 	log.Debug(IO + u)
 	return IO + base64.RawURLEncoding.EncodeToString([]byte(u))
 }
+
+var isShowQR = false
+
 func showQR(a fyne.App, w fyne.Window, text string) {
+	if !(at != nil && len(at.Items) > 3) || !(accordion != nil && len(accordion.Items) > 6) {
+		return
+	}
+
+	if isShowQR {
+		return
+	}
+	isShowQR = true
+	defer func() {
+		isShowQR = false
+	}()
+
 	if text == "" {
 		text = a.Clipboard().Content()
 		if text == "" {
@@ -276,8 +291,8 @@ func showQR(a fyne.App, w fyne.Window, text string) {
 	content.Add(cbLabel)
 
 	hlt := text
-	if len(text) > 77 {
-		hlt = text[:77] + "..."
+	if len(text) > 63 {
+		hlt = text[:63] + "..."
 	}
 	link := widget.NewHyperlink(hlt, nil)
 	link.SetURLFromString(text)
@@ -311,14 +326,11 @@ func showQR(a fyne.App, w fyne.Window, text string) {
 			"ZXing",
 
 			"Chrome Google",
+			"Via",
 			"sBrowser Samsung",
-			".mi. Xiaomi",
-			"Huawei",
 
-			"Yandex lite",
 			"Opera mini",
 			"Microsoft",
-			"UCMobile",
 
 			"Firefox",
 		}, func(sel string) {
@@ -328,12 +340,14 @@ func showQR(a fyne.App, w fyne.Window, text string) {
 		if sel := a.Preferences().String("scanner"); sel != "" {
 			scanSelect.SetSelected(sel)
 		} else {
-			scanSelect.SetSelectedIndex(0)
-			a.Preferences().SetString("scanner", scanSelect.Selected)
+			if opt := scanSelect.Options; len(opt) > 0 {
+				scanSelect.SetSelectedIndex(0)
+				a.Preferences().SetString("scanner", opt[0])
+			}
 		}
 
 		// Сканируйте QRы используя:
-		qrButton := widget.NewButtonWithIcon(lp("Scan QRs with:"), theme.ViewFullScreenIcon(), scanner)
+		qrButton := widget.NewButtonWithIcon(lp("Scan QRs with:"), theme.ViewFullScreenIcon(), func() { scanner(a, w) })
 
 		content.Add(container.NewVBox(
 			container.NewBorder(
@@ -366,16 +380,20 @@ func showQR(a fyne.App, w fyne.Window, text string) {
 
 		scan := widget.NewHyperlink(lp("Scan QR"), nil)
 		scan.SetURLFromString(HTTPS + ":" + SCAN)
-		scan.OnTapped = scanner
+		scan.OnTapped = func() { scanner(a, w) }
 		labelB.Add(scan)
 	}
 	labelB.Add(layout.NewSpacer())
 	content.Add(labelB)
 
-	d := dialog.NewCustom("Deep Link", "Ok", content, w)
-
 	link.OnTapped = func() {
-		d.Hide()
+		if !isAndroid {
+			log.Debug(text)
+			if err := OpenURL(text); err == nil {
+				NewToast(w, "OK").Show()
+			}
+			return
+		}
 
 		intent := &Intent{
 			Data:   strings.TrimPrefix(link.URL.String(), link.URL.Scheme+":"),
@@ -401,23 +419,80 @@ func showQR(a fyne.App, w fyne.Window, text string) {
 		notFinish = false
 	}
 
-	d.Resize(fyne.NewSize(300, 0))
-	d.Show()
-	// go func() {
-	// 	timer := time.NewTimer(time.Second * 7)
-	// 	defer timer.Stop()
+	at.SelectIndex(3)
+	accordion.CloseAll()
+	accordion.Items[6].Detail = content
+	accordion.Open(6)
+}
 
-	// 	select {
-	// 	case <-timer.C:
-	// 		if d == nil {
-	// 			return
-	// 		}
-	// 		fyne.Do(d.Hide)
-	// 	case <-done:
-	// 		return
-	// 	}
-	// }()
+func scanner(a fyne.App, w fyne.Window) {
+	if !isAndroid {
+		s := HTTPS + ":" + SCAN
+		err := OpenURL(s)
+		log.Debugf("%s: %v", s, err)
+		return
+	}
+	// view 0x23000003
+	// send 0x1b080001
+	intents := []*Intent{
+		// html5-qrcode
+		&Intent{Categories: []string{CATEGORY_DEFAULT, CATEGORY_BROWSABLE}},
 
+		// XIAOMI / REDMI / POCO
+		&Intent{Action: "miui.intent.action.scanner"},
+		// SAMSUNG
+		&Intent{Action: "com.samsung.android.app.opticalreader.SCAN"},
+		// OPPO / REALME / ONEPLUS (ColorOS/Oplus)
+		&Intent{Component: "com.oplus.scanner/.ScanActivity"},
+
+		// BINARY EYE
+		&Intent{Data: "//scan/", Scheme: "binaryeye"},
+		&Intent{Data: "//details?id=de.markusfisch.android.binaryeye", Scheme: "market"},
+		// Google Lens
+		&Intent{Component: "com.google.ar.lens/com.google.vr.apps.ornament.app.lens.LensLauncherActivity"},
+		&Intent{Data: "//details?id=com.google.ar.lens", Scheme: "market"},
+		// ZXING
+		&Intent{Action: "com.google.zxing.client.android.SCAN"},
+
+		&Intent{Package: "com.android.chrome", Categories: []string{CATEGORY_BROWSABLE}},
+		&Intent{Package: "mark.via.gp", Categories: []string{CATEGORY_BROWSABLE}},
+		&Intent{Package: "com.sec.android.app.sbrowser", Categories: []string{CATEGORY_BROWSABLE}},
+
+		&Intent{Package: "com.opera.mini.native", Categories: []string{CATEGORY_BROWSABLE}},
+		&Intent{Package: "com.microsoft.emmx", Categories: []string{CATEGORY_BROWSABLE}},
+
+		&Intent{Package: "org.mozilla.firefox", Categories: []string{CATEGORY_BROWSABLE}},
+	}
+	notFinish = false
+	contains := false
+	sel := a.Preferences().String("scanner")
+	key := strings.ToLower(strings.Fields(sel)[0])
+	for _, i := range intents {
+		i.Flags = NON_BROWSER
+		if slices.Contains(i.Categories, CATEGORY_BROWSABLE) {
+			i.Flags = BROWSER
+			i.Scheme = HTTPS
+			i.Data = SCAN
+		}
+		s := i.String()
+		// Пропускаем до выбранного
+		// остальные это фолбэки
+		switch {
+		case contains:
+		case strings.Contains(strings.ToLower(s), key):
+			contains = true
+		default:
+			continue
+		}
+		log.Debugf("%s", s)
+		if err := OpenURL(s); err == nil {
+			log.Debugf("find^^^")
+			return
+		}
+	}
+	fyne.Do(func() {
+		showQR(a, w, "")
+	})
 }
 
 func setClipboard(code string, a fyne.App) (text string) {
@@ -461,78 +536,6 @@ func setClipboard(code string, a fyne.App) (text string) {
 	)
 	a.Clipboard().SetContent(text)
 	return
-}
-
-// view 0x23000003
-// send 0x1b080001
-func scanner() {
-	if !isAndroid {
-		s := HTTPS + ":" + SCAN
-		err := OpenURL(s)
-		log.Debugf("%s: %v", s, err)
-		return
-	}
-	intents := []*Intent{
-		// html5-qrcode
-		&Intent{Categories: []string{CATEGORY_DEFAULT, CATEGORY_BROWSABLE}},
-
-		// XIAOMI / REDMI / POCO
-		&Intent{Action: "miui.intent.action.scanner"},
-		// SAMSUNG
-		&Intent{Action: "com.samsung.android.app.opticalreader.SCAN"},
-		// OPPO / REALME / ONEPLUS (ColorOS/Oplus)
-		&Intent{Component: "com.oplus.scanner/.ScanActivity"},
-
-		// BINARY EYE
-		&Intent{Data: "//scan/", Scheme: "binaryeye"},
-		&Intent{Data: "//details?id=de.markusfisch.android.binaryeye", Scheme: "market"},
-		// Google Lens
-		&Intent{Component: "com.google.ar.lens/com.google.vr.apps.ornament.app.lens.LensLauncherActivity"},
-		&Intent{Data: "//details?id=com.google.ar.lens", Scheme: "market"},
-		// ZXING
-		&Intent{Action: "com.google.zxing.client.android.SCAN"},
-
-		&Intent{Package: "com.android.chrome", Categories: []string{CATEGORY_BROWSABLE}},
-		&Intent{Package: "com.sec.android.app.sbrowser", Categories: []string{CATEGORY_BROWSABLE}},
-		&Intent{Package: "com.mi.globalbrowser", Categories: []string{CATEGORY_BROWSABLE}},
-		&Intent{Package: "com.huawei.browser", Categories: []string{CATEGORY_BROWSABLE}},
-
-		&Intent{Package: "com.yandex.browser.lite", Categories: []string{CATEGORY_BROWSABLE}},
-		&Intent{Package: "com.opera.mini.native", Categories: []string{CATEGORY_BROWSABLE}},
-		&Intent{Package: "com.microsoft.emmx", Categories: []string{CATEGORY_BROWSABLE}},
-		&Intent{Package: "com.UCMobile.intl", Categories: []string{CATEGORY_BROWSABLE}},
-
-		&Intent{Package: "org.mozilla.firefox", Categories: []string{CATEGORY_BROWSABLE}},
-	}
-	notFinish = false
-	find := false
-	a := fyne.CurrentApp()
-	sel := a.Preferences().String("scanner")
-	key := strings.ToLower(strings.Fields(sel)[0])
-	for _, i := range intents {
-		i.Flags = NON_BROWSER
-		s := i.String()
-		// Пропускаем до выбранного
-		// остальные это фолбэки
-		switch {
-		case find:
-		case strings.Contains(strings.ToLower(s), key):
-			find = true
-			if strings.Contains(s, CATEGORY_BROWSABLE) {
-				i.Scheme = HTTPS
-				i.Data = SCAN
-				i.Flags = BROWSER
-				s = i.String()
-			}
-		default:
-			continue
-		}
-		log.Debugf("%s", s)
-		if err := OpenURL(s); err == nil {
-			log.Debugf("find^^^")
-			return
-		}
-	}
 }
 
 // Intent represents an abstract description of an operation to be performed.

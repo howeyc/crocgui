@@ -461,6 +461,7 @@ func settingsTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 		widget.NewAccordionItem(lp("Network Local"), networkForm),
 		widget.NewAccordionItem(lp("Storage Options"), storageForm),
 		widget.NewAccordionItem(lp("Transfer Options"), transferForm),
+		widget.NewAccordionItem("QR", container.NewVBox()),
 	)
 	accordion.MultiOpen = !(isMobile || asMobile)
 	restoreAccordionState()

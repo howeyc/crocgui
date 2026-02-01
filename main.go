@@ -162,11 +162,11 @@ var (
 		FLAG_ACTIVITY_NEW_TASK,
 		// FLAG_ACTIVITY_NO_HISTORY,
 		FLAG_ACTIVITY_SINGLE_TOP,
-		FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS,
-		// FLAG_ACTIVITY_REQUIRE_NON_BROWSER,
-		FLAG_ACTIVITY_CLEAR_TOP,
-		FLAG_ACTIVITY_CLEAR_TASK,
+		// FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS,
+		// FLAG_ACTIVITY_CLEAR_TOP,
+		// FLAG_ACTIVITY_CLEAR_TASK,
 	)
+	at *container.AppTabs
 )
 
 func main() {
@@ -352,7 +352,6 @@ func refreshWindow(a fyne.App, w fyne.Window) {
 	textlogo.SetMinSize(fyne.NewSize(205, 100))
 	top := container.NewHBox(layout.NewSpacer(), textlogo, layout.NewSpacer())
 
-	var at *container.AppTabs
 	at = container.NewAppTabs(
 		sendTabItem(a, w, at),
 		recvTabItem(a, w, at),
