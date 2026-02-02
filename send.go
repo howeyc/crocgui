@@ -111,7 +111,8 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 	}
 
 	cbButton := widget.NewButtonWithIcon("", theme.ContentCopyIcon(), func() {
-		showQR(a, w, setClipboard(entry.Text, a))
+		setClipboard(a)
+		showQR()
 	})
 
 	secretButton := widget.NewButtonWithIcon("", theme.ViewRefreshIcon(), func() {
@@ -775,7 +776,8 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 								totalMax += fi.Size
 							}
 							log.Debugf("totalMax %d", totalMax)
-							setClipboard(opt.SharedSecret, a)
+							//setClipboard(opt.SharedSecret, a)
+							setClipboard(a)
 							fyne.Do(func() {
 								toplineW.SetText(lp("Have them press the Download now"))
 								NewToast(w, lp("Have them press the Download now")).Show()

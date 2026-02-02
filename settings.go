@@ -466,6 +466,7 @@ func settingsTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 	accordion.MultiOpen = !(isMobile || asMobile)
 	restoreAccordionState()
 
+	OnSelectedReload[3] = func() { makeQR(a, w) }
 	// Собираем финальный интерфейс
 	ti = container.NewTabItemWithIcon(ZeroWidthNonJoiner, theme.SettingsIcon(),
 		container.NewVScroll(

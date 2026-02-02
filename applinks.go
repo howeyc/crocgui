@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"net"
+	"net/url"
 	"slices"
 	"strconv"
 	"strings"
@@ -247,57 +248,61 @@ func toURI(ss ...string) (u string) {
 	return IO + base64.RawURLEncoding.EncodeToString([]byte(u))
 }
 
-var isShowQR = false
-
-func showQR(a fyne.App, w fyne.Window, text string) {
-	if !(at != nil && len(at.Items) > 3) || !(accordion != nil && len(accordion.Items) > 6) {
-		return
+func showQR() {
+	if at != nil &&
+		len(at.Items) > 3 &&
+		accordion != nil &&
+		len(accordion.Items) > 6 {
+		at.SelectIndex(3)
+		accordion.CloseAll()
+		accordion.Open(6)
 	}
+}
 
-	if isShowQR {
-		return
-	}
-	isShowQR = true
+func makeQR(a fyne.App, w fyne.Window) {
+	text := a.Clipboard().Content()
+	content := container.NewVBox()
 	defer func() {
-		isShowQR = false
+		if accordion != nil && len(accordion.Items) > 6 {
+			accordion.Items[6].Detail = content
+		}
 	}()
 
 	if text == "" {
-		text = a.Clipboard().Content()
-		if text == "" {
-			NewToast(w, "empty clipboard").Show()
-			log.Error("empty clipboard")
-			return
-		}
+		NewToast(w, "empty clipboard").Show()
+		log.Error("empty clipboard")
+		return
 	}
-	content := container.NewVBox()
 
-	pngData, err := qrcode.Encode(text, qrcode.High, 256)
+	QR := canvas.NewImageFromResource(theme.BrokenImageIcon())
+	k := 21 * 16
+	pngData, err := qrcode.Encode(text, qrcode.High, k)
 	if err != nil {
 		log.Error(err)
 	} else {
-		QR := canvas.NewImageFromReader(bytes.NewReader(pngData), "qr.png")
-		QR.SetMinSize(fyne.NewSize(256, 256))
-		QR.FillMode = canvas.ImageFillContain
-		content.Add(QR)
+		QR = canvas.NewImageFromReader(bytes.NewReader(pngData), "qr.png")
 	}
-
-	cbLabel := container.NewHBox(
-		layout.NewSpacer(),
-		widget.NewIcon(theme.ContentCopyIcon()),
-		widget.NewLabel(lp("Copied to clipboard:")),
-		layout.NewSpacer(),
-	)
-	content.Add(cbLabel)
+	QR.SetMinSize(fyne.NewSize(float32(k), float32(k)))
+	// QR.FillMode = canvas.ImageFillContain
+	QR.FillMode = canvas.ImageFillOriginal
+	content.Add(QR)
 
 	hlt := text
-	if len(text) > 63 {
-		hlt = text[:63] + "..."
+	hltl := 80
+	if len(text) > hltl {
+		hlt = text[:hltl] + "..."
 	}
 	link := widget.NewHyperlink(hlt, nil)
-	link.SetURLFromString(text)
 	link.Wrapping = fyne.TextWrapBreak
 	content.Add(link)
+	u, err := url.Parse(text)
+	if err != nil {
+		return
+	}
+	link.SetURL(u)
+	if !strings.HasPrefix(text, IO) {
+		return
+	}
 
 	content.Add(widget.NewSeparator())
 
@@ -346,7 +351,7 @@ func showQR(a fyne.App, w fyne.Window, text string) {
 			}
 		}
 
-		// Сканируйте QRы используя:
+		// Сканируйте QRы c:
 		qrButton := widget.NewButtonWithIcon(lp("Scan QRs with:"), theme.ViewFullScreenIcon(), func() { scanner(a, w) })
 
 		content.Add(container.NewVBox(
@@ -418,11 +423,6 @@ func showQR(a fyne.App, w fyne.Window, text string) {
 		}
 		notFinish = false
 	}
-
-	at.SelectIndex(3)
-	accordion.CloseAll()
-	accordion.Items[6].Detail = content
-	accordion.Open(6)
 }
 
 func scanner(a fyne.App, w fyne.Window) {
@@ -491,11 +491,12 @@ func scanner(a fyne.App, w fyne.Window) {
 		}
 	}
 	fyne.Do(func() {
-		showQR(a, w, "")
+		showQR()
 	})
 }
 
-func setClipboard(code string, a fyne.App) (text string) {
+func setClipboard(a fyne.App) (text string) {
+	code := a.Preferences().String("secret")
 	name := a.Preferences().String("new-relay")
 	if name == "" {
 		name = relayName(a)
