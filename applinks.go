@@ -259,6 +259,30 @@ func showQR() {
 	}
 }
 
+func defaultQR(cb string) (qr *canvas.Image, text string, link *widget.Hyperlink) {
+	qr = canvas.NewImageFromResource(theme.BrokenImageIcon())
+	text = cb
+	if text == "" {
+		text = fmt.Sprintf("%s://%s/%s/%s/releases", HTTPS, GH, FORKto, CG)
+	}
+	pngData, err := qrcode.Encode(text, qrcode.High, int(qrSize))
+	if err != nil {
+		log.Error(err)
+	} else {
+		qr = canvas.NewImageFromReader(bytes.NewReader(pngData), "qr.png")
+	}
+	qr.SetMinSize(fyne.NewSize(qrSize, qrSize))
+
+	hlt := text
+	hltl := 80
+	if len(text) > hltl {
+		hlt = text[:hltl] + "…"
+	}
+	link = widget.NewHyperlink(hlt, nil)
+	link.Wrapping = fyne.TextWrapBreak
+	return
+}
+
 func makeQR(a fyne.App, w fyne.Window) {
 	// Получаем контейнер для QR секции
 	var qrContainer *fyne.Container
@@ -276,37 +300,8 @@ func makeQR(a fyne.App, w fyne.Window) {
 		return
 	}
 
-	text := a.Clipboard().Content()
-
-	if text == "" {
-		NewToast(w, "empty clipboard").Show()
-		log.Error("empty clipboard")
-		return
-	}
-
-	// Обновляем QR код (item[0])
-	k := 21 * 16
-	pngData, err := qrcode.Encode(text, qrcode.High, k)
-	if err != nil {
-		log.Error(err)
-		QR := canvas.NewImageFromResource(theme.BrokenImageIcon())
-		QR.SetMinSize(fyne.NewSize(float32(k), float32(k)))
-		qrContainer.Objects[0] = QR
-	} else {
-		QR := canvas.NewImageFromReader(bytes.NewReader(pngData), "qr.png")
-		QR.SetMinSize(fyne.NewSize(float32(k), float32(k)))
-		QR.FillMode = canvas.ImageFillOriginal
-		qrContainer.Objects[0] = QR
-	}
-
-	// Обновляем ссылку (item[1])
-	hlt := text
-	hltl := 80
-	if len(text) > hltl {
-		hlt = text[:hltl] + "..."
-	}
-	link := widget.NewHyperlink(hlt, nil)
-	link.Wrapping = fyne.TextWrapBreak
+	qr, text, link := defaultQR(a.Clipboard().Content())
+	qrContainer.Objects[0] = qr
 
 	// Парсим URL для ссылки
 	isIO := false
@@ -406,8 +401,9 @@ func makeScannerSettings(a fyne.App, w fyne.Window) fyne.CanvasObject {
 	})
 
 	selScan := a.Preferences().String("scanner")
-	if selScan != "" {
+	if !slices.Contains(optScan, selScan) {
 		selScan = optScan[0]
+		a.Preferences().SetString("scanner", selScan)
 	}
 	scanSelect.SetSelected(selScan)
 

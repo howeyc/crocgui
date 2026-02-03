@@ -83,11 +83,11 @@ func aboutTabItem(a fyne.App, _ fyne.Window) *container.TabItem {
 	crocHyperlink.SetURLFromString(fmt.Sprintf("%s://%s/%s/%s/releases/latest", HTTPS, GH, SCHOLLZ, CROC))
 
 	fromHyperlink := widget.NewHyperlink(fmt.Sprintf("%s/%s/%s v%s_%d", GH, FORKfrom, "crocgui", FORKfromVersion, FORKfromBuild), nil)
-	fromHyperlink.SetURLFromString(fmt.Sprintf("s://%s/%s/%s/releases/tag/v%s", HTTPS, GH, FORKfrom, "crocgui", FORKfromVersion))
+	fromHyperlink.SetURLFromString(fmt.Sprintf("%s://%s/%s/%s/releases/tag/v%s", HTTPS, GH, FORKfrom, "crocgui", FORKfromVersion))
 
 	ve, bu, errVb := VersionBuild(a, fyneApp)
 	oldHyperlink := widget.NewHyperlink(fmt.Sprintf("%s/%s/%s v%s_%d", GH, FORKto, CG, ve, bu), nil)
-	oldHyperlink.SetURLFromString(fmt.Sprintf("s://%s/%s/%s/releases/tag/v%s", HTTPS, GH, FORKto, CG, ve))
+	oldHyperlink.SetURLFromString(fmt.Sprintf("%s://%s/%s/%s/releases/tag/v%s", HTTPS, GH, FORKto, CG, ve))
 	oldHyperlink.Hidden = errVb != nil
 
 	newHyperlink := widget.NewHyperlink("", nil)

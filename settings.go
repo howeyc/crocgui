@@ -18,7 +18,6 @@ import (
 	"golang.org/x/text/message"
 
 	"fyne.io/fyne/v2"
-	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/data/binding"
 	"fyne.io/fyne/v2/layout"
@@ -455,20 +454,13 @@ func settingsTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 	)
 
 	// Создаем основной контейнер для QR секции
-	qrContent := container.NewVBox()
 
-	// 1. Место для QR кода (item[0]) - будет заполнено в makeQR
-	placeholderQR := canvas.NewImageFromResource(theme.BrokenImageIcon())
-	placeholderQR.SetMinSize(fyne.NewSize(336, 336)) // 21*16 = 336
-	qrContent.Add(placeholderQR)
-
-	// 2. Место для ссылки (item[1]) - будет заполнено в makeQR
-	placeholderLink := widget.NewHyperlink("", nil)
-	placeholderLink.Wrapping = fyne.TextWrapBreak
-	qrContent.Add(placeholderLink)
-
-	// 3. Разделитель (item[2])
-	qrContent.Add(widget.NewSeparator())
+	qr, _, link := defaultQR("")
+	qrContent := container.NewVBox(
+		container.NewWithoutLayout(qr), //0
+		link,                           //1
+		widget.NewSeparator(),          //2
+	)
 
 	// 4. Настройки сканера (item[3]) - создаются через функцию из applinks.go
 	if scannerSettings := makeScannerSettings(a, w); scannerSettings != nil {

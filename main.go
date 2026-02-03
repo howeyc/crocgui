@@ -64,16 +64,17 @@ const (
 
 	// cmd/c "set LOGGER=trace&crocgui.exe"
 	// LOGGER=trace crocgui
-	LEVEL           = "debug"
-	FORKfrom        = "howeyc"
-	FORKfromVersion = "1.11.5"
-	FORKfromBuild   = 40
-	FORKto          = "abakum"
-	GH              = "github.com"
-	HTTPS           = "https"
-	GHP             = FORKto + ".github.io"
-	IO              = HTTPS + "://" + GHP + "/croc#"
-	SCAN            = "//" + GHP + "/scan/"
+	LEVEL                   = "debug"
+	FORKfrom                = "howeyc"
+	FORKfromVersion         = "1.11.5"
+	FORKfromBuild           = 40
+	FORKto                  = "abakum"
+	GH                      = "github.com"
+	HTTPS                   = "https"
+	GHP                     = FORKto + ".github.io"
+	IO                      = HTTPS + "://" + GHP + "/croc#"
+	SCAN                    = "//" + GHP + "/scan/"
+	qrSize          float32 = 21 * 16
 )
 
 const (
