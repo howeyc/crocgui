@@ -260,13 +260,23 @@ func showQR() {
 }
 
 func makeQR(a fyne.App, w fyne.Window) {
-	text := a.Clipboard().Content()
-	content := container.NewVBox()
-	defer func() {
-		if accordion != nil && len(accordion.Items) > 6 {
-			accordion.Items[6].Detail = content
+	// Получаем контейнер для QR секции
+	var qrContainer *fyne.Container
+	if accordion != nil && len(accordion.Items) > 6 {
+		if detail, ok := accordion.Items[6].Detail.(*fyne.Container); ok {
+			qrContainer = detail
 		}
-	}()
+	} else {
+		log.Error("QR container empty")
+		return
+	}
+
+	if qrContainer == nil || len(qrContainer.Objects) < 2 {
+		log.Error("QR container empty")
+		return
+	}
+
+	text := a.Clipboard().Content()
 
 	if text == "" {
 		NewToast(w, "empty clipboard").Show()
@@ -274,19 +284,22 @@ func makeQR(a fyne.App, w fyne.Window) {
 		return
 	}
 
-	QR := canvas.NewImageFromResource(theme.BrokenImageIcon())
+	// Обновляем QR код (item[0])
 	k := 21 * 16
 	pngData, err := qrcode.Encode(text, qrcode.High, k)
 	if err != nil {
 		log.Error(err)
+		QR := canvas.NewImageFromResource(theme.BrokenImageIcon())
+		QR.SetMinSize(fyne.NewSize(float32(k), float32(k)))
+		qrContainer.Objects[0] = QR
 	} else {
-		QR = canvas.NewImageFromReader(bytes.NewReader(pngData), "qr.png")
+		QR := canvas.NewImageFromReader(bytes.NewReader(pngData), "qr.png")
+		QR.SetMinSize(fyne.NewSize(float32(k), float32(k)))
+		QR.FillMode = canvas.ImageFillOriginal
+		qrContainer.Objects[0] = QR
 	}
-	QR.SetMinSize(fyne.NewSize(float32(k), float32(k)))
-	// QR.FillMode = canvas.ImageFillContain
-	QR.FillMode = canvas.ImageFillOriginal
-	content.Add(QR)
 
+	// Обновляем ссылку (item[1])
 	hlt := text
 	hltl := 80
 	if len(text) > hltl {
@@ -294,85 +307,136 @@ func makeQR(a fyne.App, w fyne.Window) {
 	}
 	link := widget.NewHyperlink(hlt, nil)
 	link.Wrapping = fyne.TextWrapBreak
-	content.Add(link)
+
+	// Парсим URL для ссылки
+	isIO := false
 	u, err := url.Parse(text)
-	if err != nil {
-		return
-	}
-	link.SetURL(u)
-	if !strings.HasPrefix(text, IO) {
-		return
-	}
+	if err == nil && u.Scheme != "" && u.Host != "" {
+		link.SetURL(u)
+		if strings.HasPrefix(text, IO) {
+			isIO = true
+			link.OnTapped = func() {
+				if !(isAndroid || asMobile) {
+					log.Debug(text)
+					if err := OpenURL(text); err == nil {
+						NewToast(w, "OK").Show()
+					}
+					return
+				}
 
-	content.Add(widget.NewSeparator())
-
-	if isAndroid {
-		// Нажмите Deep Link выше для пробы.
-		labelT := widget.NewLabel(lp("Click the Deep Link above to test"))
-		labelT.Wrapping = fyne.TextWrapWord
-		labelT.Alignment = fyne.TextAlignCenter
-
-		// Если откроется браузер:
-		labelL := widget.NewLabel(lp("If a browser opens then:"))
-		labelL.Wrapping = fyne.TextWrapWord
-		labelL.Alignment = fyne.TextAlignTrailing
-		// Разрешить
-		setupButton := widget.NewButtonWithIcon(lp("Allow")+"\n"+GHP, theme.SettingsIcon(), func() {
-			idActions(ID, APP_OPEN_BY_DEFAULT_SETTINGS, APPLICATION_DETAILS_SETTINGS)
-		})
-		scanSelect := widget.NewSelect([]string{
-			"Default html5-QRcode",
-			"miUI Xiaomi",
-			"Samsung",
-			"OPlus",
-
-			"BinaryEye",
-			"Lens Google",
-			"ZXing",
-
-			"Chrome Google",
-			"Via",
-			"sBrowser Samsung",
-
-			"Opera mini",
-			"Microsoft",
-
-			"Firefox",
-		}, func(sel string) {
-			a.Preferences().SetString("scanner", sel)
-		})
-
-		if sel := a.Preferences().String("scanner"); sel != "" {
-			scanSelect.SetSelected(sel)
-		} else {
-			if opt := scanSelect.Options; len(opt) > 0 {
-				scanSelect.SetSelectedIndex(0)
-				a.Preferences().SetString("scanner", opt[0])
+				intent := &Intent{
+					Data:   strings.TrimPrefix(link.URL.String(), link.URL.Scheme+":"),
+					Scheme: link.URL.Scheme,
+					Flags: flagActivity(
+						FLAG_ACTIVITY_SINGLE_TOP,
+						FLAG_ACTIVITY_REQUIRE_NON_BROWSER,
+					),
+				}
+				s := intent.String()
+				notFinish = true
+				log.Debug(s)
+				if err := OpenURL(s); err == nil {
+					NewToast(w, "OK").Show()
+					return
+				}
+				intent.SetFlags(BROWSER)
+				s = intent.String()
+				log.Debug(s)
+				if err := OpenURL(s); err != nil {
+					log.Errorf("%v", err)
+				}
+				notFinish = false
 			}
 		}
-
-		// Сканируйте QRы c:
-		qrButton := widget.NewButtonWithIcon(lp("Scan QRs with:"), theme.ViewFullScreenIcon(), func() { scanner(a, w) })
-
-		content.Add(container.NewVBox(
-			container.NewBorder(
-				labelT,
-				nil,
-				nil,
-				setupButton,
-				labelL,
-			),
-			widget.NewSeparator(),
-			container.NewBorder(
-				nil,
-				nil,
-				qrButton,
-				nil,
-				scanSelect,
-			),
-			widget.NewSeparator(),
-		))
+	} else {
+		link.OnTapped = nil
 	}
+
+	qrContainer.Objects[1] = link
+	for _, o := range qrContainer.Objects[2:] {
+		if isIO {
+			o.Show()
+		} else {
+			o.Hide()
+		}
+	}
+}
+
+func makeScannerSettings(a fyne.App, w fyne.Window) fyne.CanvasObject {
+	if !(isAndroid || asMobile) {
+		return nil // Возвращаем nil, если не Android
+	}
+
+	// Нажмите Deep Link выше для пробы.
+	labelT := widget.NewLabel(lp("Click the Deep Link above to test"))
+	labelT.Wrapping = fyne.TextWrapWord
+	labelT.Alignment = fyne.TextAlignCenter
+
+	// Если откроется браузер:
+	labelL := widget.NewLabel(lp("If a browser opens then:"))
+	labelL.Wrapping = fyne.TextWrapWord
+	labelL.Alignment = fyne.TextAlignTrailing
+
+	// Разрешить
+	setupButton := widget.NewButtonWithIcon(lp("Allow")+"\n"+GHP, theme.SettingsIcon(), func() {
+		idActions(ID, APP_OPEN_BY_DEFAULT_SETTINGS, APPLICATION_DETAILS_SETTINGS)
+	})
+
+	optScan := []string{
+		"Default html5-QRcode",
+		"miUI Xiaomi",
+		"Samsung",
+		"OPlus",
+
+		"BinaryEye",
+		"Lens Google",
+		"ZXing",
+
+		"Chrome Google",
+		"Via",
+		"sBrowser Samsung",
+
+		"Opera mini",
+		"Microsoft",
+
+		"Firefox",
+	}
+	scanSelect := widget.NewSelect(optScan, func(sel string) {
+		a.Preferences().SetString("scanner", sel)
+	})
+
+	selScan := a.Preferences().String("scanner")
+	if selScan != "" {
+		selScan = optScan[0]
+	}
+	scanSelect.SetSelected(selScan)
+
+	// Сканируйте QRы c:
+	qrButton := widget.NewButtonWithIcon(lp("Scan QRs with:"), theme.ViewFullScreenIcon(), func() {
+		scanner(a, w)
+	})
+
+	return container.NewVBox(
+		container.NewBorder(
+			labelT,
+			nil,
+			nil,
+			setupButton,
+			labelL,
+		),
+		widget.NewSeparator(),
+		container.NewBorder(
+			nil,
+			nil,
+			qrButton,
+			nil,
+			scanSelect,
+		),
+		widget.NewSeparator(),
+	)
+}
+
+func makeQRInstructions(a fyne.App, w fyne.Window) fyne.CanvasObject {
 	labelB := container.NewHBox(
 		layout.NewSpacer(),
 		widget.NewLabel(lp("Use")),
@@ -380,53 +444,24 @@ func makeQR(a fyne.App, w fyne.Window) {
 		widget.NewLabel(lp("on page")),
 		widget.NewIcon(theme.DownloadIcon()),
 	)
-	if !isAndroid {
+
+	if !(isAndroid || asMobile) {
 		labelB.Add(widget.NewLabel(lp("as link:")))
 
 		scan := widget.NewHyperlink(lp("Scan QR"), nil)
 		scan.SetURLFromString(HTTPS + ":" + SCAN)
-		scan.OnTapped = func() { scanner(a, w) }
+		scan.OnTapped = func() {
+			scanner(a, w)
+		}
 		labelB.Add(scan)
 	}
+
 	labelB.Add(layout.NewSpacer())
-	content.Add(labelB)
-
-	link.OnTapped = func() {
-		if !isAndroid {
-			log.Debug(text)
-			if err := OpenURL(text); err == nil {
-				NewToast(w, "OK").Show()
-			}
-			return
-		}
-
-		intent := &Intent{
-			Data:   strings.TrimPrefix(link.URL.String(), link.URL.Scheme+":"),
-			Scheme: link.URL.Scheme,
-			Flags: flagActivity(
-				FLAG_ACTIVITY_SINGLE_TOP,
-				FLAG_ACTIVITY_REQUIRE_NON_BROWSER,
-			),
-		}
-		s := intent.String()
-		notFinish = true
-		log.Debug(s)
-		if err := OpenURL(s); err == nil {
-			NewToast(w, "OK").Show()
-			return
-		}
-		intent.SetFlags(BROWSER)
-		s = intent.String()
-		log.Debug(s)
-		if err := OpenURL(s); err != nil {
-			log.Errorf("%v", err)
-		}
-		notFinish = false
-	}
+	return labelB
 }
 
 func scanner(a fyne.App, w fyne.Window) {
-	if !isAndroid {
+	if !(isAndroid || asMobile) {
 		s := HTTPS + ":" + SCAN
 		err := OpenURL(s)
 		log.Debugf("%s: %v", s, err)

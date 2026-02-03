@@ -104,7 +104,7 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 			a.Preferences().SetString("relay-password", pd)
 			a.Preferences().SetString("socks5", s5)
 			a.Preferences().SetString("connect", ct)
-			cc = fmt.Sprintf("%s %s: %s", lp("Relay"), lp("Name"), ne)
+			cc = fmt.Sprintf("%s: %s", lp("Relay"), ne)
 		} else {
 			entry.SetText(cc)
 		}
