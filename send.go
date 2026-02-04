@@ -1464,7 +1464,7 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 }
 
 // Большой диалог для десктопа
-func ShowFileOpen(callback func(fyne.URIReadCloser, error), parent fyne.Window) {
+func ShowFileOpen0(callback func(fyne.URIReadCloser, error), parent fyne.Window) {
 	if isMobile {
 		notFinish = true
 		dialog.ShowFileOpen(callback, parent)
@@ -1472,7 +1472,33 @@ func ShowFileOpen(callback func(fyne.URIReadCloser, error), parent fyne.Window) 
 	}
 	fd := dialog.NewFileOpen(callback, parent)
 	fd.Resize(parent.Canvas().Size())
-	// fd.SetLocation(lastLU)
+	fd.Show()
+}
+
+func ShowFileOpen(callback func(fyne.URIReadCloser, error), parent fyne.Window) {
+	if isMobile {
+		notFinish = true
+		dialog.ShowFileOpen(callback, parent)
+		return
+	}
+
+	var fd *dialog.FileDialog
+
+	if parent.FullScreen() {
+		// Если уже был fullscreen - простой диалог
+		fd = dialog.NewFileOpen(callback, parent)
+	} else {
+		// Если не было fullscreen - включаем и создаём диалог с восстановлением
+		parent.SetFullScreen(true)
+
+		fd = dialog.NewFileOpen(func(uri fyne.URIReadCloser, err error) {
+			parent.SetFullScreen(false)
+			callback(uri, err)
+		}, parent)
+	}
+
+	// Настраиваем размер и показываем
+	fd.Resize(parent.Canvas().Size())
 	fd.Show()
 }
 

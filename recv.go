@@ -490,12 +490,12 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 			)
 			return
 		}
-		savedialog := dialog.NewFileSave(fileSave, parent)
-		savedialog.SetFileName(child)
-		savedialog.Resize(parent.Canvas().Size())
-		// savedialog.SetLocation(lastLU)
-		notFinish = true
-		savedialog.Show()
+		// savedialog := dialog.NewFileSave(fileSave, parent)
+		// savedialog.SetFileName(child)
+		// savedialog.Resize(parent.Canvas().Size())
+		// notFinish = true
+		// savedialog.Show()
+		newFileSave(fileSave, parent, child)
 	} //ShowFileSave
 
 	fpath := a.Preferences().String("DeleteFile")
@@ -1113,7 +1113,7 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 }
 
 // Большой диалог для десктопа
-func ShowFolderOpen(callback func(fyne.ListableURI, error), parent fyne.Window) {
+func ShowFolderOpen0(callback func(fyne.ListableURI, error), parent fyne.Window) {
 	if isMobile {
 		notFinish = true
 		dialog.ShowFolderOpen(callback, parent)
@@ -1121,6 +1121,58 @@ func ShowFolderOpen(callback func(fyne.ListableURI, error), parent fyne.Window) 
 	}
 	fd := dialog.NewFolderOpen(callback, parent)
 	fd.Resize(parent.Canvas().Size())
-	// fd.SetLocation(lastLU)
 	fd.Show()
+}
+func ShowFolderOpen(callback func(fyne.ListableURI, error), parent fyne.Window) {
+	if isMobile {
+		notFinish = true
+		dialog.ShowFolderOpen(callback, parent)
+		return
+	}
+
+	var fd *dialog.FileDialog
+
+	if parent.FullScreen() {
+		// Если уже был fullscreen - простой диалог
+		fd = dialog.NewFolderOpen(callback, parent)
+	} else {
+		// Если не было fullscreen - включаем и создаём диалог с восстановлением
+		parent.SetFullScreen(true)
+
+		fd = dialog.NewFolderOpen(func(uri fyne.ListableURI, err error) {
+			parent.SetFullScreen(false)
+			callback(uri, err)
+		}, parent)
+	}
+
+	// Настраиваем размер и показываем
+	fd.Resize(parent.Canvas().Size())
+	fd.Show()
+}
+
+func newFileSave(callback func(fyne.URIWriteCloser, error), parent fyne.Window, fileName string) (fd *dialog.FileDialog) {
+	if isMobile {
+		notFinish = true
+		fd = dialog.NewFileSave(callback, parent)
+		fd.SetFileName(fileName)
+		fd.Show()
+		return
+	}
+
+	if !parent.FullScreen() {
+		parent.SetFullScreen(true)
+
+		fd = dialog.NewFileSave(func(uri fyne.URIWriteCloser, err error) {
+			parent.SetFullScreen(false)
+			callback(uri, err)
+		}, parent)
+	} else {
+		fd = dialog.NewFileSave(callback, parent)
+	}
+
+	fd.Resize(parent.Canvas().Size())
+	fd.SetFileName(fileName)
+	fd.Show()
+
+	return
 }
