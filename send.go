@@ -112,7 +112,9 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 
 	cbButton := widget.NewButtonWithIcon("", theme.ContentCopyIcon(), func() {
 		setClipboard(a)
-		showQR()
+		if qr != nil {
+			qr.Show()
+		}
 	})
 
 	secretButton := widget.NewButtonWithIcon("", theme.ViewRefreshIcon(), func() {

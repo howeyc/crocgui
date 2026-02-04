@@ -247,14 +247,19 @@ func toURI(ss ...string) (u string) {
 	return IO + base64.RawURLEncoding.EncodeToString([]byte(u))
 }
 
-func showQR() {
-	if at != nil &&
-		len(at.Items) > 3 &&
-		accordion != nil &&
-		len(accordion.Items) > 6 {
+// Show открывает секцию QR в аккордеоне
+func (qr *QR) Show() {
+	if at != nil && len(at.Items) > 3 {
 		at.SelectIndex(3)
+	}
+	if accordion != nil && qr.accordionItem != nil {
 		accordion.CloseAll()
-		accordion.Open(6)
+		for i, item := range accordion.Items {
+			if item == qr.accordionItem {
+				accordion.Open(i)
+				break
+			}
+		}
 	}
 }
 
@@ -342,14 +347,6 @@ func (qr *QR) makeQRInstructions() fyne.CanvasObject {
 		widget.NewLabel(lp("to")),
 	)
 
-	if !(isAndroid || asMobile) {
-		scan := widget.NewHyperlink(lp("Scan QRs"), nil)
-		scan.SetURLFromString(HTTPS + ":" + SCAN)
-		scan.OnTapped = func() {
-			scanner(qr.app, qr.window)
-		}
-		labelB.Add(scan)
-	}
 	labelB.Add(layout.NewSpacer())
 
 	vBox := container.NewVBox(labelB)
@@ -384,7 +381,7 @@ func (qr *QR) makeQRInstructions() fyne.CanvasObject {
 		scanSelect.SetSelected(selScan)
 
 		qrButton := widget.NewButton(lp("Scan QRs")+" "+lp("with:"), func() {
-			scanner(qr.app, qr.window)
+			qr.scanner()
 		})
 
 		vBox.Add(container.NewBorder(
@@ -394,11 +391,16 @@ func (qr *QR) makeQRInstructions() fyne.CanvasObject {
 			nil,
 			scanSelect,
 		))
+	} else {
+		qrButton := widget.NewButton(lp("Scan QRs"), func() {
+			qr.scanner()
+		})
+		vBox.Add(qrButton)
 	}
 	return vBox
 }
 
-func scanner(a fyne.App, w fyne.Window) {
+func (qr *QR) scanner() {
 	if !(isAndroid || asMobile) {
 		s := HTTPS + ":" + SCAN
 		err := OpenURL(s)
@@ -410,14 +412,12 @@ func scanner(a fyne.App, w fyne.Window) {
 	intents := []*Intent{
 		// html5-qrcode
 		&Intent{Categories: []string{CATEGORY_DEFAULT, CATEGORY_BROWSABLE}},
-
 		// XIAOMI / REDMI / POCO
 		&Intent{Action: "miui.intent.action.scanner"},
 		// SAMSUNG
 		&Intent{Action: "com.samsung.android.app.opticalreader.SCAN"},
 		// OPPO / REALME / ONEPLUS (ColorOS/Oplus)
 		&Intent{Component: "com.oplus.scanner/.ScanActivity"},
-
 		// BINARY EYE
 		&Intent{Data: "//scan/", Scheme: "binaryeye"},
 		&Intent{Data: "//details?id=de.markusfisch.android.binaryeye", Scheme: "market"},
@@ -426,20 +426,19 @@ func scanner(a fyne.App, w fyne.Window) {
 		&Intent{Data: "//details?id=com.google.ar.lens", Scheme: "market"},
 		// ZXING
 		&Intent{Action: "com.google.zxing.client.android.SCAN"},
-
 		&Intent{Package: "com.android.chrome", Categories: []string{CATEGORY_BROWSABLE}},
 		&Intent{Package: "mark.via.gp", Categories: []string{CATEGORY_BROWSABLE}},
 		&Intent{Package: "com.sec.android.app.sbrowser", Categories: []string{CATEGORY_BROWSABLE}},
-
 		&Intent{Package: "com.opera.mini.native", Categories: []string{CATEGORY_BROWSABLE}},
 		&Intent{Package: "com.microsoft.emmx", Categories: []string{CATEGORY_BROWSABLE}},
-
 		&Intent{Package: "org.mozilla.firefox", Categories: []string{CATEGORY_BROWSABLE}},
 	}
+
 	notFinish = false
 	contains := false
-	sel := a.Preferences().String("scanner")
+	sel := qr.app.Preferences().String("scanner")
 	key := strings.ToLower(strings.Fields(sel)[0])
+
 	for _, i := range intents {
 		i.Flags = NON_BROWSER
 		if slices.Contains(i.Categories, CATEGORY_BROWSABLE) {
@@ -457,14 +456,16 @@ func scanner(a fyne.App, w fyne.Window) {
 		default:
 			continue
 		}
+
 		log.Debugf("%s", s)
 		if err := OpenURL(s); err == nil {
 			log.Debugf("find^^^")
 			return
 		}
 	}
+
 	fyne.Do(func() {
-		showQR()
+		qr.Show()
 	})
 }
 
@@ -878,6 +879,8 @@ func idActions(id string, actions ...string) {
 	notFinish = false
 }
 
+var qr *QR
+
 // QR управляет всей секцией QR в настройках
 type QR struct {
 	app    fyne.App
@@ -1039,74 +1042,6 @@ func (qr *QR) updateVisibility() {
 	}
 }
 
-// scanner вызывает сканер QR-кодов в зависимости от платформы
-func (qr *QR) scanner() {
-	if !(isAndroid || asMobile) {
-		s := HTTPS + ":" + SCAN
-		err := OpenURL(s)
-		log.Debugf("%s: %v", s, err)
-		return
-	}
-
-	intents := []*Intent{
-		// html5-qrcode
-		&Intent{Categories: []string{CATEGORY_DEFAULT, CATEGORY_BROWSABLE}},
-		// XIAOMI / REDMI / POCO
-		&Intent{Action: "miui.intent.action.scanner"},
-		// SAMSUNG
-		&Intent{Action: "com.samsung.android.app.opticalreader.SCAN"},
-		// OPPO / REALME / ONEPLUS (ColorOS/Oplus)
-		&Intent{Component: "com.oplus.scanner/.ScanActivity"},
-		// BINARY EYE
-		&Intent{Data: "//scan/", Scheme: "binaryeye"},
-		&Intent{Data: "//details?id=de.markusfisch.android.binaryeye", Scheme: "market"},
-		// Google Lens
-		&Intent{Component: "com.google.ar.lens/com.google.vr.apps.ornament.app.lens.LensLauncherActivity"},
-		&Intent{Data: "//details?id=com.google.ar.lens", Scheme: "market"},
-		// ZXING
-		&Intent{Action: "com.google.zxing.client.android.SCAN"},
-		&Intent{Package: "com.android.chrome", Categories: []string{CATEGORY_BROWSABLE}},
-		&Intent{Package: "mark.via.gp", Categories: []string{CATEGORY_BROWSABLE}},
-		&Intent{Package: "com.sec.android.app.sbrowser", Categories: []string{CATEGORY_BROWSABLE}},
-		&Intent{Package: "com.opera.mini.native", Categories: []string{CATEGORY_BROWSABLE}},
-		&Intent{Package: "com.microsoft.emmx", Categories: []string{CATEGORY_BROWSABLE}},
-		&Intent{Package: "org.mozilla.firefox", Categories: []string{CATEGORY_BROWSABLE}},
-	}
-
-	notFinish = false
-	contains := false
-	sel := qr.app.Preferences().String("scanner")
-	key := strings.ToLower(strings.Fields(sel)[0])
-
-	for _, i := range intents {
-		i.Flags = NON_BROWSER
-		if slices.Contains(i.Categories, CATEGORY_BROWSABLE) {
-			i.Flags = BROWSER
-			i.Scheme = HTTPS
-			i.Data = SCAN
-		}
-		s := i.String()
-
-		switch {
-		case contains:
-		case strings.Contains(strings.ToLower(s), key):
-			contains = true
-		default:
-			continue
-		}
-
-		log.Debugf("%s", s)
-		if err := OpenURL(s); err == nil {
-			log.Debugf("find^^^")
-			return
-		}
-	}
-
-	fyne.Do(func() {
-		qr.Show()
-	})
-}
-
 // SetClipboard устанавливает контент в буфер обмена и обновляет секцию
 func (qr *QR) SetClipboard(text string) string {
 	qr.app.Clipboard().SetContent(text)
@@ -1117,20 +1052,4 @@ func (qr *QR) SetClipboard(text string) string {
 // GetAccordionItem возвращает элемент аккордеона
 func (qr *QR) GetAccordionItem() *widget.AccordionItem {
 	return qr.accordionItem
-}
-
-// Show открывает секцию QR в аккордеоне
-func (qr *QR) Show() {
-	if at != nil && len(at.Items) > 3 {
-		at.SelectIndex(3)
-	}
-	if accordion != nil && qr.accordionItem != nil {
-		accordion.CloseAll()
-		for i, item := range accordion.Items {
-			if item == qr.accordionItem {
-				accordion.Open(i)
-				break
-			}
-		}
-	}
 }

@@ -47,7 +47,7 @@ var accordion *widget.Accordion
 
 func settingsTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 	langBinding := binding.BindPreferenceString("lang", a.Preferences())
-	langSelect := widget.NewSelect([]string{"en-US", "tr-TR", "ja-JP", "zh-CN", "zh-HK", "zh-TW", "ru-RU"}, func(selection string) {
+	langSelect := widget.NewSelect([]string{"en-US", "tr-TR", "ja-JP", "zh-CN", "ru-RU"}, func(selection string) {
 		langBinding.Set(selection)
 		if langCode != selection {
 			langCode = selection
@@ -454,7 +454,7 @@ func settingsTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 	)
 
 	// Создаем основной контейнер для QR секции
-	qr := NewQR(a, w)
+	qr = NewQR(a, w)
 
 	// Создаём аккордеон
 	accordion = widget.NewAccordion(

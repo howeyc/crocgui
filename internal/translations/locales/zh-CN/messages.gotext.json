@@ -14,16 +14,52 @@
             "position": "crocgui/about.go:95:40"
         },
         {
-            "id": "Click the link below to test. If a browser opens, setup is required. If the app restarts, it's OK.",
-            "message": "Click the link below to test. If a browser opens, setup is required. If the app restarts, it's OK.",
-            "translation": "点击下方链接进行测试。如果浏览器打开，则需要设置。如果应用程序重启，则没有问题。",
-            "position": "crocgui/applinks.go:107:29"
+            "id": "Click the Deep Link above to test",
+            "message": "Click the Deep Link above to test",
+            "translation": "点击上方的Deep Link进行测试",
+            "position": "crocgui/applinks.go:312:30"
         },
         {
-            "id": "Name",
-            "message": "Name",
-            "translation": "名称",
-            "position": "crocgui/applinks.go:161:9"
+            "id": "If a browser opens then:",
+            "message": "If a browser opens then:",
+            "translation": "If a browser opens then:",
+            "position": "crocgui/applinks.go:317:30"
+        },
+        {
+            "id": "Allow",
+            "message": "Allow",
+            "translation": "允许",
+            "position": "crocgui/applinks.go:322:44"
+        },
+        {
+            "id": "Use",
+            "message": "Use",
+            "translation": "使用",
+            "position": "crocgui/applinks.go:343:21"
+        },
+        {
+            "id": "on page",
+            "message": "on page",
+            "translation": "在页面",
+            "position": "crocgui/applinks.go:345:21"
+        },
+        {
+            "id": "to",
+            "message": "to",
+            "translation": "以",
+            "position": "crocgui/applinks.go:347:21"
+        },
+        {
+            "id": "Scan QRs",
+            "message": "Scan QRs",
+            "translation": "扫描二维码",
+            "position": "crocgui/applinks.go:351:33"
+        },
+        {
+            "id": "with:",
+            "message": "with:",
+            "translation": "使用：",
+            "position": "crocgui/applinks.go:391:53"
         },
         {
             "id": "Export full log",
@@ -41,7 +77,7 @@
             "id": "App closed. Tap to start.",
             "message": "App closed. Tap to start.",
             "translation": "应用已关闭。点击启动。",
-            "position": "crocgui/main.go:320:16"
+            "position": "crocgui/main.go:344:16"
         },
         {
             "id": "Cancel",
@@ -56,52 +92,58 @@
             "position": "crocgui/recv.go:84:31"
         },
         {
+            "id": "Relay",
+            "message": "Relay",
+            "translation": "中继",
+            "position": "crocgui/recv.go:111:33"
+        },
+        {
             "id": "Download",
             "message": "Download",
             "translation": "下载",
-            "position": "crocgui/recv.go:550:42"
+            "position": "crocgui/recv.go:571:42"
         },
         {
             "id": "Secret must be longer than 5 characters",
             "message": "Secret must be longer than 5 characters",
             "translation": "密码必须长于5个字符",
-            "position": "crocgui/recv.go:553:18"
+            "position": "crocgui/recv.go:574:18"
         },
         {
             "id": "Send",
             "message": "Send",
             "translation": "发送",
-            "position": "crocgui/recv.go:558:35"
+            "position": "crocgui/recv.go:579:35"
         },
         {
             "id": "Receive cancelled.",
             "message": "Receive cancelled.",
             "translation": "接收已取消。",
-            "position": "crocgui/recv.go:678:34"
+            "position": "crocgui/recv.go:699:34"
         },
         {
             "id": "Receiving file",
             "message": "Receiving file",
             "translation": "正在接收文件",
-            "position": "crocgui/recv.go:701:27"
+            "position": "crocgui/recv.go:722:27"
         },
         {
             "id": "Send cancelled.",
             "message": "Send cancelled.",
             "translation": "发送已取消。",
-            "position": "crocgui/recv.go:776:36"
+            "position": "crocgui/recv.go:797:36"
         },
         {
             "id": "Received",
             "message": "Received",
             "translation": "已接收",
-            "position": "crocgui/recv.go:783:46"
+            "position": "crocgui/recv.go:804:46"
         },
         {
             "id": "Receive",
             "message": "Receive",
             "translation": "接收",
-            "position": "crocgui/recv.go:1060:38"
+            "position": "crocgui/recv.go:1089:38"
         },
         {
             "id": "Empty name",
@@ -125,31 +167,31 @@
             "id": "Have them not press the Download yet",
             "message": "Have them not press the Download yet",
             "translation": "让他们先不要按\"下载\"",
-            "position": "crocgui/send.go:703:24"
+            "position": "crocgui/send.go:716:24"
         },
         {
             "id": "Have them press the Download now",
             "message": "Have them press the Download now",
             "translation": "现在让他们按\"下载\"",
-            "position": "crocgui/send.go:768:28"
+            "position": "crocgui/send.go:782:28"
         },
         {
             "id": "Sending file",
             "message": "Sending file",
             "translation": "正在发送文件",
-            "position": "crocgui/send.go:779:57"
+            "position": "crocgui/send.go:793:57"
         },
         {
             "id": "Sent file",
             "message": "Sent file",
             "translation": "已发送文件",
-            "position": "crocgui/send.go:829:47"
+            "position": "crocgui/send.go:843:47"
         },
         {
             "id": "Allow access to read",
             "message": "Allow access to read",
             "translation": "允许读取权限",
-            "position": "crocgui/send.go:996:23"
+            "position": "crocgui/send.go:1027:23"
         },
         {
             "id": "Hide",
@@ -236,6 +278,12 @@
             "position": "crocgui/settings.go:368:24"
         },
         {
+            "id": "Name",
+            "message": "Name",
+            "translation": "名称",
+            "position": "crocgui/settings.go:372:24"
+        },
+        {
             "id": "UnZip files",
             "message": "UnZip files",
             "translation": "UnZip 文件",
@@ -275,31 +323,25 @@
             "id": "Appearance",
             "message": "Appearance",
             "translation": "外观",
-            "position": "crocgui/settings.go:458:29"
-        },
-        {
-            "id": "Relay",
-            "message": "Relay",
-            "translation": "中继",
-            "position": "crocgui/settings.go:460:29"
+            "position": "crocgui/settings.go:461:29"
         },
         {
             "id": "Network Local",
             "message": "Network Local",
             "translation": "本地网络",
-            "position": "crocgui/settings.go:461:29"
+            "position": "crocgui/settings.go:464:29"
         },
         {
             "id": "Storage Options",
             "message": "Storage Options",
             "translation": "存储选项",
-            "position": "crocgui/settings.go:462:29"
+            "position": "crocgui/settings.go:465:29"
         },
         {
             "id": "Transfer Options",
             "message": "Transfer Options",
             "translation": "传输选项",
-            "position": "crocgui/settings.go:463:29"
+            "position": "crocgui/settings.go:466:29"
         }
     ]
 }

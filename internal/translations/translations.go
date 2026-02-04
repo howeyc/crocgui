@@ -7,4 +7,4 @@ package translations
 //cd text/cmd/gotext
 //go install
 
-//go:generate gotext -srclang=en-US update -out=catalog.go -lang=en-US,tr-TR,ja-JP,zh-CN,zh-HK,zh-TW,ru-RU crocgui
+//go:generate gotext -srclang=en-US update -out=catalog.go -lang=en-US,tr-TR,ja-JP,zh-CN,ru-RU crocgui
