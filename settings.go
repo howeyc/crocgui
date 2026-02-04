@@ -454,21 +454,7 @@ func settingsTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 	)
 
 	// Создаем основной контейнер для QR секции
-
-	qr, _, link := defaultQR("")
-	qrContent := container.NewVBox(
-		container.NewWithoutLayout(qr), //0
-		link,                           //1
-		widget.NewSeparator(),          //2
-	)
-
-	// 4. Настройки сканера (item[3]) - создаются через функцию из applinks.go
-	if scannerSettings := makeScannerSettings(a, w); scannerSettings != nil {
-		qrContent.Add(scannerSettings)
-	}
-
-	// 5. Инструкции по использованию (последний элемент) - тоже из applinks.go
-	qrContent.Add(makeQRInstructions(a, w))
+	qr := NewQR(a, w)
 
 	// Создаём аккордеон
 	accordion = widget.NewAccordion(
@@ -478,19 +464,17 @@ func settingsTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 		widget.NewAccordionItem(lp("Network Local"), networkForm),
 		widget.NewAccordionItem(lp("Storage Options"), storageForm),
 		widget.NewAccordionItem(lp("Transfer Options"), transferForm),
-		widget.NewAccordionItem("QR", qrContent),
+		qr.GetAccordionItem(),
 	)
 	accordion.MultiOpen = !(isMobile || asMobile)
 	restoreAccordionState()
-
-	makeQR(a, w)
 
 	// Собираем финальный интерфейс
 	ti = container.NewTabItemWithIcon(ZeroWidthNonJoiner, theme.SettingsIcon(), container.NewVScroll(
 		container.NewVBox(accordion),
 	))
 	OnSelectedReload[3] = func() {
-		makeQR(a, w)
+		qr.UpdateFromClipboard()
 		ti.Content.Refresh()
 	}
 

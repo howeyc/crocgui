@@ -113,6 +113,7 @@ func recvTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 
 	cosED = append(cosED, cbButton)
 	secretButton := widget.NewButtonWithIcon("", theme.ContentClearIcon(), func() {
+		a.Clipboard().SetContent("")
 		fyne.Do(func() {
 			entry.SetText(entryText)
 		})

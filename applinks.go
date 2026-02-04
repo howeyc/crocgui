@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"encoding/base64"
 	"fmt"
 	"net"
@@ -259,105 +258,47 @@ func showQR() {
 	}
 }
 
-func defaultQR(cb string) (qr *canvas.Image, text string, link *widget.Hyperlink) {
-	qr = canvas.NewImageFromResource(theme.BrokenImageIcon())
-	text = cb
-	if text == "" {
-		text = fmt.Sprintf("%s://%s/%s/%s/releases", HTTPS, GH, FORKto, CG)
+// generateQR создает QR-код из текста
+func (qr *QR) generateQR() {
+	if qr.currentText == "" {
+		qr.currentText = fmt.Sprintf("%s://%s/%s/%s/releases", HTTPS, GH, FORKto, CG)
 	}
-	pngData, err := qrcode.Encode(text, qrcode.High, int(qrSize))
+
+	// Генерируем QR-код
+	pngData, err := qrcode.Encode(qr.currentText, qrcode.High, int(qrSize))
 	if err != nil {
 		log.Error(err)
+		qr.qrImage.Resource = theme.BrokenImageIcon()
 	} else {
-		qr = canvas.NewImageFromReader(bytes.NewReader(pngData), "qr.png")
+		qrResource := fyne.NewStaticResource("qr.png", pngData)
+		qr.qrImage.Resource = qrResource
 	}
-	qr.SetMinSize(fyne.NewSize(qrSize, qrSize))
-
-	hlt := text
-	hltl := 80
-	if len(text) > hltl {
-		hlt = text[:hltl] + "…"
-	}
-	link = widget.NewHyperlink(hlt, nil)
-	link.Wrapping = fyne.TextWrapBreak
-	return
+	qr.qrImage.Refresh()
 }
 
-func makeQR(a fyne.App, w fyne.Window) {
-	// Получаем контейнер для QR секции
-	var qrContainer *fyne.Container
-	if accordion != nil && len(accordion.Items) > 6 {
-		if detail, ok := accordion.Items[6].Detail.(*fyne.Container); ok {
-			qrContainer = detail
-		}
+// updateLink обновляет гиперссылку
+func (qr *QR) updateLink() {
+	displayText := qr.currentText
+	if len(displayText) > 80 {
+		displayText = displayText[:80] + "…"
+	}
+
+	qr.link.SetText(displayText)
+
+	// Устанавливаем обработчик в зависимости от типа
+	qr.link.OnTapped = nil
+	if qr.isIO {
+		qr.link.OnTapped = qr.handleIOTapped
+		qr.link.SetURLFromString(qr.currentText)
+	} else if u, err := url.Parse(qr.currentText); err == nil && u.Scheme != "" && u.Host != "" {
+		qr.link.SetURL(u)
 	} else {
-		log.Error("QR container empty")
-		return
-	}
-
-	if qrContainer == nil || len(qrContainer.Objects) < 2 {
-		log.Error("QR container empty")
-		return
-	}
-
-	qr, text, link := defaultQR(a.Clipboard().Content())
-	qrContainer.Objects[0] = qr
-
-	// Парсим URL для ссылки
-	isIO := false
-	u, err := url.Parse(text)
-	if err == nil && u.Scheme != "" && u.Host != "" {
-		link.SetURL(u)
-		if strings.HasPrefix(text, IO) {
-			isIO = true
-			link.OnTapped = func() {
-				if !(isAndroid || asMobile) {
-					log.Debug(text)
-					if err := OpenURL(text); err == nil {
-						NewToast(w, "OK").Show()
-					}
-					return
-				}
-
-				intent := &Intent{
-					Data:   strings.TrimPrefix(link.URL.String(), link.URL.Scheme+":"),
-					Scheme: link.URL.Scheme,
-					Flags: flagActivity(
-						FLAG_ACTIVITY_SINGLE_TOP,
-						FLAG_ACTIVITY_REQUIRE_NON_BROWSER,
-					),
-				}
-				s := intent.String()
-				notFinish = true
-				log.Debug(s)
-				if err := OpenURL(s); err == nil {
-					NewToast(w, "OK").Show()
-					return
-				}
-				intent.SetFlags(BROWSER)
-				s = intent.String()
-				log.Debug(s)
-				if err := OpenURL(s); err != nil {
-					log.Errorf("%v", err)
-				}
-				notFinish = false
-			}
-		}
-	} else {
-		link.OnTapped = nil
-	}
-
-	qrContainer.Objects[1] = link
-	for _, o := range qrContainer.Objects[2:] {
-		if isIO {
-			o.Show()
-		} else {
-			o.Hide()
-		}
+		qr.link.SetURL(nil)
 	}
 }
 
-func makeScannerSettings(a fyne.App, w fyne.Window) fyne.CanvasObject {
+// makeScannerSettings создает настройки сканера для Android
+func (qr *QR) makeScannerSettings() fyne.CanvasObject {
 	if !(isAndroid || asMobile) {
 		return nil // Возвращаем nil, если не Android
 	}
@@ -377,41 +318,6 @@ func makeScannerSettings(a fyne.App, w fyne.Window) fyne.CanvasObject {
 		idActions(ID, APP_OPEN_BY_DEFAULT_SETTINGS, APPLICATION_DETAILS_SETTINGS)
 	})
 
-	optScan := []string{
-		"Default html5-QRcode",
-		"miUI Xiaomi",
-		"Samsung",
-		"OPlus",
-
-		"BinaryEye",
-		"Lens Google",
-		"ZXing",
-
-		"Chrome Google",
-		"Via",
-		"sBrowser Samsung",
-
-		"Opera mini",
-		"Microsoft",
-
-		"Firefox",
-	}
-	scanSelect := widget.NewSelect(optScan, func(sel string) {
-		a.Preferences().SetString("scanner", sel)
-	})
-
-	selScan := a.Preferences().String("scanner")
-	if !slices.Contains(optScan, selScan) {
-		selScan = optScan[0]
-		a.Preferences().SetString("scanner", selScan)
-	}
-	scanSelect.SetSelected(selScan)
-
-	// Сканируйте QRы c:
-	qrButton := widget.NewButtonWithIcon(lp("Scan QRs with:"), theme.ViewFullScreenIcon(), func() {
-		scanner(a, w)
-	})
-
 	return container.NewVBox(
 		container.NewBorder(
 			labelT,
@@ -421,39 +327,75 @@ func makeScannerSettings(a fyne.App, w fyne.Window) fyne.CanvasObject {
 			labelL,
 		),
 		widget.NewSeparator(),
-		container.NewBorder(
-			nil,
-			nil,
-			qrButton,
-			nil,
-			scanSelect,
-		),
-		widget.NewSeparator(),
 	)
 }
 
-func makeQRInstructions(a fyne.App, w fyne.Window) fyne.CanvasObject {
+// makeQRInstructions создает инструкции по использованию QR
+func (qr *QR) makeQRInstructions() fyne.CanvasObject {
+
 	labelB := container.NewHBox(
 		layout.NewSpacer(),
 		widget.NewLabel(lp("Use")),
 		widget.NewIcon(theme.ViewFullScreenIcon()),
 		widget.NewLabel(lp("on page")),
 		widget.NewIcon(theme.DownloadIcon()),
+		widget.NewLabel(lp("to")),
 	)
 
 	if !(isAndroid || asMobile) {
-		labelB.Add(widget.NewLabel(lp("as link:")))
-
-		scan := widget.NewHyperlink(lp("Scan QR"), nil)
+		scan := widget.NewHyperlink(lp("Scan QRs"), nil)
 		scan.SetURLFromString(HTTPS + ":" + SCAN)
 		scan.OnTapped = func() {
-			scanner(a, w)
+			scanner(qr.app, qr.window)
 		}
 		labelB.Add(scan)
 	}
-
 	labelB.Add(layout.NewSpacer())
-	return labelB
+
+	vBox := container.NewVBox(labelB)
+	if isAndroid || asMobile {
+		optScan := []string{
+			"Default html5-QRcode",
+			"miUI Xiaomi",
+			"Samsung",
+			"OPlus",
+
+			"BinaryEye",
+			"Lens Google",
+			"ZXing",
+
+			"Chrome Google",
+			"Via",
+			"sBrowser Samsung",
+
+			"Opera mini",
+			"Microsoft",
+			"Firefox",
+		}
+		scanSelect := widget.NewSelect(optScan, func(sel string) {
+			qr.app.Preferences().SetString("scanner", sel)
+		})
+
+		selScan := qr.app.Preferences().String("scanner")
+		if !slices.Contains(optScan, selScan) {
+			selScan = optScan[0]
+			qr.app.Preferences().SetString("scanner", selScan)
+		}
+		scanSelect.SetSelected(selScan)
+
+		qrButton := widget.NewButton(lp("Scan QRs")+" "+lp("with:"), func() {
+			scanner(qr.app, qr.window)
+		})
+
+		vBox.Add(container.NewBorder(
+			nil,
+			nil,
+			qrButton,
+			nil,
+			scanSelect,
+		))
+	}
+	return vBox
 }
 
 func scanner(a fyne.App, w fyne.Window) {
@@ -934,4 +876,261 @@ func idActions(id string, actions ...string) {
 		}
 	}
 	notFinish = false
+}
+
+// QR управляет всей секцией QR в настройках
+type QR struct {
+	app    fyne.App
+	window fyne.Window
+
+	// Виджеты
+	qrImage      *canvas.Image
+	link         *widget.Hyperlink
+	scannerSetup fyne.CanvasObject
+	instructions fyne.CanvasObject
+	separator    *widget.Separator
+
+	// Контейнеры
+	mainContainer *fyne.Container
+	accordionItem *widget.AccordionItem
+
+	// Состояние
+	isIO        bool
+	currentText string
+}
+
+// NewQR создает новую секцию QR
+func NewQR(a fyne.App, w fyne.Window) *QR {
+	qr := &QR{
+		app:    a,
+		window: w,
+		isIO:   false,
+	}
+
+	// Создаем виджеты
+	qr.qrImage = canvas.NewImageFromResource(theme.BrokenImageIcon())
+	qr.qrImage.SetMinSize(fyne.NewSize(qrSize, qrSize))
+	qr.qrImage.FillMode = canvas.ImageFillContain
+
+	qr.link = widget.NewHyperlink("", nil)
+	qr.link.Wrapping = fyne.TextWrapBreak
+	qr.separator = widget.NewSeparator()
+
+	qr.scannerSetup = qr.makeScannerSettings()
+	qr.instructions = qr.makeQRInstructions()
+
+	// Создаем основной контейнер
+	qr.mainContainer = container.NewVBox(
+		container.NewCenter(qr.qrImage),
+		qr.link,
+		qr.separator,
+	)
+
+	// Добавляем опциональные виджеты
+	if qr.scannerSetup != nil {
+		qr.mainContainer.Add(qr.scannerSetup)
+	}
+	if qr.instructions != nil {
+		qr.mainContainer.Add(qr.instructions)
+	}
+
+	// Создаем элемент аккордеона
+	qr.accordionItem = widget.NewAccordionItem("QR", qr.mainContainer)
+
+	// Первоначальное обновление
+	qr.UpdateFromClipboard()
+
+	return qr
+}
+
+// initWidgets создает и настраивает виджеты
+func (qr *QR) initWidgets() {
+	// Создаем пустой QR-код
+	qr.qrImage = canvas.NewImageFromResource(theme.BrokenImageIcon())
+	qr.qrImage.SetMinSize(fyne.NewSize(qrSize, qrSize))
+
+	// Создаем ссылку
+	qr.link = widget.NewHyperlink("", nil)
+	qr.link.Wrapping = fyne.TextWrapBreak
+
+	// Создаем разделитель
+	qr.separator = widget.NewSeparator()
+
+	// Создаем дополнительные виджеты
+	qr.scannerSetup = qr.makeScannerSettings()
+	qr.instructions = qr.makeQRInstructions()
+}
+
+// buildLayout собирает контейнеры
+func (qr *QR) buildLayout() {
+	qr.mainContainer = container.NewVBox(
+		container.NewCenter(qr.qrImage), //NewWithoutLayout
+		qr.link,
+		qr.separator,
+	)
+
+	// Добавляем опциональные виджеты
+	if qr.scannerSetup != nil {
+		qr.mainContainer.Add(qr.scannerSetup)
+	}
+	if qr.instructions != nil {
+		qr.mainContainer.Add(qr.instructions)
+	}
+
+	// Создаем элемент аккордеона
+	qr.accordionItem = widget.NewAccordionItem("QR", qr.mainContainer)
+}
+
+// UpdateFromClipboard обновляет секцию из содержимого буфера обмена
+func (qr *QR) UpdateFromClipboard() {
+	text := qr.app.Clipboard().Content()
+	qr.currentText = text
+
+	// Определяем тип контента
+	qr.isIO = strings.HasPrefix(text, IO)
+
+	// Генерируем новый QR-код
+	qr.generateQR()
+	qr.updateLink()
+	qr.updateVisibility()
+
+	qr.mainContainer.Refresh()
+}
+
+// handleIOTapped обрабатывает нажатие на IO-ссылку
+func (qr *QR) handleIOTapped() {
+	if !(isAndroid || asMobile) {
+		if err := OpenURL(qr.currentText); err == nil {
+			NewToast(qr.window, "OK").Show()
+		}
+		return
+	}
+
+	intent := &Intent{
+		Data:   strings.TrimPrefix(qr.link.URL.String(), qr.link.URL.Scheme+":"),
+		Scheme: qr.link.URL.Scheme,
+		Flags: flagActivity(
+			FLAG_ACTIVITY_SINGLE_TOP,
+			FLAG_ACTIVITY_REQUIRE_NON_BROWSER,
+		),
+	}
+
+	notFinish = true
+	if err := OpenURL(intent.String()); err == nil {
+		NewToast(qr.window, "OK").Show()
+		return
+	}
+
+	intent.SetFlags(BROWSER)
+	if err := OpenURL(intent.String()); err != nil {
+		qr.app.SendNotification(fyne.NewNotification("Error", err.Error()))
+	}
+	notFinish = false
+}
+
+// updateVisibility управляет видимостью виджетов
+func (qr *QR) updateVisibility() {
+	if qr.scannerSetup != nil {
+		if qr.isIO {
+			qr.scannerSetup.Show()
+		} else {
+			qr.scannerSetup.Hide()
+		}
+	}
+}
+
+// scanner вызывает сканер QR-кодов в зависимости от платформы
+func (qr *QR) scanner() {
+	if !(isAndroid || asMobile) {
+		s := HTTPS + ":" + SCAN
+		err := OpenURL(s)
+		log.Debugf("%s: %v", s, err)
+		return
+	}
+
+	intents := []*Intent{
+		// html5-qrcode
+		&Intent{Categories: []string{CATEGORY_DEFAULT, CATEGORY_BROWSABLE}},
+		// XIAOMI / REDMI / POCO
+		&Intent{Action: "miui.intent.action.scanner"},
+		// SAMSUNG
+		&Intent{Action: "com.samsung.android.app.opticalreader.SCAN"},
+		// OPPO / REALME / ONEPLUS (ColorOS/Oplus)
+		&Intent{Component: "com.oplus.scanner/.ScanActivity"},
+		// BINARY EYE
+		&Intent{Data: "//scan/", Scheme: "binaryeye"},
+		&Intent{Data: "//details?id=de.markusfisch.android.binaryeye", Scheme: "market"},
+		// Google Lens
+		&Intent{Component: "com.google.ar.lens/com.google.vr.apps.ornament.app.lens.LensLauncherActivity"},
+		&Intent{Data: "//details?id=com.google.ar.lens", Scheme: "market"},
+		// ZXING
+		&Intent{Action: "com.google.zxing.client.android.SCAN"},
+		&Intent{Package: "com.android.chrome", Categories: []string{CATEGORY_BROWSABLE}},
+		&Intent{Package: "mark.via.gp", Categories: []string{CATEGORY_BROWSABLE}},
+		&Intent{Package: "com.sec.android.app.sbrowser", Categories: []string{CATEGORY_BROWSABLE}},
+		&Intent{Package: "com.opera.mini.native", Categories: []string{CATEGORY_BROWSABLE}},
+		&Intent{Package: "com.microsoft.emmx", Categories: []string{CATEGORY_BROWSABLE}},
+		&Intent{Package: "org.mozilla.firefox", Categories: []string{CATEGORY_BROWSABLE}},
+	}
+
+	notFinish = false
+	contains := false
+	sel := qr.app.Preferences().String("scanner")
+	key := strings.ToLower(strings.Fields(sel)[0])
+
+	for _, i := range intents {
+		i.Flags = NON_BROWSER
+		if slices.Contains(i.Categories, CATEGORY_BROWSABLE) {
+			i.Flags = BROWSER
+			i.Scheme = HTTPS
+			i.Data = SCAN
+		}
+		s := i.String()
+
+		switch {
+		case contains:
+		case strings.Contains(strings.ToLower(s), key):
+			contains = true
+		default:
+			continue
+		}
+
+		log.Debugf("%s", s)
+		if err := OpenURL(s); err == nil {
+			log.Debugf("find^^^")
+			return
+		}
+	}
+
+	fyne.Do(func() {
+		qr.Show()
+	})
+}
+
+// SetClipboard устанавливает контент в буфер обмена и обновляет секцию
+func (qr *QR) SetClipboard(text string) string {
+	qr.app.Clipboard().SetContent(text)
+	qr.UpdateFromClipboard()
+	return text
+}
+
+// GetAccordionItem возвращает элемент аккордеона
+func (qr *QR) GetAccordionItem() *widget.AccordionItem {
+	return qr.accordionItem
+}
+
+// Show открывает секцию QR в аккордеоне
+func (qr *QR) Show() {
+	if at != nil && len(at.Items) > 3 {
+		at.SelectIndex(3)
+	}
+	if accordion != nil && qr.accordionItem != nil {
+		accordion.CloseAll()
+		for i, item := range accordion.Items {
+			if item == qr.accordionItem {
+				accordion.Open(i)
+				break
+			}
+		}
+	}
 }
