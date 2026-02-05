@@ -1489,10 +1489,13 @@ func ShowFileOpen(callback func(fyne.URIReadCloser, error), parent fyne.Window) 
 		fd = dialog.NewFileOpen(callback, parent)
 	} else {
 		// Если не было fullscreen - включаем и создаём диалог с восстановлением
-		parent.SetFullScreen(true)
+		//parent.SetFullScreen(true)
+		current := parent.Canvas().Size()
+		parent.Resize(current.AddWidthHeight(current.Width, 0))
 
 		fd = dialog.NewFileOpen(func(uri fyne.URIReadCloser, err error) {
-			parent.SetFullScreen(false)
+			//parent.SetFullScreen(false)
+			parent.Resize(current)
 			callback(uri, err)
 		}, parent)
 	}

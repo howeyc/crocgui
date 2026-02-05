@@ -84,7 +84,7 @@ func TestLsr(t *testing.T) {
 	}
 
 	// Запускаем lsr
-	result := lsr(tmpDir)
+	result, _ := lsr(tmpDir)
 
 	// Ожидаемый результат - пустые каталоги со слешом
 	expected := []string{

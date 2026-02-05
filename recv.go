@@ -1137,10 +1137,13 @@ func ShowFolderOpen(callback func(fyne.ListableURI, error), parent fyne.Window) 
 		fd = dialog.NewFolderOpen(callback, parent)
 	} else {
 		// Если не было fullscreen - включаем и создаём диалог с восстановлением
-		parent.SetFullScreen(true)
+		//parent.SetFullScreen(true)
+		current := parent.Canvas().Size()
+		parent.Resize(current.AddWidthHeight(current.Width, 0))
 
 		fd = dialog.NewFolderOpen(func(uri fyne.ListableURI, err error) {
-			parent.SetFullScreen(false)
+			//parent.SetFullScreen(false)
+			parent.Resize(current)
 			callback(uri, err)
 		}, parent)
 	}
@@ -1160,10 +1163,13 @@ func newFileSave(callback func(fyne.URIWriteCloser, error), parent fyne.Window, 
 	}
 
 	if !parent.FullScreen() {
-		parent.SetFullScreen(true)
+		//parent.SetFullScreen(true)
+		current := parent.Canvas().Size()
+		parent.Resize(current.AddWidthHeight(current.Width, 0))
 
 		fd = dialog.NewFileSave(func(uri fyne.URIWriteCloser, err error) {
-			parent.SetFullScreen(false)
+			//parent.SetFullScreen(false)
+			parent.Resize(current)
 			callback(uri, err)
 		}, parent)
 	} else {
