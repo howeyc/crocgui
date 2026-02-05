@@ -51,7 +51,7 @@ const (
 	feSave
 )
 
-func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *container.TabItem) {
+func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 	var (
 		cosED, cosSH []fyne.CanvasObject
 		removeEntry  func(fpath string, fe *fyne.Container, del bool)
@@ -1440,18 +1440,19 @@ func sendTabItem(a fyne.App, w fyne.Window, parent *container.AppTabs) (ti *cont
 
 	ti = container.NewTabItemWithIcon(lp("Send"), theme.MailSendIcon(),
 		container.NewBorder(top, nil, nil, nil, scroller))
+
 	showPage = func() {
-		if parent == nil {
+		if at == nil {
 			return
 		}
-		ps := parent.Selected()
+		ps := at.Selected()
 		if ps == nil || ti == nil {
 			return
 		}
 		fyne.Do(func() {
 			if ps != ti {
-				parent.Select(ti)
-				ps := parent.Selected()
+				at.Select(ti)
+				ps := at.Selected()
 				if ps == nil {
 					return
 				}

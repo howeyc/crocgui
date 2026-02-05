@@ -354,8 +354,8 @@ func refreshWindow(a fyne.App, w fyne.Window) {
 	top := container.NewHBox(layout.NewSpacer(), textlogo, layout.NewSpacer())
 
 	at = container.NewAppTabs(
-		sendTabItem(a, w, at),
-		recvTabItem(a, w, at),
+		sendTabItem(a, w),
+		recvTabItem(a, w),
 		logTabItem(a, w),
 		settingsTabItem(a, w),
 		aboutTabItem(a, w),
