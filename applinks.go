@@ -12,6 +12,7 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
@@ -299,6 +300,7 @@ func (qr *QR) updateLink() {
 		qr.link.SetURL(u)
 	} else {
 		qr.link.SetURL(nil)
+		qr.link.OnTapped = qr.showTextDialog
 	}
 }
 
@@ -1052,4 +1054,28 @@ func (qr *QR) SetClipboard(text string) string {
 // GetAccordionItem возвращает элемент аккордеона
 func (qr *QR) GetAccordionItem() *widget.AccordionItem {
 	return qr.accordionItem
+}
+
+func (qr *QR) showTextDialog() {
+	textEntry := widget.NewMultiLineEntry()
+	textEntry.SetText(qr.currentText)
+
+	scrollContainer := container.NewVScroll(textEntry)
+
+	dialog := dialog.NewCustom(
+		"Clipboard",
+		"OK",
+		scrollContainer,
+		qr.window,
+	)
+	if !(isAndroid || asMobile || qr.window.FullScreen()) {
+		current := qr.window.Canvas().Size()
+		qr.window.Resize(current.AddWidthHeight(current.Width, 0))
+		dialog.SetOnClosed(func() {
+			qr.window.Resize(current)
+		})
+	}
+	dialog.Resize(qr.window.Canvas().Size())
+
+	dialog.Show()
 }

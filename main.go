@@ -44,6 +44,7 @@ const (
 	SCHOLLZ                = "schollz"
 	TOTP                   = "TOTP-" + CROC_SECRET
 	DOTZIP                 = ".zip"
+	DOTTXT                 = ".txt"
 	ZhangHai               = "content://me.zhanghai.android.files.file_provider/"
 	Ghisler                = "content://com.ghisler.files/"
 	CG                     = "crocgui"

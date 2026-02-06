@@ -2,12 +2,13 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"crypto/hmac"
 	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
-	"hash/crc32"
 	"io"
 	"math"
 	"os"
@@ -942,10 +943,6 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 						log.Debug("done")
 						return
 					case text := <-textFromIntent:
-						// if !IsTaskRoot() {
-						// 	log.Debug("!IsTaskRoot excludeFromRecents")
-						// 	excludeFromRecents()
-						// }
 						if text == "" {
 							// Ошибка обработки Намерения или Главная или из Недавних
 							log.Debug("doneProcessIntent notFinish")
@@ -957,9 +954,11 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 							log.Debug("doneProcessIntent Sending")
 							return
 						}
-						log.Debugf(`text "%s"`, text)
-						src := join("text" + hashToFilename(text))
-						if fe := addEntry(src, nil); fe == nil {
+						log.Debugf("clip\n%s", text)
+						src := join(hashToFilename(text))
+						if fe := addEntry(src, func(d *widget.Button, p *widget.ProgressBar, l *widget.Label) {
+							setSizes(p, int64(len(text)))
+						}); fe == nil {
 							continue
 						}
 
@@ -981,10 +980,6 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 						showPage() //textFromIntent
 
 					case uriString := <-uriFromIntent:
-						// if !IsTaskRoot() {
-						// 	log.Debug("!IsTaskRoot excludeFromRecents")
-						// 	excludeFromRecents()
-						// }
 						if uriString == "" {
 							log.Debug("doneProcessIntent")
 							return
@@ -1075,11 +1070,13 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 										default:
 											wg.Wait()
 											log.Debugf("copyFiles done")
+											showPage()
 										}
 									}()
 									continue
 								}
 								CopyFileProgress(u.Path(), dst, fe, func(err error) {
+									showPage()
 									if err != nil {
 										log.Errorf("copy %s %s: %s", u, dst, err)
 										removeEntry(dst, fe, true)
@@ -1111,8 +1108,8 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 							continue
 						}
 
-						showPage() //uriFromIntent
 						copyFromURCProgress(source, "", fe, func(err error) {
+							showPage() //uriFromIntent
 							if err != nil {
 								log.Errorf("copy %s %s: %s", u, dst, err)
 								removeEntry(dst, fe, true)
@@ -1220,6 +1217,37 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 			}()
 		})
 	} //isAndroid
+
+	addClipButton := widget.NewButtonWithIcon("", theme.ContentPasteIcon(), func() {
+		text := a.Clipboard().Content()
+		if text == "" {
+			log.Debug("empty clipboard")
+			return
+		}
+		log.Debugf("clip\n%s", text)
+		src := join(hashToFilename(text))
+		if fe := addEntry(src, func(d *widget.Button, p *widget.ProgressBar, l *widget.Label) {
+			setSizes(p, int64(len(text)))
+		}); fe == nil {
+			return
+		}
+		source, err := os.Create(src)
+		if err != nil {
+			log.Errorf("create: %v", err)
+			return
+		}
+
+		_, err = source.WriteString(text)
+		if err != nil {
+			source.Close()
+			os.Remove(src)
+			log.Errorf("write: %v", err)
+			return
+		}
+
+		source.Close()
+	})
+	cosED = append(cosED, addClipButton)
 
 	addFileButton := widget.NewButtonWithIcon("", theme.ContentAddIcon(), func() {
 		if supported, err := IsFilePickerSupported(); err != nil {
@@ -1413,6 +1441,7 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 	top := container.NewVBox(
 		container.NewHBox(topline,
 			layout.NewSpacer(),
+			addClipButton,
 			addFileButton,
 			addFolderButton,
 		),
@@ -1578,9 +1607,37 @@ func totp(secret string) string {
 	return fmt.Sprintf("%06d", otp)
 }
 
+const H2F = 16
+
 func hashToFilename(data string) string {
-	hash := crc32.ChecksumIEEE([]byte(data))
-	return fmt.Sprintf("%x", hash)
+	hash := sha256.Sum256([]byte(data))
+	return hex.EncodeToString(hash[:H2F/2]) + DOTTXT
+}
+
+func validHash(path string, content ...byte) bool {
+	base := filepath.Base(path)
+	ext := filepath.Ext(base)
+	if strings.ToLower(ext) != DOTTXT {
+		return false
+	}
+
+	name := strings.TrimSuffix(base, ext)
+	if len(name) != H2F {
+		return false
+	}
+
+	var decoded [H2F / 2]byte
+	if _, err := hex.Decode(decoded[:], []byte(name)); err != nil {
+		return false
+	}
+
+	if len(content) == 0 {
+		// Проверим только имя
+		return true
+	}
+
+	hash := sha256.Sum256(content)
+	return bytes.Equal(decoded[:], hash[:H2F/2])
 }
 
 func hashed(c *croc.Client) bool {

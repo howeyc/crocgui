@@ -277,6 +277,14 @@ func recvTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 		labelFile := widget.NewLabel(base)
 		icon := theme.ContentRemoveIcon()
 		saveButton := widget.NewButtonWithIcon("", theme.DocumentSaveIcon(), func() {
+			if validHash(dst) {
+				clip, err := os.ReadFile(dst)
+				if err == nil && validHash(base, clip...) {
+					s := string(clip)
+					log.Debugf("clip\n%s", s)
+					a.Clipboard().SetContent(s)
+				}
+			}
 			if isMobile || asMobile {
 				// На Андроиде свернём каталог в  файл
 				if isLinkDir(dst) {
