@@ -943,7 +943,7 @@ func NewQR(a fyne.App, w fyne.Window) *QR {
 	qr.accordionItem = widget.NewAccordionItem("QR", qr.mainContainer)
 
 	// Первоначальное обновление
-	qr.UpdateFromClipboard()
+	fyne.Do(qr.UpdateFromClipboard)
 
 	return qr
 }
@@ -1059,13 +1059,31 @@ func (qr *QR) GetAccordionItem() *widget.AccordionItem {
 func (qr *QR) showTextDialog() {
 	textEntry := widget.NewMultiLineEntry()
 	textEntry.SetText(qr.currentText)
+	textEntry.Wrapping = fyne.TextWrapWord
+	TextWrapWord := true
 
-	scrollContainer := container.NewVScroll(textEntry)
+	var wrapButton *widget.Button
+	wrapButton = widget.NewButtonWithIcon("", theme.MoreVerticalIcon(), func() {
+		TextWrapWord = !TextWrapWord
+		if TextWrapWord {
+			wrapButton.SetIcon(theme.MoreVerticalIcon())
+			textEntry.Wrapping = fyne.TextWrapWord
+		} else {
+			wrapButton.SetIcon(theme.MoreHorizontalIcon())
+			textEntry.Wrapping = fyne.TextWrapOff
+		}
+
+		textEntry.Refresh()
+	})
 
 	dialog := dialog.NewCustom(
 		"Clipboard",
 		"OK",
-		scrollContainer,
+		container.NewBorder(
+			wrapButton,
+			nil, nil, nil,
+			container.NewVScroll(textEntry),
+		),
 		qr.window,
 	)
 	if !(isAndroid || asMobile || qr.window.FullScreen()) {
