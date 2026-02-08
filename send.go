@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"net"
 	"os"
 	"path"
 	"path/filepath"
@@ -58,6 +59,7 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 		removeEntry  func(fpath string, fe *fyne.Container, del bool)
 		showPage     func()
 		reload       func()
+		treeOff      = func() {}
 
 		boxholder = container.NewVBox()
 		scroller  = container.NewVScroll(boxholder)
@@ -137,9 +139,7 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 			fileentries.Clear()
 			fyne.Do(func() {
 				boxholder.RemoveAll()
-				if ftw != nil {
-					ftw.Close()
-				}
+				// treeOff()
 			})
 			return
 		}
@@ -193,9 +193,7 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 			fyne.Do(func() {
 				boxholder.Remove(fe)
 				doMonitor.DoRequest(boxholder.Refresh)
-				if ftw != nil {
-					ftw.Close()
-				}
+				// treeOff()
 			})
 		}
 		if del {
@@ -241,9 +239,7 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 								}
 							})
 							doMonitor.DoRequest(boxholder.Refresh)
-							if ftw != nil {
-								ftw.Close()
-							}
+							// treeOff()
 						})
 						return
 					}
@@ -309,9 +305,7 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 			}
 			boxholder.Add(newentry)
 			doMonitor.DoRequest(boxholder.Refresh)
-			if ftw != nil {
-				ftw.Close()
-			}
+			// treeOff()
 		})
 		return
 	} //addEntry
@@ -515,7 +509,7 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 			removeEntry(path, fe, true)
 		})
 	}
-	OnSelectedReload[0] = reload
+	OnSelectedTab[SENTi] = reload
 
 	reload()
 	mainButton = widget.NewButtonWithIcon(lp("Send"), theme.MailSendIcon(), func() {
@@ -586,7 +580,8 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 				return
 			}
 		}
-		//
+		// treeOff()
+		// progress
 		go func() {
 			GitIgnore := a.Preferences().Bool("git")
 			Exclude := exclude(a.Preferences().String("exclude"))
@@ -856,25 +851,67 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 	}) // mainButton
 	cosED = append(cosED, mainButton)
 
-	treeButton := widget.NewButtonWithIcon("", theme.VisibilityIcon(), func() {
+	var treeButton *widget.Button
+	treeButton = widget.NewButtonWithIcon("", theme.VisibilityIcon(), func() {
 		u := storage.NewFileURI(join())
-		if !isMobile {
+		if !(isMobile || asMobile) {
 			if err := OpenURL(u.String()); err == nil {
 				return
 			} else {
 				log.Errorf("OpenURL: %v", err)
 			}
 		}
-		ft := fileTreeShow(u, a)
-		if ft != nil {
-			ft.OnSelected = func(uid widget.TreeNodeID) {
-				selected(uid, func(err error) {
-					log.Debugf("selected %v: %v", uid, err)
-				})
+
+		if scroller.Content == boxholder {
+			treeButton.SetIcon(theme.VisibilityOffIcon())
+
+			ft := xw.NewFileTree(u)
+			ft.OpenAllBranches()
+			updateLink := func() {}
+			prev := hostSelectOptions(LOCAL)[0]
+			hostSelect := NewSelect(hostSelectOptions(LOCAL), func(next string) {
+				if next != prev {
+					prev = next
+					updateLink()
+				}
+			})
+			link := widget.NewHyperlink("", nil)
+			port := widget.NewEntry()
+
+			updateLink = func() {
+				link.SetText(net.JoinHostPort(hostSelect.Selected, port.Text))
+				link.SetURLFromString("http://" + link.Text)
+				davServer.Start(link.Text, join())
 			}
+
+			port.OnSubmitted = func(s string) {
+				updateLink()
+			}
+
+			hostSelect.SetSelected(prev)
+			port.SetText("8080")
+			updateLink()
+
+			top := container.NewBorder(
+				nil,
+				nil,
+				container.NewGridWrap(widget.NewLabel("\t\t\t").MinSize(), hostSelect), link,
+				container.NewGridWrap(widget.NewLabel("\t").MinSize(), port),
+			)
+			scroller.Content = container.NewBorder(top, nil, nil, nil, ft)
+			scroller.Refresh()
+			return
 		}
+		treeOff()
 	})
 	cosED = append(cosED, treeButton)
+
+	treeOff = func() {
+		treeButton.SetIcon(theme.VisibilityIcon())
+		scroller.Content = boxholder
+		scroller.Refresh()
+		davServer.Stop()
+	}
 
 	if isAndroid {
 		oH := ""
@@ -1129,8 +1166,26 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 			processIntent()
 			mH = wHandle(w)
 			// log.Debug("mainH " + mH)
+			fyne.Do(func() {
+				at.OnSelected(at.Selected())
+			})
 		})
 	} else {
+		a.Lifecycle().SetOnExitedForeground(func() {
+			log.Debug("ExitedForeground " + wHandle(w))
+		})
+		a.Lifecycle().SetOnStopped(func() {
+			log.Debug("Stopped " + wHandle(w))
+		})
+		a.Lifecycle().SetOnStarted(func() {
+			log.Debug("Started " + wHandle(w))
+		})
+		a.Lifecycle().SetOnEnteredForeground(func() {
+			log.Debug("EnteredForeground " + wHandle(w))
+			fyne.Do(func() {
+				at.OnSelected(at.Selected())
+			})
+		})
 		if !GUI {
 			if stat, err := os.Stdin.Stat(); err == nil && ((stat.Mode() & os.ModeCharDevice) == 0) {
 				// cat file|crocgui
@@ -1816,55 +1871,6 @@ func load(fileentries *sync.Map, path string) (*fyne.Container, bool) {
 		}
 	}
 	return nil, false
-}
-
-func fileTreeShow(uri fyne.URI, a fyne.App) (ft *xw.FileTree) {
-
-	if uri == nil {
-		log.Errorf("uri is nul")
-		return
-	}
-
-	ft = xw.NewFileTree(uri)
-	if ft == nil {
-		log.Errorf("file tree is nul")
-		return
-	}
-
-	if ftw != nil {
-		ftw.Close()
-	}
-
-	ftw = a.NewWindow(uri.Path())
-	ft.OpenAllBranches()
-
-	ftw.SetContent(ft)
-
-	ftw.Resize(size)
-	ftw.Show()
-	return
-}
-
-// .zip распаковать
-// dir упаковать
-func selected(uid widget.TreeNodeID, cb func(err error)) {
-	if cb == nil {
-		cb = func(err error) {}
-	}
-
-	u, err := storage.ParseURI(uid)
-	if err != nil {
-		cb(err)
-		return
-	}
-	root := ftw.Title()
-	switch ext := strings.ToLower(u.Extension()); ext {
-	case DOTZIP:
-		log.Debugf("unZip %v %s", u.Path(), root)
-		cb(nil)
-		return
-	}
-	cb(fmt.Errorf(DEFAULT))
 }
 
 func linkByTarget(target string, join func(elem ...string) string) (link string, err error) {

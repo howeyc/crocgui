@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -22,6 +23,7 @@ import (
 	"fyne.io/fyne/v2/storage"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
+	xw "fyne.io/x/fyne/widget"
 	"github.com/schollz/croc/v10/src/comm"
 	"github.com/schollz/croc/v10/src/croc"
 	log "github.com/schollz/logger"
@@ -33,6 +35,7 @@ func recvTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 		removeEntry  func(fpath string, fe *fyne.Container, del bool)
 		showPage     func()
 		reload       func()
+		treeOff      = func() {}
 
 		boxholder = container.NewVBox()
 		scroller  = container.NewVScroll(boxholder)
@@ -137,9 +140,7 @@ func recvTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 			fileentries.Clear()
 			fyne.Do(func() {
 				boxholder.RemoveAll()
-				if ftw != nil {
-					ftw.Close()
-				}
+				// treeOff()
 			})
 			return
 		}
@@ -193,9 +194,7 @@ func recvTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 			fyne.Do(func() {
 				boxholder.Remove(fe)
 				doMonitor.DoRequest(boxholder.Refresh)
-				if ftw != nil {
-					ftw.Close()
-				}
+				// treeOff()
 			})
 		}
 		if del {
@@ -227,9 +226,7 @@ func recvTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 								}
 							})
 							doMonitor.DoRequest(boxholder.Refresh)
-							if ftw != nil {
-								ftw.Close()
-							}
+							// treeOff()
 						})
 						return
 					}
@@ -355,9 +352,7 @@ func recvTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 			}
 			boxholder.Add(newentry)
 			doMonitor.DoRequest(boxholder.Refresh)
-			if ftw != nil {
-				ftw.Close()
-			}
+			// treeOff()
 		})
 		return
 	} //addEntry
@@ -427,10 +422,10 @@ func recvTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 			if err == nil {
 				log.Debugf("move %s %s", src, dst)
 				removeEntry(src, fe, false)
-				fyne.Do(func() {
-					log.Debugf("fileTreeShow %s", u)
-					fileTreeShow(u, a)
-				})
+				// fyne.Do(func() {
+				// 	log.Debugf("fileTreeShow %s", u)
+				// 	fileTreeShow(u, a)
+				// })
 				return
 			}
 			log.Warnf("move %s %s: %v", src, dst, err)
@@ -474,11 +469,11 @@ func recvTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 											if feRoot, ok := load(&fileentries, root); ok {
 												removeEntry(root, feRoot, false)
 											}
-											fyne.Do(func() {
-												u := storage.NewFileURI(filepath.Dir(dstPath))
-												log.Debugf("fileTreeShow %s", u)
-												fileTreeShow(u, a)
-											})
+											// fyne.Do(func() {
+											// 	u := storage.NewFileURI(filepath.Dir(dstPath))
+											// 	log.Debugf("fileTreeShow %s", u)
+											// 	fileTreeShow(u, a)
+											// })
 										}
 									}
 								}
@@ -582,7 +577,7 @@ func recvTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 			removeEntry(path, fe, true)
 		})
 	}
-	OnSelectedReload[1] = reload
+	OnSelectedTab[RECVi] = reload
 	mainButton = widget.NewButtonWithIcon(lp("Download"), theme.DownloadIcon(), func() {
 		if entry.Validate() != nil {
 			log.Error("no receive code entered")
@@ -672,6 +667,7 @@ func recvTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 		doneChan := make(chan struct{})
 		fpath := ""
 
+		// treeOff()
 		// progress
 		go func() {
 			ticker := time.NewTicker(time.Millisecond * 100)
@@ -827,25 +823,67 @@ func recvTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 	}) // mainButton
 	cosED = append(cosED, mainButton)
 
-	treeButton := widget.NewButtonWithIcon("", theme.VisibilityIcon(), func() {
+	var treeButton *widget.Button
+	treeButton = widget.NewButtonWithIcon("", theme.VisibilityIcon(), func() {
 		u := storage.NewFileURI(join())
-		if !isMobile {
+		if !(isMobile || asMobile) {
 			if err := OpenURL(u.String()); err == nil {
 				return
 			} else {
 				log.Errorf("OpenURL: %v", err)
 			}
 		}
-		ft := fileTreeShow(u, a)
-		if ft != nil {
-			ft.OnSelected = func(uid widget.TreeNodeID) {
-				selected(uid, func(err error) {
-					log.Debugf("selected %v: %v", uid, err)
-				})
+
+		if scroller.Content == boxholder {
+			treeButton.SetIcon(theme.VisibilityOffIcon())
+
+			ft := xw.NewFileTree(u)
+			ft.OpenAllBranches()
+			updateLink := func() {}
+			prev := hostSelectOptions(LOCAL)[0]
+			hostSelect := NewSelect(hostSelectOptions(LOCAL), func(next string) {
+				if next != prev {
+					prev = next
+					updateLink()
+				}
+			})
+			link := widget.NewHyperlink("", nil)
+			port := widget.NewEntry()
+
+			updateLink = func() {
+				link.SetText(net.JoinHostPort(hostSelect.Selected, port.Text))
+				link.SetURLFromString("http://" + link.Text)
+				davServer.Start(link.Text, join())
 			}
+
+			port.OnSubmitted = func(s string) {
+				updateLink()
+			}
+
+			hostSelect.SetSelected(prev)
+			port.SetText("8080")
+			updateLink()
+
+			top := container.NewBorder(
+				nil,
+				nil,
+				container.NewGridWrap(widget.NewLabel("\t\t\t").MinSize(), hostSelect), link,
+				container.NewGridWrap(widget.NewLabel("\t").MinSize(), port),
+			)
+			scroller.Content = container.NewBorder(top, nil, nil, nil, ft)
+			scroller.Refresh()
+			return
 		}
+		treeOff()
 	})
 	cosED = append(cosED, treeButton)
+
+	treeOff = func() {
+		treeButton.SetIcon(theme.VisibilityIcon())
+		scroller.Content = boxholder
+		scroller.Refresh()
+		davServer.Stop()
+	}
 
 	saveAllButton := widget.NewButtonWithIcon("", theme.FolderOpenIcon(), func() {
 		ShowFilesSave()
@@ -934,8 +972,6 @@ func recvTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 						if mapEmpty(&fileentries) {
 							// dir := filepath.Dir(dst)
 							topline.SetText(fmt.Sprintf("%s %s", lp("Saved all files to"), lu.Path()))
-							log.Debugf("fileTreeShow %s", u)
-							fileTreeShow(u, a)
 						}
 					})
 					return
@@ -981,11 +1017,6 @@ func recvTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 													removeEntry(root, feRoot, false)
 												}
 											}
-											fyne.Do(func() {
-												u := storage.NewFileURI(filepath.Dir(dstPath))
-												log.Debugf("fileTreeShow %s", u)
-												fileTreeShow(u, a)
-											})
 										}
 									}
 								}

@@ -185,61 +185,41 @@ func settingsTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 	on, _ := sendBinding.Get()
 	sendCheck.OnChanged(on)
 
-	off := "..."
-	all := "0.0.0.0"
-
-	// Функция для обновления опций селекта
-	hostSelectOptions := func() []string {
-		ips, err := localIPs()
-		if err != nil {
-			log.Errorf("%v", err)
-		}
-		options := []string{off}
-
-		if err == nil && len(ips) > 0 {
-			options = append(options, ips...)
-		}
-		if len(options) > 2 {
-			options = append(options, all)
-		}
-
-		return options
-	}
 	hostBinding := binding.BindPreferenceString("host", a.Preferences())
-	prev := off
+	prev := OFF
 
 	ctx, ctc := context.WithCancel(context.Background())
 	var hostSelect *Select
-	hostSelect = NewSelect(hostSelectOptions(), func(next string) {
+	hostSelect = NewSelect(hostSelectOptions(OFF), func(next string) {
 		if next == prev {
 			return
 		}
 		hostBinding.Set(next)
 		if noRestart {
-			if next == off {
+			if next == OFF {
 				//Лучше использовать testing или ip или явно host чем флудить локалку
 				// disableLocalBinding.Set(false)
 				// disableLocalCheck.Refresh()
-				prev = off
+				prev = OFF
 				ctc()
 				return
 			}
-			if prev != off {
+			if prev != OFF {
 				// 192.168.0.1->0.0.0.0 не позволяем а опускаем 192.168.0.1
-				hostSelect.SetSelected(off) // рекурсия
+				hostSelect.SetSelected(OFF) // рекурсия
 				return
 			}
 			ctx, ctc = context.WithCancel(context.Background())
 		} else {
-			if next == off {
+			if next == OFF {
 				// disableLocalBinding.Set(false)
 				// disableLocalCheck.Refresh()
-				if prev != off {
+				if prev != OFF {
 					restart(w)
 				}
 				return
 			}
-			if prev != off {
+			if prev != OFF {
 				if next != prev {
 					restart(w)
 				}
@@ -274,7 +254,7 @@ func settingsTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 			// ss -tlnp|grep crocgui
 			// netstat -a -n -p tcp |find ":90"
 			fyne.Do(func() {
-				hostSelect.SetSelected(off) // рекурсия
+				hostSelect.SetSelected(OFF) // рекурсия
 				// hostSelect.Refresh()
 				if err != nil {
 					NewToast(w, err.Error()).Show()
@@ -283,12 +263,12 @@ func settingsTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 		}()
 	})
 	hostSelect.BeforePopup = func() {
-		hostSelect.Options = hostSelectOptions()
+		hostSelect.Options = hostSelectOptions(OFF)
 		log.Debugf("Options %v", hostSelect.Options)
 	}
 	s, _ := hostBinding.Get()
 	if s == "" {
-		s = off
+		s = OFF
 	}
 	hostSelect.SetSelected(s)
 
@@ -407,7 +387,7 @@ func settingsTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 			doMonitor.DoRequest(relayForm.Refresh)
 		}
 		// Обновляем опции селекта при изменении адреса релея
-		hostSelect.Options = hostSelectOptions()
+		hostSelect.Options = hostSelectOptions(OFF)
 		hostSelect.Refresh()
 	}
 	ra, _ := relayAddressBinding.Get()
@@ -470,10 +450,10 @@ func settingsTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 	restoreAccordionState()
 
 	// Собираем финальный интерфейс
-	ti = container.NewTabItemWithIcon(ZeroWidthNonJoiner, theme.SettingsIcon(), container.NewVScroll(
+	ti = container.NewTabItemWithIcon("", theme.SettingsIcon(), container.NewVScroll(
 		container.NewVBox(accordion),
 	))
-	OnSelectedReload[3] = func() {
+	OnSelectedTab[SETTINGSi] = func() {
 		qr.UpdateFromClipboard()
 		ti.Content.Refresh()
 	}
@@ -719,4 +699,22 @@ func localIPs() ([]string, error) {
 	}
 
 	return ips, nil
+}
+
+// Функция для обновления опций селекта
+func hostSelectOptions(first string) []string {
+	ips, err := localIPs()
+	if err != nil {
+		log.Errorf("%v", err)
+	}
+	options := []string{first}
+
+	if err == nil && len(ips) > 0 {
+		options = append(options, ips...)
+	}
+	if len(options) > 2 && first == OFF {
+		options = append(options, ALL)
+	}
+
+	return options
 }

@@ -97,7 +97,7 @@ func aboutTabItem(a fyne.App, _ fyne.Window) *container.TabItem {
 	})
 	appInfo.Hidden = !isAndroid
 
-	ti := container.NewTabItemWithIcon(ZeroWidthJoiner, theme.InfoIcon(), //lp("About")
+	ti := container.NewTabItemWithIcon("", theme.InfoIcon(), //lp("About")
 		container.NewVScroll(container.NewVBox(
 			appInfo,
 			container.New(&tightVBoxLayout{},
@@ -110,7 +110,7 @@ func aboutTabItem(a fyne.App, _ fyne.Window) *container.TabItem {
 			licenseToggle,
 		)),
 	)
-	OnSelectedReload[4] = func() {
+	OnSelectedTab[ABOUTi] = func() {
 		go func() {
 			latestVersion, err := Latest(FORKto, CG)
 			currentVersion := fmt.Sprintf("v%s", ve)

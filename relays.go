@@ -258,12 +258,10 @@ func createRelaySelector(a fyne.App, w fyne.Window,
 
 	// Первоначальная загрузка
 	updateRelaySelector()
-	label := widget.NewLabel("\t\t")
 	relayControls = container.NewBorder(
 		nil, nil,
 		container.NewHBox(
-			// container.NewGridWrap(fyne.NewSize(90, relaySelect.MinSize().Height), relaySelect),
-			container.NewGridWrap(fyne.NewSize(label.MinSize().Width, label.MinSize().Height), relaySelect),
+			container.NewGridWrap(widget.NewLabel("\t\t").MinSize(), relaySelect),
 			deleteRelayBtn),
 		addRelayBtn,
 		nameEntry,

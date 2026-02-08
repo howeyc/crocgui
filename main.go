@@ -76,12 +76,18 @@ const (
 	IO                      = HTTPS + "://" + GHP + "/croc#"
 	SCAN                    = "//" + GHP + "/scan/"
 	qrSize          float32 = 21 * 16
+	OFF                     = "..."
+	ALL                     = "0.0.0.0"
+	LOCAL                   = "127.0.0.1"
 )
 
 const (
-	ZeroWidthSpace     = string(rune(0x200B) + iota) // Пробел нулевой ширины
-	ZeroWidthNonJoiner                               // Не-соединитель нулевой ширины
-	ZeroWidthJoiner                                  // Соединитель нулевой ширины
+	SENTi = iota
+	RECVi
+	LOGi
+	SETTINGSi
+	ABOUTi
+	LENi
 )
 
 //go:embed metadata/en-US/images/featureGraphic.png
@@ -100,7 +106,7 @@ var (
 	atSI                   int
 	notFinish              bool
 	wd                     string
-	OnSelectedReload       = make(map[int]func(), 5)
+	OnSelectedTab          = make(map[int]func(), LENi)
 	swap                   bool
 	tempDir                string
 	ready                  func() bool
@@ -109,7 +115,6 @@ var (
 	slash           = string(filepath.Separator)
 	ErrNilURI       = errors.New("uri is nil")
 	crocRemovalFile = "croc-marked-files.txt"
-	ftw             fyne.Window
 	size            = fyne.NewSize(350, 700)
 
 	// Чтоб на десктопе отладить как будто это мобильная ОС
@@ -168,7 +173,8 @@ var (
 		// FLAG_ACTIVITY_CLEAR_TOP,
 		// FLAG_ACTIVITY_CLEAR_TASK,
 	)
-	at *container.AppTabs
+	at        *container.AppTabs
+	davServer = NewWebDAVServer()
 )
 
 func main() {
@@ -365,10 +371,10 @@ func refreshWindow(a fyne.App, w fyne.Window) {
 	at.OnSelected = func(tab *container.TabItem) {
 		atSI = at.SelectedIndex()
 		a.Preferences().SetInt("tab", atSI)
-		if f, ok := OnSelectedReload[atSI]; ok && f != nil {
+		logOutput.active(false)
+		if f, ok := OnSelectedTab[atSI]; ok && f != nil {
 			f()
 		}
-		logOutput.active(tab.Text == ZeroWidthSpace)
 	}
 
 	if a.Preferences().Bool("hide-logo") {
@@ -401,6 +407,7 @@ func cleanup(w fyne.Window) {
 	if err := os.Chdir(join()); err == nil {
 		utils.RemoveMarkedFiles()
 	}
+	davServer.Stop()
 	w.Close()
 }
 

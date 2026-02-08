@@ -54,11 +54,9 @@ func (lw *logWriter) active(isActive bool) {
 		if lw.updateTimer != nil {
 			lw.updateTimer.Stop()
 		}
-		// fyne.Do(func() {
 		lw.update()
 		lw.lastUpdateTime = time.Now()
 		lw.rapidUpdateCount = 0
-		// })
 	}
 	lw.isActive = isActive
 }
@@ -214,7 +212,7 @@ func debugString(a fyne.App) string {
 // var exportButton *widget.Button
 
 func logTabItem(a fyne.App, w fyne.Window) *container.TabItem {
-	// logGUI.Wrapping = fyne.TextWrapWord
+	OnSelectedTab[LOGi] = func() { logOutput.active(true) }
 
 	exportButton := widget.NewButtonWithIcon(lp("Export full log"), theme.ContentCopyIcon(), func() {
 		log.Debug("Log copied to clipboard")
@@ -307,15 +305,33 @@ func logTabItem(a fyne.App, w fyne.Window) *container.TabItem {
 
 	debugCheck.SetChecked(debugBool(a))
 
+	rt := logOutput.RichText
+	TextWrapWord := true
+
+	var wrapButton *widget.Button
+	wrapButton = widget.NewButtonWithIcon("", theme.MoreVerticalIcon(), func() {
+		TextWrapWord = !TextWrapWord
+		if TextWrapWord {
+			wrapButton.SetIcon(theme.MoreVerticalIcon())
+			rt.Wrapping = fyne.TextWrapWord
+		} else {
+			wrapButton.SetIcon(theme.MoreHorizontalIcon())
+			rt.Wrapping = fyne.TextWrapOff
+		}
+
+		rt.Refresh()
+	})
+
 	top := container.NewHBox(
 		debugCheck,
+		layout.NewSpacer(),
+		wrapButton,
 		layout.NewSpacer(),
 		exportButton,
 	)
 
-	// content := container.NewBorder(top, nil, nil, nil, logScroll)
 	content := container.NewBorder(top, nil, nil, nil, logOutput.Scroll)
-	return container.NewTabItemWithIcon(ZeroWidthSpace, theme.DocumentIcon(), content)
+	return container.NewTabItemWithIcon("", theme.DocumentIcon(), content)
 }
 
 func removeLevel(line string) string {
