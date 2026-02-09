@@ -13,7 +13,6 @@ import (
 	"runtime"
 	"runtime/debug"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -174,10 +173,8 @@ var (
 		// FLAG_ACTIVITY_CLEAR_TOP,
 		// FLAG_ACTIVITY_CLEAR_TASK,
 	)
-	at *container.AppTabs
-	//	davServer = NewWebDAVServer()
-	davServer  *WebDAVServer
-	onceWebDAV sync.Once
+	at        *container.AppTabs
+	davServer = NewWebDAVServer()
 )
 
 func main() {

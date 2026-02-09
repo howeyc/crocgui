@@ -33,8 +33,6 @@ func recvTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 		removeEntry  func(fpath string, fe *fyne.Container, del bool)
 		showPage     func()
 		reload       func()
-		treeButton   *widget.Button
-		treeOff      = func() {}
 
 		boxholder = container.NewVBox()
 		scroller  = container.NewVScroll(boxholder)
@@ -821,69 +819,6 @@ func recvTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 		log.Warnf("NumGoroutine %d", runtime.NumGoroutine())
 	}) // mainButton
 	cosED = append(cosED, mainButton)
-	/*
-			var treeButton *widget.Button
-			treeButton = widget.NewButtonWithIcon("", theme.VisibilityIcon(), func() {
-				u := storage.NewFileURI(join())
-				if !(isMobile || asMobile) {
-					if err := OpenURL(u.String()); err == nil {
-						return
-					} else {
-						log.Errorf("OpenURL: %v", err)
-					}
-				}
-
-				if scroller.Content == boxholder {
-					treeButton.SetIcon(theme.VisibilityOffIcon())
-
-					ft := xw.NewFileTree(u)
-					ft.OpenAllBranches()
-					updateLink := func() {}
-					prev := hostSelectOptions(LOCAL)[0]
-					hostSelect := NewSelect(hostSelectOptions(LOCAL), func(next string) {
-						if next != prev {
-							prev = next
-							updateLink()
-						}
-					})
-					link := widget.NewHyperlink("", nil)
-					port := widget.NewEntry()
-
-					updateLink = func() {
-						link.SetText(net.JoinHostPort(hostSelect.Selected, port.Text))
-						link.SetURLFromString("http://" + link.Text)
-						davServer.Start(link.Text, join())
-					}
-
-					port.OnSubmitted = func(s string) {
-						updateLink()
-					}
-
-					hostSelect.SetSelected(prev)
-					port.SetText("8080")
-					updateLink()
-
-					top := container.NewBorder(
-						nil,
-						nil,
-						container.NewGridWrap(widget.NewLabel("\t\t\t").MinSize(), hostSelect), link,
-						container.NewGridWrap(widget.NewLabel("\t").MinSize(), port),
-					)
-					scroller.Content = container.NewBorder(top, nil, nil, nil, ft)
-					scroller.Refresh()
-					return
-				}
-				treeOff()
-			})
-		treeOff = func() {
-			treeButton.SetIcon(theme.VisibilityIcon())
-			scroller.Content = boxholder
-			scroller.Refresh()
-			davServer.Stop()
-		}
-	*/
-	treeButton, treeOff = createTreeButton(w, scroller, boxholder, a)
-	cosED = append(cosED, treeButton)
 
 	saveAllButton := widget.NewButtonWithIcon("", theme.FolderOpenIcon(), func() {
 		ShowFilesSave()
@@ -1123,7 +1058,6 @@ func recvTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 			totpLabel,
 			totpProg,
 			layout.NewSpacer(),
-			treeButton,
 			deleteAllButton,
 			saveAllButton,
 			downloadButton,
