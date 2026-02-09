@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"io"
 	"math"
-	"net"
 	"os"
 	"path"
 	"path/filepath"
@@ -32,7 +31,6 @@ import (
 	"fyne.io/fyne/v2/storage"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
-	xw "fyne.io/x/fyne/widget"
 	"github.com/schollz/croc/v10/src/comm"
 	"github.com/schollz/croc/v10/src/croc"
 	"github.com/schollz/croc/v10/src/message"
@@ -59,6 +57,7 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 		removeEntry  func(fpath string, fe *fyne.Container, del bool)
 		showPage     func()
 		reload       func()
+		treeButton   *widget.Button
 		treeOff      = func() {}
 
 		boxholder = container.NewVBox()
@@ -850,68 +849,70 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 		//		a.Clipboard().SetContent(entry.Text)
 	}) // mainButton
 	cosED = append(cosED, mainButton)
-
-	var treeButton *widget.Button
-	treeButton = widget.NewButtonWithIcon("", theme.VisibilityIcon(), func() {
-		u := storage.NewFileURI(join())
-		if !(isMobile || asMobile) {
-			if err := OpenURL(u.String()); err == nil {
-				return
-			} else {
-				log.Errorf("OpenURL: %v", err)
+	/*
+		var treeButton *widget.Button
+		treeButton = widget.NewButtonWithIcon("", theme.VisibilityIcon(), func() {
+			u := storage.NewFileURI(tempDir)
+			if !(isMobile || asMobile) {
+				if err := OpenURL(u.String()); err == nil {
+					return
+				} else {
+					log.Errorf("OpenURL: %v", err)
+				}
 			}
-		}
 
-		if scroller.Content == boxholder {
-			treeButton.SetIcon(theme.VisibilityOffIcon())
+			if scroller.Content == boxholder {
+				treeButton.SetIcon(theme.VisibilityOffIcon())
 
-			ft := xw.NewFileTree(u)
-			ft.OpenAllBranches()
-			updateLink := func() {}
-			prev := hostSelectOptions(LOCAL)[0]
-			hostSelect := NewSelect(hostSelectOptions(LOCAL), func(next string) {
-				if next != prev {
-					prev = next
+				ft := xw.NewFileTree(u)
+				ft.OpenAllBranches()
+				updateLink := func() {}
+				prev := hostSelectOptions(LOCAL)[0]
+				hostSelect := NewSelect(hostSelectOptions(LOCAL), func(next string) {
+					if next != prev {
+						prev = next
+						updateLink()
+					}
+				})
+				link := widget.NewHyperlink("", nil)
+				port := widget.NewEntry()
+
+				updateLink = func() {
+					addr := net.JoinHostPort(hostSelect.Selected, port.Text)
+					link.SetText("dav://" + addr)
+					link.SetURLFromString(link.Text)
+					davServer.Start(addr, join())
+				}
+
+				port.OnSubmitted = func(s string) {
 					updateLink()
 				}
-			})
-			link := widget.NewHyperlink("", nil)
-			port := widget.NewEntry()
 
-			updateLink = func() {
-				link.SetText(net.JoinHostPort(hostSelect.Selected, port.Text))
-				link.SetURLFromString("http://" + link.Text)
-				davServer.Start(link.Text, join())
-			}
-
-			port.OnSubmitted = func(s string) {
+				hostSelect.SetSelected(prev)
+				port.SetText("8080")
 				updateLink()
+
+				top := container.NewBorder(
+					nil,
+					nil,
+					container.NewGridWrap(widget.NewLabel("\t\t\t").MinSize(), hostSelect), link,
+					container.NewGridWrap(widget.NewLabel("\t").MinSize(), port),
+				)
+				scroller.Content = container.NewBorder(top, nil, nil, nil, ft)
+				scroller.Refresh()
+				return
 			}
-
-			hostSelect.SetSelected(prev)
-			port.SetText("8080")
-			updateLink()
-
-			top := container.NewBorder(
-				nil,
-				nil,
-				container.NewGridWrap(widget.NewLabel("\t\t\t").MinSize(), hostSelect), link,
-				container.NewGridWrap(widget.NewLabel("\t").MinSize(), port),
-			)
-			scroller.Content = container.NewBorder(top, nil, nil, nil, ft)
+			treeOff()
+		})
+		treeOff = func() {
+			treeButton.SetIcon(theme.VisibilityIcon())
+			scroller.Content = boxholder
 			scroller.Refresh()
-			return
+			davServer.Stop()
 		}
-		treeOff()
-	})
+	*/
+	treeButton, treeOff = createTreeButton(w, scroller, boxholder, a)
 	cosED = append(cosED, treeButton)
-
-	treeOff = func() {
-		treeButton.SetIcon(theme.VisibilityIcon())
-		scroller.Content = boxholder
-		scroller.Refresh()
-		davServer.Stop()
-	}
 
 	if isAndroid {
 		oH := ""
