@@ -60,6 +60,7 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 		showPage     func()
 		reload       func()
 		treeOff      = func() {}
+		scRefresh    = func() {}
 
 		boxholder = container.NewVBox()
 		scroller  = container.NewVScroll(boxholder)
@@ -67,6 +68,7 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 		mainButton  *widget.Button
 		prog        = widget.NewProgressBar()
 		fileentries sync.Map
+		ft          *xw.FileTree
 	)
 	var (
 		addEntry func(dst string, f func(d *widget.Button, p *widget.ProgressBar,
@@ -139,7 +141,6 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 			fileentries.Clear()
 			fyne.Do(func() {
 				boxholder.RemoveAll()
-				// treeOff()
 			})
 			return
 		}
@@ -192,8 +193,7 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 			fileentries.Delete(key)
 			fyne.Do(func() {
 				boxholder.Remove(fe)
-				doMonitor.DoRequest(boxholder.Refresh)
-				// treeOff()
+				doMonitor.DoRequest(scRefresh)
 			})
 		}
 		if del {
@@ -238,8 +238,7 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 									boxholder.Remove(fe)
 								}
 							})
-							doMonitor.DoRequest(boxholder.Refresh)
-							// treeOff()
+							doMonitor.DoRequest(scRefresh)
 						})
 						return
 					}
@@ -304,8 +303,7 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 					labelFile)
 			}
 			boxholder.Add(newentry)
-			doMonitor.DoRequest(boxholder.Refresh)
-			// treeOff()
+			doMonitor.DoRequest(scRefresh)
 		})
 		return
 	} //addEntry
@@ -580,7 +578,7 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 				return
 			}
 		}
-		// treeOff()
+		treeOff()
 		// progress
 		go func() {
 			GitIgnore := a.Preferences().Bool("git")
@@ -851,78 +849,95 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 	}) // mainButton
 	cosED = append(cosED, mainButton)
 
+	updateLink := func() {}
+	prev := a.Preferences().String("webdav-host")
+	if !slices.Contains(hostSelectOptions(LOCAL), prev) {
+		prev = hostSelectOptions(LOCAL)[0]
+	}
+	hostSelect := NewSelect(hostSelectOptions(LOCAL), func(next string) {
+		if prev != next {
+			prev = next
+			a.Preferences().SetString("webdav-host", prev)
+			updateLink()
+		}
+	})
+	link := widget.NewHyperlink("", nil)
+	link.OnTapped = func() {
+		s := link.URL.String()
+		err := OpenURL(s)
+		if err != nil {
+			log.Errorf("OpenURL: %v", err)
+		}
+		a.Clipboard().SetContent(s)
+		if qr != nil {
+			qr.Show()
+		}
+	}
+	port := widget.NewEntry()
+
+	updateLink = func() {
+		addr := net.JoinHostPort(hostSelect.Selected, port.Text)
+		link.SetText(addr)
+		link.SetURLFromString("dav://" + addr)
+		davServer.Start(addr, join())
+	}
+
+	port.OnSubmitted = func(s string) {
+		a.Preferences().SetString("webdav-port", s)
+		updateLink()
+	}
+
+	hostSelect.SetSelected(prev)
+	port.SetText(a.Preferences().StringWithFallback("webdav-port", "8080"))
+
+	davControl := container.NewBorder(
+		nil,
+		nil,
+		container.NewGridWrap(widget.NewLabel("\t\t\t").MinSize(), hostSelect), link,
+		container.NewGridWrap(widget.NewLabel("\t").MinSize(), port),
+	)
+	davControl.Hide()
+
+	scRefresh = func() {
+		if davControl.Hidden {
+			boxholder.Refresh()
+		} else {
+			root := storage.NewFileURI(join())
+			if ft == nil || ft.Root != root.String() {
+				log.Debugf("root %s", root.String())
+				ft = xw.NewFileTree(root)
+			} else {
+				log.Debugf("ft.Root %s", ft.Root)
+				ft.Refresh()
+			}
+			ft.OpenAllBranches()
+			scroller.Content = ft
+		}
+		scroller.Refresh()
+	}
+
 	var treeButton *widget.Button
 	treeButton = widget.NewButtonWithIcon("", theme.VisibilityIcon(), func() {
-		u := storage.NewFileURI(join())
-		if scroller.Content == boxholder {
-			treeButton.SetIcon(theme.VisibilityOffIcon())
-
-			updateLink := func() {}
-			prev := a.Preferences().String("webdav-host")
-			if !slices.Contains(hostSelectOptions(LOCAL), prev) {
-				prev = hostSelectOptions(LOCAL)[0]
-			}
-			hostSelect := NewSelect(hostSelectOptions(LOCAL), func(next string) {
-				if prev != next {
-					prev = next
-					a.Preferences().SetString("webdav-host", prev)
-					updateLink()
-				}
-			})
-			link := widget.NewHyperlink("", nil)
-			port := widget.NewEntry()
-
-			updateLink = func() {
-				addr := net.JoinHostPort(hostSelect.Selected, port.Text)
-				link.SetText(addr)
-				link.SetURLFromString("dav://" + addr)
-				davServer.Start(addr, join())
-			}
-
-			port.OnSubmitted = func(s string) {
-				a.Preferences().SetString("webdav-port", s)
-				updateLink()
-			}
-
-			hostSelect.SetSelected(prev)
-			port.SetText(a.Preferences().StringWithFallback("webdav-port", "8080"))
+		if davControl.Hidden {
 			updateLink()
-
-			top := container.NewBorder(
-				nil,
-				nil,
-				container.NewGridWrap(widget.NewLabel("\t\t\t").MinSize(), hostSelect), link,
-				container.NewGridWrap(widget.NewLabel("\t").MinSize(), port),
-			)
+			davControl.Show()
+			treeButton.SetIcon(theme.VisibilityOffIcon())
 			if !(isMobile || asMobile) {
-				if err := OpenURL(u.String()); err == nil {
-					scroller.Content = container.NewBorder(
-						top,
-						nil,
-						nil, nil,
-						boxholder)
-					return
-				} else {
+				if err := OpenURL(join()); err != nil {
 					log.Errorf("OpenURL: %v", err)
 				}
 			}
-			ft := xw.NewFileTree(u)
-			ft.OpenAllBranches()
-			scroller.Content = container.NewBorder(
-				top,
-				nil,
-				nil, nil,
-				ft)
-			scroller.Refresh()
+			scRefresh()
 			return
 		}
 		treeOff()
-		davServer.Stop()
 	})
 	treeOff = func() {
+		davControl.Hide()
 		treeButton.SetIcon(theme.VisibilityIcon())
 		scroller.Content = boxholder
 		scroller.Refresh()
+		davServer.Stop()
 	}
 	cosED = append(cosED, treeButton)
 
@@ -1503,7 +1518,7 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 		}
 		removeEntrys(false)
 		reload()
-		if scroller.Content != boxholder {
+		if davControl.Visible() {
 			treeOff()
 			treeButton.OnTapped()
 		}
@@ -1534,6 +1549,7 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 			treeButton,
 			reDir,
 		),
+		davControl,
 		mainButton,
 		prog,
 		cancelButton,
