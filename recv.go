@@ -45,7 +45,7 @@ func recvTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 		addEntry func(dst string, f func(d *widget.Button, p *widget.ProgressBar,
 			s *widget.Button,
 			l *widget.Label)) (newentry *fyne.Container)
-		dialogFileSave func(src string, parent fyne.Window)
+		dialogFileSave func(src string, parent fyne.Window, textDialog bool)
 		join           = func(elem ...string) string {
 			return filepath.FromSlash(filepath.Join(append([]string{tempDir, RECV}, elem...)...))
 		}
@@ -271,20 +271,17 @@ func recvTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 		labelFile := widget.NewLabel(base)
 		icon := theme.ContentRemoveIcon()
 		iconSB := theme.DocumentSaveIcon()
+		clipString := ""
 		if validHash(dst) {
 			clip, err := os.ReadFile(dst)
 			if err == nil && validHash(base, clip...) {
+				clipString = string(clip)
 				iconSB = theme.ContentCopyIcon()
 			}
 		}
 		saveButton := widget.NewButtonWithIcon("", iconSB, func() {
-			if validHash(dst) {
-				clip, err := os.ReadFile(dst)
-				if err == nil && validHash(base, clip...) {
-					s := string(clip)
-					log.Debugf("clip\n%s", s)
-					a.Clipboard().SetContent(s)
-				}
+			if clipString != "" {
+				a.Clipboard().SetContent(clipString)
 			}
 			if isMobile || asMobile {
 				// На Андроиде свернём каталог в  файл
@@ -313,14 +310,14 @@ func recvTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 								removeEntry(dst, feDir, true)
 							}
 							fyne.Do(func() {
-								dialogFileSave(pathZip, w)
+								dialogFileSave(pathZip, w, false)
 							})
 						})
 					}
 					return
 				}
 			}
-			dialogFileSave(dst, w)
+			dialogFileSave(dst, w, clipString != "")
 		}) //saveButton
 
 		deleteButton := widget.NewButtonWithIcon("", icon, func() {
@@ -355,7 +352,7 @@ func recvTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 	} //addEntry
 
 	//
-	dialogFileSave = func(src string, parent fyne.Window) {
+	dialogFileSave = func(src string, parent fyne.Window, textDialog bool) {
 		fe, ok := load(&fileentries, src)
 		if !ok {
 			return
@@ -374,6 +371,9 @@ func recvTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 				})
 			} else if destination == nil {
 				log.Debug("folder selection canceled")
+				if textDialog {
+					qr.showTextDialog()
+				}
 				return
 			}
 
