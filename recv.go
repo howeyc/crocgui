@@ -274,7 +274,7 @@ func recvTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 		if validHash(dst) {
 			clip, err := os.ReadFile(dst)
 			if err == nil && validHash(base, clip...) {
-				iconSB = theme.ContentPasteIcon()
+				iconSB = theme.ContentCopyIcon()
 			}
 		}
 		saveButton := widget.NewButtonWithIcon("", iconSB, func() {
