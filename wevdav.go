@@ -38,13 +38,26 @@ func (s *WebDAVServer) Start(addr, root string) error {
 		s.stopLocked()
 	}
 
-	// Create the WebDAV handler.
-	fs := &webdav.Handler{
-		FileSystem: webdav.Dir(root),
+	// Create the WebDAV handler with resolving filesystem
+	fs := &ResolvingFileSystem{root: root}
+
+	handler := &webdav.Handler{
+		FileSystem: fs,
 		LockSystem: webdav.NewMemLS(),
 		Logger: func(r *http.Request, err error) {
+			// Подробное логирование всех запросов
+			log.Debugf("[WEBDAV] %s %s - User-Agent: %s, Depth: %s",
+				r.Method, r.URL.Path, r.UserAgent(), r.Header.Get("Depth"))
+
+			// Логируем все заголовки для PROPFIND (обычно используется для листинга)
+			if r.Method == "PROPFIND" {
+				for k, v := range r.Header {
+					log.Debugf("[WEBDAV] Header %s: %s", k, v)
+				}
+			}
+
 			if err != nil {
-				log.Debugf("WebDAV request %s %s: %v", r.Method, r.URL.Path, err)
+				log.Debugf("[WEBDAV] Error: %s %s: %v", r.Method, r.URL.Path, err)
 			}
 		},
 	}
@@ -52,7 +65,7 @@ func (s *WebDAVServer) Start(addr, root string) error {
 	// Create and configure the HTTP server.
 	s.server = &http.Server{
 		Addr:    addr,
-		Handler: fs,
+		Handler: handler,
 	}
 
 	// Start the server in a separate goroutine.
@@ -67,6 +80,8 @@ func (s *WebDAVServer) Start(addr, root string) error {
 	}()
 
 	s.active = true
+	s.addr = addr
+	s.root = root
 	return nil
 }
 
@@ -104,7 +119,7 @@ func (s *WebDAVServer) IsActive() bool {
 	return s.active
 }
 
-// GetPort returns the address on which the server is running (if active).
+// GetAddr returns the address on which the server is running (if active).
 func (s *WebDAVServer) GetAddr() string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
