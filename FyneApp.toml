@@ -4,8 +4,8 @@ Website = "https://github.com/abakum/crocgui/releases"
 Icon = "Icon.png"
 Name = "crocgui"
 ID = "com.github.howeyc.crocgui"
-Version = "1.11.42"
-Build = 1681
+Version = "1.11.43"
+Build = 1691
 
 [Source]
 Repo = "https://github.com/abakum/crocgui"

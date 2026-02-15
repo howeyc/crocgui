@@ -668,8 +668,10 @@ func recvTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 		// progress
 		go func() {
 			ticker := time.NewTicker(time.Millisecond * 100)
+			caffeinate(1)
 			defer func() {
 				// Конец
+				caffeinate(-1)
 				ticker.Stop()
 				if longCdLock {
 					log.Debugf("CROC_CD_LOCK %v", longCdLock)

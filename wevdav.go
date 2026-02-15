@@ -4,6 +4,7 @@ package main
 import (
 	"context"
 	"net/http"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -37,29 +38,28 @@ func (s *WebDAVServer) Start(addr, root string) error {
 		}
 		s.stopLocked()
 	}
-
-	// Create the WebDAV handler with resolving filesystem
-	fs := &ResolvingFileSystem{root: root}
+	caffeinate(1)
 
 	handler := &webdav.Handler{
-		FileSystem: fs,
 		LockSystem: webdav.NewMemLS(),
 		Logger: func(r *http.Request, err error) {
-			// Подробное логирование всех запросов
-			log.Debugf("[WEBDAV] %s %s - User-Agent: %s, Depth: %s",
-				r.Method, r.URL.Path, r.UserAgent(), r.Header.Get("Depth"))
-
-			// Логируем все заголовки для PROPFIND (обычно используется для листинга)
-			if r.Method == "PROPFIND" {
-				for k, v := range r.Header {
-					log.Debugf("[WEBDAV] Header %s: %s", k, v)
-				}
-			}
+			// if r.Method == "PROPFIND" {
+			// 	for k, v := range r.Header {
+			// 		log.Debugf("http.Request Header %s: %s", k, v)
+			// 	}
+			// }
 
 			if err != nil {
-				log.Debugf("[WEBDAV] Error: %s %s: %v", r.Method, r.URL.Path, err)
+				log.Errorf("http.Request %s %s: %v", r.Method, r.URL.Path, err)
 			}
 		},
+	}
+
+	if base := filepath.Base(root); !CanCreateSymlinks() && base == SEND {
+		// Create the WebDAV handler with resolving filesystem
+		handler.FileSystem = &ResolvingFileSystem{root: root}
+	} else {
+		handler.FileSystem = webdav.Dir(root)
 	}
 
 	// Create and configure the HTTP server.
@@ -74,7 +74,10 @@ func (s *WebDAVServer) Start(addr, root string) error {
 		if err := s.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Errorf("WebDAV listenAndServe: %v", err)
 			s.mu.Lock()
-			s.active = false
+			if s.active {
+				s.active = false
+				caffeinate(-1) // Откатываем счетчик, если запуск не удался
+			}
 			s.mu.Unlock()
 		}
 	}()
@@ -89,12 +92,19 @@ func (s *WebDAVServer) Start(addr, root string) error {
 func (s *WebDAVServer) Stop() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
 	return s.stopLocked()
 }
 
 // stopLocked is an internal method for stopping the server (called while holding the lock).
 func (s *WebDAVServer) stopLocked() error {
-	if !s.active || s.server == nil {
+	if !s.active {
+		return nil
+	}
+	s.active = false // Сразу гасим флаг
+	caffeinate(-1)   // Уменьшаем счетчик только здесь
+
+	if s.server == nil {
 		return nil
 	}
 
@@ -106,7 +116,6 @@ func (s *WebDAVServer) stopLocked() error {
 		return err
 	}
 
-	s.active = false
 	s.server = nil
 	log.Info("WebDAV done")
 	return nil

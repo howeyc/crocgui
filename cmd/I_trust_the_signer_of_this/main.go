@@ -15,9 +15,9 @@ import (
 )
 
 var (
-	shell32            = windows.NewLazyDLL("shell32.dll")
+	shell32            = windows.NewLazySystemDLL("shell32.dll")
 	procShellExecuteW  = shell32.NewProc("ShellExecuteW")
-	kernel32           = windows.NewLazyDLL("kernel32.dll")
+	kernel32           = windows.NewLazySystemDLL("kernel32.dll")
 	setConsoleOutputCP = kernel32.NewProc("SetConsoleOutputCP")
 )
 

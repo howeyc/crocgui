@@ -10,6 +10,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
+	"strings"
 	"time"
 
 	"fyne.io/fyne/v2"
@@ -269,12 +271,40 @@ func startActivity()             {}
 func HasStoragePermission() bool { return false }
 func openAppSettings()           {}
 func openAppInfo()               {}
+func IsTaskRoot() bool           { return false }
 
 func OpenURL(s string) error {
-	if u, err := url.Parse(s); err == nil {
-		return fyne.CurrentApp().OpenURL(u)
-	} else {
+	u, err := url.Parse(s)
+	if err != nil {
 		return err
 	}
+
+	if u.Scheme == "dav" || u.Scheme == "davs" {
+		// Проверяем оба возможных обработчика
+		for _, scheme := range []string{u.Scheme, "web" + u.Scheme} {
+			if registered(scheme) {
+				u.Scheme = scheme
+				return fyne.CurrentApp().OpenURL(u)
+			}
+		}
+		scheme := "http"
+		if strings.HasSuffix(u.Scheme, "s") {
+			scheme += "s"
+		}
+		switch runtime.GOOS {
+		case "darwin":
+			u.Scheme = scheme
+			script := fmt.Sprintf(`tell app "Finder" to mount volume "%s"`, u.String())
+			return exec.Command("osascript", "-e", script).Run()
+		case "linux":
+			if err := registerScheme(u.Scheme); err != nil {
+				return err
+			}
+		case "window":
+			u.Scheme = scheme
+			return useDav(u, false)
+		}
+	}
+
+	return fyne.CurrentApp().OpenURL(u)
 }
-func IsTaskRoot() bool { return false }

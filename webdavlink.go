@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	log "github.com/schollz/logger"
 	"golang.org/x/net/webdav"
 )
 
@@ -33,11 +32,9 @@ func (fs *ResolvingFileSystem) isVirtualPath(name string) bool {
 		if _, err := Readlink(current); err == nil {
 			// Если это ссылка и мы не в конце пути, то всё что дальше - виртуальное
 			if i < len(parts)-1 {
-				log.Debugf("[VIRTUAL] Path %s is virtual (via symlink at %s)", name, current)
 				return true
 			}
 			// Если это ссылка и это последний компонент, то это виртуальный файл/директория
-			log.Debugf("[VIRTUAL] Path %s is a symlink itself", name)
 			return true
 		}
 	}
@@ -45,7 +42,6 @@ func (fs *ResolvingFileSystem) isVirtualPath(name string) bool {
 	// Проверяем, не является ли сам запрашиваемый путь псевдоссылкой
 	fullPath := filepath.Join(fs.root, filepath.FromSlash(name))
 	if _, err := Readlink(fullPath); err == nil {
-		log.Debugf("[VIRTUAL] Path %s is a symlink", name)
 		return true
 	}
 
@@ -61,8 +57,6 @@ func (fs *ResolvingFileSystem) resolvePath(ctx context.Context, name string) (st
 
 	parts := strings.Split(filepath.FromSlash(name), string(filepath.Separator))
 	current := fs.root
-
-	log.Debugf("[RESOLVE] Resolving path: %s", name)
 
 	for i, part := range parts {
 		if part == "" {
@@ -85,7 +79,6 @@ func (fs *ResolvingFileSystem) resolvePath(ctx context.Context, name string) (st
 			if remaining != "" {
 				current = filepath.Join(current, remaining)
 			}
-			log.Debugf("[RESOLVE] Followed symlink to: %s", current)
 			break
 		}
 
@@ -100,17 +93,14 @@ func (fs *ResolvingFileSystem) resolvePath(ctx context.Context, name string) (st
 func (fs *ResolvingFileSystem) Mkdir(ctx context.Context, name string, perm os.FileMode) error {
 	// Check if this is a virtual path (read-only)
 	if fs.isVirtualPath(name) {
-		log.Debugf("[MKDIR] %s is virtual, read-only", name)
 		return os.ErrPermission
 	}
 
 	fullPath := filepath.Join(fs.root, filepath.FromSlash(name))
-	log.Debugf("[MKDIR] %s (full: %s)", name, fullPath)
 
 	// If parent is a symlink, create inside target
 	parent := filepath.Dir(fullPath)
 	if target, err := Readlink(parent); err == nil {
-		log.Debugf("[MKDIR] Parent is symlink to %s, creating inside target", target)
 		return os.Mkdir(filepath.Join(target, filepath.Base(fullPath)), perm)
 	}
 
@@ -119,32 +109,20 @@ func (fs *ResolvingFileSystem) Mkdir(ctx context.Context, name string, perm os.F
 
 // OpenFile implements webdav.FileSystem
 func (fs *ResolvingFileSystem) OpenFile(ctx context.Context, name string, flag int, perm os.FileMode) (webdav.File, error) {
-	log.Debugf("[OPENFILE] %s (flags: %d, perm: %v)", name, flag, perm)
-
 	// Check for write operations on virtual paths
 	isVirtual := fs.isVirtualPath(name)
 	if isVirtual && (flag&(os.O_WRONLY|os.O_RDWR|os.O_CREATE|os.O_TRUNC) != 0) {
-		log.Debugf("[OPENFILE] %s is virtual, read-only access only", name)
 		return nil, os.ErrPermission
 	}
 
 	resolvedPath, err := fs.resolvePath(ctx, name)
 	if err != nil {
-		log.Debugf("[OPENFILE] Resolve failed: %v", err)
 		return nil, err
 	}
-
-	log.Debugf("[OPENFILE] Resolved to: %s", resolvedPath)
 
 	file, err := os.OpenFile(resolvedPath, flag, perm)
 	if err != nil {
-		log.Debugf("[OPENFILE] Open failed: %v", err)
 		return nil, err
-	}
-
-	info, err := file.Stat()
-	if err == nil {
-		log.Debugf("[OPENFILE] Opened %s, isDir: %v, size: %d", resolvedPath, info.IsDir(), info.Size())
 	}
 
 	return &ResolvingFile{
@@ -160,7 +138,6 @@ func (fs *ResolvingFileSystem) OpenFile(ctx context.Context, name string, flag i
 func (fs *ResolvingFileSystem) RemoveAll(ctx context.Context, name string) error {
 	// Check if this is a virtual path (read-only)
 	if fs.isVirtualPath(name) {
-		log.Debugf("[REMOVEALL] %s is virtual, read-only", name)
 		return os.ErrPermission
 	}
 
@@ -168,7 +145,6 @@ func (fs *ResolvingFileSystem) RemoveAll(ctx context.Context, name string) error
 	if err != nil {
 		return err
 	}
-	log.Debugf("[REMOVEALL] %s -> %s", name, resolvedPath)
 	return os.RemoveAll(resolvedPath)
 }
 
@@ -176,7 +152,6 @@ func (fs *ResolvingFileSystem) RemoveAll(ctx context.Context, name string) error
 func (fs *ResolvingFileSystem) Rename(ctx context.Context, oldName, newName string) error {
 	// Check if either path is virtual (read-only)
 	if fs.isVirtualPath(oldName) || fs.isVirtualPath(newName) {
-		log.Debugf("[RENAME] %s -> %s: virtual path detected, read-only", oldName, newName)
 		return os.ErrPermission
 	}
 
@@ -188,23 +163,18 @@ func (fs *ResolvingFileSystem) Rename(ctx context.Context, oldName, newName stri
 	if err != nil {
 		return err
 	}
-	log.Debugf("[RENAME] %s -> %s", oldResolved, newResolved)
 	return os.Rename(oldResolved, newResolved)
 }
 
 // Stat implements webdav.FileSystem
 func (fs *ResolvingFileSystem) Stat(ctx context.Context, name string) (os.FileInfo, error) {
-	log.Debugf("[STAT] %s", name)
-
 	resolvedPath, err := fs.resolvePath(ctx, name)
 	if err != nil {
-		log.Debugf("[STAT] Resolve failed: %v", err)
 		return nil, err
 	}
 
 	info, err := os.Stat(resolvedPath)
 	if err != nil {
-		log.Debugf("[STAT] Stat failed on resolved path %s: %v", resolvedPath, err)
 		return nil, err
 	}
 
@@ -217,15 +187,11 @@ func (fs *ResolvingFileSystem) Stat(ctx context.Context, name string) (os.FileIn
 		baseName = "/"
 	}
 
-	log.Debugf("[STAT] %s -> %s, isDir: %v, size: %d, virtual: %v",
-		name, resolvedPath, info.IsDir(), info.Size(), isVirtual)
-
 	// Add read-only flag for virtual files
 	mode := info.Mode()
 	if isVirtual {
 		// Remove write permissions for virtual files
 		mode &^= 0222 // Remove write bits for owner, group, others
-		log.Debugf("[STAT] Setting read-only mode for virtual path: %v", mode)
 	}
 
 	return &ResolvedFileInfo{
@@ -250,16 +216,10 @@ type ResolvingFile struct {
 
 // Readdir implements webdav.File
 func (f *ResolvingFile) Readdir(count int) ([]os.FileInfo, error) {
-	log.Debugf("[READDIR] Reading directory: %s (resolved: %s, count: %d, virtual: %v)",
-		f.name, f.resolvedPath, count, f.isVirtual)
-
 	infos, err := f.file.Readdir(count)
 	if err != nil {
-		log.Debugf("[READDIR] Readdir failed: %v", err)
 		return nil, err
 	}
-
-	log.Debugf("[READDIR] Found %d entries in %s", len(infos), f.resolvedPath)
 
 	resolvedInfos := make([]os.FileInfo, 0, len(infos))
 	for _, info := range infos {
@@ -271,7 +231,6 @@ func (f *ResolvingFile) Readdir(count int) ([]os.FileInfo, error) {
 
 		targetInfo, err := os.Stat(targetPath)
 		if err != nil {
-			log.Debugf("[READDIR] Target path stat failed: %v, using original info", err)
 			targetInfo = info // fallback
 		}
 
@@ -292,7 +251,6 @@ func (f *ResolvingFile) Readdir(count int) ([]os.FileInfo, error) {
 		})
 	}
 
-	log.Debugf("[READDIR] Returning %d resolved entries", len(resolvedInfos))
 	return resolvedInfos, nil
 }
 
@@ -304,32 +262,22 @@ func (f *ResolvingFile) Stat() (os.FileInfo, error) {
 // Write implements webdav.File with read-only check
 func (f *ResolvingFile) Write(p []byte) (int, error) {
 	if f.isVirtual {
-		log.Debugf("[WRITE] %s is virtual, read-only", f.name)
 		return 0, os.ErrPermission
 	}
-	n, err := f.file.Write(p)
-	log.Debugf("[WRITE] %s: wrote %d bytes", f.name, n)
-	return n, err
+	return f.file.Write(p)
 }
 
 // Delegate methods
 func (f *ResolvingFile) Read(p []byte) (int, error) {
-	n, err := f.file.Read(p)
-	if n > 0 {
-		log.Debugf("[READ] %s: read %d bytes", f.name, n)
-	}
-	return n, err
+	return f.file.Read(p)
 }
 
 func (f *ResolvingFile) Close() error {
-	log.Debugf("[CLOSE] %s", f.name)
 	return f.file.Close()
 }
 
 func (f *ResolvingFile) Seek(offset int64, whence int) (int64, error) {
-	pos, err := f.file.Seek(offset, whence)
-	log.Debugf("[SEEK] %s: offset=%d whence=%d -> pos=%d", f.name, offset, whence, pos)
-	return pos, err
+	return f.file.Seek(offset, whence)
 }
 
 // ResolvedFileInfo is a custom implementation of os.FileInfo

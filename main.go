@@ -173,8 +173,9 @@ var (
 		// FLAG_ACTIVITY_CLEAR_TOP,
 		// FLAG_ACTIVITY_CLEAR_TASK,
 	)
-	at        *container.AppTabs
-	davServer = NewWebDAVServer()
+	at           *container.AppTabs
+	davServer    = NewWebDAVServer()
+	sleepCounter int32
 )
 
 func main() {
@@ -408,6 +409,9 @@ func cleanup(w fyne.Window) {
 		utils.RemoveMarkedFiles()
 	}
 	davServer.Stop()
+	if !SleepAllowed() {
+		caffeinate(0)
+	}
 	w.Close()
 }
 
