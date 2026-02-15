@@ -91,6 +91,20 @@ import (
 // end
 
 func OpenURL(intentStr string) error {
+	// u, err := url.Parse(intentStr)
+	// if err == nil && (u.Scheme == "dav" || u.Scheme == "davs") {
+	// 	intent := &Intent{
+	// 		// Data:    "//127.0.0.1:8080",
+	// 		Data:    "//127.0.0.1:8443",
+	// 		Scheme:  "https",
+	// 		Package: "com.ghisler.tcplugins.WebDAV",
+	// 		Flags: flagActivity(
+	// 			FLAG_ACTIVITY_NEW_TASK,
+	// 			FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS,
+	// 		),
+	// 	}
+	// 	intentStr = intent.String()
+	// }
 	return driver.RunNative(func(ctx interface{}) error {
 		ac, ok := ctx.(*driver.AndroidContext)
 		if !ok {
