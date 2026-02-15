@@ -856,6 +856,11 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 	if !slices.Contains(hostSelectOptions(LOCAL), prev) {
 		prev = hostSelectOptions(LOCAL)[0]
 	}
+	sCheck := widget.NewCheck("s", func(b bool) {
+		a.Preferences().SetBool("webdavs", b)
+		updateLink()
+	})
+	sCheck.SetChecked(a.Preferences().Bool("webdavs"))
 	hostSelect := NewSelect(hostSelectOptions(LOCAL), func(next string) {
 		if prev != next {
 			prev = next
@@ -865,6 +870,17 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 	})
 	link := widget.NewHyperlink("", nil)
 	link.OnTapped = func() {
+		if !(isMobile || asMobile) && hostSelect.Selected == LOCAL {
+			root := join()
+			if base := filepath.Base(root); CanCreateSymlinks() || base == RECV {
+				if err := OpenURL(root); err != nil {
+					log.Errorf("OpenURL: %v", err)
+				} else {
+					return
+				}
+			}
+		}
+
 		s := link.URL.String()
 		err := OpenURL(s)
 		if err != nil {
@@ -878,10 +894,21 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 	port := widget.NewEntry()
 
 	updateLink = func() {
-		addr := net.JoinHostPort(hostSelect.Selected, port.Text)
+		text := port.Text
+		if port.Text == "" {
+			text = "8080"
+		}
+		scheme := "dav"
+		if sCheck.Checked {
+			scheme += "s"
+			if port.Text == "" {
+				text = "8443"
+			}
+		}
+		addr := net.JoinHostPort(hostSelect.Selected, text)
 		link.SetText(addr)
-		link.SetURLFromString("dav://" + addr)
-		davServer.Start(addr, join())
+		link.SetURLFromString(scheme + "://" + addr)
+		davServer.Start(addr, join(), sCheck.Checked)
 	}
 
 	port.OnSubmitted = func(s string) {
@@ -890,12 +917,13 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 	}
 
 	hostSelect.SetSelected(prev)
-	port.SetText(a.Preferences().StringWithFallback("webdav-port", "8080"))
+	port.SetText(a.Preferences().String("webdav-port"))
 
 	davControl := container.NewBorder(
 		nil,
 		nil,
-		container.NewGridWrap(widget.NewLabel("\t\t\t").MinSize(), hostSelect), link,
+		container.NewHBox(sCheck,
+			container.NewGridWrap(widget.NewLabel("\t\t\t").MinSize(), hostSelect)), link,
 		container.NewGridWrap(widget.NewLabel("\t").MinSize(), port),
 	)
 	davControl.Hide()
@@ -924,12 +952,6 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 			updateLink()
 			davControl.Show()
 			treeButton.SetIcon(theme.VisibilityOffIcon())
-			dir := join()
-			if !(isMobile || asMobile) && filepath.Base(dir) == RECV {
-				if err := OpenURL(dir); err != nil {
-					log.Errorf("OpenURL: %v", err)
-				}
-			}
 			scRefresh()
 			return
 		}

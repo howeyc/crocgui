@@ -300,9 +300,15 @@ func OpenURL(s string) error {
 			if err := registerScheme(u.Scheme); err != nil {
 				return err
 			}
-		case "window":
+		case "windows":
 			u.Scheme = scheme
-			return useDav(u, false)
+			err := useDav(u, false)
+			if err == nil {
+				cleanups = append(cleanups, func() {
+					useDav(u, true)
+				})
+			}
+			return err
 		}
 	}
 

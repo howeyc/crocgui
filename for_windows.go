@@ -112,22 +112,13 @@ func useDav(u *url.URL, del bool) error {
 	// Извлекаем хост и порт
 	host := u.Hostname()
 	port := u.Port()
+	uncPath := fmt.Sprintf(`\\%s@%s\DavWWWRoot`, host, port)
+	webdavURL := fmt.Sprintf("%s://%s:%s", u.Scheme, host, port)
 	if port == "" {
-		// Если порт не указан, используем стандартные
-		if u.Scheme == "https" {
-			port = "443"
-		} else {
-			port = "80"
-		}
+		uncPath = fmt.Sprintf(`\\%s\DavWWWRoot`, host)
+		webdavURL = fmt.Sprintf("%s://%s", u.Scheme, host)
 	}
 
-	// Формируем UNC путь (без завершающего слеша)
-	uncPath := fmt.Sprintf(`\\%s@%s\DavWWWRoot`, host, port)
-
-	// Формируем URL для net use (без завершающего слеша)
-	webdavURL := fmt.Sprintf("%s://%s:%s", u.Scheme, host, port)
-
-	log.Debugf("Parsed URL: scheme=%s, host=%s, port=%s", u.Scheme, host, port)
 	log.Debugf("UNC Path: %s", uncPath)
 	log.Debugf("WebDAV URL: %s", webdavURL)
 
@@ -150,5 +141,6 @@ func useDav(u *url.URL, del bool) error {
 
 	// Шаг 3: Открываем в проводнике
 	log.Debug("Opening in explorer...")
-	return exec.Command("explorer", uncPath).Start()
+	exec.Command("explorer", uncPath).Start()
+	return nil
 }

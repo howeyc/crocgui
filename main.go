@@ -176,6 +176,7 @@ var (
 	at           *container.AppTabs
 	davServer    = NewWebDAVServer()
 	sleepCounter int32
+	cleanups     = []func(){}
 )
 
 func main() {
@@ -411,6 +412,11 @@ func cleanup(w fyne.Window) {
 	davServer.Stop()
 	if !SleepAllowed() {
 		caffeinate(0)
+	}
+	for _, f := range cleanups {
+		if f != nil {
+			f()
+		}
 	}
 	w.Close()
 }
