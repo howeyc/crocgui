@@ -90,8 +90,11 @@ const (
 	LENi
 )
 
-//go:embed metadata/en-US/images/featureGraphic.png
+//go:embed images/featureGraphic.png
 var textlogobytes []byte
+
+//go:embed images/icon.png
+var iconData []byte // 512x512 PNG иконка
 
 var (
 	isMobile               bool

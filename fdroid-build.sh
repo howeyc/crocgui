@@ -14,10 +14,10 @@ go version
 go install fyne.io/fyne/v2/cmd/fyne\@v2.6.1
 fyne version
 if [[ $# -eq 0 ]]; then
-	fyne package -os android -release -appID com.github.howeyc.crocgui -icon metadata/en-US/images/icon.png
+	fyne package -os android -release -appID com.github.howeyc.crocgui -icon images/icon.png
 	zip -d crocgui.apk "META-INF/*"
 else
-	fyne package -os android -appID com.github.howeyc.crocgui -icon metadata/en-US/images/icon.png
+	fyne package -os android -appID com.github.howeyc.crocgui -icon images/icon.png
 fi
 chmod -R u+w gobuild
 rm -rf gobuild

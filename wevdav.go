@@ -14,9 +14,11 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
+	gomime "github.com/cubewise-code/go-mime"
 	log "github.com/schollz/logger"
 	"golang.org/x/net/webdav"
 )
@@ -35,21 +37,54 @@ type WebDAVServer struct {
 // красивого отображения директорий при GET запросах
 type WebDAVWithDirectoryListing struct {
 	webdavHandler *webdav.Handler
-	rootPath      string
+	fileSystem    webdav.FileSystem
 }
 
 func (h *WebDAVWithDirectoryListing) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// Отдаем встроенную иконку для favicon запросов
+	if r.URL.Path == "/favicon.ico" {
+		h.serveFavicon(w, r)
+		return
+	}
 	// Для GET запросов проверяем, является ли путь директорией
 	if r.Method == http.MethodGet {
-		// Получаем полный путь к файлу
-		fullPath := filepath.Join(h.rootPath, r.URL.Path)
-
-		// Проверяем существование и тип
-		fileInfo, err := os.Stat(fullPath)
-		if err == nil && fileInfo.IsDir() {
+		// Используем ту же FileSystem, что и webdav.Handler
+		if info, err := h.fileSystem.Stat(context.Background(), r.URL.Path); err == nil && info.IsDir() {
 			// Это директория - показываем список файлов
-			h.serveDirectoryListing(w, r, fullPath)
+			h.serveDirectoryListing(w, r)
 			return
+		}
+
+		// Если это файл, устанавливаем правильный Content-Type
+		if info, err := h.fileSystem.Stat(context.Background(), r.URL.Path); err == nil && !info.IsDir() {
+			// Определяем MIME-тип по расширению через go-mime
+			ext := filepath.Ext(r.URL.Path)
+			mimeType := gomime.TypeByExtension(ext)
+
+			if mimeType != "" {
+				// Для FLAC используем правильный тип
+				if ext == ".flac" {
+					mimeType = "audio/flac"
+				}
+				w.Header().Set("Content-Type", mimeType)
+
+				// Добавляем заголовки для поддержки потокового воспроизведения
+				if strings.HasPrefix(mimeType, "audio/") || strings.HasPrefix(mimeType, "video/") {
+					w.Header().Set("Accept-Ranges", "bytes")
+				}
+			} else {
+				// Если тип не определен, используем DetectContentType как fallback
+				file, err := h.fileSystem.OpenFile(context.Background(), r.URL.Path, os.O_RDONLY, 0)
+				if err == nil {
+					defer file.Close()
+					buffer := make([]byte, 512)
+					_, err := file.Read(buffer)
+					if err == nil {
+						mimeType = http.DetectContentType(buffer)
+						w.Header().Set("Content-Type", mimeType)
+					}
+				}
+			}
 		}
 	}
 
@@ -57,58 +92,36 @@ func (h *WebDAVWithDirectoryListing) ServeHTTP(w http.ResponseWriter, r *http.Re
 	h.webdavHandler.ServeHTTP(w, r)
 }
 
-func (h *WebDAVWithDirectoryListing) serveDirectoryListing(w http.ResponseWriter, r *http.Request, dirPath string) {
-	files, err := os.ReadDir(dirPath)
-	if err != nil {
-		http.Error(w, "Error reading directory", http.StatusInternalServerError)
+func (h *WebDAVWithDirectoryListing) serveFavicon(w http.ResponseWriter, r *http.Request) {
+	// Обработка OPTIONS для CORS
+	if r.Method == http.MethodOptions {
+		w.Header().Set("Allow", "GET, HEAD, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.WriteHeader(http.StatusOK)
 		return
 	}
 
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-
-	// Простой HTML шаблон
-	fmt.Fprintf(w, "<!DOCTYPE html>\n<html>\n<head>\n")
-	fmt.Fprintf(w, "<title>Index of %s</title>\n", r.URL.Path)
-	fmt.Fprintf(w, "<style>body { font-family: monospace; }</style>\n")
-	fmt.Fprintf(w, "</head>\n<body>\n")
-	fmt.Fprintf(w, "<h1>Index of %s</h1>\n<hr>\n<pre>\n", r.URL.Path)
-
-	// Ссылка на родительскую директорию
-	if r.URL.Path != "/" {
-		parentDir := filepath.Dir(r.URL.Path)
-		if parentDir == "." {
-			parentDir = "/"
-		}
-		fmt.Fprintf(w, "<a href=\"%s\">../</a>\n", parentDir)
+	if len(iconData) == 0 {
+		http.NotFound(w, r)
+		return
 	}
 
-	for _, file := range files {
-		name := file.Name()
-		fileInfo, _ := file.Info()
+	// Важно! Добавляем заголовки для корректного кэширования в закладках
+	w.Header().Set("Content-Type", "image/png")
+	w.Header().Set("Cache-Control", "public, max-age=86400") // 24 часа, не слишком долго
+	w.Header().Set("Content-Length", fmt.Sprintf("%d", len(iconData)))
+	w.Header().Set("Access-Control-Allow-Origin", "*")
 
-		if file.IsDir() {
-			name += "/"
-		}
-
-		// Форматируем размер
-		size := ""
-		if !file.IsDir() {
-			size = fmt.Sprintf("%10d", fileInfo.Size())
-		} else {
-			size = "          "
-		}
-
-		// Форматируем дату
-		modTime := fileInfo.ModTime().Format("2006-01-02 15:04:05")
-
-		fmt.Fprintf(w, "<a href=\"%s\">%s</a>%s %s\n",
-			name,
-			name,
-			size,
-			modTime)
+	// Для HEAD запросов только заголовки
+	if r.Method == http.MethodHead {
+		w.WriteHeader(http.StatusOK)
+		return
 	}
 
-	fmt.Fprintf(w, "</pre>\n<hr>\n</body>\n</html>")
+	// Для GET - отдаем данные
+	w.WriteHeader(http.StatusOK)
+	w.Write(iconData)
 }
 
 // NewWebDAVServer creates a new instance of a WebDAV server.
@@ -131,15 +144,24 @@ func (s *WebDAVServer) Start(addr, root string, useTLS bool) error {
 	caffeinate(1)
 	s.useTLS = useTLS
 
+	// Определяем какую FileSystem использовать
+	var fs webdav.FileSystem
+	if base := filepath.Base(root); !CanCreateSymlinks() && base == SEND {
+		fs = &ResolvingFileSystem{root: root}
+	} else {
+		fs = webdav.Dir(root)
+	}
+
 	// Создаем стандартный WebDAV handler
 	webdavHandler := &webdav.Handler{
+		FileSystem: fs,
 		LockSystem: webdav.NewMemLS(),
 		Logger: func(r *http.Request, err error) {
-			// if r.Method == "PROPFIND" {
-			// 	for k, v := range r.Header {
-			// 		log.Debugf("http.Request Header %s: %s", k, v)
-			// 	}
-			// }
+			if r.Method == "PROPFIND" {
+				for k, v := range r.Header {
+					log.Debugf("http.Request Header %s: %s", k, v)
+				}
+			}
 
 			if err != nil {
 				log.Errorf("http.Request %s %s: %v", r.Method, r.URL.Path, err)
@@ -147,16 +169,10 @@ func (s *WebDAVServer) Start(addr, root string, useTLS bool) error {
 		},
 	}
 
-	if base := filepath.Base(root); !CanCreateSymlinks() && base == SEND {
-		webdavHandler.FileSystem = &ResolvingFileSystem{root: root}
-	} else {
-		webdavHandler.FileSystem = webdav.Dir(root)
-	}
-
 	// Оборачиваем handler для поддержки листинга директорий
 	handler := &WebDAVWithDirectoryListing{
 		webdavHandler: webdavHandler,
-		rootPath:      root,
+		fileSystem:    fs,
 	}
 
 	s.server = &http.Server{
