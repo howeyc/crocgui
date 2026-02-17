@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"path/filepath"
 	"strings"
 )
 
@@ -31,7 +32,10 @@ func (h *WebDAVWithDirectoryListing) serveDirectoryListing(w http.ResponseWriter
 		Readdir(count int) ([]os.FileInfo, error)
 	}
 
-	if readdir, ok := f.(readdirFile); ok {
+	if readdir, ok := f.(readdirFile); !ok {
+		// Если не можем получить интерфейс с Readdir, используем стандартный WebDAV handler
+		h.webdavHandler.ServeHTTP(w, r)
+	} else {
 		// Читаем все файлы в директории
 		fileInfos, err := readdir.Readdir(-1)
 		if err != nil {
@@ -57,7 +61,7 @@ func (h *WebDAVWithDirectoryListing) serveDirectoryListing(w http.ResponseWriter
 		fmt.Fprintf(w, `<!DOCTYPE html>
 <html>
 <head>
-	<title>Index of %s</title>
+	<title>%s</title>
 	<link rel="icon" type="image/png" href="/favicon.ico">
     <link rel="shortcut icon" href="/favicon.ico" type="image/x-icon">
     <link rel="apple-touch-icon" href="/favicon.ico">
@@ -137,14 +141,58 @@ func (h *WebDAVWithDirectoryListing) serveDirectoryListing(w http.ResponseWriter
 			border-top: 1px solid #eee;
 			padding-top: 10px;
 		}
+		
+		/* Медиа-запрос для мобильных устройств */
+		@media (max-width: 768px) {
+			body {
+				margin: 10px;
+				font-size: 16px;
+			}
+			.container {
+				padding: 15px;
+			}
+			.breadcrumbs {
+				font-size: 1.3em;
+				padding: 12px;
+			}
+			.directory-listing td {
+				padding: 12px 8px;
+				font-size: 1.1em;
+			}
+			.directory-listing .name a {
+				font-size: 1.15em;
+				display: inline-block;
+				padding: 4px 0;
+			}
+			.directory-listing .size,
+			.directory-listing .date {
+				font-size: 1em;
+			}
+			.footer {
+				font-size: 1em;
+			}
+		}
+		
+		/* Для очень маленьких экранов */
+		@media (max-width: 480px) {
+			.directory-listing td {
+				padding: 10px 5px;
+			}
+			.directory-listing .name a {
+				font-size: 1.2em;
+			}
+			.breadcrumbs {
+				font-size: 1.4em;
+			}
+		}
 	</style>
 </head>
 <body>
 	<div class="container">
-		%s
-		<table class="directory-listing">
+	%s
+	<table class="directory-listing">
 			<tbody>
-`, displayPath, breadcrumbs)
+`, filepath.Base(join())+displayPath, breadcrumbs)
 
 		// Проверяем каждый элемент через Stat FileSystem для правильного определения типа
 		for _, info := range fileInfos {
@@ -192,9 +240,6 @@ func (h *WebDAVWithDirectoryListing) serveDirectoryListing(w http.ResponseWriter
 	</div>
 </body>
 </html>`, len(fileInfos))
-	} else {
-		// Если не можем получить интерфейс с Readdir, используем стандартный WebDAV handler
-		h.webdavHandler.ServeHTTP(w, r)
 	}
 }
 
@@ -214,18 +259,19 @@ func formatSize(size int64) string {
 
 // generateBreadcrumbs создает кликабельную цепочку родительских каталогов
 func (h *WebDAVWithDirectoryListing) generateBreadcrumbs(currentPath string) string {
+	root := filepath.Base(join())
+	separator := `<span class="separator">›</span>`
 	if currentPath == "/" {
-		return `<div class="breadcrumbs"><a href="/">root</a></div>`
+		return fmt.Sprintf(`<div class="breadcrumbs"><a href="/">%s</a>%s</div>`, root, separator)
 	}
 
 	parts := strings.Split(strings.Trim(currentPath, "/"), "/")
 	var breadcrumbs strings.Builder
-	breadcrumbs.WriteString(`<div class="breadcrumbs"><a href="/">root</a>`)
+	breadcrumbs.WriteString(fmt.Sprintf(`<div class="breadcrumbs"><a href="/">%s</a>`, root))
 
 	pathSoFar := ""
 	for i, part := range parts {
 		pathSoFar += "/" + part
-		separator := `<span class="separator">›</span>`
 		if i == len(parts)-1 {
 			// Текущий каталог (не ссылка)
 			breadcrumbs.WriteString(fmt.Sprintf(`%s <span class="current">%s</span>`, separator, part))

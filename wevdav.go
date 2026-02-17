@@ -43,11 +43,13 @@ type WebDAVWithDirectoryListing struct {
 func (h *WebDAVWithDirectoryListing) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Отдаем встроенную иконку для favicon запросов
 	if r.URL.Path == "/favicon.ico" {
+		log.Debugf("Request %s %s", r.Method, r.URL.Path)
 		h.serveFavicon(w, r)
 		return
 	}
 	// Для GET запросов проверяем, является ли путь директорией
 	if r.Method == http.MethodGet {
+		log.Debugf("Request %s %s", r.Method, r.URL.Path)
 		// Используем ту же FileSystem, что и webdav.Handler
 		if info, err := h.fileSystem.Stat(context.Background(), r.URL.Path); err == nil && info.IsDir() {
 			// Это директория - показываем список файлов
@@ -157,14 +159,16 @@ func (s *WebDAVServer) Start(addr, root string, useTLS bool) error {
 		FileSystem: fs,
 		LockSystem: webdav.NewMemLS(),
 		Logger: func(r *http.Request, err error) {
-			if r.Method == "PROPFIND" {
-				for k, v := range r.Header {
-					log.Debugf("http.Request Header %s: %s", k, v)
-				}
-			}
+			// if r.Method == "PROPFIND" {
+			// 	for k, v := range r.Header {
+			// 		log.Debugf("Request Header %s: %s", k, v)
+			// 	}
+			// }
 
 			if err != nil {
-				log.Errorf("http.Request %s %s: %v", r.Method, r.URL.Path, err)
+				log.Errorf("Request %s %s: %v", r.Method, r.URL.Path, err)
+			} else {
+				log.Debugf("Request %s %s", r.Method, r.URL.Path)
 			}
 		},
 	}

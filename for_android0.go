@@ -297,8 +297,8 @@ func OpenURL(s string) error {
 			script := fmt.Sprintf(`tell app "Finder" to mount volume "%s"`, u.String())
 			return exec.Command("osascript", "-e", script).Run()
 		case "linux":
-			if err := registerScheme(u.Scheme); err != nil {
-				return err
+			if err := registerScheme(u.Scheme); err == nil {
+				return fyne.CurrentApp().OpenURL(u)
 			}
 		case "windows":
 			u.Scheme = scheme
@@ -307,9 +307,10 @@ func OpenURL(s string) error {
 				cleanups = append(cleanups, func() {
 					useDav(u, true)
 				})
+				return nil
 			}
-			return err
 		}
+		u.Scheme = scheme
 	}
 
 	return fyne.CurrentApp().OpenURL(u)
