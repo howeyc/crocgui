@@ -94,10 +94,7 @@ func OpenURL(intentStr string) error {
 	// u, err := url.Parse(intentStr)
 	// if err == nil && (u.Scheme == "dav" || u.Scheme == "davs") {
 	// 	intent := &Intent{
-	// 		// Data:    "//127.0.0.1:8080",
-	// 		Data:    "//127.0.0.1:8443",
-	// 		Scheme:  "https",
-	// 		Package: "com.ghisler.tcplugins.WebDAV",
+	// 		Data: strings.TrimPrefix(intentStr, u.Scheme+":"),
 	// 		Flags: flagActivity(
 	// 			FLAG_ACTIVITY_NEW_TASK,
 	// 			FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS,

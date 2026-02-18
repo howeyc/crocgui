@@ -871,21 +871,24 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 	link := widget.NewHyperlink("", nil)
 	link.OnTapped = func() {
 		if !(isMobile || asMobile) && hostSelect.Selected == LOCAL {
+			// для десктопов и локально
 			root := join()
 			if base := filepath.Base(root); CanCreateSymlinks() || base == RECV {
-				if err := OpenURL(root); err != nil {
-					log.Errorf("OpenURL: %v", err)
-				} else {
+				// без псевдоссылок в файловом менеджере
+				err := OpenURL(root)
+				if err == nil {
 					return
 				}
+				log.Errorf("OpenURL: %v", err)
 			}
 		}
-
+		// для мобильных или с псевдоссылками
+		// dev devs
 		s := link.URL.String()
-		err := OpenURL(s)
-		if err != nil {
-			log.Errorf("OpenURL: %v", err)
-		}
+		// err := OpenURL(s)
+		// if err != nil {
+		// 	log.Errorf("OpenURL: %v", err)
+		// }
 		a.Clipboard().SetContent(s)
 		if qr != nil {
 			qr.Show()

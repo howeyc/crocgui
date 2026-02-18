@@ -292,12 +292,14 @@ func (qr *QR) updateLink() {
 	qr.link.SetText(displayText)
 
 	// Устанавливаем обработчик в зависимости от типа
-	qr.link.OnTapped = nil
 	if qr.isIO {
 		qr.link.OnTapped = qr.handleIOTapped
 		qr.link.SetURLFromString(qr.currentText)
 	} else if u, err := url.Parse(qr.currentText); err == nil && u.Scheme != "" && u.Host != "" {
 		qr.link.SetURL(u)
+		qr.link.OnTapped = func() {
+			OpenURL(qr.currentText)
+		}
 	} else {
 		qr.link.SetURL(nil)
 		qr.link.OnTapped = qr.showTextDialog
