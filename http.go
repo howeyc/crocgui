@@ -61,6 +61,8 @@ func (h *WebDAVWithDirectoryListing) serveDirectoryListing(w http.ResponseWriter
 		fmt.Fprintf(w, `<!DOCTYPE html>
 <html>
 <head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<title>%s</title>
 	<link rel="icon" type="image/png" href="/favicon.ico">
     <link rel="shortcut icon" href="/favicon.ico" type="image/x-icon">
@@ -70,6 +72,7 @@ func (h *WebDAVWithDirectoryListing) serveDirectoryListing(w http.ResponseWriter
 			font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 			margin: 20px;
 			background-color: #f5f5f5;
+			-webkit-tap-highlight-color: transparent;
 		}
 		.container {
 			max-width: 1200px;
@@ -104,6 +107,9 @@ func (h *WebDAVWithDirectoryListing) serveDirectoryListing(w http.ResponseWriter
 		.directory-listing {
 			width: 100%%;
 			border-collapse: collapse;
+		}
+		.directory-listing tr {
+			transition: background-color 0.15s ease;
 		}
 		.directory-listing tr:hover {
 			background-color: #f5f5f5;
@@ -145,44 +151,74 @@ func (h *WebDAVWithDirectoryListing) serveDirectoryListing(w http.ResponseWriter
 		/* Медиа-запрос для мобильных устройств */
 		@media (max-width: 768px) {
 			body {
-				margin: 10px;
+				margin: 8px;
 				font-size: 16px;
 			}
 			.container {
-				padding: 15px;
+				border-radius: 6px;
 			}
 			.breadcrumbs {
-				font-size: 1.3em;
-				padding: 12px;
+				border-radius: 8px;
+				margin-bottom: 16px;
+			}
+			.directory-listing {
 			}
 			.directory-listing td {
-				padding: 12px 8px;
-				font-size: 1.1em;
+				border-bottom-width: 1px;
+			}
+			.directory-listing .name {
+				width: 75%%;
 			}
 			.directory-listing .name a {
-				font-size: 1.15em;
 				display: inline-block;
-				padding: 4px 0;
+				word-wrap: break-word;
+				word-break: break-word;
+				overflow-wrap: break-word;
 			}
-			.directory-listing .size,
+			.directory-listing .size {
+				width: 25%%;
+				font-size: 0.5em;
+			}
 			.directory-listing .date {
-				font-size: 1em;
+				display: none;
 			}
 			.footer {
-				font-size: 1em;
+				font-size: 0.5em;
 			}
 		}
 		
 		/* Для очень маленьких экранов */
 		@media (max-width: 480px) {
+			body {
+				margin: 4px;
+			}
+			.container {
+				padding: 10px;
+			}
+			.breadcrumbs {
+				font-size: 1em;
+			}
+			.breadcrumbs .separator {
+				margin: 0 8px;
+			}
+			.directory-listing {
+				font-size: 1.0em;
+			}
 			.directory-listing td {
 				padding: 10px 5px;
 			}
 			.directory-listing .name a {
-				font-size: 1.2em;
+				font-size: 1em;
 			}
-			.breadcrumbs {
-				font-size: 1.4em;
+			.directory-listing .size {
+				width: 25%%;
+				font-size: 0.5em;
+			}
+			.directory-listing .date {
+				display: none;
+			}
+			.footer {
+				font-size: 0.5em;
 			}
 		}
 	</style>

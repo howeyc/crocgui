@@ -1,4 +1,4 @@
-//go:build unix
+//go:build unix && !android
 
 package main
 
@@ -82,7 +82,7 @@ func SleepAllowed() bool {
 	return atomic.LoadInt32(&sleepCounter) <= 0
 }
 func CanCreateSymlinks() bool {
-	return !isMobile
+	return true
 }
 
 func registered(scheme string) bool {

@@ -358,7 +358,3 @@ func Child(parent fyne.URI, component string) (child fyne.URI, cleanup func(), e
 
 	return
 }
-
-func CanCreateSymlinks() bool {
-	return false
-}

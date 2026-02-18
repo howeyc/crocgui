@@ -93,17 +93,6 @@ import (
 // end
 
 func OpenURL(intentStr string) error {
-	// u, err := url.Parse(intentStr)
-	// if err == nil && (u.Scheme == "dav" || u.Scheme == "davs") {
-	// 	intent := &Intent{
-	// 		Data: strings.TrimPrefix(intentStr, u.Scheme+":"),
-	// 		Flags: flagActivity(
-	// 			FLAG_ACTIVITY_NEW_TASK,
-	// 			FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS,
-	// 		),
-	// 	}
-	// 	intentStr = intent.String()
-	// }
 	return driver.RunNative(func(ctx interface{}) error {
 		ac, ok := ctx.(*driver.AndroidContext)
 		if !ok {
@@ -144,10 +133,11 @@ func OpenDAV(s string) error {
 				return nil
 			}
 		}
-		u.Scheme = "http"
+		scheme := "http"
 		if strings.HasSuffix(u.Scheme, "s") {
-			u.Scheme += "s"
+			scheme += "s"
 		}
+		u.Scheme = scheme
 	}
 
 	return OpenURL(u.String())
