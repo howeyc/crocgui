@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -31,6 +32,12 @@ type WebDAVServer struct {
 	addr   string
 	root   string
 	useTLS bool
+
+	// Для кеширования TLS конфигурации
+	TLSConfig      *tls.Config
+	tlsMu          sync.RWMutex
+	tlsAddrs       []string
+	tlsConfigError error
 }
 
 // WebDAVWithDirectoryListing оборачивает стандартный WebDAV handler для поддержки
@@ -132,7 +139,7 @@ func NewWebDAVServer() *WebDAVServer {
 }
 
 // Start launches the WebDAV server on the specified address with the given root directory.
-func (s *WebDAVServer) Start(addr, root string, useTLS bool) error {
+func (s *WebDAVServer) Start(addr, root string, useTLS bool, addrs ...string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -179,30 +186,33 @@ func (s *WebDAVServer) Start(addr, root string, useTLS bool) error {
 		fileSystem:    fs,
 	}
 
+	// Создаем сервер
 	s.server = &http.Server{
 		Addr:    addr,
 		Handler: handler,
 	}
 
-	// Если нужен HTTPS, генерируем TLS конфиг в памяти для этого адреса
+	// Если нужен HTTPS, подготавливаем TLS конфиг
 	if useTLS {
-		tlsConfig, err := GenerateTLSConfig(addr)
-		if err != nil {
-			return fmt.Errorf("failed to generate TLS config: %v", err)
+		if err := s.prepareTLSConfig(addrs...); err != nil {
+			s.useTLS = false
+			log.Errorf("failed to prepare TLS config: %v", err)
+		} else {
+			s.server.TLSConfig = s.TLSConfig
 		}
-		s.server.TLSConfig = tlsConfig
 	}
 
 	// Start the server in a separate goroutine.
 	go func() {
 		var err error
 		scheme := "http"
-		if useTLS {
+		if useTLS && s.useTLS {
 			scheme = "https"
-			log.Infof("WebDAV on %s://%s %s", scheme, addr, root)
+		}
+		log.Infof("WebDAV on %s://%s %s", scheme, addr, root)
+		if useTLS && s.useTLS {
 			err = s.server.ListenAndServeTLS("", "")
 		} else {
-			log.Infof("WebDAV on %s://%s %s", scheme, addr, root)
 			err = s.server.ListenAndServe()
 		}
 
@@ -223,66 +233,95 @@ func (s *WebDAVServer) Start(addr, root string, useTLS bool) error {
 	return nil
 }
 
-// GenerateTLSConfig генерирует TLS конфигурацию с самоподписанным сертификатом в памяти.
-// Ожидает addr в формате "IP:Port" (например, "192.168.0.107:8443").
-func GenerateTLSConfig(addr string) (*tls.Config, error) {
-	// 1. Извлекаем IP из строки адреса
-	host, _, err := net.SplitHostPort(addr)
+// prepareTLSConfig подготавливает TLS конфигурацию и сохраняет её в server.TLSConfig
+func (s *WebDAVServer) prepareTLSConfig(addrs ...string) error {
+	if len(addrs) == 0 {
+		return fmt.Errorf("no addresses provided")
+	}
+
+	s.tlsMu.Lock()
+	defer s.tlsMu.Unlock()
+
+	// Проверяем, изменились ли адреса
+	if slices.Equal(addrs, s.tlsAddrs) && s.TLSConfig != nil {
+		return nil // Используем существующий конфиг
+	}
+
+	// Генерируем новый конфиг
+	config, err := generateTLSConfig(addrs...)
 	if err != nil {
-		return nil, fmt.Errorf("invalid address format, expected IP:Port: %v", err)
+		s.TLSConfig = nil
+		s.tlsConfigError = err
+		s.tlsAddrs = nil
+		return err
 	}
 
-	ip := net.ParseIP(host)
-	if ip == nil {
-		return nil, fmt.Errorf("invalid IP address in addr: %s", host)
+	s.TLSConfig = config
+	s.tlsAddrs = addrs
+	s.tlsConfigError = nil
+
+	return nil
+}
+
+// generateTLSConfig генерирует TLS конфигурацию с самоподписанным сертификатом в памяти.
+// Ожидает addr в формате "IP" (например, "192.168.0.107").
+func generateTLSConfig(addrs ...string) (*tls.Config, error) {
+	if len(addrs) == 0 {
+		return nil, fmt.Errorf("no addresses provided")
 	}
 
-	// 2. Генерируем приватный ключ (RSA 2048 бит)
+	var IPAddresses []net.IP
+	for _, addr := range addrs {
+		ip := net.ParseIP(addr)
+		if ip == nil {
+			return nil, fmt.Errorf("invalid address format %v", addr)
+		}
+		IPAddresses = append(IPAddresses, ip)
+	}
+
 	priv, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate private key: %v", err)
 	}
 
-	// 3. Настраиваем сроки действия (на 1 год)
+	// Настраиваем сроки действия (на 1 год)
 	notBefore := time.Now()
 	notAfter := notBefore.Add(365 * 24 * time.Hour)
 
-	// 4. Генерируем уникальный серийный номер
+	// Генерируем уникальный серийный номер
 	serialNumber, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate serial number: %v", err)
 	}
 
-	// 5. Создаем шаблон сертификата
+	// Создаем шаблон сертификата
 	template := x509.Certificate{
 		SerialNumber: serialNumber,
 		Subject: pkix.Name{
-			Organization: []string{"crocgui"},
-			CommonName:   host, // Для совместимости со старым софтом
+			Organization: []string{CG},
+			CommonName:   addrs[0], // Для совместимости со старым софтом
 		},
 		NotBefore:             notBefore,
 		NotAfter:              notAfter,
 		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
 		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
 		BasicConstraintsValid: true,
-
-		// КРИТИЧЕСКИ ВАЖНО для Windows: заполняем Subject Alternative Name (SAN)
-		IPAddresses: []net.IP{ip},
+		IPAddresses:           IPAddresses,
 	}
 
-	// 6. Создаем сам сертификат (самоподписанный)
+	// Создаем сам сертификат (самоподписанный)
 	derBytes, err := x509.CreateCertificate(rand.Reader, &template, &template, &priv.PublicKey, priv)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create certificate: %v", err)
 	}
 
-	// 7. Формируем структуру tls.Certificate для использования в сервере
+	// Формируем структуру tls.Certificate для использования в сервере
 	cert := tls.Certificate{
 		Certificate: [][]byte{derBytes},
 		PrivateKey:  priv,
 	}
 
-	// 8. Возвращаем итоговый конфиг (требуем минимум TLS 1.2)
+	// Возвращаем итоговый конфиг (требуем минимум TLS 1.2)
 	return &tls.Config{
 		Certificates: []tls.Certificate{cert},
 		MinVersion:   tls.VersionTLS12,

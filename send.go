@@ -911,7 +911,7 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 		addr := net.JoinHostPort(hostSelect.Selected, text)
 		link.SetText(addr)
 		link.SetURLFromString(scheme + "://" + addr)
-		davServer.Start(addr, join(), sCheck.Checked)
+		davServer.Start(addr, join(), sCheck.Checked, hostSelect.Options...)
 	}
 
 	port.OnSubmitted = func(s string) {

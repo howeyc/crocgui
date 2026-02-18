@@ -63,8 +63,11 @@ cleanup:
 import "C"
 import (
 	"fmt"
+	"net/url"
+	"strings"
 	"unsafe"
 
+	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/driver"
 )
 
@@ -124,4 +127,29 @@ func OpenURL(intentStr string) error {
 		}
 		return nil
 	})
+}
+
+// Если зарегистрированы схемы то через них
+// иначе через браузер
+func OpenDAV(s string) error {
+	u, err := url.Parse(s)
+	if err != nil {
+		return err
+	}
+
+	if u.Scheme == "dav" || u.Scheme == "davs" {
+		// Проверяем оба возможных обработчика
+		for _, scheme := range []string{u.Scheme, "web" + u.Scheme} {
+			u.Scheme = scheme
+			if err := fyne.CurrentApp().OpenURL(u); err == nil {
+				return nil
+			}
+		}
+		u.Scheme = "http"
+		if strings.HasSuffix(u.Scheme, "s") {
+			u.Scheme += "s"
+		}
+	}
+
+	return fyne.CurrentApp().OpenURL(u)
 }

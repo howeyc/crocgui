@@ -298,7 +298,8 @@ func (qr *QR) updateLink() {
 	} else if u, err := url.Parse(qr.currentText); err == nil && u.Scheme != "" && u.Host != "" {
 		qr.link.SetURL(u)
 		qr.link.OnTapped = func() {
-			OpenURL(qr.currentText)
+			err := OpenDAV(qr.currentText)
+			log.Debugf("OpenDAV %s: %v", qr.currentText, err)
 		}
 	} else {
 		qr.link.SetURL(nil)

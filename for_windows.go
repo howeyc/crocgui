@@ -102,13 +102,13 @@ func registered(scheme string) bool {
 	return true
 }
 
-// OpenDav открывает WebDAV ресурс в проводнике Windows
+// netUse открывает WebDAV ресурс в проводнике Windows
 // Примеры:
 //
-//	OpenDav("http://127.0.0.1:8080")
-//	OpenDav("http://127.0.0.1:8080/")
-//	OpenDav("https://example.com:8443")
-func useDav(u *url.URL, del bool) error {
+//	netUse("http://127.0.0.1:8080")
+//	netUse("http://127.0.0.1:8080/")
+//	netUse("https://example.com:8443")
+func netUse(u *url.URL, del bool) error {
 	// Извлекаем хост и порт
 	host := u.Hostname()
 	port := u.Port()

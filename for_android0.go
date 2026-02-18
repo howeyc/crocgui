@@ -273,7 +273,11 @@ func openAppSettings()           {}
 func openAppInfo()               {}
 func IsTaskRoot() bool           { return false }
 
-func OpenURL(s string) error {
+// Если зарегистрированы схемы то через них
+// иначе регистрируем для линукс
+// иначе монтируем для дарвина и виндовс
+// иначе через браузер
+func OpenDAV(s string) error {
 	u, err := url.Parse(s)
 	if err != nil {
 		return err
@@ -302,10 +306,10 @@ func OpenURL(s string) error {
 			}
 		case "windows":
 			u.Scheme = scheme
-			err := useDav(u, false)
+			err := netUse(u, false)
 			if err == nil {
 				cleanups = append(cleanups, func() {
-					useDav(u, true)
+					netUse(u, true)
 				})
 				return nil
 			}
@@ -313,5 +317,14 @@ func OpenURL(s string) error {
 		u.Scheme = scheme
 	}
 
+	return fyne.CurrentApp().OpenURL(u)
+
+}
+
+func OpenURL(s string) error {
+	u, err := url.Parse(s)
+	if err != nil {
+		return err
+	}
 	return fyne.CurrentApp().OpenURL(u)
 }
