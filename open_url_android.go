@@ -67,7 +67,6 @@ import (
 	"strings"
 	"unsafe"
 
-	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/driver"
 )
 
@@ -141,7 +140,7 @@ func OpenDAV(s string) error {
 		// Проверяем оба возможных обработчика
 		for _, scheme := range []string{u.Scheme, "web" + u.Scheme} {
 			u.Scheme = scheme
-			if err := fyne.CurrentApp().OpenURL(u); err == nil {
+			if err := OpenURL(u.String()); err == nil {
 				return nil
 			}
 		}
@@ -151,5 +150,5 @@ func OpenDAV(s string) error {
 		}
 	}
 
-	return fyne.CurrentApp().OpenURL(u)
+	return OpenURL(u.String())
 }
