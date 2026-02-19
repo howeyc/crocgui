@@ -242,7 +242,7 @@ func main() {
 		isMobile = true
 		GUI = true
 		setOut(GUI)
-	case "linux":
+	case "unix":
 		replacer = strings.NewReplacer(
 			"\x1b[0;34;1m[trace]\t\x1b[0m", "",
 			"\x1b[0;36m[debug]\t\x1b[0m", "",
@@ -250,8 +250,6 @@ func main() {
 			"\x1b[0;33m[warn]\t\x1b[0m", "",
 			"\x1b[0;31;1m[error]\t\x1b[0m", "",
 		)
-		fallthrough
-	case "freebsd", "openbsd", "netbsd":
 		if os.Getenv("DISPLAY") == "" {
 			log.Error("The DISPLAY environment variable is missing")
 			return

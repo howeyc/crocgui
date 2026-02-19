@@ -300,7 +300,7 @@ func OpenDAV(s string) error {
 			u.Scheme = scheme
 			script := fmt.Sprintf(`tell app "Finder" to mount volume "%s"`, u.String())
 			return exec.Command("osascript", "-e", script).Run()
-		case "linux":
+		case "unix":
 			if err := registerScheme(u.Scheme); err == nil {
 				return fyne.CurrentApp().OpenURL(u)
 			}
