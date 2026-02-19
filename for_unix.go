@@ -81,6 +81,7 @@ func caffeinate(i int32) int32 {
 func SleepAllowed() bool {
 	return atomic.LoadInt32(&sleepCounter) <= 0
 }
+
 func CanCreateSymlinks() bool {
 	return true
 }

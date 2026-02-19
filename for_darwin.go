@@ -1,4 +1,4 @@
-//go:build darwin && !unix
+//go:build darwin
 
 package main
 
@@ -80,4 +80,8 @@ func registered(scheme string) bool {
 
 	// Если команда успешна (код 0) - обработчик есть
 	return exec.Command("osascript", "-e", script).Run() == nil
+}
+
+func CanCreateSymlinks() bool {
+	return true
 }
