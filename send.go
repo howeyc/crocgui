@@ -901,7 +901,7 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 		if port.Text == "" {
 			text = "8080"
 		}
-		scheme := "dav"
+		scheme := DAV
 		if sCheck.Checked {
 			scheme += "s"
 			if port.Text == "" {
@@ -1099,6 +1099,13 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 							a.Preferences().SetString("socks5", s5)
 							a.Preferences().SetString("connect", ct)
 							continue
+						}
+						if _, ccn, ok := isDAV(uriString); ok {
+							if err := OpenURL(ccn); err == nil {
+								continue
+							} else {
+								log.Error(err)
+							}
 						}
 						u, err := storage.ParseURI(uriString)
 						if err != nil {

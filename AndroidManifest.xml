@@ -2,7 +2,7 @@
 <manifest
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
-    android:versionCode="1722"
+    android:versionCode="1724"
     android:versionName="1.11.43"
     package="com.github.howeyc.crocgui">
 
@@ -48,6 +48,15 @@
                 <data android:scheme="https"
                     android:host="abakum.github.io"
                     android:pathPattern="/croc.*" />                
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="dav" />
+                <data android:scheme="davs" />
+                <data android:scheme="webdav" />
+                <data android:scheme="webdavs" />
             </intent-filter>
 
             <intent-filter>

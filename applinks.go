@@ -234,6 +234,28 @@ func fromURI(u string) (st, ne, as, a6, ps, pd, s5, ct string, err error) {
 	return
 }
 
+func isDAV(cc string) (schemes []string, ccNew string, ok bool) {
+	u, err := url.Parse(cc)
+	if err != nil {
+		return
+	}
+	switch u.Scheme {
+	case DAV, "webdav":
+		u.Scheme = HTTP
+		schemes = []string{HTTP, DAV, "webdav"}
+		ccNew = u.String()
+		ok = true
+		return
+	case DAVS, "webdavs":
+		u.Scheme = HTTPS
+		schemes = []string{HTTPS, DAVS, "webdavs"}
+		ccNew = u.String()
+		ok = true
+		return
+	}
+	return
+}
+
 // st, ne, as, a6, ps, pd, s5, ct
 func toURI(ss ...string) (u string) {
 	for i, s := range ss {

@@ -11,7 +11,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"strings"
 	"time"
 
 	"fyne.io/fyne/v2"
@@ -274,7 +273,7 @@ func openAppInfo()               {}
 func IsTaskRoot() bool           { return false }
 
 // Если зарегистрированы схемы то через них
-// иначе регистрируем для линукс
+// иначе регистрируем для юникс
 // иначе монтируем для дарвина и виндовс
 // иначе через браузер
 func OpenDAV(s string) error {
@@ -283,29 +282,35 @@ func OpenDAV(s string) error {
 		return err
 	}
 
-	if u.Scheme == "dav" || u.Scheme == "davs" {
-		// Проверяем оба возможных обработчика
-		for _, scheme := range []string{u.Scheme, "web" + u.Scheme} {
+	if schemes, _, ok := isDAV(s); ok {
+		// Если зарегистрированы схемы то через них
+		for _, scheme := range schemes[1:] {
 			if registered(scheme) {
 				u.Scheme = scheme
 				return fyne.CurrentApp().OpenURL(u)
 			}
 		}
-		scheme := "http"
-		if strings.HasSuffix(u.Scheme, "s") {
-			scheme += "s"
-		}
 		switch runtime.GOOS {
 		case "darwin":
-			u.Scheme = scheme
-			script := fmt.Sprintf(`tell app "Finder" to mount volume "%s"`, u.String())
-			return exec.Command("osascript", "-e", script).Run()
+			// иначе монтируем
+			u.Scheme = schemes[0]
+			script := fmt.Sprintf(`tell app "Finder" to mount volume "%s"`, u)
+			err := exec.Command("osascript", "-e", script).Run()
+			if err == nil {
+				cleanups = append(cleanups, func() {
+					exec.Command("diskutil", "eject", u.Hostname()).Run()
+				})
+				return nil
+			}
+			return err
 		case "unix":
+			// иначе регистрируем для юникс
 			if err := registerScheme(u.Scheme); err == nil {
 				return fyne.CurrentApp().OpenURL(u)
 			}
 		case "windows":
-			u.Scheme = scheme
+			// иначе монтируем
+			u.Scheme = schemes[0]
 			err := netUse(u, false)
 			if err == nil {
 				cleanups = append(cleanups, func() {
@@ -314,7 +319,7 @@ func OpenDAV(s string) error {
 				return nil
 			}
 		}
-		u.Scheme = scheme
+		u.Scheme = schemes[0]
 	}
 
 	return fyne.CurrentApp().OpenURL(u)

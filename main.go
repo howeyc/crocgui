@@ -71,8 +71,11 @@ const (
 	FORKfromBuild           = 40
 	FORKto                  = "abakum"
 	GH                      = "github.com"
-	HTTPS                   = "https"
 	GHP                     = FORKto + ".github.io"
+	DAV                     = "dav"
+	HTTP                    = "http"
+	DAVS                    = "davs"
+	HTTPS                   = "https"
 	IO                      = HTTPS + "://" + GHP + "/croc#"
 	SCAN                    = "//" + GHP + "/scan/"
 	qrSize          float32 = 21 * 16

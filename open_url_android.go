@@ -64,7 +64,6 @@ import "C"
 import (
 	"fmt"
 	"net/url"
-	"strings"
 	"unsafe"
 
 	"fyne.io/fyne/v2/driver"
@@ -125,19 +124,16 @@ func OpenDAV(s string) error {
 		return err
 	}
 
-	if u.Scheme == "dav" || u.Scheme == "davs" {
-		// Проверяем оба возможных обработчика
-		for _, scheme := range []string{u.Scheme, "web" + u.Scheme} {
-			u.Scheme = scheme
-			if err := OpenURL(u.String()); err == nil {
-				return nil
-			}
-		}
-		scheme := "http"
-		if strings.HasSuffix(u.Scheme, "s") {
-			scheme += "s"
-		}
-		u.Scheme = scheme
+	if schemes, _, ok := isDAV(s); ok {
+		// Если зарегистрированы схемы то через них
+		// но  я их зарегистрировал на себя
+		// for _, scheme := range schemes[1:] {
+		// 	u.Scheme = scheme
+		// 	if err := OpenURL(u.String()); err == nil {
+		// 		return nil
+		// 	}
+		// }
+		u.Scheme = schemes[0]
 	}
 
 	return OpenURL(u.String())

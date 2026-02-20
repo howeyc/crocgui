@@ -205,9 +205,9 @@ func (s *WebDAVServer) Start(addr, root string, useTLS bool, addrs ...string) er
 	// Start the server in a separate goroutine.
 	go func() {
 		var err error
-		scheme := "http"
+		scheme := HTTP
 		if useTLS && s.useTLS {
-			scheme = "https"
+			scheme = HTTPS
 		}
 		log.Infof("WebDAV on %s://%s %s", scheme, addr, root)
 		if useTLS && s.useTLS {
