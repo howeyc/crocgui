@@ -124,7 +124,6 @@ import "C"
 
 import (
 	"net/url"
-	"path/filepath"
 	"strings"
 )
 
@@ -277,28 +276,6 @@ func extractRelativePath(fullPath string, baseFolders ...string) string {
 	return fullPath
 }
 
-// DetectMimeType определяет MIME-тип по имени файла
-func DetectMimeType(fileName string) string {
-	ext := strings.ToLower(filepath.Ext(fileName))
-
-	switch ext {
-	case ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp":
-		return "image/" + strings.TrimPrefix(ext, ".")
-	case ".mp4", ".avi", ".mkv", ".webm", ".3gp":
-		return "video/" + strings.TrimPrefix(ext, ".")
-	case ".mp3", ".wav", ".ogg", ".flac", ".m4a":
-		return "audio/" + strings.TrimPrefix(ext, ".")
-	case ".pdf":
-		return "application/pdf"
-	case ".txt":
-		return "text/plain"
-	case ".html", ".htm":
-		return "text/html"
-	default:
-		return "application/octet-stream"
-	}
-}
-
 // PrepareMediaStoreParams подготавливает параметры для создания файла через MediaStore
 func PrepareMediaStoreParams(uri, fileName string) (*MediaStorePathInfo, error) {
 	info, err := ParseUriForMediaStore(uri)
@@ -307,7 +284,7 @@ func PrepareMediaStoreParams(uri, fileName string) (*MediaStorePathInfo, error) 
 	}
 
 	info.FileName = fileName
-	info.MimeType = DetectMimeType(fileName)
+	info.MimeType = detectMimeType(fileName)
 
 	return info, nil
 }
