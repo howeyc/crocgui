@@ -161,7 +161,14 @@ func (p *CrocProxy) Stop() error {
 	}
 
 	p.active = false
-	close(p.stopChan)
+
+	// Безопасно закрываем stopChan - если уже закрыт, игнорируем
+	select {
+	case <-p.stopChan:
+		// Канал уже закрыт
+	default:
+		close(p.stopChan)
+	}
 
 	// Останавливаем прокси сервер если есть
 	if p.proxyServer != nil {

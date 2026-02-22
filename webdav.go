@@ -450,7 +450,17 @@ func (s *WebDAVServer) setupSenderProxyMode() error {
 
 	// Создаем прокси для отправителя с сохраненными opt
 	proxy := NewCrocProxy(s.proxyOpts)
+
+	// Сохраняем прокси в поле proxyHandler для использования в Wrap()
 	s.proxyHandler = proxy
+
+	// Настраиваем прокси для работы с WebDAV сервером
+	s.proxyMode = true
+
+	// ВАЖНО: инициализируем stopChan ДО запуска горутины
+	proxy.mu.Lock()
+	proxy.stopChan = make(chan struct{})
+	proxy.mu.Unlock()
 
 	// Запускаем ожидание клиента в отдельной горутине
 	go func() {
@@ -507,11 +517,30 @@ func (s *WebDAVServer) setupReceiverProxyMode() error {
 		proxyURL = s.addr // Используем тот же адрес, что был у WebDAV сервера
 	}
 
+	// ВАЖНО: инициализируем stopChan ДО запуска горутины
+	proxy.mu.Lock()
+	proxy.stopChan = make(chan struct{})
+	proxy.mu.Unlock()
+
 	// Запускаем прокси-клиент в отдельной горутине
 	go func() {
 		log.Infof("Starting proxy client on %s", proxyURL)
 
-		err := proxy.StartProxyClient(proxyURL)
+		// СНАЧАЛА создаем туннель, ПОТОМ запускаем прокси
+		tunnel, err := proxy.connectToRelay()
+		if err != nil {
+			log.Errorf("Failed to create tunnel: %v", err)
+			s.proxyError <- err
+			return
+		}
+
+		proxy.mu.Lock()
+		proxy.tunnel = tunnel
+		proxy.mu.Unlock()
+
+		log.Info("Tunnel established, starting proxy server")
+
+		err = proxy.StartProxyClient(proxyURL)
 		if err != nil {
 			log.Errorf("Failed to start proxy client: %v", err)
 			s.proxyError <- err
