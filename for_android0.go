@@ -298,7 +298,7 @@ func OpenDAV(s string) error {
 			err := exec.Command("osascript", "-e", script).Run()
 			if err == nil {
 				cleanups = append(cleanups, func() {
-					exec.Command("diskutil", "eject", u.Hostname()).Run()
+					exec.Command("diskutil", "eject", u.Hostname()).Start()
 				})
 				return nil
 			}

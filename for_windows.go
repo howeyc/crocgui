@@ -20,7 +20,6 @@ import (
 	"net/url"
 	"os/exec"
 	"sync/atomic"
-	"time"
 
 	"fyne.io/fyne/v2"
 	log "github.com/schollz/logger"
@@ -103,44 +102,24 @@ func registered(scheme string) bool {
 }
 
 // netUse открывает WebDAV ресурс в проводнике Windows
-// Примеры:
-//
-//	netUse("http://127.0.0.1:8080")
-//	netUse("http://127.0.0.1:8080/")
-//	netUse("https://example.com:8443")
+
 func netUse(u *url.URL, del bool) error {
 	// Извлекаем хост и порт
 	host := u.Hostname()
 	port := u.Port()
-	uncPath := fmt.Sprintf(`\\%s@%s\DavWWWRoot`, host, port)
-	webdavURL := fmt.Sprintf("%s://%s:%s", u.Scheme, host, port)
-	if port == "" {
-		uncPath = fmt.Sprintf(`\\%s\DavWWWRoot`, host)
-		webdavURL = fmt.Sprintf("%s://%s", u.Scheme, host)
+	at := ""
+	webdavURL := fmt.Sprintf("%s://%s", u.Scheme, host)
+	if port != "" {
+		at = "@" + port
+		webdavURL = fmt.Sprintf("%s://%s:%s", u.Scheme, host, port)
 	}
-
-	log.Debugf("UNC Path: %s", uncPath)
+	uncPath := fmt.Sprintf(`\\%s%s\DavWWWRoot`, host, at)
 	log.Debugf("WebDAV URL: %s", webdavURL)
 
-	// Шаг 1: Удаляем существующее подключение (если есть)
-	log.Debug("Removing existing connection...")
-	exec.Command("net", "use", uncPath, "/delete").Run()
+	cmd := exec.Command("explorer", uncPath)
 	if del {
-		return nil
+		cmd = exec.Command("net", "use", uncPath, "/delete")
 	}
-
-	time.Sleep(500 * time.Millisecond)
-
-	// Шаг 2: Подключаем WebDAV
-	log.Debug("Connecting WebDAV...")
-	cmd := exec.Command("net", "use", uncPath, webdavURL, "/persistent:no")
-	if out, err := cmd.CombinedOutput(); err != nil {
-		log.Debugf("net use output: %s", out)
-		return fmt.Errorf("failed to connect WebDAV: %v", err)
-	}
-
-	// Шаг 3: Открываем в проводнике
-	log.Debug("Opening in explorer...")
-	exec.Command("explorer", uncPath).Start()
-	return nil
+	log.Debug(cmd)
+	return cmd.Start()
 }

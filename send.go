@@ -870,26 +870,26 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 	})
 	link := widget.NewHyperlink("", nil)
 	link.OnTapped = func() {
+		s := link.URL.String()
+		a.Clipboard().SetContent(s)
+		NewToast(w, s).Show()
 		if !(isMobile || asMobile) && hostSelect.Selected == LOCAL {
 			// для десктопов и локально
 			root := join()
-			if base := filepath.Base(root); CanCreateSymlinks() || base == RECV {
+			var err error
+			if base := filepath.Base(root); CanCreateSymlinks() && !isWSL() || base == RECV {
 				// без псевдоссылок в файловом менеджере
-				err := OpenURL(root)
-				if err == nil {
-					return
-				}
-				log.Errorf("OpenURL: %v", err)
+				err = OpenURL(root)
+			} else {
+				// с псевдоссылками в через вебдав
+				err = OpenDAV(link.URL.String())
 			}
+			if err == nil {
+				return
+			}
+			log.Errorf("OpenURL: %v", err)
 		}
 		// для мобильных или с псевдоссылками
-		// dev devs
-		s := link.URL.String()
-		// err := OpenURL(s)
-		// if err != nil {
-		// 	log.Errorf("OpenURL: %v", err)
-		// }
-		a.Clipboard().SetContent(s)
 		if qr != nil {
 			qr.Show()
 		}
@@ -2173,4 +2173,10 @@ func wHandle(w fyne.Window) string {
 		return strings.TrimSuffix(s[i+7:], "}")
 	}
 	return ""
+}
+
+// isWSL определяет, выполняется ли код в окружении WSL
+func isWSL() bool {
+	// WSL_DISTRO_NAME устанавливается в WSL и содержит имя дистрибутива
+	return os.Getenv("WSL_DISTRO_NAME") != ""
 }
