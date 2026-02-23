@@ -510,346 +510,6 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 	OnSelectedTab[SENTi] = reload
 
 	reload()
-	mainButton = widget.NewButtonWithIcon(lp("Send"), theme.MailSendIcon(), func() {
-		if entry.Validate() != nil {
-			log.Error("no receive code entered")
-			NewToast(w, lp("Secret must be longer than 5 characters")).Show()
-			return
-		}
-
-		if !seady() || swap && !ready() {
-			NewToast(w, lp("Pick a file to send")).Show()
-			return
-		}
-		filepaths := []string{}
-		allowed := []string{}
-		fileentries.Range(func(key, value interface{}) bool {
-			path := key.(string)
-			fe := value.(*fyne.Container)
-			label(fe, false, func(l *widget.Label) {
-				processedPath := path
-				if target, err := Readlink(path); err == nil {
-					processedPath = target
-				}
-
-				// Логика для filepaths (каталоги и файлы в корне)
-				if strings.HasSuffix(l.Text, slash) || !strings.Contains(l.Text, slash) {
-					filepaths = append(filepaths, processedPath)
-				}
-
-				// Логика для allowed (все файлы, но не каталоги)
-				if !strings.HasSuffix(l.Text, slash) {
-					allowed = append(allowed, processedPath)
-				}
-			})
-
-			return true
-		})
-		log.Debugf("filepaths %v", filepaths)
-		log.Debugf("allowed %v", allowed)
-
-		// Посылаем если есть файлы
-		if len(filepaths) < 1 {
-			log.Error("no files ready")
-			NewToast(w, lp("Pick a file to send")).Show()
-			return
-		}
-
-		ZipFolder := a.Preferences().Bool("zip-unzip")
-
-		// Пути посылаемых файлов абсолютны. Переходим в каталог только если zipfolder
-		cdLocked := false
-		if hasFolder(join()) && ZipFolder {
-			log.Debug("hasFolders(join()) && zipfolder")
-			if cdLock.CompareAndSwap(0, 1) {
-				cdLocked = true
-				log.Debug("cdLocked = true")
-				if wd, _ := os.Getwd(); wd != join() {
-					err := os.Chdir(join())
-					log.Debugf("change to %s: %v", join(), err)
-					if err != nil {
-						NewToast(w, err.Error()).Show()
-						cdLock.Store(0)
-						return
-					}
-				}
-			} else {
-				NewToast(w, lp("Cancel")+" "+lp("Download")).Show()
-				return
-			}
-		}
-		treeOff()
-		// progress
-		go func() {
-			GitIgnore := a.Preferences().Bool("git")
-			Exclude := exclude(a.Preferences().String("exclude"))
-			filesInfo, emptyfolders, totalNumberFolders, err := croc.GetFilesInfo(filepaths, ZipFolder, GitIgnore, Exclude)
-
-			if cdLocked {
-				if longCdLock {
-					time.Sleep(time.Second * 30)
-				}
-				cdLock.Store(0)
-			}
-			if err != nil {
-				fyne.Do(NewToast(w, err.Error()).Show)
-				return
-			}
-			if len(filesInfo) < 1 {
-				fyne.Do(NewToast(w, lp("Pick a file to send")).Show)
-				return
-			}
-
-			// log.Debugf("filesInfo %+v %v %d: %v", filesInfo, emptyfolders, totalNumberFolders, err)
-
-			filesInfo, emptyfolders, totalNumberFolders = filter(filesInfo, emptyfolders, totalNumberFolders, Exclude, allowed...)
-			// log.Debugf("filtered filesInfo %+v %v %d", filesInfo, emptyfolders, totalNumberFolders)
-			if len(filesInfo) < 1 {
-				fyne.Do(NewToast(w, lp("Pick a file to send")).Show)
-				return
-			}
-
-			secret := entry.Text
-			if totpCheck.Checked {
-				secret = totp(entry.Text)
-				totpLabel.SetText(secret)
-				secret = TOTP + secret
-			}
-
-			opt := croc.Options{
-				IsSender:         true,
-				SharedSecret:     secret,
-				Debug:            debugBool(a),
-				NoPrompt:         true,
-				DisableLocal:     a.Preferences().Bool("disable-local"),
-				NoMultiplexing:   a.Preferences().Bool("disable-multiplexing"),
-				NoCompress:       a.Preferences().Bool("disable-compression"),
-				OnlyLocal:        a.Preferences().Bool("force-local"),
-				Curve:            a.Preferences().String("pake-curve"),
-				MulticastAddress: a.Preferences().String("multicast-address"),
-
-				HashAlgorithm:  a.Preferences().String("croc-hash"),
-				ThrottleUpload: a.Preferences().String("upload-throttle"),
-				Exclude:        Exclude,
-				ZipFolder:      ZipFolder,
-				// Overwrite:        a.Preferences().Bool("overwrite"),
-				GitIgnore:        GitIgnore,
-				Quiet:            GUI,
-				IgnoreStdin:      GUI,
-				DisableClipboard: true,
-			}
-			RelayPorts := ""
-			opt.RelayPassword, opt.RelayAddress, opt.RelayAddress6, RelayPorts,
-				comm.Socks5Proxy, comm.HttpProxy = def(a)
-			opt.RelayPorts = strings.Split(RelayPorts, ",")
-			opt.OnlyLocal = a.Preferences().Bool("force-local") || opt.RelayAddress == "" && opt.RelayAddress6 == ""
-
-			var sendErr error
-
-			log.Warnf("Restart %v", !noRestart)
-			ctx, ctc := context.WithCancel(context.Background())
-			client, err := crocNew(noRestart, ctx, opt)
-			if err != nil {
-				log.Errorf("croc: %v", err)
-				fyne.Do(NewToast(w, err.Error()).Show)
-
-				return
-			}
-			log.SetLevel(debugString(a))
-			log.Debug("croc client created")
-
-			if a.Preferences().Bool("remember") {
-				p := NewPreferences(a.Preferences())
-				p.SetString("relay", opt.RelayAddress)
-				a.Preferences().SetBool("send", true)
-				saveConfig(p, opt, true)
-			}
-
-			var filename string
-			showCancel()
-			fyne.Do(func() {
-
-				allEnabled(false, cosED...)
-
-				if totpCheck.Checked {
-					totpProg.Hide()
-				}
-				// Скрываю кнопки Удалить
-				fileentries.Range(func(key, value interface{}) bool {
-					fe := value.(*fyne.Container)
-					fe.Objects[feDel].Hide()
-					return true
-				})
-			})
-
-			doneChan := make(chan struct{})
-
-			// progress
-			go func() {
-				ticker := time.NewTicker(time.Millisecond * 100)
-				caffeinate(1)
-				defer func() {
-					// Конец
-					caffeinate(-1)
-					ticker.Stop()
-					fyne.Do(func() {
-						// prog.SetValue(0)
-						allShow(false, cosSH...)
-						allEnabled(true, cosED...)
-						if totpCheck.Checked {
-							totpProg.Show()
-						}
-						removeEntrys(false)
-						reload()
-						showPage()
-						log.Warnf("NumGoroutine %d", runtime.NumGoroutine())
-					})
-				}()
-
-				old := 0
-				oldPath := ""
-				var TotalSent, size, totalMax int64
-				progW := NewLongProgressWrapper(prog)
-				toplineW := NewLabelWrapper(topline)
-				toplineW.SetText(lp("Have them not press the Download yet"))
-				fepw := NewProgressWrapper(nil)
-				once := true
-				for {
-					select {
-					case <-done:
-						return
-					case <-doneChan:
-						if !swap && sendErr == nil {
-							os.RemoveAll(join())
-						}
-						fyne.Do(func() {
-							restart(w)
-						})
-						return
-					case <-cancelChan:
-						s := fmt.Sprintf("%s %s", lp("Send cancelled."), filename)
-						log.Error(s)
-						fyne.Do(func() {
-							topline.SetText(s)
-						})
-
-						if noRestart {
-							ctc()
-						} else {
-							Stop(client)
-							fyne.Do(func() {
-								restart(w)
-							})
-						}
-						return
-					case <-ticker.C:
-						if client == nil {
-							return
-						}
-						if once && hashed(client) {
-							// Начало передачи
-							once = false
-							for _, fi := range client.FilesToTransfer {
-								log.Debugf("fi %+v", fi)
-								path := filepath.Join(fi.FolderSource, fi.Name)
-
-								if fe, ok := load(&fileentries, path); ok {
-									button(fe, true, feDel, func(d *widget.Button) {
-										d.Hide()
-									})
-									bar(fe, true, func(p *widget.ProgressBar) {
-										setSizes(p, fi.Size, 0)
-									})
-								} else {
-									addEntry(path, func(d *widget.Button, p *widget.ProgressBar, l *widget.Label) {
-										d.Hide()
-										setSizes(p, fi.Size, 0)
-
-										if !fi.TempFile {
-											l.SetText(trimDotSlash(fi))
-										}
-									}) //addEntry
-								}
-
-								totalMax += fi.Size
-							}
-							log.Debugf("totalMax %d", totalMax)
-							//setClipboard(opt.SharedSecret, a)
-							setClipboard(a)
-							fyne.Do(func() {
-								toplineW.SetText(lp("Have them press the Download now"))
-								NewToast(w, lp("Have them press the Download now")).Show()
-								progW.SetMax(totalMax)
-							})
-						}
-						if client.Step2FileInfoTransferred {
-							cnum := client.FilesToTransferCurrentNum
-							if old < cnum+1 {
-								old = cnum + 1
-								fi := client.FilesToTransfer[cnum]
-								filename = trimDotSlash(fi)
-								toplineW.SetText(fmt.Sprintf("%s: %s(%d/%d)", lp("Sending file"), filename, cnum+1, len(client.FilesToTransfer)))
-								TotalSent += size
-								size = fi.Size
-								// path := join(fi.Name)
-								path := filepath.Join(fi.FolderSource, fi.Name)
-								if oldPath != path {
-									if fe, ok := load(&fileentries, oldPath); ok {
-										removeEntry(oldPath, fe, true)
-									}
-									oldPath = path
-								}
-								log.Debug(path)
-								if fe, ok := load(&fileentries, path); ok {
-									fepw = NewProgressWrapper(fe.Objects[feBar].(*widget.ProgressBar))
-								} else {
-									fepw = NewProgressWrapper(nil)
-								}
-							}
-							progW.SetValue(TotalSent + client.TotalSent)
-							fepw.SetValue(client.TotalSent)
-						}
-					}
-				}
-			}() // progress
-
-			// Send
-			go func() {
-				if EMULATE == 0 {
-					sendErr = client.Send(filesInfo, emptyfolders, totalNumberFolders)
-				} else {
-					log.Warnf("Send %v %v %d", filesInfo, emptyfolders, totalNumberFolders)
-					time.Sleep(EMULATE)
-					defer func() {
-						time.Sleep(time.Millisecond * 10)
-						client = nil
-					}()
-				}
-
-				fyne.Do(func() {
-					if sendErr != nil {
-						if errors.Is(sendErr, io.EOF) ||
-							errors.Is(sendErr, context.Canceled) {
-							sendErr = fmt.Errorf("%s", lp("Receive cancelled."))
-						}
-						s := fmt.Sprintf("send: %v", sendErr)
-						log.Error(s)
-						topline.SetText(s)
-						//
-
-					} else {
-						topline.SetText(fmt.Sprintf("%s: %s", lp("Sent file"), filename))
-					}
-
-				})
-				close(doneChan)
-			}() // Send
-		}() //go
-		// +12 go routines
-		log.Warnf("NumGoroutine %d", runtime.NumGoroutine())
-		//		a.Clipboard().SetContent(entry.Text)
-	}) // mainButton
-	cosED = append(cosED, mainButton)
 
 	updateLink := func() {}
 	prev := a.Preferences().String("webdav-host")
@@ -968,6 +628,368 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 		davServer.Stop()
 	}
 	cosED = append(cosED, treeButton)
+
+	mainButton = widget.NewButtonWithIcon(lp("Send"), theme.MailSendIcon(), func() {
+		if entry.Validate() != nil {
+			log.Error("no receive code entered")
+			NewToast(w, lp("Secret must be longer than 5 characters")).Show()
+			return
+		}
+
+		if !seady() || swap && !ready() {
+			NewToast(w, lp("Pick a file to send")).Show()
+			return
+		}
+		filepaths := []string{}
+		allowed := []string{}
+		if davControl.Hidden {
+			fileentries.Range(func(key, value interface{}) bool {
+				path := key.(string)
+				fe := value.(*fyne.Container)
+				label(fe, false, func(l *widget.Label) {
+					processedPath := path
+					if target, err := Readlink(path); err == nil {
+						processedPath = target
+					}
+
+					// Логика для filepaths (каталоги и файлы в корне)
+					if strings.HasSuffix(l.Text, slash) || !strings.Contains(l.Text, slash) {
+						filepaths = append(filepaths, processedPath)
+					}
+
+					// Логика для allowed (все файлы, но не каталоги)
+					if !strings.HasSuffix(l.Text, slash) {
+						allowed = append(allowed, processedPath)
+					}
+				})
+
+				return true
+			})
+			log.Debugf("filepaths %v", filepaths)
+			log.Debugf("allowed %v", allowed)
+
+			// Посылаем если есть файлы
+			if len(filepaths) < 1 {
+				log.Error("no files ready")
+				NewToast(w, lp("Pick a file to send")).Show()
+				return
+			}
+		}
+
+		ZipFolder := a.Preferences().Bool("zip-unzip")
+
+		// Пути посылаемых файлов абсолютны. Переходим в каталог только если zipfolder
+		cdLocked := false
+		if hasFolder(join()) && ZipFolder && davControl.Hidden {
+			log.Debug("hasFolders(join()) && zipfolder")
+			if cdLock.CompareAndSwap(0, 1) {
+				cdLocked = true
+				log.Debug("cdLocked = true")
+				if wd, _ := os.Getwd(); wd != join() {
+					err := os.Chdir(join())
+					log.Debugf("change to %s: %v", join(), err)
+					if err != nil {
+						NewToast(w, err.Error()).Show()
+						cdLock.Store(0)
+						return
+					}
+				}
+			} else {
+				NewToast(w, lp("Cancel")+" "+lp("Download")).Show()
+				return
+			}
+		}
+
+		// progress
+		go func() {
+			var (
+				GitIgnore = a.Preferences().Bool("git")
+				Exclude   = exclude(a.Preferences().String("exclude"))
+				filesInfo = []croc.FileInfo{
+					{Name: filepath.Base(os.DevNull),
+						FolderSource: filepath.Dir(os.DevNull)}}
+				emptyFolders       = []croc.FileInfo{}
+				totalNumberFolders int
+				err                error
+			)
+
+			if davControl.Hidden {
+				filesInfo, emptyFolders, totalNumberFolders, err = croc.GetFilesInfo(filepaths, ZipFolder, GitIgnore, Exclude)
+
+				if cdLocked {
+					if longCdLock {
+						log.Debugf("CROC_CD_LOCK %v", longCdLock)
+						time.Sleep(time.Second * 30)
+					}
+					cdLock.Store(0)
+				}
+				if err != nil {
+					fyne.Do(NewToast(w, err.Error()).Show)
+					return
+				}
+				if len(filesInfo) < 1 {
+					fyne.Do(NewToast(w, lp("Pick a file to send")).Show)
+					return
+				}
+
+				// log.Debugf("filesInfo %+v %v %d: %v", filesInfo, emptyfolders, totalNumberFolders, err)
+
+				filesInfo, emptyFolders, totalNumberFolders = filter(filesInfo, emptyFolders, totalNumberFolders, Exclude, allowed...)
+				// log.Debugf("filtered filesInfo %+v %v %d", filesInfo, emptyfolders, totalNumberFolders)
+				if len(filesInfo) < 1 {
+					fyne.Do(NewToast(w, lp("Pick a file to send")).Show)
+					return
+				}
+			}
+
+			secret := entry.Text
+			if totpCheck.Checked {
+				secret = totp(entry.Text)
+				totpLabel.SetText(secret)
+				secret = TOTP + secret
+			}
+
+			opt := croc.Options{
+				IsSender:         true,
+				SharedSecret:     secret,
+				Debug:            debugBool(a),
+				NoPrompt:         true,
+				DisableLocal:     a.Preferences().Bool("disable-local"),
+				NoMultiplexing:   a.Preferences().Bool("disable-multiplexing"),
+				NoCompress:       a.Preferences().Bool("disable-compression"),
+				OnlyLocal:        a.Preferences().Bool("force-local"),
+				Curve:            a.Preferences().String("pake-curve"),
+				MulticastAddress: a.Preferences().String("multicast-address"),
+
+				HashAlgorithm:  a.Preferences().String("croc-hash"),
+				ThrottleUpload: a.Preferences().String("upload-throttle"),
+				Exclude:        Exclude,
+				ZipFolder:      ZipFolder,
+				// Overwrite:        a.Preferences().Bool("overwrite"),
+				GitIgnore:        GitIgnore,
+				Quiet:            GUI,
+				IgnoreStdin:      GUI,
+				DisableClipboard: true,
+			}
+			RelayPorts := ""
+			opt.RelayPassword, opt.RelayAddress, opt.RelayAddress6, RelayPorts,
+				comm.Socks5Proxy, comm.HttpProxy = def(a)
+			opt.RelayPorts = strings.Split(RelayPorts, ",")
+			opt.OnlyLocal = a.Preferences().Bool("force-local") || opt.RelayAddress == "" && opt.RelayAddress6 == ""
+
+			var sendErr error
+
+			log.Warnf("Restart %v", !noRestart)
+			ctx, ctc := context.WithCancel(context.Background())
+			client, err := crocNew(noRestart, ctx, opt)
+			if err != nil {
+				log.Errorf("croc: %v", err)
+				fyne.Do(NewToast(w, err.Error()).Show)
+
+				return
+			}
+			log.SetLevel(debugString(a))
+			log.Debug("croc client created")
+
+			if a.Preferences().Bool("remember") {
+				p := NewPreferences(a.Preferences())
+				p.SetString("relay", opt.RelayAddress)
+				a.Preferences().SetBool("send", true)
+				saveConfig(p, opt, true)
+			}
+
+			var filename string
+			showCancel()
+			fyne.Do(func() {
+
+				allEnabled(false, cosED...)
+
+				if totpCheck.Checked {
+					totpProg.Hide()
+				}
+				// Скрываю кнопки Удалить
+				fileentries.Range(func(key, value interface{}) bool {
+					fe := value.(*fyne.Container)
+					fe.Objects[feDel].Hide()
+					return true
+				})
+			})
+
+			doneChan := make(chan struct{})
+
+			// progress
+			go func() {
+				ticker := time.NewTicker(time.Millisecond * 100)
+				caffeinate(1)
+				defer func() {
+					// Конец
+					caffeinate(-1)
+					ticker.Stop()
+					fyne.Do(func() {
+						// prog.SetValue(0)
+						allShow(false, cosSH...)
+						allEnabled(true, cosED...)
+						if totpCheck.Checked {
+							totpProg.Show()
+						}
+						removeEntrys(false)
+						reload()
+						showPage()
+						davServer.DisableProxy()
+						log.Warnf("NumGoroutine %d", runtime.NumGoroutine())
+					})
+				}()
+
+				old := 0
+				oldPath := ""
+				var TotalSent, size, totalMax int64
+				progW := NewLongProgressWrapper(prog)
+				toplineW := NewLabelWrapper(topline)
+				toplineW.SetText(lp("Have them not press the Download yet"))
+				fepw := NewProgressWrapper(nil)
+				once := true
+				for {
+					select {
+					case <-done:
+						return
+					case <-doneChan:
+						if !swap && sendErr == nil {
+							os.RemoveAll(join())
+						}
+						fyne.Do(func() {
+							restart(w)
+						})
+						return
+					case <-cancelChan:
+						s := fmt.Sprintf("%s %s", lp("Send cancelled."), filename)
+						log.Error(s)
+						fyne.Do(func() {
+							topline.SetText(s)
+						})
+
+						if noRestart {
+							ctc()
+						} else {
+							Stop(client)
+							fyne.Do(func() {
+								restart(w)
+							})
+						}
+						return
+					case <-ticker.C:
+						if client == nil {
+							return
+						}
+						if once && hashed(client) {
+							// Начало передачи
+							once = false
+							for _, fi := range client.FilesToTransfer {
+								log.Debugf("fi %+v", fi)
+								path := filepath.Join(fi.FolderSource, fi.Name)
+
+								if fe, ok := load(&fileentries, path); ok {
+									button(fe, true, feDel, func(d *widget.Button) {
+										d.Hide()
+									})
+									bar(fe, true, func(p *widget.ProgressBar) {
+										setSizes(p, fi.Size, 0)
+									})
+								} else {
+									addEntry(path, func(d *widget.Button, p *widget.ProgressBar, l *widget.Label) {
+										d.Hide()
+										setSizes(p, fi.Size, 0)
+
+										if !fi.TempFile {
+											l.SetText(trimDotSlash(fi))
+										}
+									}) //addEntry
+								}
+
+								totalMax += fi.Size
+							}
+							log.Debugf("totalMax %d", totalMax)
+							//setClipboard(opt.SharedSecret, a)
+							setClipboard(a)
+							fyne.Do(func() {
+								toplineW.SetText(lp("Have them press the Download now"))
+								NewToast(w, lp("Have them press the Download now")).Show()
+								progW.SetMax(totalMax)
+							})
+						}
+						if client.Step2FileInfoTransferred {
+							if !davControl.Hidden && !davServer.IsProxyActive() {
+								err := davServer.EnableProxy(client)
+								if err != nil {
+									log.Errorf("failed to enable proxy: %v", err)
+								}
+							}
+							cnum := client.FilesToTransferCurrentNum
+							if old < cnum+1 {
+								old = cnum + 1
+								fi := client.FilesToTransfer[cnum]
+								filename = trimDotSlash(fi)
+								toplineW.SetText(fmt.Sprintf("%s: %s(%d/%d)", lp("Sending file"), filename, cnum+1, len(client.FilesToTransfer)))
+								TotalSent += size
+								size = fi.Size
+								// path := join(fi.Name)
+								path := filepath.Join(fi.FolderSource, fi.Name)
+								if oldPath != path {
+									if fe, ok := load(&fileentries, oldPath); ok {
+										removeEntry(oldPath, fe, true)
+									}
+									oldPath = path
+								}
+								log.Debug(path)
+								if fe, ok := load(&fileentries, path); ok {
+									fepw = NewProgressWrapper(fe.Objects[feBar].(*widget.ProgressBar))
+								} else {
+									fepw = NewProgressWrapper(nil)
+								}
+							}
+							progW.SetValue(TotalSent + client.TotalSent)
+							fepw.SetValue(client.TotalSent)
+						}
+					}
+				}
+			}() // progress
+
+			// Send
+			go func() {
+				if EMULATE == 0 {
+					sendErr = client.Send(filesInfo, emptyFolders, totalNumberFolders)
+				} else {
+					log.Warnf("Send %v %v %d", filesInfo, emptyFolders, totalNumberFolders)
+					time.Sleep(EMULATE)
+					defer func() {
+						time.Sleep(time.Millisecond * 10)
+						client = nil
+					}()
+				}
+
+				fyne.Do(func() {
+					if sendErr != nil {
+						if errors.Is(sendErr, io.EOF) ||
+							errors.Is(sendErr, context.Canceled) {
+							sendErr = fmt.Errorf("%s", lp("Receive cancelled."))
+						}
+						s := fmt.Sprintf("send: %v", sendErr)
+						log.Error(s)
+						topline.SetText(s)
+						//
+
+					} else {
+						topline.SetText(fmt.Sprintf("%s: %s", lp("Sent file"), filename))
+					}
+
+				})
+				close(doneChan)
+			}() // Send
+		}() //go
+		// +12 go routines
+		log.Warnf("NumGoroutine %d", runtime.NumGoroutine())
+		//		a.Clipboard().SetContent(entry.Text)
+	}) // mainButton
+	cosED = append(cosED, mainButton)
 
 	if isAndroid {
 		oH := ""

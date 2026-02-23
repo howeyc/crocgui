@@ -20,7 +20,6 @@ import (
 	"time"
 
 	gomime "github.com/cubewise-code/go-mime"
-	"github.com/schollz/croc/v10/src/croc"
 	log "github.com/schollz/logger"
 	"golang.org/x/net/webdav"
 )
@@ -40,22 +39,8 @@ type WebDAVServer struct {
 	tlsAddrs       []string
 	tlsConfigError error
 
-	// НОВОЕ: Прокси режим
-	proxyOpts    *croc.Options
-	proxyHandler ProxyHandler
-	proxyMode    bool
-	proxyClient  *CrocProxy // Для режима клиента
-
-	// Каналы для коммуникации между прокси и сервером
-	proxyReady chan struct{}
-	proxyError chan error
-}
-
-// Определяем интерфейс ProxyHandler если его нет в других файлах
-type ProxyHandler interface {
-	Wrap(next http.Handler) http.Handler
-	IsActive() bool
-	Stop() error
+	// НОВОЕ: прокси-режим
+	proxy *CrocProxy // активный прокси
 }
 
 // WebDAVWithDirectoryListing оборачивает стандартный WebDAV handler для поддержки
@@ -153,10 +138,7 @@ func (h *WebDAVWithDirectoryListing) serveFavicon(w http.ResponseWriter, r *http
 
 // NewWebDAVServer создает новый экземпляр WebDAV сервера
 func NewWebDAVServer() *WebDAVServer {
-	return &WebDAVServer{
-		proxyReady: make(chan struct{}, 1),
-		proxyError: make(chan error, 1),
-	}
+	return &WebDAVServer{}
 }
 
 // Start launches the WebDAV server on the specified address with the given root directory.
@@ -355,17 +337,10 @@ func (s *WebDAVServer) Stop() error {
 	defer s.mu.Unlock()
 
 	// Останавливаем прокси если есть
-	if s.proxyHandler != nil {
-		s.proxyHandler.Stop()
-		s.proxyHandler = nil
+	if s.proxy != nil {
+		s.proxy.Stop()
+		s.proxy = nil
 	}
-	if s.proxyClient != nil {
-		s.proxyClient.Stop()
-		s.proxyClient = nil
-	}
-
-	s.proxyMode = false
-	s.proxyOpts = nil
 
 	return s.stopLocked()
 }
@@ -410,227 +385,4 @@ func (s *WebDAVServer) GetAddr() string {
 		return s.server.Addr
 	}
 	return ""
-}
-
-// SetProxyOptions настраивает прокси режим с переданными opt
-func (s *WebDAVServer) SetProxyOptions(opt croc.Options) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	// Сохраняем опции
-	s.proxyOpts = &opt
-	s.proxyMode = true
-
-	// Останавливаем предыдущий прокси если был
-	if s.proxyHandler != nil {
-		s.proxyHandler.Stop()
-		s.proxyHandler = nil
-	}
-	if s.proxyClient != nil {
-		s.proxyClient.Stop()
-		s.proxyClient = nil
-	}
-
-	if opt.IsSender {
-		// РЕЖИМ ОТПРАВИТЕЛЯ: создаем комнату и ждем клиента
-		return s.setupSenderProxyMode()
-	} else {
-		// РЕЖИМ ПОЛУЧАТЕЛЯ: подключаемся к комнате и запускаем HTTP прокси
-		return s.setupReceiverProxyMode()
-	}
-}
-
-// setupSenderProxyMode - отправитель: использует s.proxyOpts
-func (s *WebDAVServer) setupSenderProxyMode() error {
-	if s.proxyOpts == nil {
-		return fmt.Errorf("proxy options not set")
-	}
-
-	log.Info("Setting up sender proxy mode - will wait for client connection")
-
-	// Создаем прокси для отправителя с сохраненными opt
-	proxy := NewCrocProxy(s.proxyOpts)
-
-	// Сохраняем прокси в поле proxyHandler для использования в Wrap()
-	s.proxyHandler = proxy
-
-	// Настраиваем прокси для работы с WebDAV сервером
-	s.proxyMode = true
-
-	// ВАЖНО: инициализируем stopChan ДО запуска горутины
-	proxy.mu.Lock()
-	proxy.stopChan = make(chan struct{})
-	proxy.mu.Unlock()
-
-	// Запускаем ожидание клиента в отдельной горутине
-	go func() {
-		log.Info("Sender proxy: connecting to relay and waiting for client...")
-
-		tunnel, err := proxy.connectToRelay()
-		if err != nil {
-			log.Errorf("Failed to create tunnel: %v", err)
-			s.proxyError <- err
-			return
-		}
-
-		proxy.mu.Lock()
-		proxy.tunnel = tunnel
-		proxy.active = true
-		proxy.mu.Unlock()
-
-		log.Infof("Client connected from: %s", tunnel.ControlConn.Connection().RemoteAddr())
-
-		select {
-		case s.proxyReady <- struct{}{}:
-		default:
-		}
-
-		// Запускаем receive loop для обработки запросов
-		// В этом режиме proxy будет перенаправлять запросы к локальному WebDAV серверу
-		proxy.receiveLoop()
-	}()
-
-	return nil
-}
-
-// setupReceiverProxyMode - получатель: использует s.proxyOpts
-func (s *WebDAVServer) setupReceiverProxyMode() error {
-	if s.proxyOpts == nil {
-		return fmt.Errorf("proxy options not set")
-	}
-
-	log.Info("Setting up receiver proxy mode - will connect to sender and start local proxy")
-
-	// Останавливаем WebDAV сервер если он работает (в режиме получателя он не нужен)
-	if s.active {
-		log.Info("Stopping local WebDAV server for receiver mode")
-		s.stopLocked()
-	}
-
-	// Создаем прокси для получателя с сохраненными opt
-	proxy := NewCrocProxy(s.proxyOpts)
-	s.proxyClient = proxy
-
-	// Определяем URL для прокси
-	proxyURL := "127.0.0.1:8081"
-	if s.addr != "" {
-		proxyURL = s.addr // Используем тот же адрес, что был у WebDAV сервера
-	}
-
-	// ВАЖНО: инициализируем stopChan ДО запуска горутины
-	proxy.mu.Lock()
-	proxy.stopChan = make(chan struct{})
-	proxy.mu.Unlock()
-
-	// Запускаем прокси-клиент в отдельной горутине
-	go func() {
-		log.Infof("Starting proxy client on %s", proxyURL)
-
-		// СНАЧАЛА создаем туннель, ПОТОМ запускаем прокси
-		tunnel, err := proxy.connectToRelay()
-		if err != nil {
-			log.Errorf("Failed to create tunnel: %v", err)
-			s.proxyError <- err
-			return
-		}
-
-		proxy.mu.Lock()
-		proxy.tunnel = tunnel
-		proxy.mu.Unlock()
-
-		log.Info("Tunnel established, starting proxy server")
-
-		err = proxy.StartProxyClient(proxyURL)
-		if err != nil {
-			log.Errorf("Failed to start proxy client: %v", err)
-			s.proxyError <- err
-			return
-		}
-
-		log.Info("Proxy client started successfully")
-
-		select {
-		case s.proxyReady <- struct{}{}:
-		default:
-		}
-
-		// Ждем сигнала остановки
-		<-proxy.stopChan
-		log.Info("Proxy client stopped")
-	}()
-
-	return nil
-}
-
-// WaitForProxyReady ожидает готовности прокси (до таймаута)
-func (s *WebDAVServer) WaitForProxyReady(timeout time.Duration) error {
-	select {
-	case <-s.proxyReady:
-		return nil
-	case err := <-s.proxyError:
-		return err
-	case <-time.After(timeout):
-		return fmt.Errorf("timeout waiting for proxy")
-	case <-done:
-		return ErrApplicationShutdown
-	}
-}
-
-// GetProxyStatus возвращает статус прокси
-func (s *WebDAVServer) GetProxyStatus() string {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	if !s.proxyMode {
-		return "proxy disabled"
-	}
-	if s.proxyOpts == nil {
-		return "proxy not configured"
-	}
-
-	if s.proxyOpts.IsSender {
-		if s.proxyHandler != nil && s.proxyHandler.IsActive() {
-			return "sender proxy active - client connected"
-		}
-		return "sender proxy waiting for client"
-	} else {
-		if s.proxyClient != nil && s.proxyClient.IsActive() {
-			return "receiver proxy active - forwarding requests"
-		}
-		return "receiver proxy starting"
-	}
-}
-
-// GetProxyOptions возвращает текущие настройки прокси
-func (s *WebDAVServer) GetProxyOptions() *croc.Options {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	return s.proxyOpts
-}
-
-// GetProxyHandler возвращает текущий прокси handler
-func (s *WebDAVServer) GetProxyHandler() ProxyHandler {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	return s.proxyHandler
-}
-
-// DisableProxy отключает прокси режим
-func (s *WebDAVServer) DisableProxy() (err error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if s.proxyHandler != nil {
-		err = s.proxyHandler.Stop()
-		s.proxyHandler = nil
-	}
-	if s.proxyClient != nil {
-		err = s.proxyClient.Stop()
-		s.proxyClient = nil
-	}
-	s.proxyMode = false
-	s.proxyOpts = nil
-
-	log.Info("Proxy mode disabled")
-	return
 }
