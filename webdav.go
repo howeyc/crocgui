@@ -41,6 +41,15 @@ type WebDAVServer struct {
 
 	// НОВОЕ: прокси-режим
 	proxy *CrocProxy // активный прокси
+
+	// Сохранённые настройки WebDAV для восстановления после отключения прокси
+	savedAddr   string
+	savedRoot   string
+	savedUseTLS bool
+	savedAddrs  []string
+
+	// Флаг: был ли WebDAV остановлен при включении прокси
+	webDAVStopped bool
 }
 
 // WebDAVWithDirectoryListing оборачивает стандартный WebDAV handler для поддержки

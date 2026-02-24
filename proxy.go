@@ -65,6 +65,7 @@ func (rm *RequestManager) Get(id string) chan *http.Response {
 type CrocProxy struct {
 	controlConn *comm.Comm
 	isSender    bool
+	key         []byte
 
 	requestMgr *RequestManager
 	active     bool
@@ -80,10 +81,11 @@ type CrocProxy struct {
 }
 
 // NewCrocProxy создает новый экземпляр прокси с существующим соединением
-func NewCrocProxy(conn *comm.Comm, isSender bool) *CrocProxy {
+func NewCrocProxy(conn *comm.Comm, isSender bool, key []byte) *CrocProxy {
 	return &CrocProxy{
 		controlConn: conn,
 		isSender:    isSender,
+		key:         key,
 		requestMgr:  NewRequestManager(),
 		stopChan:    make(chan struct{}),
 	}
@@ -215,12 +217,7 @@ func (p *CrocProxy) RoundTrip(req *http.Request) (*http.Response, error) {
 		Num:     0,
 	}
 
-	encoded, err := json.Marshal(msg)
-	if err != nil {
-		return nil, err
-	}
-
-	if err := p.controlConn.Send(encoded); err != nil {
+	if err := message.Send(p.controlConn, p.key, msg); err != nil {
 		return nil, err
 	}
 
@@ -245,14 +242,24 @@ func (p *CrocProxy) senderReceiveLoop() {
 		default:
 		}
 
+		// Устанавливаем короткий дедлайн для чтения
+		p.controlConn.Connection().SetReadDeadline(time.Now().Add(1 * time.Second))
+
 		data, err := p.controlConn.Receive()
 		if err != nil {
-			log.Errorf("sender receive error: %v", err)
-			continue
+			// Проверяем на тайм-аут - это нормально, проверяем stopChan
+			if err.Error() == "i/o timeout" {
+				continue
+			}
+			// Другая ошибка - возможно закрытие соединения
+			return
 		}
 
-		var msg message.Message
-		if err := json.Unmarshal(data, &msg); err != nil {
+		// Сбрасываем дедлайн после успешного чтения
+		p.controlConn.Connection().SetReadDeadline(time.Time{})
+
+		msg, err := message.Decode(p.key, data)
+		if err != nil {
 			log.Errorf("failed to decode message: %v", err)
 			continue
 		}
@@ -273,14 +280,24 @@ func (p *CrocProxy) receiverReceiveLoop() {
 		default:
 		}
 
+		// Устанавливаем короткий дедлайн для чтения
+		p.controlConn.Connection().SetReadDeadline(time.Now().Add(1 * time.Second))
+
 		data, err := p.controlConn.Receive()
 		if err != nil {
-			log.Errorf("receiver receive error: %v", err)
-			continue
+			// Проверяем на тайм-аут - это нормально, проверяем stopChan
+			if err.Error() == "i/o timeout" {
+				continue
+			}
+			// Другая ошибка - возможно закрытие соединения
+			return
 		}
 
-		var msg message.Message
-		if err := json.Unmarshal(data, &msg); err != nil {
+		// Сбрасываем дедлайн после успешного чтения
+		p.controlConn.Connection().SetReadDeadline(time.Time{})
+
+		msg, err := message.Decode(p.key, data)
+		if err != nil {
 			log.Errorf("failed to decode message: %v", err)
 			continue
 		}
@@ -344,13 +361,10 @@ func (p *CrocProxy) handleSenderRequest(msg message.Message) {
 		Num:     resp.StatusCode,
 	}
 
-	encoded, err := json.Marshal(responseMsg)
-	if err != nil {
-		log.Errorf("failed to encode response: %v", err)
+	if err := message.Send(p.controlConn, p.key, responseMsg); err != nil {
+		log.Errorf("failed to send response: %v", err)
 		return
 	}
-
-	p.controlConn.Send(encoded)
 }
 
 // EnableWebDAVProxy активирует прокси-режим для WebDAV сервера
@@ -358,12 +372,7 @@ func (s *WebDAVServer) EnableProxy(client *croc.Client) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	// Уже есть прокси?
-	if s.proxy != nil {
-		log.Debugf("EnableProxy: proxy already exists, active=%v", s.proxy.IsActive())
-		return nil
-	}
-	log.Debugf("EnableProxy: creating new proxy (sender=%v)", client.Options.IsSender)
+	log.Debugf("EnableProxy: creating proxy (sender=%v)", client.Options.IsSender)
 
 	conns, err := Conns(client)
 	if err != nil {
@@ -379,7 +388,7 @@ func (s *WebDAVServer) EnableProxy(client *croc.Client) error {
 		conns[0].Connection().LocalAddr(), conns[0].Connection().RemoteAddr())
 
 	// Создаём прокси
-	proxy := NewCrocProxy(conns[0], client.Options.IsSender)
+	proxy := NewCrocProxy(conns[0], client.Options.IsSender, client.Key)
 
 	if client.Options.IsSender {
 		// Отправитель: создаём WebDAV handler и устанавливаем его в прокси
@@ -407,6 +416,23 @@ func (s *WebDAVServer) EnableProxy(client *croc.Client) error {
 			return fmt.Errorf("StartSender: %w", err)
 		}
 	} else {
+		// Получатель: останавливаем WebDAV и запускаем прокси на том же адресе
+		if s.active {
+			// Сохраняем настройки WebDAV для последующего восстановления
+			s.savedAddr = s.addr
+			s.savedRoot = s.root
+			s.savedUseTLS = s.useTLS
+			s.savedAddrs = s.tlsAddrs
+			s.webDAVStopped = true // Помечаем, что мы остановили WebDAV
+			log.Debugf("EnableProxy: saved WebDAV settings (addr=%v, root=%v, useTLS=%v)",
+				s.savedAddr, s.savedRoot, s.savedUseTLS)
+		}
+
+		// Останавливаем WebDAV сервер
+		if err := s.stopLocked(); err != nil {
+			log.Errorf("EnableProxy: failed to stop WebDAV server: %v", err)
+		}
+
 		log.Debugf("EnableProxy: starting receiver on addr=%v", s.addr)
 		if err := proxy.StartReceiver(s.addr); err != nil {
 			return fmt.Errorf("failed to start receiver proxy: %w", err)
@@ -424,10 +450,121 @@ func (s *WebDAVServer) DisableProxy() {
 	defer s.mu.Unlock()
 
 	if s.proxy != nil {
+		// Проверяем, был ли прокси в режиме получателя
+		isReceiver := !s.proxy.isSender
 		s.proxy.Stop()
 		s.proxy = nil
 		log.Info("WebDAV proxy disabled")
+
+		// Если это был режим получателя и WebDAV был остановлен, восстанавливаем WebDAV сервер
+		if isReceiver && s.savedAddr != "" && s.webDAVStopped {
+			log.Debugf("DisableProxy: restoring WebDAV server (addr=%v, root=%v, useTLS=%v)",
+				s.savedAddr, s.savedRoot, s.savedUseTLS)
+
+			// Запускаем WebDAV сервер с сохранёнными настройками
+			s.active = false // Сбрасываем флаг перед запуском
+			if err := s.Start(s.savedAddr, s.savedRoot, s.savedUseTLS, s.savedAddrs...); err != nil {
+				log.Errorf("DisableProxy: failed to restore WebDAV server: %v", err)
+			} else {
+				log.Info("WebDAV server restored")
+			}
+
+			// Очищаем сохранённые настройки
+			s.savedAddr = ""
+			s.savedRoot = ""
+			s.savedUseTLS = false
+			s.savedAddrs = nil
+			s.webDAVStopped = false
+		}
 	}
+}
+
+// RestartProxy перезапускает прокси с новым адресом
+func (s *WebDAVServer) RestartProxy(addr string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Если прокси не активен, ничего не делаем
+	if s.proxy == nil || !s.proxy.IsActive() {
+		return nil
+	}
+
+	// Если адрес тот же, перезапуск не нужен
+	if s.addr == addr {
+		return nil
+	}
+
+	log.Infof("RestartProxy: restarting proxy from %s to %s", s.addr, addr)
+
+	// Сохраняем соединение croc
+	conn := s.proxy.controlConn
+	isSender := s.proxy.isSender
+	key := s.proxy.key
+
+	// Останавливаем старый прокси
+	s.proxy.Stop()
+	s.proxy = nil
+
+	// Для режима получателя восстанавливаем WebDAV на старом адресе
+	if !isSender && s.savedAddr != "" {
+		s.active = false
+		if err := s.Start(s.savedAddr, s.savedRoot, s.savedUseTLS, s.savedAddrs...); err != nil {
+			log.Errorf("RestartProxy: failed to restore WebDAV: %v", err)
+		}
+	}
+
+	// Создаём новый прокси на новом адресе
+	newProxy := NewCrocProxy(conn, isSender, key)
+
+	if isSender {
+		// Отправитель: восстанавливаем handler
+		var fs webdav.FileSystem
+		if base := filepath.Base(s.root); !CanCreateSymlinks() && base == SEND {
+			fs = &ResolvingFileSystem{root: s.root}
+		} else {
+			fs = webdav.Dir(s.root)
+		}
+
+		webdavHandler := &webdav.Handler{
+			FileSystem: fs,
+			LockSystem: webdav.NewMemLS(),
+			Logger: func(r *http.Request, err error) {
+				if err != nil {
+					log.Errorf("Proxy WebDAV request %s %s: %v", r.Method, r.URL.Path, err)
+				} else {
+					log.Debugf("Proxy WebDAV request %s %s", r.Method, r.URL.Path)
+				}
+			},
+		}
+
+		newProxy.SetHandler(webdavHandler)
+		if err := newProxy.StartSender(); err != nil {
+			return fmt.Errorf("failed to restart sender proxy: %w", err)
+		}
+	} else {
+		// Получатель: сохраняем настройки, останавливаем WebDAV, запускаем прокси на новом адресе
+		if s.active {
+			s.savedAddr = s.addr
+			s.savedRoot = s.root
+			s.savedUseTLS = s.useTLS
+			s.savedAddrs = s.tlsAddrs
+			s.webDAVStopped = true // Помечаем, что мы остановили WebDAV
+		}
+
+		if err := s.stopLocked(); err != nil {
+			log.Errorf("RestartProxy: failed to stop WebDAV: %v", err)
+		}
+
+		if err := newProxy.StartReceiver(addr); err != nil {
+			log.Errorf("failed to restart receiver proxy: %v", err)
+		}
+	}
+
+	// Обновляем адрес в структуре
+	s.addr = addr
+	s.proxy = newProxy
+	log.Infof("RestartProxy: proxy restarted successfully")
+	return nil
 }
 
 // ================ ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ================
@@ -454,11 +591,17 @@ type SerializableResponse struct {
 }
 
 func serializeRequest(req *http.Request) ([]byte, error) {
-	body, err := io.ReadAll(req.Body)
-	if err != nil {
-		return nil, err
+	var body []byte
+	var err error
+
+	// Проверяем, что Body не nil перед чтением
+	if req.Body != nil {
+		body, err = io.ReadAll(req.Body)
+		if err != nil {
+			return nil, err
+		}
+		req.Body.Close()
 	}
-	req.Body.Close()
 
 	sReq := SerializableRequest{
 		Method:  req.Method,

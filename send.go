@@ -572,7 +572,16 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 		addr := net.JoinHostPort(hostSelect.Selected, text)
 		link.SetText(addr)
 		link.SetURLFromString(scheme + "://" + addr)
-		davServer.Start(addr, join(), sCheck.Checked, hostSelect.Options...)
+
+		// Если прокси активен, перезапускаем его с новым адресом
+		if davServer.IsProxyActive() {
+			if err := davServer.RestartProxy(addr); err != nil {
+				log.Errorf("updateLink: failed to restart proxy: %v", err)
+			}
+		} else {
+			// Обычный режим: перезапускаем WebDAV сервер
+			davServer.Start(addr, join(), sCheck.Checked, hostSelect.Options...)
+		}
 	}
 
 	port.OnSubmitted = func(s string) {
@@ -917,14 +926,15 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 								progW.SetMax(totalMax)
 							})
 						}
-						// log.Infof("%+v", client)
-						if client.Step2FileInfoTransferred {
+						if client.Step1ChannelSecured {
 							if !davControl.Hidden && davServer.IsActive() && !davServer.IsProxyActive() {
 								err := davServer.EnableProxy(client)
 								if err != nil {
 									log.Errorf("failed to enable proxy (send): %v", err)
 								}
 							}
+						}
+						if client.Step2FileInfoTransferred {
 							cnum := client.FilesToTransferCurrentNum
 							if old < cnum+1 {
 								old = cnum + 1

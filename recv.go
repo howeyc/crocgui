@@ -735,7 +735,7 @@ func recvTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 					if client == nil {
 						return
 					}
-					if client.Step2FileInfoTransferred {
+					if client.Step1ChannelSecured {
 						// Включаем прокси для WebDAV (если сервер активен)
 						if davServer.IsActive() && !davServer.IsProxyActive() {
 							err := davServer.EnableProxy(client)
@@ -745,6 +745,8 @@ func recvTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 								log.Infof("enabled proxy")
 							}
 						}
+					}
+					if client.Step2FileInfoTransferred {
 						if once {
 							// Начало приёма
 							once = false
