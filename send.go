@@ -21,6 +21,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unsafe"
 
 	log "github.com/schollz/logger"
 
@@ -916,11 +917,12 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 								progW.SetMax(totalMax)
 							})
 						}
+						// log.Infof("%+v", client)
 						if client.Step2FileInfoTransferred {
-							if !davControl.Hidden && !davServer.IsProxyActive() {
+							if !davControl.Hidden && davServer.IsActive() && !davServer.IsProxyActive() {
 								err := davServer.EnableProxy(client)
 								if err != nil {
-									log.Errorf("failed to enable proxy: %v", err)
+									log.Errorf("failed to enable proxy (send): %v", err)
 								}
 							}
 							cnum := client.FilesToTransferCurrentNum
@@ -1693,19 +1695,52 @@ func restart(w fyne.Window) {
 }
 
 func Conns(client any) ([]*comm.Comm, error) {
-	defer func() { recover() }()
+	defer func() {
+		if r := recover(); r != nil {
+			log.Errorf("Conns panic recovered: %v", r)
+		}
+	}()
 
 	v := reflect.ValueOf(client)
 	if v.Kind() != reflect.Ptr {
 		return nil, errors.New("not a pointer")
 	}
 
-	field := v.Elem().FieldByName("conn")
-	if !field.IsValid() {
-		return nil, errors.New("no such field")
+	elem := v.Elem()
+	if elem.Kind() != reflect.Struct {
+		return nil, errors.New("client is not a struct")
 	}
 
-	return field.Interface().([]*comm.Comm), nil
+	// Прямой доступ к неэкспортированному полю "conn" через unsafe
+	connField := elem.FieldByName("conn")
+	if !connField.IsValid() {
+		return nil, errors.New("field 'conn' not found")
+	}
+
+	// Проверяем тип через отражение
+	expectedType := reflect.TypeOf([]*comm.Comm{})
+	if connField.Type() != expectedType {
+		return nil, errors.New("field 'conn' has wrong type")
+	}
+
+	// Безопасный доступ через unsafe
+	addr := connField.UnsafeAddr()
+	ptr := (*[]*comm.Comm)(unsafe.Pointer(addr))
+	if ptr == nil {
+		return nil, errors.New("connection slice is nil")
+	}
+
+	conns := *ptr
+	log.Debugf("Conns: got connections via unsafe (field 'conn'), count=%d", len(conns))
+	for i, conn := range conns {
+		if conn != nil && conn.Connection() != nil {
+			log.Debugf("  conn[%d]: local=%v, remote=%v", i,
+				conn.Connection().LocalAddr(),
+				conn.Connection().RemoteAddr())
+		}
+	}
+
+	return conns, nil
 }
 
 // func Stop(c any) {

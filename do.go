@@ -68,7 +68,7 @@ func (dm *DoMonitor) executeAll(pending map[uintptr]func()) {
 
 	fyne.Do(func() {
 		for _, fn := range pending {
-			log.Debugf("executeAll %v", fn)
+			log.Debugf("executeAll %p", fn)
 			fn()
 		}
 	})

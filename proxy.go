@@ -7,6 +7,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -359,13 +360,23 @@ func (s *WebDAVServer) EnableProxy(client *croc.Client) error {
 
 	// Уже есть прокси?
 	if s.proxy != nil {
+		log.Debugf("EnableProxy: proxy already exists, active=%v", s.proxy.IsActive())
 		return nil
 	}
+	log.Debugf("EnableProxy: creating new proxy (sender=%v)", client.Options.IsSender)
 
 	conns, err := Conns(client)
-	if err != nil || len(conns) == 0 {
-		return fmt.Errorf("%v", err)
+	if err != nil {
+		return fmt.Errorf("get conns: %w", err)
 	}
+	if len(conns) == 0 {
+		return errors.New("no active connections")
+	}
+	if conns[0] == nil || conns[0].Connection() == nil {
+		return errors.New("first connection is nil or closed")
+	}
+	log.Debugf("EnableProxy: connection found, local=%v, remote=%v",
+		conns[0].Connection().LocalAddr(), conns[0].Connection().RemoteAddr())
 
 	// Создаём прокси
 	proxy := NewCrocProxy(conns[0], client.Options.IsSender)
@@ -393,16 +404,17 @@ func (s *WebDAVServer) EnableProxy(client *croc.Client) error {
 
 		proxy.SetHandler(webdavHandler)
 		if err := proxy.StartSender(); err != nil {
-			return err
+			return fmt.Errorf("StartSender: %w", err)
 		}
 	} else {
-
+		log.Debugf("EnableProxy: starting receiver on addr=%v", s.addr)
 		if err := proxy.StartReceiver(s.addr); err != nil {
-			return fmt.Errorf("failed to start receiver proxy: %v", err)
+			return fmt.Errorf("failed to start receiver proxy: %w", err)
 		}
 	}
 
 	s.proxy = proxy
+	log.Infof("Croc proxy enabled (sender: %v)", client.Options.IsSender)
 	return nil
 }
 
@@ -536,7 +548,7 @@ func (r *ResponseRecorder) Result() *http.Response {
 func (s *WebDAVServer) IsProxyActive() bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return s.proxy != nil
+	return s.proxy != nil && s.proxy.IsActive()
 }
 
 func (s *WebDAVServer) GetProxy() *CrocProxy {
