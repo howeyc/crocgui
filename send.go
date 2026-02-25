@@ -765,7 +765,7 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 				Debug:            debugBool(a),
 				NoPrompt:         true,
 				DisableLocal:     a.Preferences().Bool("disable-local"),
-				NoMultiplexing:   a.Preferences().Bool("disable-multiplexing"),
+				NoMultiplexing:   a.Preferences().Bool("disable-multiplexing") || !davControl.Hidden,
 				NoCompress:       a.Preferences().Bool("disable-compression"),
 				OnlyLocal:        a.Preferences().Bool("force-local"),
 				Curve:            a.Preferences().String("pake-curve"),

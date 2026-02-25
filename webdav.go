@@ -42,14 +42,9 @@ type WebDAVServer struct {
 	// НОВОЕ: прокси-режим
 	proxy *CrocProxy // активный прокси
 
-	// Сохранённые настройки WebDAV для восстановления после отключения прокси
-	savedAddr   string
-	savedRoot   string
-	savedUseTLS bool
-	savedAddrs  []string
-
-	// Флаг: был ли WebDAV остановлен при включении прокси
-	webDAVStopped bool
+	// Для отслеживания оригинального handler
+	localHandler   http.Handler
+	currentHandler http.Handler
 }
 
 // WebDAVWithDirectoryListing оборачивает стандартный WebDAV handler для поддержки
@@ -150,6 +145,50 @@ func NewWebDAVServer() *WebDAVServer {
 	return &WebDAVServer{}
 }
 
+// Определяем какую FileSystem использовать
+func createFileSystem(root string) webdav.FileSystem {
+	if base := filepath.Base(root); !CanCreateSymlinks() && base == SEND {
+		return &ResolvingFileSystem{root: root}
+	}
+	return webdav.Dir(root)
+}
+
+// createLocalHandler создаёт обычный WebDAV handler для локальных файлов
+func (s *WebDAVServer) createLocalHandler(root string) http.Handler {
+	fs := createFileSystem(root)
+
+	webdavHandler := &webdav.Handler{
+		FileSystem: fs,
+		LockSystem: webdav.NewMemLS(),
+		Logger: func(r *http.Request, err error) {
+			if err != nil {
+				log.Errorf("WebDAV request %s %s: %v", r.Method, r.URL.Path, err)
+			} else {
+				log.Debugf("WebDAV request %s %s", r.Method, r.URL.Path)
+			}
+		},
+	}
+
+	return &WebDAVWithDirectoryListing{
+		webdavHandler: webdavHandler,
+		fileSystem:    fs,
+	}
+}
+
+// handlerRouter направляет запросы к текущему активному handler'у
+func (s *WebDAVServer) handlerRouter(w http.ResponseWriter, r *http.Request) {
+	s.mu.RLock()
+	handler := s.currentHandler
+	s.mu.RUnlock()
+
+	if handler == nil {
+		http.Error(w, "WebDAV server not ready", http.StatusServiceUnavailable)
+		return
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // Start launches the WebDAV server on the specified address with the given root directory.
 func (s *WebDAVServer) Start(addr, root string, useTLS bool, addrs ...string) error {
 	s.mu.Lock()
@@ -165,43 +204,14 @@ func (s *WebDAVServer) Start(addr, root string, useTLS bool, addrs ...string) er
 	caffeinate(1)
 	s.useTLS = useTLS
 
-	// Определяем какую FileSystem использовать
-	var fs webdav.FileSystem
-	if base := filepath.Base(root); !CanCreateSymlinks() && base == SEND {
-		fs = &ResolvingFileSystem{root: root}
-	} else {
-		fs = webdav.Dir(root)
-	}
+	// Создаем локальный handler и устанавливаем его как текущий
+	s.localHandler = s.createLocalHandler(root)
+	s.currentHandler = s.localHandler
 
-	// Создаем стандартный WebDAV handler
-	webdavHandler := &webdav.Handler{
-		FileSystem: fs,
-		LockSystem: webdav.NewMemLS(),
-		Logger: func(r *http.Request, err error) {
-			// if r.Method == "PROPFIND" {
-			// 	for k, v := range r.Header {
-			// 		log.Debugf("Request Header %s: %s", k, v)
-			// 	}
-			// }
-
-			if err != nil {
-				log.Errorf("Request %s %s: %v", r.Method, r.URL.Path, err)
-			} else {
-				log.Debugf("Request %s %s", r.Method, r.URL.Path)
-			}
-		},
-	}
-
-	// Оборачиваем handler для поддержки листинга директорий
-	handler := &WebDAVWithDirectoryListing{
-		webdavHandler: webdavHandler,
-		fileSystem:    fs,
-	}
-
-	// Создаем сервер
+	// Создаем сервер с handlerRouter, который выбирает текущий handler
 	s.server = &http.Server{
 		Addr:    addr,
-		Handler: handler,
+		Handler: http.HandlerFunc(s.handlerRouter),
 	}
 
 	// Если нужен HTTPS, подготавливаем TLS конфиг
