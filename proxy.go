@@ -663,12 +663,6 @@ func (s *WebDAVServer) createProxyHandler(proxy *CrocProxy) http.Handler {
 		log.Debugf("Proxy handler received %s %s", r.Method, originalURL)
 
 		// Создаем новый запрос
-		// Декодируем URL-кодированный путь
-		// decodedPath, err := url.PathUnescape(r.URL.String())
-		// if err != nil {
-		// 	log.Errorf("Failed to decode URL path: %v", err)
-		// 	decodedPath = r.URL.String()
-		// }
 		proxyReq, err := http.NewRequest(r.Method, r.URL.String(), r.Body)
 		if err != nil {
 			log.Errorf("Failed to create proxy request: %v", err)

@@ -12,6 +12,7 @@ import (
 	"io"
 	"math"
 	"net"
+	"net/url"
 	"os"
 	"path"
 	"path/filepath"
@@ -558,20 +559,14 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 	port := widget.NewEntry()
 
 	updateLink = func() {
-		text := port.Text
-		if port.Text == "" {
-			text = "8080"
-		}
-		scheme := DAV
-		if sCheck.Checked {
-			scheme += "s"
-			if port.Text == "" {
-				text = "8443"
-			}
-		}
-		addr := net.JoinHostPort(hostSelect.Selected, text)
+		addr, u := defWeb(
+			DAV,
+			sCheck.Checked,
+			hostSelect.Selected,
+			port.Text,
+			"")
 		link.SetText(addr)
-		link.SetURLFromString(scheme + "://" + addr)
+		link.SetURL(&u)
 
 		// Если прокси активен, перезапускаем его с новым адресом
 		if davServer.IsProxyActive() {
@@ -609,6 +604,15 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 			if ft == nil || ft.Root != root.String() {
 				log.Debugf("root %s", root.String())
 				ft = xw.NewFileTree(root)
+				ft.OnSelected = func(id widget.TreeNodeID) {
+					_, u := defWeb(
+						HTTP,
+						sCheck.Checked,
+						hostSelect.Selected,
+						port.Text,
+						strings.Replace(id, root.String(), "", 1))
+					OpenURL(u.String())
+				}
 			} else {
 				log.Debugf("ft.Root %s", ft.Root)
 				ft.Refresh()
@@ -2248,4 +2252,26 @@ func wHandle(w fyne.Window) string {
 func isWSL() bool {
 	// WSL_DISTRO_NAME устанавливается в WSL и содержит имя дистрибутива
 	return os.Getenv("WSL_DISTRO_NAME") != ""
+}
+
+func defWeb(sch string, s bool, h, p, path string) (host string, u url.URL) {
+	port := p
+	if p == "" {
+		port = "8080"
+	}
+	u.Scheme = sch
+	if s {
+		u.Scheme += "s"
+		if p == "" {
+			port = "8443"
+		}
+	}
+	if port == "80" {
+		u.Host = h
+	} else {
+		u.Host = net.JoinHostPort(h, port)
+	}
+	host = u.Host
+	u.Path = path
+	return
 }
