@@ -17,6 +17,7 @@ import (
 	"github.com/schollz/croc/v10/src/comm"
 	"github.com/schollz/croc/v10/src/croc"
 	"github.com/schollz/croc/v10/src/message"
+	"github.com/schollz/croc/v10/src/models"
 	"github.com/schollz/croc/v10/src/tcp"
 	log "github.com/schollz/logger"
 	"golang.org/x/net/webdav"
@@ -257,7 +258,7 @@ func (p *CrocProxy) senderReceiveLoop() {
 }
 
 // receiverReceiveLoop - получатель ждёт ответы от отправителя
-func (p *CrocProxy) receiverReceiveLoop() {
+func (p *CrocProxy) receiverReceiveLoop0() {
 	for {
 		select {
 		case <-p.stopChan:
@@ -284,6 +285,9 @@ func (p *CrocProxy) receiverReceiveLoop() {
 
 		// Сбрасываем дедлайн после успешного чтения
 		p.controlConn.Connection().SetReadDeadline(time.Time{})
+		if len(data) == 0 {
+			continue
+		}
 
 		msg, err := message.Decode(p.key, data)
 		if err != nil {
@@ -301,6 +305,69 @@ func (p *CrocProxy) receiverReceiveLoop() {
 					continue
 				}
 				ch <- resp
+			}
+		}
+	}
+}
+
+// receiverReceiveLoop - получатель ждёт ответы от отправителя
+func (p *CrocProxy) receiverReceiveLoop() {
+	// Создаем канал для результата чтения
+	type readResult struct {
+		data []byte
+		err  error
+	}
+	readChan := make(chan readResult, 1)
+
+	// Запускаем горутину для чтения
+	go func() {
+		for {
+			data, err := p.controlConn.Receive()
+			select {
+			case readChan <- readResult{data: data, err: err}:
+			case <-p.stopChan:
+				return
+			case <-done:
+				return
+			}
+		}
+	}()
+
+	for {
+		select {
+		case <-p.stopChan:
+			log.Debug("receiverReceiveLoop stopped")
+			return
+		case <-done:
+			log.Debug("app stopped")
+			return
+		case result := <-readChan:
+			if result.err != nil {
+				log.Debugf("receiverReceiveLoop error: %v", result.err)
+				return
+			}
+
+			if len(result.data) == 0 {
+				continue
+			}
+
+			msg, err := message.Decode(p.key, result.data)
+			if err != nil {
+				log.Errorf("failed to decode message: %v", err)
+				continue
+			}
+
+			if msg.Type == "proxy-response" {
+				requestID := string(msg.Bytes)
+				ch := p.requestMgr.Get(requestID)
+				if ch != nil {
+					resp, err := deserializeResponse([]byte(msg.Message))
+					if err != nil {
+						log.Errorf("failed to deserialize response: %v", err)
+						continue
+					}
+					ch <- resp
+				}
 			}
 		}
 	}
@@ -518,11 +585,7 @@ func (s *WebDAVServer) EnableProxy(client *croc.Client) error {
 	}
 
 	// Парсим хост и порт
-	host, portStr, err := net.SplitHostPort(relayAddr)
-	if err != nil {
-		return fmt.Errorf("invalid relay address %s: %w", relayAddr, err)
-	}
-
+	host, portStr, _ := defAddress(relayAddr)
 	basePort, err := strconv.Atoi(portStr)
 	if err != nil {
 		return fmt.Errorf("invalid port number %s: %w", portStr, err)
@@ -600,6 +663,12 @@ func (s *WebDAVServer) createProxyHandler(proxy *CrocProxy) http.Handler {
 		log.Debugf("Proxy handler received %s %s", r.Method, originalURL)
 
 		// Создаем новый запрос
+		// Декодируем URL-кодированный путь
+		// decodedPath, err := url.PathUnescape(r.URL.String())
+		// if err != nil {
+		// 	log.Errorf("Failed to decode URL path: %v", err)
+		// 	decodedPath = r.URL.String()
+		// }
 		proxyReq, err := http.NewRequest(r.Method, r.URL.String(), r.Body)
 		if err != nil {
 			log.Errorf("Failed to create proxy request: %v", err)
@@ -746,4 +815,21 @@ func (s *WebDAVServer) GetProxy() *CrocProxy {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.proxy
+}
+
+func defAddress(hp string, ports ...string) (host, port, address string) {
+	var err error
+	host, port, err = net.SplitHostPort(hp)
+	// Default port to :9009
+	if err != nil {
+		host = hp
+		port = models.DEFAULT_PORT
+		for _, p := range ports {
+			port = p
+			break
+		}
+	}
+	log.Debugf("got host '%v' and port '%v'", host, port)
+	address = net.JoinHostPort(host, port)
+	return
 }

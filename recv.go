@@ -741,9 +741,9 @@ func recvTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 							err := davServer.EnableProxy(client)
 							if err != nil {
 								log.Errorf("failed to enable proxy: %v", err)
-							} else {
-								log.Infof("enabled proxy")
+								return
 							}
+							log.Infof("enabled proxy")
 						}
 					}
 					if client.Step2FileInfoTransferred {

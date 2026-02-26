@@ -534,8 +534,8 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 		s := link.URL.String()
 		a.Clipboard().SetContent(s)
 		NewToast(w, s).Show()
-		if !(isMobile || asMobile) && hostSelect.Selected == LOCAL {
-			// для десктопов и локально
+		if !(isMobile || asMobile || davServer.IsProxyActive()) && hostSelect.Selected == LOCAL {
+			// для десктопов и без прокси и локально
 			root := join()
 			var err error
 			if base := filepath.Base(root); CanCreateSymlinks() && !isWSL() || base == RECV {
@@ -930,8 +930,10 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 							if !davControl.Hidden && davServer.IsActive() && !davServer.IsProxyActive() {
 								err := davServer.EnableProxy(client)
 								if err != nil {
-									log.Errorf("failed to enable proxy (send): %v", err)
+									log.Errorf("failed to enable proxy: %v", err)
+									return
 								}
+								log.Infof("enabled proxy")
 							}
 						}
 						if client.Step2FileInfoTransferred {
