@@ -45,6 +45,10 @@ type WebDAVServer struct {
 	// Для отслеживания оригинального handler
 	localHandler   http.Handler
 	currentHandler http.Handler
+
+	// Callback для уведомления о смене состояния прокси
+	onProxyStateChanged func(enabled bool)
+	remote              bool
 }
 
 // WebDAVWithDirectoryListing оборачивает стандартный WebDAV handler для поддержки
@@ -404,4 +408,11 @@ func (s *WebDAVServer) GetAddr() string {
 		return s.server.Addr
 	}
 	return ""
+}
+
+// SetProxyStateChangeCallback устанавливает callback для уведомления о смене состояния прокси
+func (s *WebDAVServer) SetProxyStateChangeCallback(cb func(bool)) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.onProxyStateChanged = cb
 }

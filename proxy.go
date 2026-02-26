@@ -637,7 +637,7 @@ func (s *WebDAVServer) EnableProxy(client *croc.Client) error {
 		// Создаем прокси-HANDLER (НЕ сервер!)
 		proxyHandler := s.createProxyHandler(proxy)
 
-		// ✨ ВОЛШЕБСТВО: просто меняем текущий handler!
+		// Просто меняем текущий handler!
 		// Сохраняем старый handler если нужно
 		if s.localHandler == nil {
 			s.localHandler = s.currentHandler
@@ -646,6 +646,11 @@ func (s *WebDAVServer) EnableProxy(client *croc.Client) error {
 
 		log.Infof("WebDAV proxy handler activated on %s (port %d, room %s)",
 			s.addr, webdavPort, webdavRoom)
+
+		if s.onProxyStateChanged != nil {
+			s.onProxyStateChanged(true)
+			s.remote = true
+		}
 	}
 
 	// Сохраняем прокси
@@ -725,10 +730,15 @@ func (s *WebDAVServer) DisableProxy() {
 		s.proxy.Stop()
 		s.proxy = nil
 
-		// ✨ ВОЛШЕБСТВО: возвращаем локальный handler!
+		// Возвращаем локальный handler!
 		if s.localHandler != nil {
 			s.currentHandler = s.localHandler
 			log.Info("WebDAV local handler restored")
+		}
+
+		// Вызываем callback для уведомления о выключении прокси
+		if s.remote && s.onProxyStateChanged != nil {
+			s.onProxyStateChanged(false)
 		}
 	}
 }

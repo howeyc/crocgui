@@ -596,6 +596,45 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 	)
 	davControl.Hide()
 
+	// Регистрируем callback для отслеживания состояния прокси
+	davServer.SetProxyStateChangeCallback(func(enabled bool) {
+		fyne.Do(func() {
+			if enabled {
+				// Прокси включен: ft root = ../croc для индикации
+				root := filepath.FromSlash(filepath.Join(filepath.Dir(join()), CROC))
+				os.MkdirAll(root, 0700)
+				ft = xw.NewFileTree(storage.NewFileURI(root))
+				ft.OnSelected = func(id widget.TreeNodeID) {
+					_, u := defWeb(
+						HTTP,
+						sCheck.Checked,
+						hostSelect.Selected,
+						port.Text,
+						"")
+					OpenURL(u.String())
+					ft.UnselectAll()
+				}
+				showPage()
+			} else {
+				// Прокси выключен: ft root = join()
+				ft = xw.NewFileTree(storage.NewFileURI(join()))
+				ft.OnSelected = func(id widget.TreeNodeID) {
+					_, u := defWeb(
+						HTTP,
+						sCheck.Checked,
+						hostSelect.Selected,
+						port.Text,
+						strings.Replace(id, storage.NewFileURI(join()).String(), "", 1))
+					OpenURL(u.String())
+					ft.UnselectAll()
+				}
+				ft.OpenAllBranches()
+			}
+			scroller.Content = ft
+			scroller.Refresh()
+		})
+	})
+
 	scRefresh = func() {
 		if davControl.Hidden {
 			boxholder.Refresh()
@@ -610,8 +649,9 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 						sCheck.Checked,
 						hostSelect.Selected,
 						port.Text,
-						strings.Replace(id, root.String(), "", 1))
+						strings.Replace(id, storage.NewFileURI(join()).String(), "", 1))
 					OpenURL(u.String())
+					ft.UnselectAll()
 				}
 			} else {
 				log.Debugf("ft.Root %s", ft.Root)
