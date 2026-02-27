@@ -10,7 +10,9 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -218,6 +220,29 @@ func (p *CrocProxy) RoundTrip(req *http.Request) (*http.Response, error) {
 
 // senderReceiveLoop - отправитель ждёт запросы от получателя
 func (p *CrocProxy) senderReceiveLoop() {
+	// Создаем канал для результата чтения
+	type readResult struct {
+		data []byte
+		err  error
+	}
+	readChan := make(chan readResult, 1)
+
+	// Запускаем горутину для чтения
+	go func() {
+		for {
+			data, err := p.controlConn.Receive()
+			select {
+			case readChan <- readResult{data: data, err: err}:
+			case <-p.stopChan:
+				log.Debug("senderReceiveLoop stopped")
+				return
+			case <-done:
+				log.Debug("app stopped")
+				return
+			}
+		}
+	}()
+
 	for {
 		select {
 		case <-p.stopChan:
@@ -226,85 +251,24 @@ func (p *CrocProxy) senderReceiveLoop() {
 		case <-done:
 			log.Debug("app stopped")
 			return
-		default:
-		}
+		case result := <-readChan:
+			if result.err != nil {
+				log.Debugf("senderReceiveLoop error: %v", result.err)
+				return
+			}
 
-		// Устанавливаем короткий дедлайн для чтения
-		p.controlConn.Connection().SetReadDeadline(time.Now().Add(1 * time.Second))
-
-		data, err := p.controlConn.Receive()
-		if err != nil {
-			// Проверяем на тайм-аут - это нормально, проверяем stopChan
-			if err.Error() == "i/o timeout" {
+			if len(result.data) == 0 {
 				continue
 			}
-			// Другая ошибка - возможно закрытие соединения
-			return
-		}
 
-		// Сбрасываем дедлайн после успешного чтения
-		p.controlConn.Connection().SetReadDeadline(time.Time{})
-
-		msg, err := message.Decode(p.key, data)
-		if err != nil {
-			log.Errorf("failed to decode message: %v", err)
-			continue
-		}
-
-		if msg.Type == "proxy-request" {
-			go p.handleSenderRequest(msg)
-		}
-	}
-}
-
-// receiverReceiveLoop - получатель ждёт ответы от отправителя
-func (p *CrocProxy) receiverReceiveLoop0() {
-	for {
-		select {
-		case <-p.stopChan:
-			log.Debug("receiverReceiveLoop stopped")
-			return
-		case <-done:
-			log.Debug("app stopped")
-			return
-		default:
-		}
-
-		// Устанавливаем короткий дедлайн для чтения
-		p.controlConn.Connection().SetReadDeadline(time.Now().Add(1 * time.Second))
-
-		data, err := p.controlConn.Receive()
-		if err != nil {
-			// Проверяем на тайм-аут - это нормально, проверяем stopChan
-			if err.Error() == "i/o timeout" {
+			msg, err := message.Decode(p.key, result.data)
+			if err != nil {
+				log.Errorf("failed to decode message: %v", err)
 				continue
 			}
-			// Другая ошибка - возможно закрытие соединения
-			return
-		}
 
-		// Сбрасываем дедлайн после успешного чтения
-		p.controlConn.Connection().SetReadDeadline(time.Time{})
-		if len(data) == 0 {
-			continue
-		}
-
-		msg, err := message.Decode(p.key, data)
-		if err != nil {
-			log.Errorf("failed to decode message: %v", err)
-			continue
-		}
-
-		if msg.Type == "proxy-response" {
-			requestID := string(msg.Bytes)
-			ch := p.requestMgr.Get(requestID)
-			if ch != nil {
-				resp, err := deserializeResponse([]byte(msg.Message))
-				if err != nil {
-					log.Errorf("failed to deserialize response: %v", err)
-					continue
-				}
-				ch <- resp
+			if msg.Type == "proxy-request" {
+				go p.handleSenderRequest(msg)
 			}
 		}
 	}
@@ -326,8 +290,10 @@ func (p *CrocProxy) receiverReceiveLoop() {
 			select {
 			case readChan <- readResult{data: data, err: err}:
 			case <-p.stopChan:
+				log.Debug("receiverReceiveLoop stopped")
 				return
 			case <-done:
+				log.Debug("app stopped")
 				return
 			}
 		}
@@ -392,6 +358,39 @@ func (p *CrocProxy) handleSenderRequest(msg message.Message) {
 		return
 	}
 
+	// ВАЖНО: Правим Destination ЗДЕСЬ, до вызова handler'а
+	if req.Method == "MOVE" || req.Method == "COPY" {
+		if dest := req.Header.Get("Destination"); dest != "" {
+			log.Debugf("Original Destination in request: %s", dest)
+
+			// Парсим URL
+			destURL, err := url.Parse(dest)
+			if err != nil {
+				log.Errorf("Failed to parse Destination: %v", err)
+			} else {
+				// Извлекаем только путь
+				targetPath := destURL.Path
+				if destURL.RawPath != "" {
+					// Сохраняем URL-encoded символы (для русских букв и пробелов)
+					targetPath = destURL.RawPath
+				}
+
+				// Добавляем query string если есть
+				if destURL.RawQuery != "" {
+					targetPath += "?" + destURL.RawQuery
+				}
+
+				// Убеждаемся, что путь начинается с /
+				if !strings.HasPrefix(targetPath, "/") {
+					targetPath = "/" + targetPath
+				}
+
+				log.Debugf("Setting Destination to path only: %s", targetPath)
+				req.Header.Set("Destination", targetPath)
+			}
+		}
+	}
+
 	recorder := NewResponseRecorder()
 	handler.ServeHTTP(recorder, req)
 
@@ -432,6 +431,29 @@ func (p *CrocProxy) handleSenderRequest(msg message.Message) {
 
 // ================ ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ================
 
+func ConvertFileToHTTPURL(fileURL string) (string, error) {
+	if !strings.HasPrefix(fileURL, "file://") {
+		return fileURL, nil
+	}
+
+	// Временно заменяем @ на : для парсинга
+	tempURL := strings.Replace(fileURL, "@", ":", 1)
+
+	parsed, err := url.Parse(tempURL)
+	if err != nil {
+		return "", err
+	}
+
+	parsed.Scheme = "http"
+	parsed.Host = strings.Replace(parsed.Host, ":", "@", 1) // Возвращаем @ обратно
+	parsed.Path = strings.TrimPrefix(parsed.Path, "/DavWWWRoot")
+	if parsed.Path == "" {
+		parsed.Path = "/"
+	}
+
+	return parsed.String(), nil
+}
+
 func generateRequestID() string {
 	b := make([]byte, 16)
 	rand.Read(b)
@@ -465,19 +487,6 @@ func serializeRequest(req *http.Request) ([]byte, error) {
 			return nil, err
 		}
 		req.Body.Close()
-	}
-
-	// // Логируем заголовок Destination для MOVE и COPY запросов
-	// if req.Method == "MOVE" || req.Method == "COPY" {
-	// 	if dest := req.Header.Get("Destination"); dest != "" {
-	// 		log.Debugf("serializeRequest: Destination header = %s", dest)
-	// 	}
-	// }
-	// Протоколируем все заголовки для отладки
-	for key, values := range req.Header {
-		for _, value := range values {
-			log.Debugf("Header: %s: %s", key, value)
-		}
 	}
 
 	sReq := SerializableRequest{
@@ -581,7 +590,6 @@ func (r *ResponseRecorder) Result() *http.Response {
 // ================ ИНТЕГРАЦИЯ С WEBDAV SERVER ================
 
 // EnableProxy активирует WebDAV туннель через отдельное соединение
-// Теперь использует кастомный handler'а вместо остановки сервера
 func (s *WebDAVServer) EnableProxy(client *croc.Client) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -680,13 +688,6 @@ func (s *WebDAVServer) createProxyHandler(proxy *CrocProxy) http.Handler {
 		originalURL := r.URL.String()
 		log.Debugf("Proxy handler received %s %s", r.Method, originalURL)
 
-		// Протоколируем все заголовки для отладки
-		for key, values := range r.Header {
-			for _, value := range values {
-				log.Debugf("Header: %s: %s", key, value)
-			}
-		}
-
 		// Создаем новый запрос
 		proxyReq, err := http.NewRequest(r.Method, r.URL.String(), r.Body)
 		if err != nil {
@@ -697,67 +698,6 @@ func (s *WebDAVServer) createProxyHandler(proxy *CrocProxy) http.Handler {
 
 		// Копируем все заголовки
 		proxyReq.Header = r.Header.Clone()
-
-		// // Важно для WebDAV
-		// if depth := r.Header.Get("Depth"); depth != "" {
-		// 	proxyReq.Header.Set("Depth", depth)
-		// }
-		// if timeout := r.Header.Get("Timeout"); timeout != "" {
-		// 	proxyReq.Header.Set("Timeout", timeout)
-		// }
-		// if overwrite := r.Header.Get("Overwrite"); overwrite != "" {
-		// 	proxyReq.Header.Set("Overwrite", overwrite)
-		// }
-		// if lockToken := r.Header.Get("Lock-Token"); lockToken != "" {
-		// 	proxyReq.Header.Set("Lock-Token", lockToken)
-		// }
-		// if ifMatch := r.Header.Get("If-Match"); ifMatch != "" {
-		// 	proxyReq.Header.Set("If-Match", ifMatch)
-		// }
-		// if ifNoneMatch := r.Header.Get("If-None-Match"); ifNoneMatch != "" {
-		// 	proxyReq.Header.Set("If-None-Match", ifNoneMatch)
-		// }
-
-		// // Для COPY и MOVE запросов нужно обработать заголовок Destination
-		// if r.Method == "COPY" || r.Method == "MOVE" {
-		// 	if dest := r.Header.Get("Destination"); dest != "" {
-		// 		log.Debugf("Processing Destination header: %s", dest)
-		// 		// Парсим URL назначения
-		// 		destURL, err := url.Parse(dest)
-		// 		if err != nil {
-		// 			log.Errorf("Failed to parse Destination header: %v", err)
-		// 		} else {
-		// 			log.Debugf("Parsed Destination URL: Host=%s, Path=%s, RawPath=%s", destURL.Host, destURL.Path, destURL.RawPath)
-		// 			// Заменяем хост на текущий хост запроса
-		// 			originalHost := destURL.Host
-		// 			destURL.Host = r.Host
-		// 			log.Debugf("Changing host from %s to %s", originalHost, r.Host)
-		// 			// Если есть схема, обновляем её на основе схемы запроса
-		// 			if destURL.Scheme == "" {
-		// 				if r.URL.Scheme != "" {
-		// 					destURL.Scheme = r.URL.Scheme
-		// 				} else if r.TLS != nil {
-		// 					destURL.Scheme = "https"
-		// 				} else {
-		// 					destURL.Scheme = "http"
-		// 				}
-		// 			}
-		// 			// ВАЖНО: Нужно сохранить RawPath для URL-encoded символов
-		// 			if destURL.RawPath != "" {
-		// 				destURL.Path = destURL.RawPath
-		// 				log.Debugf("Using RawPath: %s", destURL.RawPath)
-		// 			}
-		// 			newDest := destURL.String()
-		// 			log.Debugf("Setting Destination header to: %s", newDest)
-		// 			proxyReq.Header.Set("Destination", newDest)
-		// 			log.Debugf("Modified Destination header: %s -> %s", dest, newDest)
-		// 			// Проверяем, что заголовок был установлен
-		// 			if actualDest := proxyReq.Header.Get("Destination"); actualDest != newDest {
-		// 				log.Errorf("Failed to set Destination header! Expected: %s, Actual: %s", newDest, actualDest)
-		// 			}
-		// 		}
-		// }
-		// }
 
 		// Отправляем через прокси
 		resp, err := proxy.RoundTrip(proxyReq)
