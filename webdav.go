@@ -83,7 +83,7 @@ func (h *WebDAVWithDirectoryListing) ServeHTTP(w http.ResponseWriter, r *http.Re
 
 			if mimeType != "" {
 				// Для FLAC используем правильный тип
-				if ext == ".flac" {
+				if strings.ToLower(ext) == ".flac" {
 					mimeType = "audio/flac"
 				}
 				w.Header().Set("Content-Type", mimeType)
@@ -169,6 +169,12 @@ func (s *WebDAVServer) createLocalHandler(root string) http.Handler {
 				log.Errorf("WebDAV request %s %s: %v", r.Method, r.URL.Path, err)
 			} else {
 				log.Debugf("WebDAV request %s %s", r.Method, r.URL.Path)
+			}
+			// Для MOVE и COPY запросов логируем заголовок Destination
+			if r.Method == "MOVE" || r.Method == "COPY" {
+				if dest := r.Header.Get("Destination"); dest != "" {
+					log.Debugf("  Destination header: %s", dest)
+				}
 			}
 		},
 	}

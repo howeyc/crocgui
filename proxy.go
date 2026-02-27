@@ -467,6 +467,19 @@ func serializeRequest(req *http.Request) ([]byte, error) {
 		req.Body.Close()
 	}
 
+	// // Логируем заголовок Destination для MOVE и COPY запросов
+	// if req.Method == "MOVE" || req.Method == "COPY" {
+	// 	if dest := req.Header.Get("Destination"); dest != "" {
+	// 		log.Debugf("serializeRequest: Destination header = %s", dest)
+	// 	}
+	// }
+	// Протоколируем все заголовки для отладки
+	for key, values := range req.Header {
+		for _, value := range values {
+			log.Debugf("Header: %s: %s", key, value)
+		}
+	}
+
 	sReq := SerializableRequest{
 		Method:  req.Method,
 		URL:     req.URL.String(),
@@ -667,6 +680,13 @@ func (s *WebDAVServer) createProxyHandler(proxy *CrocProxy) http.Handler {
 		originalURL := r.URL.String()
 		log.Debugf("Proxy handler received %s %s", r.Method, originalURL)
 
+		// Протоколируем все заголовки для отладки
+		for key, values := range r.Header {
+			for _, value := range values {
+				log.Debugf("Header: %s: %s", key, value)
+			}
+		}
+
 		// Создаем новый запрос
 		proxyReq, err := http.NewRequest(r.Method, r.URL.String(), r.Body)
 		if err != nil {
@@ -678,13 +698,66 @@ func (s *WebDAVServer) createProxyHandler(proxy *CrocProxy) http.Handler {
 		// Копируем все заголовки
 		proxyReq.Header = r.Header.Clone()
 
-		// Важно для WebDAV
-		if depth := r.Header.Get("Depth"); depth != "" {
-			proxyReq.Header.Set("Depth", depth)
-		}
-		if timeout := r.Header.Get("Timeout"); timeout != "" {
-			proxyReq.Header.Set("Timeout", timeout)
-		}
+		// // Важно для WebDAV
+		// if depth := r.Header.Get("Depth"); depth != "" {
+		// 	proxyReq.Header.Set("Depth", depth)
+		// }
+		// if timeout := r.Header.Get("Timeout"); timeout != "" {
+		// 	proxyReq.Header.Set("Timeout", timeout)
+		// }
+		// if overwrite := r.Header.Get("Overwrite"); overwrite != "" {
+		// 	proxyReq.Header.Set("Overwrite", overwrite)
+		// }
+		// if lockToken := r.Header.Get("Lock-Token"); lockToken != "" {
+		// 	proxyReq.Header.Set("Lock-Token", lockToken)
+		// }
+		// if ifMatch := r.Header.Get("If-Match"); ifMatch != "" {
+		// 	proxyReq.Header.Set("If-Match", ifMatch)
+		// }
+		// if ifNoneMatch := r.Header.Get("If-None-Match"); ifNoneMatch != "" {
+		// 	proxyReq.Header.Set("If-None-Match", ifNoneMatch)
+		// }
+
+		// // Для COPY и MOVE запросов нужно обработать заголовок Destination
+		// if r.Method == "COPY" || r.Method == "MOVE" {
+		// 	if dest := r.Header.Get("Destination"); dest != "" {
+		// 		log.Debugf("Processing Destination header: %s", dest)
+		// 		// Парсим URL назначения
+		// 		destURL, err := url.Parse(dest)
+		// 		if err != nil {
+		// 			log.Errorf("Failed to parse Destination header: %v", err)
+		// 		} else {
+		// 			log.Debugf("Parsed Destination URL: Host=%s, Path=%s, RawPath=%s", destURL.Host, destURL.Path, destURL.RawPath)
+		// 			// Заменяем хост на текущий хост запроса
+		// 			originalHost := destURL.Host
+		// 			destURL.Host = r.Host
+		// 			log.Debugf("Changing host from %s to %s", originalHost, r.Host)
+		// 			// Если есть схема, обновляем её на основе схемы запроса
+		// 			if destURL.Scheme == "" {
+		// 				if r.URL.Scheme != "" {
+		// 					destURL.Scheme = r.URL.Scheme
+		// 				} else if r.TLS != nil {
+		// 					destURL.Scheme = "https"
+		// 				} else {
+		// 					destURL.Scheme = "http"
+		// 				}
+		// 			}
+		// 			// ВАЖНО: Нужно сохранить RawPath для URL-encoded символов
+		// 			if destURL.RawPath != "" {
+		// 				destURL.Path = destURL.RawPath
+		// 				log.Debugf("Using RawPath: %s", destURL.RawPath)
+		// 			}
+		// 			newDest := destURL.String()
+		// 			log.Debugf("Setting Destination header to: %s", newDest)
+		// 			proxyReq.Header.Set("Destination", newDest)
+		// 			log.Debugf("Modified Destination header: %s -> %s", dest, newDest)
+		// 			// Проверяем, что заголовок был установлен
+		// 			if actualDest := proxyReq.Header.Get("Destination"); actualDest != newDest {
+		// 				log.Errorf("Failed to set Destination header! Expected: %s, Actual: %s", newDest, actualDest)
+		// 			}
+		// 		}
+		// }
+		// }
 
 		// Отправляем через прокси
 		resp, err := proxy.RoundTrip(proxyReq)

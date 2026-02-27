@@ -596,6 +596,29 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 	)
 	davControl.Hide()
 
+	// Конструктор для FileTree с OnSelected callback
+	newFileTreeWithOnSelected := func(rootURI fyne.URI, extractPath bool) *xw.FileTree {
+		ft := xw.NewFileTree(rootURI)
+
+		ft.OnSelected = func(id widget.TreeNodeID) {
+			var path string
+			if extractPath {
+				rootStr := storage.NewFileURI(join()).String()
+				path = strings.Replace(id, rootStr, "", 1)
+			}
+			_, u := defWeb(
+				HTTP,
+				sCheck.Checked,
+				hostSelect.Selected,
+				port.Text,
+				path)
+			OpenURL(u.String())
+			ft.UnselectAll()
+		}
+		ft.OpenAllBranches()
+		return ft
+	}
+
 	// Регистрируем callback для отслеживания состояния прокси
 	davServer.SetProxyStateChangeCallback(func(enabled bool) {
 		fyne.Do(func() {
@@ -603,32 +626,11 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 				// Прокси включен: ft root = ../croc для индикации
 				root := filepath.FromSlash(filepath.Join(filepath.Dir(join()), CROC))
 				os.MkdirAll(root, 0700)
-				ft = xw.NewFileTree(storage.NewFileURI(root))
-				ft.OnSelected = func(id widget.TreeNodeID) {
-					_, u := defWeb(
-						HTTP,
-						sCheck.Checked,
-						hostSelect.Selected,
-						port.Text,
-						"")
-					OpenURL(u.String())
-					ft.UnselectAll()
-				}
+				ft = newFileTreeWithOnSelected(storage.NewFileURI(root), false)
 				showPage()
 			} else {
 				// Прокси выключен: ft root = join()
-				ft = xw.NewFileTree(storage.NewFileURI(join()))
-				ft.OnSelected = func(id widget.TreeNodeID) {
-					_, u := defWeb(
-						HTTP,
-						sCheck.Checked,
-						hostSelect.Selected,
-						port.Text,
-						strings.Replace(id, storage.NewFileURI(join()).String(), "", 1))
-					OpenURL(u.String())
-					ft.UnselectAll()
-				}
-				ft.OpenAllBranches()
+				ft = newFileTreeWithOnSelected(storage.NewFileURI(join()), true)
 			}
 			scroller.Content = ft
 			scroller.Refresh()
@@ -642,17 +644,7 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 			root := storage.NewFileURI(join())
 			if ft == nil || ft.Root != root.String() {
 				log.Debugf("root %s", root.String())
-				ft = xw.NewFileTree(root)
-				ft.OnSelected = func(id widget.TreeNodeID) {
-					_, u := defWeb(
-						HTTP,
-						sCheck.Checked,
-						hostSelect.Selected,
-						port.Text,
-						strings.Replace(id, storage.NewFileURI(join()).String(), "", 1))
-					OpenURL(u.String())
-					ft.UnselectAll()
-				}
+				ft = newFileTreeWithOnSelected(root, true)
 			} else {
 				log.Debugf("ft.Root %s", ft.Root)
 				ft.Refresh()
