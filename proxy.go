@@ -775,9 +775,14 @@ func (s *WebDAVServer) RestartProxy(addr string) error {
 	log.Infof("RestartProxy: restarting proxy from %s to %s", s.addr, addr)
 
 	// Сохраняем соединение croc
-	conn := s.proxy.controlConn
-	isSender := s.proxy.isSender
-	key := s.proxy.key
+	crocProxy, ok := s.proxy.(*CrocProxy)
+	if !ok {
+		return fmt.Errorf("proxy is not a CrocProxy")
+	}
+
+	conn := crocProxy.controlConn
+	isSender := crocProxy.isSender
+	key := crocProxy.key
 
 	// Останавливаем старый прокси
 	s.proxy.Stop()
@@ -832,7 +837,10 @@ func (s *WebDAVServer) IsProxyActive() bool {
 func (s *WebDAVServer) GetProxy() *CrocProxy {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return s.proxy
+	if crocProxy, ok := s.proxy.(*CrocProxy); ok {
+		return crocProxy
+	}
+	return nil
 }
 
 func defAddress(hp string, ports ...string) (host, port, address string) {

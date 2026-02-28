@@ -40,7 +40,10 @@ type WebDAVServer struct {
 	tlsConfigError error
 
 	// НОВОЕ: прокси-режим
-	proxy *CrocProxy // активный прокси
+	proxy interface {
+		IsActive() bool
+		Stop() error
+	} // активный прокси (может быть CrocProxy или TCPCrocProxy)
 
 	// Для отслеживания оригинального handler
 	localHandler   http.Handler
