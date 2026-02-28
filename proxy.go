@@ -431,29 +431,6 @@ func (p *CrocProxy) handleSenderRequest(msg message.Message) {
 
 // ================ ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ================
 
-func ConvertFileToHTTPURL(fileURL string) (string, error) {
-	if !strings.HasPrefix(fileURL, "file://") {
-		return fileURL, nil
-	}
-
-	// Временно заменяем @ на : для парсинга
-	tempURL := strings.Replace(fileURL, "@", ":", 1)
-
-	parsed, err := url.Parse(tempURL)
-	if err != nil {
-		return "", err
-	}
-
-	parsed.Scheme = "http"
-	parsed.Host = strings.Replace(parsed.Host, ":", "@", 1) // Возвращаем @ обратно
-	parsed.Path = strings.TrimPrefix(parsed.Path, "/DavWWWRoot")
-	if parsed.Path == "" {
-		parsed.Path = "/"
-	}
-
-	return parsed.String(), nil
-}
-
 func generateRequestID() string {
 	b := make([]byte, 16)
 	rand.Read(b)

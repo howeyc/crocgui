@@ -688,7 +688,7 @@ func recvTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 				}
 				cdLock.Store(0)
 				// Выключаем прокси
-				davServer.DisableProxy()
+				davServer.DisableStreamProxy()
 				fyne.Do(func() {
 					allShow(false, cosSH...)
 					allEnabled(true, cosED...)
@@ -737,14 +737,14 @@ func recvTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 						return
 					}
 					if client.Step1ChannelSecured {
-						// Включаем прокси для WebDAV (если сервер активен)
+						// Включаем бинарный прокси для WebDAV (если сервер активен)
 						if davServer.IsActive() && !davServer.IsProxyActive() {
-							err := davServer.EnableProxy(client)
+							err := davServer.EnableStreamProxy(client)
 							if err != nil {
-								log.Errorf("failed to enable proxy: %v", err)
+								log.Errorf("failed to enable binary proxy: %v", err)
 								return
 							}
-							log.Infof("enabled proxy")
+							log.Infof("enabled binary proxy")
 						}
 					}
 					if client.Step2FileInfoTransferred {

@@ -882,7 +882,7 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 						removeEntrys(false)
 						reload()
 						showPage()
-						davServer.DisableProxy()
+						davServer.DisableStreamProxy()
 						log.Warnf("NumGoroutine %d", runtime.NumGoroutine())
 					})
 				}()
@@ -965,12 +965,13 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 						}
 						if client.Step1ChannelSecured {
 							if !davControl.Hidden && davServer.IsActive() && !davServer.IsProxyActive() {
-								err := davServer.EnableProxy(client)
+								// Используем бинарный протокол для лучшей производительности
+								err := davServer.EnableStreamProxy(client)
 								if err != nil {
-									log.Errorf("failed to enable proxy: %v", err)
+									log.Errorf("failed to enable binary proxy: %v", err)
 									return
 								}
-								log.Infof("enabled proxy")
+								log.Infof("enabled binary proxy")
 							}
 						}
 						if client.Step2FileInfoTransferred {
