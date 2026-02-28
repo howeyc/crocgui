@@ -263,7 +263,7 @@ func (p *CrocProxy) senderReceiveLoop() {
 
 			msg, err := message.Decode(p.key, result.data)
 			if err != nil {
-				log.Errorf("failed to decode message: %v", err)
+				// Это для другой комнаты
 				continue
 			}
 
@@ -614,6 +614,7 @@ func (s *WebDAVServer) EnableProxy(client *croc.Client) error {
 
 	// Параметры WebDAV туннеля
 	roomSuffix := 1
+	// Чтоб не было 2-х ридеров на одном порту
 	webdavPort := basePort + roomSuffix + 1 // basePort + 2 = 9011
 	webdavRoom := fmt.Sprintf("%s-%d", client.Options.RoomName, roomSuffix)
 	webdavAddr := net.JoinHostPort(host, strconv.Itoa(webdavPort))

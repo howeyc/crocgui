@@ -796,12 +796,13 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 			}
 
 			opt := croc.Options{
-				IsSender:         true,
-				SharedSecret:     secret,
-				Debug:            debugBool(a),
-				NoPrompt:         true,
-				DisableLocal:     a.Preferences().Bool("disable-local"),
-				NoMultiplexing:   a.Preferences().Bool("disable-multiplexing") || !davControl.Hidden,
+				IsSender:     true,
+				SharedSecret: secret,
+				Debug:        debugBool(a),
+				NoPrompt:     true,
+				DisableLocal: a.Preferences().Bool("disable-local"),
+				// Чтоб не было 2-х ридеров на одном порту
+				NoMultiplexing:   a.Preferences().Bool("disable-multiplexing") || !davControl.Hidden || davServer.IsActive() || davServer.IsProxyActive(),
 				NoCompress:       a.Preferences().Bool("disable-compression"),
 				OnlyLocal:        a.Preferences().Bool("force-local"),
 				Curve:            a.Preferences().String("pake-curve"),
@@ -984,8 +985,10 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 								// path := join(fi.Name)
 								path := filepath.Join(fi.FolderSource, fi.Name)
 								if oldPath != path {
-									if fe, ok := load(&fileentries, oldPath); ok {
-										removeEntry(oldPath, fe, true)
+									if !swap {
+										if fe, ok := load(&fileentries, oldPath); ok {
+											removeEntry(oldPath, fe, true)
+										}
 									}
 									oldPath = path
 								}
