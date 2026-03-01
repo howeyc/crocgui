@@ -566,6 +566,9 @@ func (p *StreamCrocProxy) handleResponseData(id uint64, data []byte) {
 		if reader, ok := val.(*StreamResponseReader); ok {
 			if _, err := reader.Write(data); err != nil {
 				log.Errorf("Failed to write data to reader: %v", err)
+				// При ошибке закрываем ридер и удаляем из pending
+				p.pending.Delete(id)
+				reader.Close()
 			}
 		}
 	}
