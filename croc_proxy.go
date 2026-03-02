@@ -574,12 +574,28 @@ func (p *StreamCrocProxy) handleRequest(id uint64, data []byte) {
 		p.pendingRequestBodys.Store(id, pwm)
 		log.Debugf("Created pipe for request body (id=%d, expected %d bytes)", id, req.ContentLength)
 
+		// Verify that the pendingRequestBodys was stored
+		_, ok := p.pendingRequestBodys.Load(id)
+		if !ok {
+			log.Errorf("handleRequest: FAILED to verify pendingRequestBodys.Store for id=%d", id)
+		} else {
+			log.Debugf("handleRequest: Verified pendingRequestBodys.Store for id=%d", id)
+		}
+
 		// ВАЖНО! НЕ вызываем handler.ServeHTTP сейчас!
 		// Сохраняем состояние для вызова ПОСЛЕ получения StreamMsgDone
 		writer := NewStreamResponseWriter(p, id)
 		state := newPendingRequestState(req, handler, writer)
 		p.pendingRequests.Store(id, state)
 		log.Debugf("handleRequest: saved pending state for id=%d (waiting for body)", id)
+
+		// Verify that the pendingRequests was stored
+		_, ok = p.pendingRequests.Load(id)
+		if !ok {
+			log.Errorf("handleRequest: FAILED to verify pendingRequests.Store for id=%d", id)
+		} else {
+			log.Debugf("handleRequest: Verified pendingRequests.Store for id=%d", id)
+		}
 		log.Debugf("handleRequest: EXIT id=%d (will call handler after StreamMsgDone)", id)
 		return
 	} else {
@@ -634,8 +650,11 @@ func (p *StreamCrocProxy) handleData(id uint64, data []byte) {
 
 	// Пишем данные в pipe в отдельной goroutine, чтобы не блокировать senderLoop
 	// pipeWriterWithMutex.Write() блокируется пока данные не будут прочитаны или pipe закрыт
+	log.Debugf("handleData: Starting goroutine to write %d bytes to pipe for id=%d", len(data), id)
 	go func() {
+		log.Debugf("handleData: Goroutine started for id=%d, about to write %d bytes", id, len(data))
 		n, err := pwm.Write(data)
+		log.Debugf("handleData: Goroutine Write() returned for id=%d, n=%d, err=%v", id, n, err)
 		if err != nil {
 			log.Errorf("Failed to write to request body pipe (id=%d): %v", id, err)
 			// ВАЖНО! При ошибке записи в pipe всё равно вызываем handleDone
@@ -651,18 +670,24 @@ func (p *StreamCrocProxy) handleData(id uint64, data []byte) {
 // handleDone - обработка завершения от получателя
 func (p *StreamCrocProxy) handleDone(id uint64) {
 	log.Debugf("handleDone: ENTER for request id=%d", id)
-	defer log.Debugf("handleDone: EXIT for request id=%d", id)
 
-	// Закрываем pipeWriter для тела запроса если есть
-	val, ok := p.pendingRequestBodys.LoadAndDelete(id)
-	if ok {
-		if pwm, ok := val.(*pipeWriterWithMutex); ok {
-			pwm.Close()
-			log.Debugf("handleDone: Closed pipeWriter for request id=%d", id)
-		}
-	} else {
-		log.Debugf("handleDone: No pendingRequestBody for id=%d", id)
-	}
+	// Log the current state of pendingRequestBodys for debugging
+	var pendingBodyIds []uint64
+	p.pendingRequestBodys.Range(func(key, value interface{}) bool {
+		pendingBodyIds = append(pendingBodyIds, key.(uint64))
+		return true
+	})
+	log.Debugf("handleDone: Current pendingRequestBodys IDs: %v", pendingBodyIds)
+
+	// Log the current state of pendingRequests for debugging
+	var pendingRequestIds []uint64
+	p.pendingRequests.Range(func(key, value interface{}) bool {
+		pendingRequestIds = append(pendingRequestIds, key.(uint64))
+		return true
+	})
+	log.Debugf("handleDone: Current pendingRequests IDs: %v", pendingRequestIds)
+
+	defer log.Debugf("handleDone: EXIT for request id=%d", id)
 
 	// Проверяем есть ли pending запрос (с телом), который нужно обработать
 	stateVal, ok := p.pendingRequests.LoadAndDelete(id)
@@ -682,37 +707,56 @@ func (p *StreamCrocProxy) handleDone(id uint64) {
 				log.Errorf("handleDone: PANIC for id=%d: %v", id, r)
 				// Отправляем ошибку клиенту
 				if !state.writer.headerSent {
-					p.sendMessage(id, StreamMsgError, []byte(fmt.Sprintf("internal server error: %v", r)))
+					// Отправляем ошибку через writer
+					state.writer.WriteHeader(http.StatusInternalServerError)
+					state.writer.Write([]byte(fmt.Sprintf("internal server error: %v", r)))
 				}
+				// Закрываем writer чтобы отправить StreamMsgDone
+				state.writer.Close()
 			}
 		}()
 
-		// Обрабатываем запрос в отдельной goroutine, чтобы не блокировать handleDone()
-		// WebDAV handler может блокироваться читая из pipe
-		go func() {
-			// Обрабатываем запрос - все Write() будут отправлять сразу
-			log.Debugf("handleDone: About to call handler.ServeHTTP for id=%d", id)
-			state.handler.ServeHTTP(state.writer, state.req)
-			log.Debugf("handleDone: handler.ServeHTTP returned for id=%d, headerSent=%v", id, state.writer.headerSent)
+		// ВАЖНО: Вызываем handler синхронно, не в отдельной горутине!
+		// handler.ServeHTTP будет писать ответ через state.writer, который отправляет сообщения
+		log.Debugf("handleDone: About to call handler.ServeHTTP for id=%d", id)
+		state.handler.ServeHTTP(state.writer, state.req)
+		log.Debugf("handleDone: handler.ServeHTTP returned for id=%d, headerSent=%v", id, state.writer.headerSent)
 
-			// Если заголовки не были отправлены, отправляем с кодом 200
-			if !state.writer.headerSent {
-				log.Debugf("handleDone: Sending default 200 status for id=%d", id)
-				state.writer.WriteHeader(http.StatusOK)
-			}
+		// Если заголовки не были отправлены, отправляем с кодом 200
+		if !state.writer.headerSent {
+			log.Debugf("handleDone: Sending default 200 status for id=%d", id)
+			state.writer.WriteHeader(http.StatusOK)
+		}
 
-			// Закрываем writer
-			log.Debugf("handleDone: Closing writer for id=%d", id)
-			if err := state.writer.Close(); err != nil {
-				log.Errorf("handleDone: Failed to close writer: %v", err)
+		// Закрываем writer - это отправит StreamMsgDone
+		log.Debugf("handleDone: Closing writer for id=%d", id)
+		if err := state.writer.Close(); err != nil {
+			log.Errorf("handleDone: Failed to close writer: %v", err)
+		}
+		log.Debugf("handleDone: handler completed for id=%d", id)
+
+		// ВАЖНО! Закрываем pipeWriter ПОСЛЕ handler.ServeHTTP, чтобы handler мог прочитать тело
+		val, ok := p.pendingRequestBodys.LoadAndDelete(id)
+		if ok {
+			if pwm, ok := val.(*pipeWriterWithMutex); ok {
+				pwm.Close()
+				log.Debugf("handleDone: Closed pipeWriter for request id=%d", id)
 			}
-			log.Debugf("handleDone: handler goroutine completed for id=%d", id)
-		}()
+		} else {
+			log.Debugf("handleDone: No pendingRequestBody for id=%d", id)
+		}
 	} else {
 		log.Debugf("handleDone: No pending request found for id=%d (request without body or already processed)", id)
-	}
 
-	log.Debugf("handleDone: EXIT for id=%d", id)
+		// Если нет pending запроса, но есть pendingRequestBody, закрываем его
+		val, ok := p.pendingRequestBodys.LoadAndDelete(id)
+		if ok {
+			if pwm, ok := val.(*pipeWriterWithMutex); ok {
+				pwm.Close()
+				log.Debugf("handleDone: Closed orphaned pipeWriter for request id=%d", id)
+			}
+		}
+	}
 }
 
 // handleConnectionError обрабатывает разрыв соединения как неявный StreamMsgDone для всех pending запросов
@@ -882,30 +926,49 @@ func (p *StreamCrocProxy) handleResponse(id uint64, data []byte) {
 }
 
 func (p *StreamCrocProxy) handleResponseData(id uint64, data []byte) {
+	log.Debugf("handleResponseData: Received %d bytes for id=%d", len(data), id)
 	if val, ok := p.pending.Load(id); ok {
 		if reader, ok := val.(*StreamResponseReader); ok {
 			// Пишем данные в reader в отдельной goroutine, чтобы не блокировать receiverLoop
 			// io.PipeWriter.Write() блокируется пока данные не будут прочитаны
 			go func() {
+				log.Debugf("handleResponseData: Writing %d bytes to pipe for id=%d", len(data), id)
 				if _, err := reader.Write(data); err != nil {
-					log.Errorf("Failed to write data to reader (id=%d): %v", id, err)
-					// ВАЖНО! При ошибке записи всё равно вызываем handleResponseDone
-					// для корректного завершения
-					log.Debugf("handleResponseData: Calling handleResponseDone due to write error for id=%d", id)
-					p.handleResponseDone(id)
+					// Если pipe уже закрыт (StreamMsgDone уже получен), это не ошибка
+					// Просто игнорируем эти данные, так как ответ уже завершён
+					if err == io.ErrClosedPipe {
+						log.Warnf("handleResponseData: Pipe already closed for id=%d, ignoring %d bytes - THIS MAY CAUSE INCOMPLETE RESPONSE!", id, len(data))
+					} else {
+						log.Errorf("Failed to write data to reader (id=%d): %v", id, err)
+						// ВАЖНО! При ошибке записи всё равно вызываем handleResponseDone
+						// для корректного завершения
+						log.Debugf("handleResponseData: Calling handleResponseDone due to write error for id=%d", id)
+						p.handleResponseDone(id)
+					}
+				} else {
+					log.Debugf("handleResponseData: Successfully wrote %d bytes to pipe for id=%d", len(data), id)
 				}
 			}()
+		} else {
+			log.Warnf("handleResponseData: Found pending entry for id=%d but it's not a StreamResponseReader", id)
 		}
+	} else {
+		log.Warnf("handleResponseData: No pending entry found for id=%d - data may be lost!", id)
 	}
 }
 
 func (p *StreamCrocProxy) handleResponseDone(id uint64) {
-	log.Debugf("Receiver handleResponseDone id=%d", id)
+	log.Warnf("handleResponseDone: Closing pipe for id=%d - NO MORE DATA WILL BE ACCEPTED!", id)
 
 	if val, ok := p.pending.LoadAndDelete(id); ok {
 		if reader, ok := val.(*StreamResponseReader); ok {
 			reader.Close()
+			log.Debugf("handleResponseDone: Pipe closed for id=%d", id)
+		} else {
+			log.Warnf("handleResponseDone: Found pending entry for id=%d but it's not a StreamResponseReader", id)
 		}
+	} else {
+		log.Warnf("handleResponseDone: No pending entry found for id=%d - response may already be closed!", id)
 	}
 }
 
