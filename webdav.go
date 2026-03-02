@@ -43,7 +43,7 @@ type WebDAVServer struct {
 	proxy interface {
 		IsActive() bool
 		Stop() error
-	} // активный прокси (может быть CrocProxy или TCPCrocProxy)
+	} // активный прокси (StreamCrocProxy)
 
 	// Для отслеживания оригинального handler
 	localHandler   http.Handler

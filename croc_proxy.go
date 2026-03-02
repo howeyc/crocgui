@@ -21,6 +21,7 @@ import (
 	"github.com/schollz/croc/v10/src/crypt"
 	"github.com/schollz/croc/v10/src/tcp"
 	log "github.com/schollz/logger"
+	"golang.org/x/net/webdav"
 )
 
 // Константы для потоковой передачи
@@ -1014,5 +1015,76 @@ func (s *WebDAVServer) GetStreamProxy() *StreamCrocProxy {
 	if proxy, ok := s.proxy.(*StreamCrocProxy); ok {
 		return proxy
 	}
+	return nil
+}
+
+// RestartStreamProxy перезапускает потоковый прокси с новым адресом
+func (s *WebDAVServer) RestartStreamProxy(addr string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Если прокси не активен, ничего не делаем
+	if s.proxy == nil || !s.proxy.IsActive() {
+		return nil
+	}
+
+	// Если адрес тот же, перезапуск не нужен
+	if s.addr == addr {
+		return nil
+	}
+
+	log.Infof("RestartStreamProxy: restarting proxy from %s to %s", s.addr, addr)
+
+	// Сохраняем соединение croc
+	streamProxy, ok := s.proxy.(*StreamCrocProxy)
+	if !ok {
+		return fmt.Errorf("proxy is not a StreamCrocProxy")
+	}
+
+	conn := streamProxy.controlConn
+	isSender := streamProxy.isSender
+	key := streamProxy.key
+
+	// Останавливаем старый прокси
+	s.proxy.Stop()
+	s.proxy = nil
+
+	// Создаем новый прокси на новом адресе
+	newProxy := NewStreamCrocProxy(conn, isSender, key)
+
+	if isSender {
+		// Отправитель: восстанавливаем handler
+		fs := createFileSystem(s.root)
+		webdavHandler := &webdav.Handler{
+			FileSystem: fs,
+			LockSystem: webdav.NewMemLS(),
+			Logger: func(r *http.Request, err error) {
+				if err != nil {
+					log.Errorf("Proxy WebDAV request %s %s: %v", r.Method, r.URL.Path, err)
+				} else {
+					log.Debugf("Proxy WebDAV request %s %s", r.Method, r.URL.Path)
+				}
+			},
+		}
+
+		newProxy.SetHandler(webdavHandler)
+		if err := newProxy.StartSender(); err != nil {
+			return fmt.Errorf("failed to restart sender proxy: %w", err)
+		}
+	} else {
+		// Получатель: запускаем приём ответов от отправителя
+		if err := newProxy.StartReceiver(); err != nil {
+			return fmt.Errorf("failed to restart receiver proxy: %w", err)
+		}
+	}
+
+	// Меняем handler на прокси-версию
+	proxyHandler := s.createStreamProxyHandler(newProxy)
+	s.currentHandler = proxyHandler
+
+	// Обновляем адрес в структуре
+	s.addr = addr
+	s.proxy = newProxy
+	log.Infof("RestartStreamProxy: proxy restarted successfully")
 	return nil
 }

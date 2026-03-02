@@ -570,7 +570,7 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 
 		// Если прокси активен, перезапускаем его с новым адресом
 		if davServer.IsProxyActive() {
-			if err := davServer.RestartProxy(addr); err != nil {
+			if err := davServer.RestartStreamProxy(addr); err != nil {
 				log.Errorf("updateLink: failed to restart proxy: %v", err)
 			}
 		} else {
