@@ -123,12 +123,47 @@ type StreamCrocProxy struct {
 	handler http.Handler
 
 	// Для потоковой обработки тел запросов (на отправителе)
-	pendingRequestBodys sync.Map // map[uint64]*io.PipeWriter
+	pendingRequestBodys sync.Map // map[uint64]*pipeWriterWithMutex
 
 	// Для сохранения состояния запросов с телом (на отправителе)
 	pendingRequests sync.Map // map[uint64]*pendingRequestState
+	mu              sync.RWMutex
+}
 
-	mu sync.RWMutex
+// pipeWriterWithMutex защищает PipeWriter с mutex для предотвращения race condition
+type pipeWriterWithMutex struct {
+	pw     *io.PipeWriter
+	mu     sync.Mutex
+	closed bool
+}
+
+func newPipeWriterWithMutex(pw *io.PipeWriter) *pipeWriterWithMutex {
+	return &pipeWriterWithMutex{
+		pw:     pw,
+		mu:     sync.Mutex{},
+		closed: false,
+	}
+}
+
+func (pwm *pipeWriterWithMutex) Write(data []byte) (int, error) {
+	pwm.mu.Lock()
+	defer pwm.mu.Unlock()
+
+	if pwm.closed {
+		return 0, io.ErrClosedPipe
+	}
+	return pwm.pw.Write(data)
+}
+
+func (pwm *pipeWriterWithMutex) Close() error {
+	pwm.mu.Lock()
+	defer pwm.mu.Unlock()
+
+	if pwm.closed {
+		return nil // Уже закрыт
+	}
+	pwm.closed = true
+	return pwm.pw.Close()
 }
 
 // pendingRequestState хранит состояние запроса с телом
@@ -365,11 +400,23 @@ func (p *StreamCrocProxy) sendMessage(id uint64, msgType byte, data []byte) erro
 	binary.LittleEndian.PutUint32(packet[9:13], uint32(len(data)))
 	copy(packet[13:], data)
 
+	log.Debugf("sendMessage: id=%d, msgType=0x%02x, dataLen=%d, packetLen=%d",
+		id, msgType, len(data), len(packet))
+
 	encrypted, err := crypt.Encrypt(packet, p.key)
 	if err != nil {
+		log.Errorf("sendMessage: encryption failed for id=%d: %v", id, err)
 		return err
 	}
-	return p.controlConn.Send(encrypted)
+
+	log.Debugf("sendMessage: encrypted packet size=%d for id=%d, sending...", len(encrypted), id)
+	err = p.controlConn.Send(encrypted)
+	if err != nil {
+		log.Errorf("sendMessage: Send() failed for id=%d: %v", id, err)
+		return err
+	}
+	log.Debugf("sendMessage: Send() succeeded for id=%d", id)
+	return nil
 }
 
 // senderLoop - отправитель ждёт запросы от получателя
@@ -394,12 +441,16 @@ func (p *StreamCrocProxy) senderLoop() {
 	for {
 		select {
 		case <-p.stopChan:
+			log.Debugf("senderLoop: stop signal received, exiting")
 			return
 		case result := <-readChan:
 			if result.err != nil {
-				log.Debugf("senderLoop error: %v", result.err)
+				log.Debugf("senderLoop: connection error: %v", result.err)
+				// Интерпретируем разрыв соединения как неявный StreamMsgDone для всех pending запросов
+				p.handleConnectionError()
 				return
 			}
+			log.Debugf("senderLoop: received %d bytes from controlConn", len(result.data))
 			p.handleSenderMessage(result.data)
 		}
 	}
@@ -412,14 +463,18 @@ func (p *StreamCrocProxy) handleSenderMessage(data []byte) {
 		}
 	}()
 
+	log.Debugf("handleSenderMessage: received %d encrypted bytes", len(data))
+
 	decrypted, err := crypt.Decrypt(data, p.key)
 	if err != nil {
-		log.Errorf("Failed to decrypt: %v", err)
+		log.Errorf("handleSenderMessage: Failed to decrypt %d bytes: %v", len(data), err)
 		return
 	}
 
+	log.Debugf("handleSenderMessage: decrypted to %d bytes", len(decrypted))
+
 	if len(decrypted) < 13 {
-		log.Errorf("Received too short message: %d bytes", len(decrypted))
+		log.Errorf("handleSenderMessage: Received too short message: %d bytes", len(decrypted))
 		return
 	}
 
@@ -514,7 +569,9 @@ func (p *StreamCrocProxy) handleRequest(id uint64, data []byte) {
 	if req.ContentLength > 0 {
 		pr, pw := io.Pipe()
 		req.Body = pr
-		p.pendingRequestBodys.Store(id, pw)
+		// Используем pipeWriterWithMutex для защиты от race condition
+		pwm := newPipeWriterWithMutex(pw)
+		p.pendingRequestBodys.Store(id, pwm)
 		log.Debugf("Created pipe for request body (id=%d, expected %d bytes)", id, req.ContentLength)
 
 		// ВАЖНО! НЕ вызываем handler.ServeHTTP сейчас!
@@ -555,6 +612,9 @@ func (p *StreamCrocProxy) handleRequest(id uint64, data []byte) {
 
 // handleData - обработка данных от получателя (для отправителя)
 func (p *StreamCrocProxy) handleData(id uint64, data []byte) {
+	log.Debugf("handleData: ENTER for id=%d, dataLen=%d", id, len(data))
+	defer log.Debugf("handleData: EXIT for id=%d", id)
+
 	// Находим pipeWriter для этого запроса
 	val, ok := p.pendingRequestBodys.Load(id)
 	if !ok {
@@ -562,33 +622,42 @@ func (p *StreamCrocProxy) handleData(id uint64, data []byte) {
 		return
 	}
 
-	pw, ok := val.(*io.PipeWriter)
+	pwm, ok := val.(*pipeWriterWithMutex)
 	if !ok {
 		log.Errorf("Invalid type in pendingRequestBodys for id=%d", id)
-		p.pendingRequestBodys.Delete(id)
+		// ВАЖНО! При ошибке всё равно вызываем handleDone для завершения запроса
+		p.handleDone(id)
 		return
 	}
 
 	log.Debugf("Sender received data for request id=%d: %d bytes", id, len(data))
 
-	// Пишем данные в pipe
-	if _, err := pw.Write(data); err != nil {
-		log.Errorf("Failed to write to request body pipe (id=%d): %v", id, err)
-		// При ошибке закрываем pipe и удаляем
-		pw.Close()
-		p.pendingRequestBodys.Delete(id)
-	}
+	// Пишем данные в pipe в отдельной goroutine, чтобы не блокировать senderLoop
+	// pipeWriterWithMutex.Write() блокируется пока данные не будут прочитаны или pipe закрыт
+	go func() {
+		n, err := pwm.Write(data)
+		if err != nil {
+			log.Errorf("Failed to write to request body pipe (id=%d): %v", id, err)
+			// ВАЖНО! При ошибке записи в pipe всё равно вызываем handleDone
+			// чтобы завершить pending запрос и вызвать handler
+			log.Debugf("handleData: Calling handleDone due to pipe write error for id=%d", id)
+			p.handleDone(id)
+			return
+		}
+		log.Debugf("handleData: Successfully wrote %d bytes to pipe for id=%d", n, id)
+	}()
 }
 
 // handleDone - обработка завершения от получателя
 func (p *StreamCrocProxy) handleDone(id uint64) {
 	log.Debugf("handleDone: ENTER for request id=%d", id)
+	defer log.Debugf("handleDone: EXIT for request id=%d", id)
 
 	// Закрываем pipeWriter для тела запроса если есть
 	val, ok := p.pendingRequestBodys.LoadAndDelete(id)
 	if ok {
-		if pw, ok := val.(*io.PipeWriter); ok {
-			pw.Close()
+		if pwm, ok := val.(*pipeWriterWithMutex); ok {
+			pwm.Close()
 			log.Debugf("handleDone: Closed pipeWriter for request id=%d", id)
 		}
 	} else {
@@ -618,28 +687,88 @@ func (p *StreamCrocProxy) handleDone(id uint64) {
 			}
 		}()
 
-		// Обрабатываем запрос - все Write() будут отправлять сразу
-		log.Debugf("handleDone: About to call handler.ServeHTTP for id=%d", id)
-		state.handler.ServeHTTP(state.writer, state.req)
-		log.Debugf("handleDone: handler.ServeHTTP returned for id=%d, headerSent=%v", id, state.writer.headerSent)
+		// Обрабатываем запрос в отдельной goroutine, чтобы не блокировать handleDone()
+		// WebDAV handler может блокироваться читая из pipe
+		go func() {
+			// Обрабатываем запрос - все Write() будут отправлять сразу
+			log.Debugf("handleDone: About to call handler.ServeHTTP for id=%d", id)
+			state.handler.ServeHTTP(state.writer, state.req)
+			log.Debugf("handleDone: handler.ServeHTTP returned for id=%d, headerSent=%v", id, state.writer.headerSent)
 
-		// Если заголовки не были отправлены, отправляем с кодом 200
-		if !state.writer.headerSent {
-			log.Debugf("handleDone: Sending default 200 status for id=%d", id)
-			state.writer.WriteHeader(http.StatusOK)
-		}
+			// Если заголовки не были отправлены, отправляем с кодом 200
+			if !state.writer.headerSent {
+				log.Debugf("handleDone: Sending default 200 status for id=%d", id)
+				state.writer.WriteHeader(http.StatusOK)
+			}
 
-		// Закрываем writer
-		log.Debugf("handleDone: Closing writer for id=%d", id)
-		if err := state.writer.Close(); err != nil {
-			log.Errorf("handleDone: Failed to close writer: %v", err)
-		}
-		log.Debugf("handleDone: EXIT completed request id=%d", id)
+			// Закрываем writer
+			log.Debugf("handleDone: Closing writer for id=%d", id)
+			if err := state.writer.Close(); err != nil {
+				log.Errorf("handleDone: Failed to close writer: %v", err)
+			}
+			log.Debugf("handleDone: handler goroutine completed for id=%d", id)
+		}()
 	} else {
 		log.Debugf("handleDone: No pending request found for id=%d (request without body or already processed)", id)
 	}
 
 	log.Debugf("handleDone: EXIT for id=%d", id)
+}
+
+// handleConnectionError обрабатывает разрыв соединения как неявный StreamMsgDone для всех pending запросов
+func (p *StreamCrocProxy) handleConnectionError() {
+	log.Debugf("handleConnectionError: processing all pending requests due to connection error")
+
+	// Обрабатываем все pending request bodies (закрываем pipes)
+	p.pendingRequestBodys.Range(func(key, value interface{}) bool {
+		id := key.(uint64)
+		if pwm, ok := value.(*pipeWriterWithMutex); ok {
+			pwm.Close()
+			log.Debugf("handleConnectionError: Closed pipeWriter for request id=%d", id)
+		}
+		return true
+	})
+	p.pendingRequestBodys.Clear()
+
+	// Обрабатываем все pending запросы (вызываем handler)
+	p.pendingRequests.Range(func(key, value interface{}) bool {
+		id := key.(uint64)
+		state, ok := value.(*pendingRequestState)
+		if !ok {
+			log.Errorf("handleConnectionError: Invalid type in pendingRequests for id=%d", id)
+			return true
+		}
+
+		log.Debugf("handleConnectionError: calling handler.ServeHTTP for id=%d (connection closed)", id)
+
+		// ВАЖНО! Добавляем panic recovery
+		defer func() {
+			if r := recover(); r != nil {
+				log.Errorf("handleConnectionError: PANIC for id=%d: %v", id, r)
+			}
+		}()
+
+		// Обрабатываем запрос
+		log.Debugf("handleConnectionError: About to call handler.ServeHTTP for id=%d", id)
+		state.handler.ServeHTTP(state.writer, state.req)
+		log.Debugf("handleConnectionError: handler.ServeHTTP returned for id=%d, headerSent=%v", id, state.writer.headerSent)
+
+		// Если заголовки не были отправлены, отправляем с кодом 200
+		if !state.writer.headerSent {
+			log.Debugf("handleConnectionError: Sending default 200 status for id=%d", id)
+			state.writer.WriteHeader(http.StatusOK)
+		}
+
+		// Закрываем writer
+		log.Debugf("handleConnectionError: Closing writer for id=%d", id)
+		if err := state.writer.Close(); err != nil {
+			log.Errorf("handleConnectionError: Failed to close writer: %v", err)
+		}
+		return true
+	})
+	p.pendingRequests.Clear()
+
+	log.Debugf("handleConnectionError: completed processing all pending requests")
 }
 
 // receiverLoop - получатель ждёт ответы от отправителя
@@ -664,12 +793,16 @@ func (p *StreamCrocProxy) receiverLoop() {
 	for {
 		select {
 		case <-p.stopChan:
+			log.Debugf("receiverLoop: stop signal received, exiting")
 			return
 		case result := <-readChan:
 			if result.err != nil {
-				log.Debugf("receiverLoop error: %v", result.err)
+				log.Debugf("receiverLoop: connection error: %v", result.err)
+				// Интерпретируем разрыв соединения как завершение всех pending ответов
+				p.handleReceiverConnectionError()
 				return
 			}
+			log.Debugf("receiverLoop: received %d bytes from controlConn", len(result.data))
 			p.handleReceiverMessage(result.data)
 		}
 	}
@@ -678,17 +811,22 @@ func (p *StreamCrocProxy) receiverLoop() {
 func (p *StreamCrocProxy) handleReceiverMessage(data []byte) {
 	defer func() {
 		if r := recover(); r != nil {
-			log.Errorf("Recovered from panic: %v", r)
+			log.Errorf("handleReceiverMessage: Recovered from panic: %v", r)
 		}
 	}()
 
+	log.Debugf("handleReceiverMessage: received %d encrypted bytes", len(data))
+
 	decrypted, err := crypt.Decrypt(data, p.key)
 	if err != nil {
-		log.Errorf("Failed to decrypt: %v", err)
+		log.Errorf("handleReceiverMessage: Failed to decrypt %d bytes: %v", len(data), err)
 		return
 	}
 
+	log.Debugf("handleReceiverMessage: decrypted to %d bytes", len(decrypted))
+
 	if len(decrypted) < 13 {
+		log.Errorf("handleReceiverMessage: Received too short message: %d bytes", len(decrypted))
 		return
 	}
 
@@ -700,6 +838,9 @@ func (p *StreamCrocProxy) handleReceiverMessage(data []byte) {
 	if dataLen > 0 && len(decrypted) >= 13+int(dataLen) {
 		payload = decrypted[13 : 13+dataLen]
 	}
+
+	log.Debugf("handleReceiverMessage: id=%d, msgType=0x%02x, dataLen=%d, payloadLen=%d",
+		id, msgType, dataLen, len(payload))
 
 	switch msgType {
 	case StreamMsgResponse:
@@ -743,12 +884,17 @@ func (p *StreamCrocProxy) handleResponse(id uint64, data []byte) {
 func (p *StreamCrocProxy) handleResponseData(id uint64, data []byte) {
 	if val, ok := p.pending.Load(id); ok {
 		if reader, ok := val.(*StreamResponseReader); ok {
-			if _, err := reader.Write(data); err != nil {
-				log.Errorf("Failed to write data to reader: %v", err)
-				// При ошибке закрываем ридер и удаляем из pending
-				p.pending.Delete(id)
-				reader.Close()
-			}
+			// Пишем данные в reader в отдельной goroutine, чтобы не блокировать receiverLoop
+			// io.PipeWriter.Write() блокируется пока данные не будут прочитаны
+			go func() {
+				if _, err := reader.Write(data); err != nil {
+					log.Errorf("Failed to write data to reader (id=%d): %v", id, err)
+					// ВАЖНО! При ошибке записи всё равно вызываем handleResponseDone
+					// для корректного завершения
+					log.Debugf("handleResponseData: Calling handleResponseDone due to write error for id=%d", id)
+					p.handleResponseDone(id)
+				}
+			}()
 		}
 	}
 }
@@ -774,6 +920,28 @@ func (p *StreamCrocProxy) handleResponseError(id uint64, data []byte) {
 		errReader.Close()
 		ch <- errReader
 	}
+}
+
+// handleReceiverConnectionError обрабатывает разрыв соединения на стороне получателя
+func (p *StreamCrocProxy) handleReceiverConnectionError() {
+	log.Debugf("handleReceiverConnectionError: processing all pending responses due to connection error")
+
+	// Закрываем все pending response readers
+	p.pending.Range(func(key, value interface{}) bool {
+		id := key.(uint64)
+		if reader, ok := value.(*StreamResponseReader); ok {
+			log.Debugf("handleReceiverConnectionError: Closing reader for id=%d", id)
+			reader.Close()
+		}
+		return true
+	})
+	p.pending.Clear()
+
+	// Также сигнализируем всем ожидающим RoundTrip вызовам через requestMgr
+	// Это нужно для запросов, которые еще не получили StreamMsgResponse
+	// Мы не можем сделать это напрямую, так как requestMgr.Get() удаляет запись
+	// Вместо этого мы просто логируем, что соединение закрыто
+	log.Debugf("handleReceiverConnectionError: connection closed, pending requests will timeout")
 }
 
 func (p *StreamCrocProxy) generateID() uint64 {
