@@ -39,6 +39,27 @@ const (
 	StreamMsgError    = 0x05
 )
 
+// readLoggingReader обертка для логирования чтения из тела ответа
+type readLoggingReader struct {
+	reader io.ReadCloser
+	id     uint64
+}
+
+func (r *readLoggingReader) Read(p []byte) (n int, err error) {
+	n, err = r.reader.Read(p)
+	if n > 0 {
+		log.Debugf("readLoggingReader: Read %d bytes for id=%d, err=%v", n, r.id, err)
+	} else if err != nil {
+		log.Debugf("readLoggingReader: Read error for id=%d: %v", r.id, err)
+	}
+	return
+}
+
+func (r *readLoggingReader) Close() error {
+	log.Debugf("readLoggingReader: Closing reader for id=%d", r.id)
+	return r.reader.Close()
+}
+
 // StreamRequestManager управляет ожидающими запросами
 type StreamRequestManager struct {
 	pending map[uint64]chan *StreamResponseReader
@@ -77,6 +98,7 @@ type StreamResponseReader struct {
 	body       *io.PipeReader
 	bodyWriter *io.PipeWriter
 	once       sync.Once
+	writeWg    sync.WaitGroup // Для отслеживания активных goroutine записи
 }
 
 func NewStreamResponseReader() *StreamResponseReader {
@@ -293,6 +315,8 @@ func (p *StreamCrocProxy) RoundTrip(req *http.Request) (*http.Response, error) {
 	select {
 	case reader := <-respChan:
 		p.requestMgr.Get(requestID)
+		log.Debugf("RoundTrip: Received reader for id=%d, status=%d, Content-Length=%s",
+			requestID, reader.statusCode, reader.header.Get("Content-Length"))
 		if reader == nil {
 			return nil, fmt.Errorf("connection closed")
 		}
@@ -305,11 +329,13 @@ func (p *StreamCrocProxy) RoundTrip(req *http.Request) (*http.Response, error) {
 			reader.status = "500 Internal Server Error (proxy fix)"
 		}
 
+		// Создаем обертку для логирования чтения из body
+		log.Debugf("RoundTrip: Returning response for id=%d with body reader", requestID)
 		return &http.Response{
 			StatusCode: reader.statusCode,
 			Status:     reader.status,
 			Header:     reader.header,
-			Body:       reader.body,
+			Body:       &readLoggingReader{reader: reader.body, id: requestID},
 		}, nil
 
 	case <-time.After(StreamTimeout):
@@ -917,11 +943,16 @@ func (p *StreamCrocProxy) handleResponse(id uint64, data []byte) {
 
 	// Сохраняем в pending
 	p.pending.Store(id, reader)
+	log.Debugf("handleResponse: Stored reader in pending for id=%d", id)
 
 	// Отправляем reader в канал
 	ch := p.requestMgr.Get(id)
 	if ch != nil {
+		log.Debugf("handleResponse: Sending reader to channel for id=%d", id)
 		ch <- reader
+		log.Debugf("handleResponse: Reader sent to channel for id=%d", id)
+	} else {
+		log.Errorf("handleResponse: No channel found for id=%d - response will be lost!", id)
 	}
 }
 
@@ -931,7 +962,9 @@ func (p *StreamCrocProxy) handleResponseData(id uint64, data []byte) {
 		if reader, ok := val.(*StreamResponseReader); ok {
 			// Пишем данные в reader в отдельной goroutine, чтобы не блокировать receiverLoop
 			// io.PipeWriter.Write() блокируется пока данные не будут прочитаны
+			reader.writeWg.Add(1)
 			go func() {
+				defer reader.writeWg.Done()
 				log.Debugf("handleResponseData: Writing %d bytes to pipe for id=%d", len(data), id)
 				if _, err := reader.Write(data); err != nil {
 					// Если pipe уже закрыт (StreamMsgDone уже получен), это не ошибка
@@ -958,6 +991,16 @@ func (p *StreamCrocProxy) handleResponseData(id uint64, data []byte) {
 }
 
 func (p *StreamCrocProxy) handleResponseDone(id uint64) {
+	log.Debugf("handleResponseDone: Waiting for all write goroutines to complete for id=%d", id)
+
+	if val, ok := p.pending.Load(id); ok {
+		if reader, ok := val.(*StreamResponseReader); ok {
+			// Ждем завершения всех goroutine записи перед закрытием pipe
+			reader.writeWg.Wait()
+			log.Debugf("handleResponseDone: All write goroutines completed for id=%d", id)
+		}
+	}
+
 	log.Warnf("handleResponseDone: Closing pipe for id=%d - NO MORE DATA WILL BE ACCEPTED!", id)
 
 	if val, ok := p.pending.LoadAndDelete(id); ok {
