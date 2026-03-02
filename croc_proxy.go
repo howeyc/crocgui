@@ -193,7 +193,9 @@ type pendingRequestState struct {
 	req      *http.Request
 	handler  http.Handler
 	writer   *StreamResponseWriter
-	response bool // true если ответ уже отправлен
+	response bool           // true если ответ уже отправлен
+	wg       sync.WaitGroup // Для синхронизации завершения handler
+	doneChan chan struct{}  // Для сигнализации о завершении handler
 }
 
 func newPendingRequestState(req *http.Request, handler http.Handler, writer *StreamResponseWriter) *pendingRequestState {
@@ -202,6 +204,8 @@ func newPendingRequestState(req *http.Request, handler http.Handler, writer *Str
 		handler:  handler,
 		writer:   writer,
 		response: false,
+		wg:       sync.WaitGroup{},
+		doneChan: make(chan struct{}),
 	}
 }
 
@@ -591,8 +595,9 @@ func (p *StreamCrocProxy) handleRequest(id uint64, data []byte) {
 		}
 	}
 
-	// Если есть тело (ContentLength > 0), создаем pipe для потокового чтения
-	if req.ContentLength > 0 {
+	// Если есть тело (ContentLength != 0), создаем pipe для потокового чтения
+	// Это включает: ContentLength > 0 (известный размер) и ContentLength < 0 (chunked encoding)
+	if req.ContentLength != 0 {
 		pr, pw := io.Pipe()
 		req.Body = pr
 		// Используем pipeWriterWithMutex для защиты от race condition
@@ -600,7 +605,7 @@ func (p *StreamCrocProxy) handleRequest(id uint64, data []byte) {
 		p.pendingRequestBodys.Store(id, pwm)
 		log.Debugf("Created pipe for request body (id=%d, expected %d bytes)", id, req.ContentLength)
 
-		// Verify that the pendingRequestBodys was stored
+		// Verify that pendingRequestBodys was stored
 		_, ok := p.pendingRequestBodys.Load(id)
 		if !ok {
 			log.Errorf("handleRequest: FAILED to verify pendingRequestBodys.Store for id=%d", id)
@@ -608,21 +613,49 @@ func (p *StreamCrocProxy) handleRequest(id uint64, data []byte) {
 			log.Debugf("handleRequest: Verified pendingRequestBodys.Store for id=%d", id)
 		}
 
-		// ВАЖНО! НЕ вызываем handler.ServeHTTP сейчас!
-		// Сохраняем состояние для вызова ПОСЛЕ получения StreamMsgDone
+		// ВАЖНО! Создаем состояние и запускаем handler НЕМЕДЛЕННО в goroutine
+		// Handler будет читать из pipe, данные будут поступать через handleData
 		writer := NewStreamResponseWriter(p, id)
 		state := newPendingRequestState(req, handler, writer)
 		p.pendingRequests.Store(id, state)
-		log.Debugf("handleRequest: saved pending state for id=%d (waiting for body)", id)
+		log.Debugf("handleRequest: saved pending state for id=%d", id)
 
-		// Verify that the pendingRequests was stored
+		// Verify that pendingRequests was stored
 		_, ok = p.pendingRequests.Load(id)
 		if !ok {
 			log.Errorf("handleRequest: FAILED to verify pendingRequests.Store for id=%d", id)
 		} else {
 			log.Debugf("handleRequest: Verified pendingRequests.Store for id=%d", id)
 		}
-		log.Debugf("handleRequest: EXIT id=%d (will call handler after StreamMsgDone)", id)
+
+		// Запускаем handler в goroutine немедленно
+		state.wg.Add(1)
+		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Errorf("handleRequest: PANIC in handler goroutine for id=%d: %v", id, r)
+					if !state.writer.headerSent {
+						state.writer.WriteHeader(http.StatusInternalServerError)
+						state.writer.Write([]byte(fmt.Sprintf("internal server error: %v", r)))
+					}
+					state.writer.Close()
+				}
+				state.wg.Done()
+				close(state.doneChan)
+			}()
+
+			log.Debugf("handleRequest: About to call handler.ServeHTTP for id=%d (in goroutine)", id)
+			state.handler.ServeHTTP(state.writer, state.req)
+			log.Debugf("handleRequest: handler.ServeHTTP returned for id=%d, headerSent=%v", id, state.writer.headerSent)
+
+			// Если заголовки не были отправлены, отправляем с кодом 200
+			if !state.writer.headerSent {
+				log.Debugf("handleRequest: Sending default 200 status for id=%d", id)
+				state.writer.WriteHeader(http.StatusOK)
+			}
+		}()
+
+		log.Debugf("handleRequest: EXIT id=%d (handler running in goroutine, waiting for StreamMsgDone)", id)
 		return
 	} else {
 		// Тела нет - используем http.NoBody вместо nil, чтобы WebDAV handler не паниковал
@@ -715,7 +748,7 @@ func (p *StreamCrocProxy) handleDone(id uint64) {
 
 	defer log.Debugf("handleDone: EXIT for request id=%d", id)
 
-	// Проверяем есть ли pending запрос (с телом), который нужно обработать
+	// Проверяем есть ли pending запрос (с телом)
 	stateVal, ok := p.pendingRequests.LoadAndDelete(id)
 	if ok {
 		log.Debugf("handleDone: Found pending request for id=%d", id)
@@ -725,28 +758,22 @@ func (p *StreamCrocProxy) handleDone(id uint64) {
 			return
 		}
 
-		log.Debugf("handleDone: calling handler.ServeHTTP for id=%d (after body received)", id)
-
-		// ВАЖНО! Добавляем panic recovery чтобы ловить ошибки в handler
-		defer func() {
-			if r := recover(); r != nil {
-				log.Errorf("handleDone: PANIC for id=%d: %v", id, r)
-				// Отправляем ошибку клиенту
-				if !state.writer.headerSent {
-					// Отправляем ошибку через writer
-					state.writer.WriteHeader(http.StatusInternalServerError)
-					state.writer.Write([]byte(fmt.Sprintf("internal server error: %v", r)))
-				}
-				// Закрываем writer чтобы отправить StreamMsgDone
-				state.writer.Close()
+		// ВАЖНО! Закрываем pipeWriter - это сигнализирует handler что тело закончилось
+		// Handler уже запущен в goroutine и читает из pipe
+		val, ok := p.pendingRequestBodys.LoadAndDelete(id)
+		if ok {
+			if pwm, ok := val.(*pipeWriterWithMutex); ok {
+				pwm.Close()
+				log.Debugf("handleDone: Closed pipeWriter for request id=%d, waiting for handler to complete", id)
 			}
-		}()
+		} else {
+			log.Debugf("handleDone: No pendingRequestBody for id=%d", id)
+		}
 
-		// ВАЖНО: Вызываем handler синхронно, не в отдельной горутине!
-		// handler.ServeHTTP будет писать ответ через state.writer, который отправляет сообщения
-		log.Debugf("handleDone: About to call handler.ServeHTTP for id=%d", id)
-		state.handler.ServeHTTP(state.writer, state.req)
-		log.Debugf("handleDone: handler.ServeHTTP returned for id=%d, headerSent=%v", id, state.writer.headerSent)
+		// Ждем завершения handler через WaitGroup
+		// Handler был запущен в goroutine в handleRequest()
+		state.wg.Wait()
+		log.Debugf("handleDone: Handler completed for id=%d", id)
 
 		// Если заголовки не были отправлены, отправляем с кодом 200
 		if !state.writer.headerSent {
@@ -754,22 +781,10 @@ func (p *StreamCrocProxy) handleDone(id uint64) {
 			state.writer.WriteHeader(http.StatusOK)
 		}
 
-		// Закрываем writer - это отправит StreamMsgDone
+		// Закрываем writer - это отправит StreamMsgDone клиенту
 		log.Debugf("handleDone: Closing writer for id=%d", id)
 		if err := state.writer.Close(); err != nil {
 			log.Errorf("handleDone: Failed to close writer: %v", err)
-		}
-		log.Debugf("handleDone: handler completed for id=%d", id)
-
-		// ВАЖНО! Закрываем pipeWriter ПОСЛЕ handler.ServeHTTP, чтобы handler мог прочитать тело
-		val, ok := p.pendingRequestBodys.LoadAndDelete(id)
-		if ok {
-			if pwm, ok := val.(*pipeWriterWithMutex); ok {
-				pwm.Close()
-				log.Debugf("handleDone: Closed pipeWriter for request id=%d", id)
-			}
-		} else {
-			log.Debugf("handleDone: No pendingRequestBody for id=%d", id)
 		}
 	} else {
 		log.Debugf("handleDone: No pending request found for id=%d (request without body or already processed)", id)
