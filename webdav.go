@@ -15,11 +15,14 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	gomime "github.com/cubewise-code/go-mime"
+	"github.com/schollz/croc/v10/src/croc"
+	"github.com/schollz/croc/v10/src/tcp"
 	log "github.com/schollz/logger"
 	"golang.org/x/net/webdav"
 )
@@ -52,6 +55,12 @@ type WebDAVServer struct {
 	// Callback для уведомления о смене состояния прокси
 	onProxyStateChanged func(enabled bool)
 	remote              bool
+
+	// TCP форвардер (альтернатива HTTP прокси)
+	tcpForwarder    *TCPForwarder
+	tcpListener     net.Listener
+	tcpForwarding   bool
+	tcpForwardingMu sync.RWMutex
 }
 
 // WebDAVWithDirectoryListing оборачивает стандартный WebDAV handler для поддержки
@@ -425,4 +434,246 @@ func (s *WebDAVServer) SetProxyStateChangeCallback(cb func(bool)) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.onProxyStateChanged = cb
+}
+
+// EnableTCPForwarding активирует TCP портфорвардинг через croc туннель
+func (s *WebDAVServer) EnableTCPForwarding(client *croc.Client) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Проверяем, не активен ли уже форвардинг
+	if s.tcpForwarding && s.tcpForwarder != nil && s.tcpForwarder.IsActive() {
+		return fmt.Errorf("TCP forwarding already active")
+	}
+
+	// Получаем базовый адрес ретранслятора
+	relayAddr := client.Options.RelayAddress
+	if relayAddr == "" {
+		return fmt.Errorf("no relay address configured")
+	}
+
+	// Парсим хост и порт
+	host, portStr, _ := defAddress(relayAddr)
+	basePort, err := strconv.Atoi(portStr)
+	if err != nil {
+		return fmt.Errorf("invalid port number %s: %w", portStr, err)
+	}
+
+	// Параметры туннеля
+	roomSuffix := 2 // Используем другой суффикс комнаты для TCP форвардинга
+	relayPort := basePort + roomSuffix + 1
+	roomName := fmt.Sprintf("%s-%d", client.Options.RoomName, roomSuffix)
+	relayAddrFull := net.JoinHostPort(host, strconv.Itoa(relayPort))
+
+	log.Infof("TCP forwarding: establishing connection to %s (room: %s)", relayAddrFull, roomName)
+
+	// Устанавливаем соединение
+	conn, banner, externalIP, err := tcp.ConnectToTCPServer(
+		relayAddrFull,
+		client.Options.RelayPassword,
+		roomName,
+		10*time.Second,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to establish tunnel: %w", err)
+	}
+
+	log.Debugf("TCP forwarding tunnel connected: banner=%s, externalIP=%s", banner, externalIP)
+
+	// Создаем TCP форвардер
+	tcpForwarder := NewTCPForwarder(conn, client.Options.IsSender, client.Key)
+
+	if client.Options.IsSender {
+		// Отправитель: запускаем форвардер
+		if err := tcpForwarder.Start(); err != nil {
+			conn.Close()
+			return fmt.Errorf("failed to start TCP forwarder sender: %w", err)
+		}
+		log.Infof("TCP forwarder sender started (relay port %d, room %s)", relayPort, roomName)
+
+	} else {
+		// Получатель: останавливаем WebDAV сервер перед созданием TCP listener
+		if s.active {
+			log.Infof("Stopping WebDAV server to enable TCP forwarding on %s", s.addr)
+			s.stopLocked()
+		}
+
+		// Запускаем форвардер
+		if err := tcpForwarder.Start(); err != nil {
+			conn.Close()
+			return fmt.Errorf("failed to start TCP forwarder receiver: %w", err)
+		}
+
+		// Создаем TCP listener на локальном порту
+		localAddr := s.addr // Используем тот же порт, что и WebDAV сервер
+		listener, err := net.Listen("tcp", localAddr)
+		if err != nil {
+			tcpForwarder.Stop()
+			conn.Close()
+			return fmt.Errorf("failed to create TCP listener on %s: %w", localAddr, err)
+		}
+
+		s.tcpListener = listener
+		log.Infof("TCP forwarder receiver listening on %s (relay port %d, room %s)",
+			localAddr, relayPort, roomName)
+
+		// Запускаем горутину для принятия локальных соединений
+		go s.acceptLocalConnections(tcpForwarder)
+
+		if s.onProxyStateChanged != nil {
+			s.onProxyStateChanged(true)
+			s.remote = true
+		}
+	}
+
+	// Сохраняем форвардер
+	s.tcpForwarder = tcpForwarder
+	s.tcpForwarding = true
+	log.Infof("TCP forwarding successfully enabled on relay port %d (room %s)", relayPort, roomName)
+
+	return nil
+}
+
+// acceptLocalConnections принимает локальные соединения и пробрасывает их через форвардер
+func (s *WebDAVServer) acceptLocalConnections(forwarder *TCPForwarder) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Errorf("acceptLocalConnections panic: %v", r)
+		}
+	}()
+
+	for {
+		conn, err := s.tcpListener.Accept()
+		if err != nil {
+			s.tcpForwardingMu.RLock()
+			active := s.tcpForwarding
+			s.tcpForwardingMu.RUnlock()
+
+			if active {
+				log.Errorf("Failed to accept connection: %v", err)
+			} else {
+				log.Debugf("TCP listener stopped (forwarding disabled)")
+				return
+			}
+			continue
+		}
+
+		log.Debugf("TCP forwarding: accepted connection from %s", conn.RemoteAddr())
+
+		// Пробрасываем соединение через форвардер
+		go func(c net.Conn) {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Errorf("ForwardConnection panic: %v", r)
+				}
+			}()
+			if err := forwarder.ForwardConnection(c); err != nil {
+				log.Errorf("Failed to forward connection: %v", err)
+				c.Close()
+			}
+		}(conn)
+	}
+}
+
+// DisableTCPForwarding отключает TCP портфорвардинг
+func (s *WebDAVServer) DisableTCPForwarding() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if !s.tcpForwarding {
+		return
+	}
+
+	log.Info("Disabling TCP forwarding...")
+
+	// Останавливаем TCP listener если есть
+	if s.tcpListener != nil {
+		s.tcpListener.Close()
+		s.tcpListener = nil
+	}
+
+	// Останавливаем форвардер
+	if s.tcpForwarder != nil {
+		s.tcpForwarder.Stop()
+		s.tcpForwarder = nil
+	}
+
+	s.tcpForwarding = false
+	s.remote = false
+
+	if s.onProxyStateChanged != nil {
+		s.onProxyStateChanged(false)
+	}
+
+	// Восстанавливаем WebDAV сервер, если он был остановлен
+	// Используем сохраненные параметры
+	if s.root != "" && s.addr != "" {
+		log.Infof("Restarting WebDAV server on %s for %s after disabling TCP forwarding", s.addr, s.root)
+		s.startLocked()
+	}
+
+	log.Info("TCP forwarding disabled")
+}
+
+// startLocked запускает WebDAV сервер (вызывается под lock)
+func (s *WebDAVServer) startLocked() error {
+	if s.active {
+		return nil // Уже запущен
+	}
+
+	// Создаем локальный handler и устанавливаем его как текущий
+	s.localHandler = s.createLocalHandler(s.root)
+	s.currentHandler = s.localHandler
+
+	// Создаем сервер с handlerRouter
+	s.server = &http.Server{
+		Addr:    s.addr,
+		Handler: http.HandlerFunc(s.handlerRouter),
+	}
+
+	// Если нужен HTTPS, подготавливаем TLS конфиг
+	if s.useTLS {
+		if s.tlsConfigError != nil {
+			log.Errorf("failed to use cached TLS config: %v", s.tlsConfigError)
+			s.useTLS = false
+		} else if s.TLSConfig != nil {
+			s.server.TLSConfig = s.TLSConfig
+		}
+	}
+
+	// Запускаем сервер в отдельной горутине
+	go func() {
+		var err error
+		scheme := HTTP
+		if s.useTLS {
+			scheme = HTTPS
+		}
+		log.Infof("WebDAV on %s://%s %s", scheme, s.addr, s.root)
+		if s.useTLS {
+			err = s.server.ListenAndServeTLS("", "")
+		} else {
+			err = s.server.ListenAndServe()
+		}
+
+		if err != nil && err != http.ErrServerClosed {
+			log.Errorf("WebDAV listenAndServe: %v", err)
+			s.mu.Lock()
+			if s.active {
+				s.active = false
+				caffeinate(-1)
+			}
+			s.mu.Unlock()
+		}
+	}()
+
+	s.active = true
+	caffeinate(1)
+	return nil
+}
+
+// IsTCPForwardingActive возвращает true если TCP форвардинг активен
+func (s *WebDAVServer) IsTCPForwardingActive() bool {
+	s.tcpForwardingMu.RLock()
+	defer s.tcpForwardingMu.RUnlock()
+	return s.tcpForwarding && s.tcpForwarder != nil && s.tcpForwarder.IsActive()
 }

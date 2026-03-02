@@ -802,7 +802,7 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 				NoPrompt:     true,
 				DisableLocal: a.Preferences().Bool("disable-local"),
 				// Чтоб не было 2-х ридеров на одном порту
-				NoMultiplexing:   a.Preferences().Bool("disable-multiplexing") || !davControl.Hidden || davServer.IsActive() || davServer.IsProxyActive(),
+				NoMultiplexing:   a.Preferences().Bool("disable-multiplexing") || !davControl.Hidden || davServer.IsActive() || davServer.IsTCPForwardingActive(),
 				NoCompress:       a.Preferences().Bool("disable-compression"),
 				OnlyLocal:        a.Preferences().Bool("force-local"),
 				Curve:            a.Preferences().String("pake-curve"),
@@ -882,7 +882,9 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 						removeEntrys(false)
 						reload()
 						showPage()
-						davServer.DisableStreamProxy()
+						// davServer.DisableStreamProxy()
+						// davServer.DisableProxy()
+						davServer.DisableTCPForwarding()
 						log.Warnf("NumGoroutine %d", runtime.NumGoroutine())
 					})
 				}()
@@ -964,9 +966,11 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 							})
 						}
 						if client.Step1ChannelSecured {
-							if !davControl.Hidden && davServer.IsActive() && !davServer.IsProxyActive() {
+							if !davControl.Hidden && davServer.IsActive() && !davServer.IsTCPForwardingActive() {
 								// Используем бинарный протокол для лучшей производительности
-								err := davServer.EnableStreamProxy(client)
+								// err := davServer.EnableStreamProxy(client)
+								// err := davServer.EnableProxy(client)
+								err := davServer.EnableTCPForwarding(client)
 								if err != nil {
 									log.Errorf("failed to enable binary proxy: %v", err)
 									return

@@ -618,7 +618,7 @@ func recvTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 			NoPrompt:     true,
 			DisableLocal: a.Preferences().Bool("disable-local"),
 			// Чтоб не было 2-х ридеров на одном порту
-			NoMultiplexing:   a.Preferences().Bool("disable-multiplexing") || davServer.IsActive() || davServer.IsProxyActive(),
+			NoMultiplexing:   a.Preferences().Bool("disable-multiplexing") || davServer.IsActive() || davServer.IsTCPForwardingActive(),
 			NoCompress:       a.Preferences().Bool("disable-compression"),
 			OnlyLocal:        a.Preferences().Bool("force-local"),
 			Curve:            a.Preferences().String("pake-curve"),
@@ -688,7 +688,9 @@ func recvTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 				}
 				cdLock.Store(0)
 				// Выключаем прокси
-				davServer.DisableStreamProxy()
+				// davServer.DisableStreamProxy()
+				// davServer.DisableProxy()
+				davServer.DisableTCPForwarding()
 				fyne.Do(func() {
 					allShow(false, cosSH...)
 					allEnabled(true, cosED...)
@@ -738,8 +740,10 @@ func recvTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 					}
 					if client.Step1ChannelSecured {
 						// Включаем бинарный прокси для WebDAV (если сервер активен)
-						if davServer.IsActive() && !davServer.IsProxyActive() {
-							err := davServer.EnableStreamProxy(client)
+						if davServer.IsActive() && !davServer.IsTCPForwardingActive() {
+							// err := davServer.EnableStreamProxy(client)
+							// err := davServer.EnableProxy(client)
+							err := davServer.EnableTCPForwarding(client)
 							if err != nil {
 								log.Errorf("failed to enable binary proxy: %v", err)
 								return
