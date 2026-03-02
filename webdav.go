@@ -112,6 +112,7 @@ func (h *WebDAVWithDirectoryListing) ServeHTTP(w http.ResponseWriter, r *http.Re
 	}
 
 	// Для всех остальных случаев используем стандартный WebDAV handler
+	log.Debugf("ServeHTTP %+v", r)
 	h.webdavHandler.ServeHTTP(w, r)
 }
 

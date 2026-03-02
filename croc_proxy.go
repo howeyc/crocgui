@@ -121,7 +121,30 @@ type StreamCrocProxy struct {
 	// Для режима отправителя
 	handler http.Handler
 
+	// Для потоковой обработки тел запросов (на отправителе)
+	pendingRequestBodys sync.Map // map[uint64]*io.PipeWriter
+
+	// Для сохранения состояния запросов с телом (на отправителе)
+	pendingRequests sync.Map // map[uint64]*pendingRequestState
+
 	mu sync.RWMutex
+}
+
+// pendingRequestState хранит состояние запроса с телом
+type pendingRequestState struct {
+	req      *http.Request
+	handler  http.Handler
+	writer   *StreamResponseWriter
+	response bool // true если ответ уже отправлен
+}
+
+func newPendingRequestState(req *http.Request, handler http.Handler, writer *StreamResponseWriter) *pendingRequestState {
+	return &pendingRequestState{
+		req:      req,
+		handler:  handler,
+		writer:   writer,
+		response: false,
+	}
 }
 
 func NewStreamCrocProxy(conn *comm.Comm, isSender bool, key []byte) *StreamCrocProxy {
@@ -194,6 +217,14 @@ func (p *StreamCrocProxy) Stop() error {
 	default:
 		close(p.stopChan)
 	}
+
+	// Очищаем все pending request body pipes
+	p.pendingRequestBodys.Range(func(key, value interface{}) bool {
+		if pw, ok := value.(*io.PipeWriter); ok {
+			pw.Close()
+		}
+		return true
+	})
 
 	log.Info("Stream proxy stopped")
 	return nil
@@ -273,12 +304,19 @@ func (p *StreamCrocProxy) sendRequest(id uint64, req *http.Request) error {
 		return err
 	}
 
-	// Если есть тело, отправляем чанками
-	if req.Body != nil {
+	log.Debugf("sendRequest: %s %s (id=%d, ContentLength=%d)",
+		req.Method, req.URL.Path, id, req.ContentLength)
+
+	// Если есть тело (ContentLength > 0), отправляем чанками
+	if req.Body != nil && req.ContentLength > 0 {
 		buffer := make([]byte, ChunkSize)
+		totalBytes := 0
 		for {
 			n, err := req.Body.Read(buffer)
 			if n > 0 {
+				totalBytes += n
+				log.Debugf("sendRequest: sending chunk %d bytes (total %d/%d) for id=%d",
+					n, totalBytes, req.ContentLength, id)
 				if err := p.sendMessage(id, StreamMsgData, buffer[:n]); err != nil {
 					req.Body.Close()
 					return err
@@ -288,14 +326,33 @@ func (p *StreamCrocProxy) sendRequest(id uint64, req *http.Request) error {
 				break
 			}
 			if err != nil {
+				log.Errorf("sendRequest: error reading body for id=%d: %v", id, err)
 				req.Body.Close()
 				return err
 			}
 		}
 		req.Body.Close()
+		log.Debugf("sendRequest: sent total %d bytes for id=%d", totalBytes, id)
+	} else if req.Body != nil && req.ContentLength == 0 {
+		// Тело есть, но ContentLength=0 (например, POST без данных)
+		// Просто читаем чтобы убедиться что EOF
+		buffer := make([]byte, 1)
+		_, err := req.Body.Read(buffer)
+		if err != nil && err != io.EOF {
+			log.Errorf("sendRequest: unexpected error reading zero-length body for id=%d: %v", id, err)
+			req.Body.Close()
+			return err
+		}
+		req.Body.Close()
+		log.Debugf("sendRequest: zero-length body handled for id=%d", id)
 	}
 
-	// НЕ отправляем StreamMsgDone здесь!
+	// ВАЖНО: Отправляем StreamMsgDone чтобы закрыть pipe на отправителе!
+	log.Debugf("sendRequest: sending StreamMsgDone for id=%d", id)
+	if err := p.sendMessage(id, StreamMsgDone, nil); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -350,7 +407,7 @@ func (p *StreamCrocProxy) senderLoop() {
 func (p *StreamCrocProxy) handleSenderMessage(data []byte) {
 	defer func() {
 		if r := recover(); r != nil {
-			log.Errorf("Recovered from panic: %v", r)
+			log.Errorf("Recovered from panic in handleSenderMessage: %v", r)
 		}
 	}()
 
@@ -361,6 +418,7 @@ func (p *StreamCrocProxy) handleSenderMessage(data []byte) {
 	}
 
 	if len(decrypted) < 13 {
+		log.Errorf("Received too short message: %d bytes", len(decrypted))
 		return
 	}
 
@@ -373,22 +431,38 @@ func (p *StreamCrocProxy) handleSenderMessage(data []byte) {
 		payload = decrypted[13 : 13+dataLen]
 	}
 
+	log.Debugf("handleSenderMessage: id=%d, msgType=0x%02x, dataLen=%d, payloadLen=%d",
+		id, msgType, dataLen, len(payload))
+
 	switch msgType {
 	case StreamMsgRequest:
+		log.Debugf("Sender received StreamMsgRequest id=%d, payload=%d bytes", id, len(payload))
 		p.handleRequest(id, payload)
 	case StreamMsgData:
+		log.Debugf("Sender received StreamMsgData id=%d, data=%d bytes", id, len(payload))
 		p.handleData(id, payload)
 	case StreamMsgDone:
+		log.Debugf("Sender received StreamMsgDone id=%d, payload=%d bytes", id, len(payload))
 		p.handleDone(id)
+	default:
+		log.Errorf("Unknown message type 0x%02x for id=%d", msgType, id)
 	}
 }
 
 // handleRequest - отправитель обрабатывает запрос от получателя
 func (p *StreamCrocProxy) handleRequest(id uint64, data []byte) {
+	log.Debugf("handleRequest: ENTER id=%d, payload=%d bytes", id, len(data))
+
 	defer func() {
 		if r := recover(); r != nil {
 			log.Errorf("Recovered from panic in handleRequest: %v", r)
 			p.sendMessage(id, StreamMsgError, []byte("internal server error"))
+			// Очищаем pendingRequestBody если есть
+			if pw, ok := p.pendingRequestBodys.LoadAndDelete(id); ok {
+				if writer, ok := pw.(*io.PipeWriter); ok {
+					writer.Close()
+				}
+			}
 		}
 	}()
 
@@ -402,7 +476,7 @@ func (p *StreamCrocProxy) handleRequest(id uint64, data []byte) {
 		return
 	}
 
-	// Парсим HTTP запрос
+	// Парсим HTTP запрос (только заголовки, body уже отрезан)
 	req, err := http.ReadRequest(bufio.NewReader(bytes.NewReader(data)))
 	if err != nil {
 		log.Errorf("Failed to parse request: %v", err)
@@ -410,7 +484,8 @@ func (p *StreamCrocProxy) handleRequest(id uint64, data []byte) {
 		return
 	}
 
-	log.Debugf("Sender handling request: %s %s (id=%d)", req.Method, req.URL.Path, id)
+	log.Debugf("Sender handling request: %s %s (id=%d, ContentLength=%d, Headers=%+v)",
+		req.Method, req.URL.Path, id, req.ContentLength, req.Header)
 
 	// Обработка WebDAV методов (как в proxy.go)
 	if req.Method == "MOVE" || req.Method == "COPY" {
@@ -434,33 +509,136 @@ func (p *StreamCrocProxy) handleRequest(id uint64, data []byte) {
 		}
 	}
 
-	// Создаем истинно потоковый writer (без буфера)
-	writer := NewStreamResponseWriter(p, id)
+	// Если есть тело (ContentLength > 0), создаем pipe для потокового чтения
+	if req.ContentLength > 0 {
+		pr, pw := io.Pipe()
+		req.Body = pr
+		p.pendingRequestBodys.Store(id, pw)
+		log.Debugf("Created pipe for request body (id=%d, expected %d bytes)", id, req.ContentLength)
 
-	// Обрабатываем запрос - все Write() будут отправлять сразу
-	handler.ServeHTTP(writer, req)
+		// ВАЖНО! НЕ вызываем handler.ServeHTTP сейчас!
+		// Сохраняем состояние для вызова ПОСЛЕ получения StreamMsgDone
+		writer := NewStreamResponseWriter(p, id)
+		state := newPendingRequestState(req, handler, writer)
+		p.pendingRequests.Store(id, state)
+		log.Debugf("handleRequest: saved pending state for id=%d (waiting for body)", id)
+		log.Debugf("handleRequest: EXIT id=%d (will call handler after StreamMsgDone)", id)
+		return
+	} else {
+		// Тела нет - используем http.NoBody вместо nil, чтобы WebDAV handler не паниковал
+		req.Body = http.NoBody
+		log.Debugf("No body for request (id=%d), using http.NoBody", id)
 
-	// Если заголовки не были отправлены, отправляем с кодом 200
-	if !writer.headerSent {
-		writer.WriteHeader(http.StatusOK)
-	}
+		// Создаем writer и сразу вызываем handler
+		writer := NewStreamResponseWriter(p, id)
 
-	// Закрываем writer
-	if err := writer.Close(); err != nil {
-		log.Errorf("Failed to close writer: %v", err)
+		log.Debugf("handleRequest: calling handler.ServeHTTP for id=%d (no body)", id)
+		// Обрабатываем запрос - все Write() будут отправлять сразу
+		handler.ServeHTTP(writer, req)
+
+		log.Debugf("handleRequest: handler.ServeHTTP completed for id=%d, headerSent=%v", id, writer.headerSent)
+
+		// Если заголовки не были отправлены, отправляем с кодом 200
+		if !writer.headerSent {
+			writer.WriteHeader(http.StatusOK)
+		}
+
+		// Закрываем writer
+		log.Debugf("handleRequest: closing writer for id=%d", id)
+		if err := writer.Close(); err != nil {
+			log.Errorf("Failed to close writer: %v", err)
+		}
+		log.Debugf("handleRequest: EXIT id=%d", id)
 	}
 }
 
 // handleData - обработка данных от получателя (для отправителя)
 func (p *StreamCrocProxy) handleData(id uint64, data []byte) {
-	log.Debugf("Sender received data for id=%d: %d bytes", id, len(data))
-	// На отправителе данные от клиента не ожидаются, но могут быть для WebSocket
+	// Находим pipeWriter для этого запроса
+	val, ok := p.pendingRequestBodys.Load(id)
+	if !ok {
+		log.Debugf("No pending request body for id=%d, ignoring data", id)
+		return
+	}
+
+	pw, ok := val.(*io.PipeWriter)
+	if !ok {
+		log.Errorf("Invalid type in pendingRequestBodys for id=%d", id)
+		p.pendingRequestBodys.Delete(id)
+		return
+	}
+
+	log.Debugf("Sender received data for request id=%d: %d bytes", id, len(data))
+
+	// Пишем данные в pipe
+	if _, err := pw.Write(data); err != nil {
+		log.Errorf("Failed to write to request body pipe (id=%d): %v", id, err)
+		// При ошибке закрываем pipe и удаляем
+		pw.Close()
+		p.pendingRequestBodys.Delete(id)
+	}
 }
 
 // handleDone - обработка завершения от получателя
 func (p *StreamCrocProxy) handleDone(id uint64) {
-	log.Debugf("Sender received done for id=%d", id)
-	// Получатель закрыл соединение
+	log.Debugf("handleDone: ENTER for request id=%d", id)
+
+	// Закрываем pipeWriter для тела запроса если есть
+	val, ok := p.pendingRequestBodys.LoadAndDelete(id)
+	if ok {
+		if pw, ok := val.(*io.PipeWriter); ok {
+			pw.Close()
+			log.Debugf("handleDone: Closed pipeWriter for request id=%d", id)
+		}
+	} else {
+		log.Debugf("handleDone: No pendingRequestBody for id=%d", id)
+	}
+
+	// Проверяем есть ли pending запрос (с телом), который нужно обработать
+	stateVal, ok := p.pendingRequests.LoadAndDelete(id)
+	if ok {
+		log.Debugf("handleDone: Found pending request for id=%d", id)
+		state, ok := stateVal.(*pendingRequestState)
+		if !ok {
+			log.Errorf("handleDone: Invalid type in pendingRequests for id=%d", id)
+			return
+		}
+
+		log.Debugf("handleDone: calling handler.ServeHTTP for id=%d (after body received)", id)
+
+		// ВАЖНО! Добавляем panic recovery чтобы ловить ошибки в handler
+		defer func() {
+			if r := recover(); r != nil {
+				log.Errorf("handleDone: PANIC for id=%d: %v", id, r)
+				// Отправляем ошибку клиенту
+				if !state.writer.headerSent {
+					p.sendMessage(id, StreamMsgError, []byte(fmt.Sprintf("internal server error: %v", r)))
+				}
+			}
+		}()
+
+		// Обрабатываем запрос - все Write() будут отправлять сразу
+		log.Debugf("handleDone: About to call handler.ServeHTTP for id=%d", id)
+		state.handler.ServeHTTP(state.writer, state.req)
+		log.Debugf("handleDone: handler.ServeHTTP returned for id=%d, headerSent=%v", id, state.writer.headerSent)
+
+		// Если заголовки не были отправлены, отправляем с кодом 200
+		if !state.writer.headerSent {
+			log.Debugf("handleDone: Sending default 200 status for id=%d", id)
+			state.writer.WriteHeader(http.StatusOK)
+		}
+
+		// Закрываем writer
+		log.Debugf("handleDone: Closing writer for id=%d", id)
+		if err := state.writer.Close(); err != nil {
+			log.Errorf("handleDone: Failed to close writer: %v", err)
+		}
+		log.Debugf("handleDone: EXIT completed request id=%d", id)
+	} else {
+		log.Debugf("handleDone: No pending request found for id=%d (request without body or already processed)", id)
+	}
+
+	log.Debugf("handleDone: EXIT for id=%d", id)
 }
 
 // receiverLoop - получатель ждёт ответы от отправителя
@@ -632,7 +810,9 @@ func (w *StreamResponseWriter) Write(p []byte) (int, error) {
 
 	// Отправляем данные сразу, без буферизации!
 	if len(p) > 0 {
+		log.Debugf("StreamResponseWriter.Write: id=%d, len=%d bytes", w.id, len(p))
 		if err := w.proxy.sendMessage(w.id, StreamMsgData, p); err != nil {
+			log.Errorf("StreamResponseWriter.Write: failed to send data for id=%d: %v", w.id, err)
 			return 0, err
 		}
 	}
@@ -649,14 +829,20 @@ func (w *StreamResponseWriter) WriteHeader(statusCode int) {
 			statusText = "Unknown"
 		}
 
+		log.Debugf("StreamResponseWriter.WriteHeader: id=%d, statusCode=%d, status=%s", w.id, statusCode, statusText)
+
 		var buf bytes.Buffer
 		fmt.Fprintf(&buf, "HTTP/1.1 %d %s\r\n", statusCode, statusText)
 		w.header.Write(&buf)
 		buf.WriteString("\r\n")
 
+		log.Debugf("StreamResponseWriter.WriteHeader: sending headers for id=%d, buf size=%d", w.id, buf.Len())
+
 		// Отправляем заголовки
 		if err := w.proxy.sendMessage(w.id, StreamMsgResponse, buf.Bytes()); err != nil {
-			log.Errorf("Failed to send response headers: %v", err)
+			log.Errorf("StreamResponseWriter.WriteHeader: failed to send headers for id=%d: %v", w.id, err)
+		} else {
+			log.Debugf("StreamResponseWriter.WriteHeader: headers sent successfully for id=%d", w.id)
 		}
 	})
 }
