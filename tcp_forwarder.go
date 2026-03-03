@@ -101,11 +101,7 @@ func (f *TCPForwarder) Stop() error {
 
 	f.active = false
 
-	select {
-	case <-f.stopChan:
-	default:
-		close(f.stopChan)
-	}
+	chlose(f.stopChan)
 
 	// Закрываем все активные соединения
 	log.Debugf("TCP forwarder: Stop() - closing all active connections")
@@ -115,7 +111,7 @@ func (f *TCPForwarder) Stop() error {
 			conn.Close()
 		} else if ch, ok := value.(chan []byte); ok {
 			log.Debugf("TCP forwarder: Stop() - closing channel for connID=%v", key)
-			close(ch)
+			chlose(ch)
 		}
 		return true
 	})
@@ -164,7 +160,7 @@ func (f *TCPForwarder) ForwardConnection(localConn net.Conn) error {
 	// Запускаем горутину для чтения из локального соединения и отправки в туннель
 	go func() {
 		defer localConn.Close()
-		defer close(sendDataChan)
+		defer chlose(sendDataChan)
 		defer f.connections.Delete(connID)
 
 		log.Debugf("TCP forwarder receiver: starting read goroutine for connID=%d", connID)
@@ -216,7 +212,7 @@ func (f *TCPForwarder) ForwardConnection(localConn net.Conn) error {
 			if r := recover(); r != nil {
 				log.Debugf("TCP forwarder receiver: recovered from panic in defer for connID=%d: %v", connID, r)
 			}
-			close(receiveDataChan)
+			chlose(receiveDataChan)
 			log.Debugf("TCP forwarder receiver: successfully closed receiveDataChan for connID=%d (goroutine send-to-tunnel)", connID)
 		}()
 		defer f.connections.Delete(connID)
@@ -553,7 +549,7 @@ func (f *TCPForwarder) handleReceiverMessage(data []byte) {
 		val, ok := f.connections.Load(connID)
 		if ok {
 			if receiveDataChan, ok := val.(chan []byte); ok {
-				close(receiveDataChan)
+				chlose(receiveDataChan)
 			}
 			f.connections.Delete(connID)
 		}
@@ -564,7 +560,7 @@ func (f *TCPForwarder) handleReceiverMessage(data []byte) {
 		val, ok := f.connections.Load(connID)
 		if ok {
 			if receiveDataChan, ok := val.(chan []byte); ok {
-				close(receiveDataChan)
+				chlose(receiveDataChan)
 			}
 			f.connections.Delete(connID)
 		}
@@ -686,4 +682,12 @@ func (f *TCPForwarder) generateID() ForwarderConnID {
 		ForwarderConnID(b[5])<<40 |
 		ForwarderConnID(b[6])<<48 |
 		ForwarderConnID(b[7])<<56
+}
+
+func chlose[T any](ch chan T) {
+	if ch == nil {
+		return
+	}
+	defer func() { recover() }()
+	close(ch)
 }

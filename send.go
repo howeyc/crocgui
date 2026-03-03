@@ -887,7 +887,7 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 						removeEntrys(false)
 						reload()
 						showPage()
-						davServer.DisableTCPForwarding(true)
+						davServer.DisableTCPForwarding()
 						log.Warnf("NumGoroutine %d", runtime.NumGoroutine())
 					})
 				}()

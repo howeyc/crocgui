@@ -390,7 +390,7 @@ func generateTLSConfig(addrs ...string) (*tls.Config, error) {
 // Stop останавливает сервер и прокси если есть
 func (s *WebDAVServer) Stop() error {
 	// Останавливаем прокси если есть
-	s.DisableTCPForwarding(false)
+	s.DisableTCPForwarding()
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -583,7 +583,7 @@ func (s *WebDAVServer) acceptLocalConnections(forwarder *TCPForwarder) {
 }
 
 // DisableTCPForwarding отключает TCP портфорвардинг
-func (s *WebDAVServer) DisableTCPForwarding(restore bool) {
+func (s *WebDAVServer) DisableTCPForwarding() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -608,15 +608,18 @@ func (s *WebDAVServer) DisableTCPForwarding(restore bool) {
 	s.tcpForwarding = false
 	s.remote = false
 
-	if s.onProxyStateChanged != nil {
-		s.onProxyStateChanged(false)
-	}
-
 	// Восстанавливаем WebDAV сервер, если он был остановлен
 	// Используем сохраненные параметры
-	if restore && s.root != "" && s.addr != "" {
-		log.Infof("Restarting WebDAV server on %s for %s after disabling TCP forwarding", s.addr, s.root)
-		s.startLocked()
+	select {
+	case <-done:
+	default:
+		if s.onProxyStateChanged != nil {
+			s.onProxyStateChanged(false)
+		}
+		if s.root != "" && s.addr != "" {
+			log.Infof("Restarting WebDAV server on %s for %s after disabling TCP forwarding", s.addr, s.root)
+			s.startLocked()
+		}
 	}
 
 	log.Info("TCP forwarding disabled")

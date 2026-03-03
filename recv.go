@@ -686,7 +686,7 @@ func recvTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 					time.Sleep(time.Second * 30)
 				}
 				cdLock.Store(0)
-				davServer.DisableTCPForwarding(true)
+				davServer.DisableTCPForwarding()
 				fyne.Do(func() {
 					allShow(false, cosSH...)
 					allEnabled(true, cosED...)
