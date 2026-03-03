@@ -535,7 +535,7 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 		s := link.URL.String()
 		a.Clipboard().SetContent(s)
 		NewToast(w, s).Show()
-		if !(isMobile || asMobile || davServer.IsProxyActive()) && hostSelect.Selected == LOCAL {
+		if !(isMobile || asMobile || davServer.IsTCPForwardingActive()) && hostSelect.Selected == LOCAL {
 			// для десктопов и без прокси и локально
 			root := join()
 			var err error
@@ -567,15 +567,22 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 			"")
 		link.SetText(addr)
 		link.SetURL(&u)
+		link.Show()
 
 		// Если прокси активен, перезапускаем его с новым адресом
-		if davServer.IsProxyActive() {
-			if err := davServer.RestartStreamProxy(addr); err != nil {
-				log.Errorf("updateLink: failed to restart proxy: %v", err)
+		if davServer.IsTCPForwardingActive() {
+			if err := davServer.RestartTCPForwarding(addr); err != nil {
+				log.Errorf("updateLink: failed to restart TCP forwarding: %v", err)
+				link.Hide()
 			}
 		} else {
 			// Обычный режим: перезапускаем WebDAV сервер
 			davServer.Start(addr, join(), sCheck.Checked, hostSelect.Options...)
+			time.AfterFunc(time.Second, func() {
+				if !davServer.IsActive() {
+					link.Hide()
+				}
+			})
 		}
 	}
 

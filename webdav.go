@@ -120,6 +120,29 @@ func (h *WebDAVWithDirectoryListing) ServeHTTP(w http.ResponseWriter, r *http.Re
 		}
 	}
 
+	// Для MOVE и COPY запросов всегда исправляем Destination
+	if r.Method == "MOVE" || r.Method == "COPY" {
+		if dest := r.Header.Get("Destination"); dest != "" {
+			log.Debugf("Original Destination: %s", dest)
+
+			// Просто отрезаем схему и хост
+			// Ищем "://" и следующий за ним "/"
+			if idx := strings.Index(dest, "://"); idx != -1 {
+				// Находим начало пути после хоста
+				pathStart := strings.Index(dest[idx+3:], "/")
+				if pathStart != -1 {
+					fixedDest := dest[idx+3+pathStart:]
+					// Убеждаемся, что путь начинается с /
+					if !strings.HasPrefix(fixedDest, "/") {
+						fixedDest = "/" + fixedDest
+					}
+					r.Header.Set("Destination", fixedDest)
+					log.Debugf("Fixed Destination: %s", fixedDest)
+				}
+			}
+		}
+	}
+
 	// Для всех остальных случаев используем стандартный WebDAV handler
 	log.Debugf("ServeHTTP %+v", r)
 	h.webdavHandler.ServeHTTP(w, r)
@@ -481,7 +504,13 @@ func (s *WebDAVServer) EnableTCPForwarding(client *croc.Client) error {
 	log.Debugf("TCP forwarding tunnel connected: banner=%s, externalIP=%s", banner, externalIP)
 
 	// Создаем TCP форвардер
-	tcpForwarder := NewTCPForwarder(conn, client.Options.IsSender, client.Key)
+	// На стороне отправителя: localServerAddr - адрес локального WebDAV сервера
+	// На стороне получателя: localServerAddr - не используется (может быть пустым)
+	var localServerAddr string
+	if client.Options.IsSender {
+		localServerAddr = s.addr // Адрес локального WebDAV сервера
+	}
+	tcpForwarder := NewTCPForwarder(conn, client.Options.IsSender, client.Key, localServerAddr)
 
 	if client.Options.IsSender {
 		// Отправитель: запускаем форвардер
@@ -489,7 +518,7 @@ func (s *WebDAVServer) EnableTCPForwarding(client *croc.Client) error {
 			conn.Close()
 			return fmt.Errorf("failed to start TCP forwarder sender: %w", err)
 		}
-		log.Infof("TCP forwarder sender started (relay port %d, room %s)", relayPort, roomName)
+		log.Infof("TCP forwarder sender started (relay port %d, room %s, local server %s)", relayPort, roomName, localServerAddr)
 
 	} else {
 		// Получатель: останавливаем WebDAV сервер перед созданием TCP listener
@@ -676,4 +705,77 @@ func (s *WebDAVServer) IsTCPForwardingActive() bool {
 	s.tcpForwardingMu.RLock()
 	defer s.tcpForwardingMu.RUnlock()
 	return s.tcpForwarding && s.tcpForwarder != nil && s.tcpForwarder.IsActive()
+}
+
+// RestartTCPForwarding перезапускает TCP форвардинг с новым адресом
+func (s *WebDAVServer) RestartTCPForwarding(addr string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Если форвардинг не активен, ничего не делаем
+	if !s.tcpForwarding || s.tcpForwarder == nil || !s.tcpForwarder.IsActive() {
+		return nil
+	}
+
+	// Если адрес тот же, перезапуск не нужен
+	if s.addr == addr {
+		return nil
+	}
+
+	log.Infof("RestartTCPForwarding: restarting TCP forwarding from %s to %s", s.addr, addr)
+
+	// Сохраняем соединение croc
+	tcpForwarder := s.tcpForwarder
+	conn := tcpForwarder.controlConn
+	isSender := tcpForwarder.isSender
+	key := tcpForwarder.key
+
+	// Останавливаем старый форвардер
+	s.tcpForwarder.Stop()
+	s.tcpForwarder = nil
+
+	// Закрываем TCP listener если есть
+	if s.tcpListener != nil {
+		s.tcpListener.Close()
+		s.tcpListener = nil
+	}
+
+	// Создаем новый форвардер на новом адресе
+	var localServerAddr string
+	if isSender {
+		localServerAddr = addr // Адрес локального WebDAV сервера
+	}
+	newForwarder := NewTCPForwarder(conn, isSender, key, localServerAddr)
+
+	if isSender {
+		// Отправитель: запускаем форвардер
+		if err := newForwarder.Start(); err != nil {
+			return fmt.Errorf("failed to restart TCP forwarder sender: %w", err)
+		}
+		log.Infof("TCP forwarder sender restarted on %s", localServerAddr)
+	} else {
+		// Получатель: запускаем форвардер
+		if err := newForwarder.Start(); err != nil {
+			return fmt.Errorf("failed to restart TCP forwarder receiver: %w", err)
+		}
+
+		// Создаем TCP listener на новом порту
+		listener, err := net.Listen("tcp", addr)
+		if err != nil {
+			newForwarder.Stop()
+			return fmt.Errorf("failed to create TCP listener on %s: %w", addr, err)
+		}
+
+		s.tcpListener = listener
+		log.Infof("TCP forwarder receiver listening on %s", addr)
+
+		// Запускаем горутину для принятия локальных соединений
+		go s.acceptLocalConnections(newForwarder)
+	}
+
+	// Обновляем адрес в структуре
+	s.addr = addr
+	s.tcpForwarder = newForwarder
+	log.Infof("RestartTCPForwarding: TCP forwarding restarted successfully")
+	return nil
 }
