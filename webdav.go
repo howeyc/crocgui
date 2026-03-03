@@ -187,7 +187,7 @@ func NewWebDAVServer() *WebDAVServer {
 
 // Определяем какую FileSystem использовать
 func createFileSystem(root string) webdav.FileSystem {
-	if base := filepath.Base(root); !CanCreateSymlinks() && base == SEND {
+	if base := filepath.Base(root); base == SEND { //!CanCreateSymlinks() &&
 		return &ResolvingFileSystem{root: root}
 	}
 	return webdav.Dir(root)
