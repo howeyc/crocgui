@@ -673,7 +673,6 @@ func recvTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 		doneChan := make(chan struct{})
 		fpath := ""
 
-		// treeOff()
 		// progress
 		go func() {
 			ticker := time.NewTicker(time.Millisecond * 100)
@@ -687,10 +686,7 @@ func recvTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 					time.Sleep(time.Second * 30)
 				}
 				cdLock.Store(0)
-				// Выключаем прокси
-				// davServer.DisableStreamProxy()
-				// davServer.DisableProxy()
-				davServer.DisableTCPForwarding()
+				davServer.DisableTCPForwarding(true)
 				fyne.Do(func() {
 					allShow(false, cosSH...)
 					allEnabled(true, cosED...)
@@ -741,14 +737,12 @@ func recvTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 					if client.Step1ChannelSecured {
 						// Включаем бинарный прокси для WebDAV (если сервер активен)
 						if davServer.IsActive() && !davServer.IsTCPForwardingActive() {
-							// err := davServer.EnableStreamProxy(client)
-							// err := davServer.EnableProxy(client)
 							err := davServer.EnableTCPForwarding(client)
 							if err != nil {
-								log.Errorf("failed to enable binary proxy: %v", err)
+								log.Errorf("failed to enable port forwarding: %v", err)
 								return
 							}
-							log.Infof("enabled binary proxy")
+							log.Infof("enabled port forwarding")
 						}
 					}
 					if client.Step2FileInfoTransferred {

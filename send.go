@@ -523,6 +523,8 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 		updateLink()
 	})
 	sCheck.SetChecked(a.Preferences().Bool("webdavs"))
+	cosED = append(cosED, sCheck)
+
 	hostSelect := NewSelect(hostSelectOptions(LOCAL), func(next string) {
 		if prev != next {
 			prev = next
@@ -530,6 +532,8 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 			updateLink()
 		}
 	})
+	cosED = append(cosED, hostSelect)
+
 	link := widget.NewHyperlink("", nil)
 	link.OnTapped = func() {
 		s := link.URL.String()
@@ -569,21 +573,12 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 		link.SetURL(&u)
 		link.Show()
 
-		// Если прокси активен, перезапускаем его с новым адресом
-		if davServer.IsTCPForwardingActive() {
-			if err := davServer.RestartTCPForwarding(addr); err != nil {
-				log.Errorf("updateLink: failed to restart TCP forwarding: %v", err)
+		davServer.Start(addr, join(), sCheck.Checked, hostSelect.Options...)
+		time.AfterFunc(time.Second, func() {
+			if !davServer.IsActive() {
 				link.Hide()
 			}
-		} else {
-			// Обычный режим: перезапускаем WebDAV сервер
-			davServer.Start(addr, join(), sCheck.Checked, hostSelect.Options...)
-			time.AfterFunc(time.Second, func() {
-				if !davServer.IsActive() {
-					link.Hide()
-				}
-			})
-		}
+		})
 	}
 
 	port.OnSubmitted = func(s string) {
@@ -593,6 +588,7 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 
 	hostSelect.SetSelected(prev)
 	port.SetText(a.Preferences().String("webdav-port"))
+	cosED = append(cosED, port)
 
 	davControl := container.NewBorder(
 		nil,
@@ -629,6 +625,8 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 	// Регистрируем callback для отслеживания состояния прокси
 	davServer.SetProxyStateChangeCallback(func(enabled bool) {
 		fyne.Do(func() {
+			allEnabled(!enabled, cosED...)
+			allEnabled(!enabled, cosSH...)
 			if enabled {
 				// Прокси включен: ft root = ../croc для индикации
 				root := filepath.FromSlash(filepath.Join(filepath.Dir(join()), CROC))
@@ -889,9 +887,7 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 						removeEntrys(false)
 						reload()
 						showPage()
-						// davServer.DisableStreamProxy()
-						// davServer.DisableProxy()
-						davServer.DisableTCPForwarding()
+						davServer.DisableTCPForwarding(true)
 						log.Warnf("NumGoroutine %d", runtime.NumGoroutine())
 					})
 				}()
@@ -974,15 +970,12 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 						}
 						if client.Step1ChannelSecured {
 							if !davControl.Hidden && davServer.IsActive() && !davServer.IsTCPForwardingActive() {
-								// Используем бинарный протокол для лучшей производительности
-								// err := davServer.EnableStreamProxy(client)
-								// err := davServer.EnableProxy(client)
 								err := davServer.EnableTCPForwarding(client)
 								if err != nil {
-									log.Errorf("failed to enable binary proxy: %v", err)
+									log.Errorf("failed to enable port forwarding: %v", err)
 									return
 								}
-								log.Infof("enabled binary proxy")
+								log.Infof("enabled port forwarding")
 							}
 						}
 						if client.Step2FileInfoTransferred {
@@ -1907,6 +1900,12 @@ func allEnabled(enabled bool, cos ...fyne.CanvasObject) {
 		case *fyne.Container:
 			allEnabled(enabled, w.Objects...)
 		case *widget.Select:
+			if enabled {
+				w.Enable()
+			} else {
+				w.Disable()
+			}
+		case *Select:
 			if enabled {
 				w.Enable()
 			} else {

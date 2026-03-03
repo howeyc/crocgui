@@ -22,6 +22,7 @@ import (
 
 	gomime "github.com/cubewise-code/go-mime"
 	"github.com/schollz/croc/v10/src/croc"
+	"github.com/schollz/croc/v10/src/models"
 	"github.com/schollz/croc/v10/src/tcp"
 	log "github.com/schollz/logger"
 	"golang.org/x/net/webdav"
@@ -42,21 +43,12 @@ type WebDAVServer struct {
 	tlsAddrs       []string
 	tlsConfigError error
 
-	// НОВОЕ: прокси-режим
-	proxy interface {
-		IsActive() bool
-		Stop() error
-	} // активный прокси (StreamCrocProxy)
-
-	// Для отслеживания оригинального handler
-	localHandler   http.Handler
-	currentHandler http.Handler
+	localHandler http.Handler
 
 	// Callback для уведомления о смене состояния прокси
 	onProxyStateChanged func(enabled bool)
 	remote              bool
 
-	// TCP форвардер (альтернатива HTTP прокси)
 	tcpForwarder    *TCPForwarder
 	tcpListener     net.Listener
 	tcpForwarding   bool
@@ -64,7 +56,7 @@ type WebDAVServer struct {
 }
 
 // WebDAVWithDirectoryListing оборачивает стандартный WebDAV handler для поддержки
-// красивого отображения директорий при GET запросах
+// отображения директорий при GET запросах
 type WebDAVWithDirectoryListing struct {
 	webdavHandler *webdav.Handler
 	fileSystem    webdav.FileSystem
@@ -224,7 +216,7 @@ func (s *WebDAVServer) createLocalHandler(root string) http.Handler {
 // handlerRouter направляет запросы к текущему активному handler'у
 func (s *WebDAVServer) handlerRouter(w http.ResponseWriter, r *http.Request) {
 	s.mu.RLock()
-	handler := s.currentHandler
+	handler := s.localHandler
 	s.mu.RUnlock()
 
 	if handler == nil {
@@ -250,9 +242,8 @@ func (s *WebDAVServer) Start(addr, root string, useTLS bool, addrs ...string) er
 	caffeinate(1)
 	s.useTLS = useTLS
 
-	// Создаем локальный handler и устанавливаем его как текущий
+	// Создаем локальный handler
 	s.localHandler = s.createLocalHandler(root)
-	s.currentHandler = s.localHandler
 
 	// Создаем сервер с handlerRouter, который выбирает текущий handler
 	s.server = &http.Server{
@@ -398,14 +389,11 @@ func generateTLSConfig(addrs ...string) (*tls.Config, error) {
 
 // Stop останавливает сервер и прокси если есть
 func (s *WebDAVServer) Stop() error {
+	// Останавливаем прокси если есть
+	s.DisableTCPForwarding(false)
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
-
-	// Останавливаем прокси если есть
-	if s.proxy != nil {
-		s.proxy.Stop()
-		s.proxy = nil
-	}
 
 	return s.stopLocked()
 }
@@ -440,16 +428,6 @@ func (s *WebDAVServer) IsActive() bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.active
-}
-
-// GetAddr returns the address on which the server is running (if active).
-func (s *WebDAVServer) GetAddr() string {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	if s.server != nil {
-		return s.server.Addr
-	}
-	return ""
 }
 
 // SetProxyStateChangeCallback устанавливает callback для уведомления о смене состояния прокси
@@ -605,7 +583,7 @@ func (s *WebDAVServer) acceptLocalConnections(forwarder *TCPForwarder) {
 }
 
 // DisableTCPForwarding отключает TCP портфорвардинг
-func (s *WebDAVServer) DisableTCPForwarding() {
+func (s *WebDAVServer) DisableTCPForwarding(restore bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -636,7 +614,7 @@ func (s *WebDAVServer) DisableTCPForwarding() {
 
 	// Восстанавливаем WebDAV сервер, если он был остановлен
 	// Используем сохраненные параметры
-	if s.root != "" && s.addr != "" {
+	if restore && s.root != "" && s.addr != "" {
 		log.Infof("Restarting WebDAV server on %s for %s after disabling TCP forwarding", s.addr, s.root)
 		s.startLocked()
 	}
@@ -650,9 +628,8 @@ func (s *WebDAVServer) startLocked() error {
 		return nil // Уже запущен
 	}
 
-	// Создаем локальный handler и устанавливаем его как текущий
+	// Создаем локальный handler
 	s.localHandler = s.createLocalHandler(s.root)
-	s.currentHandler = s.localHandler
 
 	// Создаем сервер с handlerRouter
 	s.server = &http.Server{
@@ -706,76 +683,19 @@ func (s *WebDAVServer) IsTCPForwardingActive() bool {
 	defer s.tcpForwardingMu.RUnlock()
 	return s.tcpForwarding && s.tcpForwarder != nil && s.tcpForwarder.IsActive()
 }
-
-// RestartTCPForwarding перезапускает TCP форвардинг с новым адресом
-func (s *WebDAVServer) RestartTCPForwarding(addr string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	// Если форвардинг не активен, ничего не делаем
-	if !s.tcpForwarding || s.tcpForwarder == nil || !s.tcpForwarder.IsActive() {
-		return nil
-	}
-
-	// Если адрес тот же, перезапуск не нужен
-	if s.addr == addr {
-		return nil
-	}
-
-	log.Infof("RestartTCPForwarding: restarting TCP forwarding from %s to %s", s.addr, addr)
-
-	// Сохраняем соединение croc
-	tcpForwarder := s.tcpForwarder
-	conn := tcpForwarder.controlConn
-	isSender := tcpForwarder.isSender
-	key := tcpForwarder.key
-
-	// Останавливаем старый форвардер
-	s.tcpForwarder.Stop()
-	s.tcpForwarder = nil
-
-	// Закрываем TCP listener если есть
-	if s.tcpListener != nil {
-		s.tcpListener.Close()
-		s.tcpListener = nil
-	}
-
-	// Создаем новый форвардер на новом адресе
-	var localServerAddr string
-	if isSender {
-		localServerAddr = addr // Адрес локального WebDAV сервера
-	}
-	newForwarder := NewTCPForwarder(conn, isSender, key, localServerAddr)
-
-	if isSender {
-		// Отправитель: запускаем форвардер
-		if err := newForwarder.Start(); err != nil {
-			return fmt.Errorf("failed to restart TCP forwarder sender: %w", err)
+func defAddress(hp string, ports ...string) (host, port, address string) {
+	var err error
+	host, port, err = net.SplitHostPort(hp)
+	// Default port to :9009
+	if err != nil {
+		host = hp
+		port = models.DEFAULT_PORT
+		for _, p := range ports {
+			port = p
+			break
 		}
-		log.Infof("TCP forwarder sender restarted on %s", localServerAddr)
-	} else {
-		// Получатель: запускаем форвардер
-		if err := newForwarder.Start(); err != nil {
-			return fmt.Errorf("failed to restart TCP forwarder receiver: %w", err)
-		}
-
-		// Создаем TCP listener на новом порту
-		listener, err := net.Listen("tcp", addr)
-		if err != nil {
-			newForwarder.Stop()
-			return fmt.Errorf("failed to create TCP listener on %s: %w", addr, err)
-		}
-
-		s.tcpListener = listener
-		log.Infof("TCP forwarder receiver listening on %s", addr)
-
-		// Запускаем горутину для принятия локальных соединений
-		go s.acceptLocalConnections(newForwarder)
 	}
-
-	// Обновляем адрес в структуре
-	s.addr = addr
-	s.tcpForwarder = newForwarder
-	log.Infof("RestartTCPForwarding: TCP forwarding restarted successfully")
-	return nil
+	log.Debugf("got host '%v' and port '%v'", host, port)
+	address = net.JoinHostPort(host, port)
+	return
 }

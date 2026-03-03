@@ -108,14 +108,18 @@ func (f *TCPForwarder) Stop() error {
 	}
 
 	// Закрываем все активные соединения
+	log.Debugf("TCP forwarder: Stop() - closing all active connections")
 	f.connections.Range(func(key, value interface{}) bool {
 		if conn, ok := value.(net.Conn); ok {
+			log.Debugf("TCP forwarder: Stop() - closing net.Conn for connID=%v", key)
 			conn.Close()
 		} else if ch, ok := value.(chan []byte); ok {
+			log.Debugf("TCP forwarder: Stop() - closing channel for connID=%v", key)
 			close(ch)
 		}
 		return true
 	})
+	log.Debugf("TCP forwarder: Stop() - all connections closed")
 
 	log.Info("TCP forwarder stopped")
 	return nil
@@ -208,8 +212,12 @@ func (f *TCPForwarder) ForwardConnection(localConn net.Conn) error {
 	go func() {
 		defer localConn.Close()
 		defer func() {
-			recover() // Игнорируем панику при закрытии уже закрытого канала
+			log.Debugf("TCP forwarder receiver: attempting to close receiveDataChan for connID=%d (goroutine send-to-tunnel)", connID)
+			if r := recover(); r != nil {
+				log.Debugf("TCP forwarder receiver: recovered from panic in defer for connID=%d: %v", connID, r)
+			}
 			close(receiveDataChan)
+			log.Debugf("TCP forwarder receiver: successfully closed receiveDataChan for connID=%d (goroutine send-to-tunnel)", connID)
 		}()
 		defer f.connections.Delete(connID)
 
