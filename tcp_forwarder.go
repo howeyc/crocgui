@@ -3,6 +3,7 @@ package main
 
 import (
 	"crypto/rand"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -174,7 +175,7 @@ func (f *TCPForwarder) ForwardConnection(localConn net.Conn) error {
 				}
 			}
 			if err != nil {
-				if err != io.EOF {
+				if !errors.Is(err, io.EOF) && !errors.Is(err, net.ErrClosed) {
 					log.Errorf("TCP forwarder: read error for connection %d: %v", connID, err)
 				}
 				break
@@ -229,7 +230,9 @@ func (f *TCPForwarder) ForwardConnection(localConn net.Conn) error {
 					return
 				}
 				if _, err := localConn.Write(data); err != nil {
-					log.Errorf("TCP forwarder: write error for connection %d: %v", connID, err)
+					if !errors.Is(err, net.ErrClosed) {
+						log.Errorf("TCP forwarder: write error for connection %d: %v", connID, err)
+					}
 					return
 				}
 				totalWritten += len(data)
@@ -371,7 +374,9 @@ func (f *TCPForwarder) handleSenderMessage(data []byte) {
 		// Пишем данные в локальное соединение
 		if len(payload) > 0 {
 			if _, err := localConn.Write(payload); err != nil {
-				log.Errorf("TCP forwarder: write error for connection %d: %v", connID, err)
+				if !errors.Is(err, net.ErrClosed) {
+					log.Errorf("TCP forwarder: write error for connection %d: %v", connID, err)
+				}
 				f.closeSenderConnection(connID, localConn)
 				return
 			}
@@ -421,7 +426,7 @@ func (f *TCPForwarder) senderReadLoop(connID ForwarderConnID, localConn net.Conn
 			}
 		}
 		if err != nil {
-			if err != io.EOF {
+			if !errors.Is(err, io.EOF) && !errors.Is(err, net.ErrClosed) {
 				log.Errorf("TCP forwarder sender: read error for connection %d: %v", connID, err)
 			}
 			break
@@ -547,7 +552,9 @@ func (f *TCPForwarder) sendMessage(connID ForwarderConnID, msgType byte, payload
 	// Отправляем через croc туннель
 	err = f.controlConn.Send(encrypted)
 	if err != nil {
-		log.Errorf("TCP forwarder: send error for connID=%d: %v", connID, err)
+		if !errors.Is(err, net.ErrClosed) {
+			log.Errorf("TCP forwarder: send error for connID=%d: %v", connID, err)
+		}
 	}
 	return err
 }

@@ -8,12 +8,23 @@ import (
 	"strings"
 	"time"
 
+	log "github.com/schollz/logger"
 	"golang.org/x/net/webdav"
 )
 
 // ResolvingFileSystem implements webdav.FileSystem with symlink resolution
 type ResolvingFileSystem struct {
 	root string
+}
+
+// sanitizePath проверяет и очищает путь от попыток directory traversal
+// Возвращает ошибку, если путь пытается выйти за пределы root через ..
+func (fs *ResolvingFileSystem) sanitizePath(name string) error {
+	if hasTraversal, _ := DetectPathTraversal(name); hasTraversal {
+		log.Warnf("Path traversal attempt detected: %s", name)
+		return os.ErrPermission
+	}
+	return nil
 }
 
 // isVirtualPath проверяет, является ли путь виртуальным (через псевдоссылку)
@@ -91,6 +102,11 @@ func (fs *ResolvingFileSystem) resolvePath(ctx context.Context, name string) (st
 
 // Mkdir implements webdav.FileSystem
 func (fs *ResolvingFileSystem) Mkdir(ctx context.Context, name string, perm os.FileMode) error {
+	// Проверяем на directory traversal
+	if err := fs.sanitizePath(name); err != nil {
+		return err
+	}
+
 	// Check if this is a virtual path (read-only)
 	if fs.isVirtualPath(name) {
 		return os.ErrPermission
@@ -109,6 +125,11 @@ func (fs *ResolvingFileSystem) Mkdir(ctx context.Context, name string, perm os.F
 
 // OpenFile implements webdav.FileSystem
 func (fs *ResolvingFileSystem) OpenFile(ctx context.Context, name string, flag int, perm os.FileMode) (webdav.File, error) {
+	// Проверяем на directory traversal
+	if err := fs.sanitizePath(name); err != nil {
+		return nil, err
+	}
+
 	// Check for write operations on virtual paths
 	isVirtual := fs.isVirtualPath(name)
 	if isVirtual && (flag&(os.O_WRONLY|os.O_RDWR|os.O_CREATE|os.O_TRUNC) != 0) {
@@ -136,6 +157,11 @@ func (fs *ResolvingFileSystem) OpenFile(ctx context.Context, name string, flag i
 
 // RemoveAll implements webdav.FileSystem
 func (fs *ResolvingFileSystem) RemoveAll(ctx context.Context, name string) error {
+	// Проверяем на directory traversal
+	if err := fs.sanitizePath(name); err != nil {
+		return err
+	}
+
 	// Check if this is a virtual path (read-only)
 	if fs.isVirtualPath(name) {
 		return os.ErrPermission
@@ -150,6 +176,14 @@ func (fs *ResolvingFileSystem) RemoveAll(ctx context.Context, name string) error
 
 // Rename implements webdav.FileSystem
 func (fs *ResolvingFileSystem) Rename(ctx context.Context, oldName, newName string) error {
+	// Проверяем на directory traversal для обоих путей
+	if err := fs.sanitizePath(oldName); err != nil {
+		return err
+	}
+	if err := fs.sanitizePath(newName); err != nil {
+		return err
+	}
+
 	// Check if either path is virtual (read-only)
 	if fs.isVirtualPath(oldName) || fs.isVirtualPath(newName) {
 		return os.ErrPermission
@@ -168,6 +202,11 @@ func (fs *ResolvingFileSystem) Rename(ctx context.Context, oldName, newName stri
 
 // Stat implements webdav.FileSystem
 func (fs *ResolvingFileSystem) Stat(ctx context.Context, name string) (os.FileInfo, error) {
+	// Проверяем на directory traversal
+	if err := fs.sanitizePath(name); err != nil {
+		return nil, err
+	}
+
 	resolvedPath, err := fs.resolvePath(ctx, name)
 	if err != nil {
 		return nil, err

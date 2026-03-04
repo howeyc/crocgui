@@ -63,7 +63,51 @@ type WebDAVWithDirectoryListing struct {
 	fileSystem    webdav.FileSystem
 }
 
+// DetectPathTraversal проверяет путь на попытки directory traversal
+// Возвращает true, если обнаружена попытка выхода за пределы корневой директории
+func DetectPathTraversal(path string) (hasTraversal bool, cleanedPath string) {
+	// Нормализуем путь (убираем . и лишние слеши)
+	cleaned := filepath.Clean(path)
+
+	// Убираем ведущий слеш для унификации
+	cleaned = strings.TrimPrefix(cleaned, "/")
+
+	// Разбиваем на компоненты
+	parts := strings.Split(cleaned, "/")
+
+	// Отслеживаем глубину вложенности
+	depth := 0
+	for _, part := range parts {
+		switch part {
+		case "", ".":
+			// Пустые компоненты и текущая директория - игнорируем
+			continue
+		case "..":
+			// Попытка подняться выше
+			depth--
+			if depth < 0 {
+				// Пытаемся выйти за пределы корня
+				return true, cleaned
+			}
+		default:
+			// Обычная директория
+			depth++
+		}
+	}
+
+	return false, cleaned
+}
+
 func (h *WebDAVWithDirectoryListing) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if hasTraversal, cleanedPath := DetectPathTraversal(r.URL.Path); hasTraversal {
+		log.Warnf("Path traversal attempt detected: %s", r.URL.Path)
+		http.Error(w, "Forbidden: Path traversal detected", http.StatusForbidden)
+		return
+	} else {
+		// Используем cleanedPath для дальнейшей работы
+		r.URL.Path = cleanedPath
+	}
+
 	// Отдаем встроенную иконку для favicon запросов
 	if r.URL.Path == "/favicon.ico" {
 		log.Debugf("Request %s %s", r.Method, r.URL.Path)
