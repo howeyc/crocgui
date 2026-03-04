@@ -243,11 +243,6 @@ func (f *TCPForwarder) ForwardConnection(localConn net.Conn) error {
 
 // senderLoop - отправитель принимает forwarded connections и пробрасывает к локальному серверу
 func (f *TCPForwarder) senderLoop() {
-	type readResult struct {
-		data []byte
-		err  error
-	}
-
 	// Каналы для приоритезации сообщений
 	priorityChan := make(chan []byte, 10) // ForwardMsgClose, ForwardMsgError - критический приоритет
 	highChan := make(chan []byte, 10)     // ForwardMsgOpen - высокий приоритет
@@ -255,27 +250,15 @@ func (f *TCPForwarder) senderLoop() {
 	smallChan := make(chan []byte, 10)    // ForwardMsgData < 10 КБ - средний приоритет
 	normalChan := make(chan []byte, 10)   // ForwardMsgData >= 10 КБ - низкий приоритет
 
-	// Канал для результатов чтения
-	readChan := make(chan readResult, 1)
+	// Запускаем reader в отдельной горутине
+	go f.senderReaderLoop(priorityChan, highChan, tinyChan, smallChan, normalChan)
 
-	go func() {
-		for {
-			data, err := f.controlConn.Receive()
-			select {
-			case readChan <- readResult{data: data, err: err}:
-			case <-f.stopChan:
-				return
-			case <-done:
-				return
-			}
-		}
-	}()
-
+	// Processor - обрабатывает сообщения с приоритезацией
 	for {
 		// Сначала проверяем stopChan
 		select {
 		case <-f.stopChan:
-			log.Debug("TCP forwarder sender loop stopped")
+			log.Debug("TCP forwarder sender processor stopped")
 			return
 		case <-done:
 			return
@@ -321,34 +304,48 @@ func (f *TCPForwarder) senderLoop() {
 			continue
 		default:
 		}
+	}
+}
 
-		// Читаем новые сообщения только если все приоритетные каналы пусты
+// senderReaderLoop читает сообщения из controlConn и распределяет по приоритетным каналам
+func (f *TCPForwarder) senderReaderLoop(priorityChan, highChan, tinyChan, smallChan, normalChan chan []byte) {
+	defer log.Debug("TCP forwarder sender reader stopped")
+
+	for {
 		select {
-		case result := <-readChan:
-			if result.err != nil {
-				log.Errorf("TCP forwarder sender loop error: %v", result.err)
+		case <-f.stopChan:
+			return
+		case <-done:
+			return
+		default:
+			data, err := f.controlConn.Receive()
+			if err != nil {
+				if !errors.Is(err, net.ErrClosed) && !errors.Is(err, io.EOF) {
+					log.Errorf("TCP forwarder sender reader error: %v", err)
+				}
 				return
 			}
+
 			// Распределяем сообщение по приоритету
-			_, msgType, payload, err := f.decodeMessage(result.data)
+			_, msgType, payload, err := f.decodeMessage(data)
 			if err != nil {
 				log.Errorf("TCP forwarder sender: failed to decode message for priority: %v", err)
 				continue
 			}
 			switch msgType {
 			case ForwardMsgClose, ForwardMsgError:
-				priorityChan <- result.data
+				priorityChan <- data
 			case ForwardMsgOpen:
-				highChan <- result.data
+				highChan <- data
 			case ForwardMsgData:
 				// Приоритезация по размеру
 				payloadLen := len(payload)
 				if payloadLen < 1024 { // < 1 КБ
-					tinyChan <- result.data
+					tinyChan <- data
 				} else if payloadLen < 10240 { // < 10 КБ
-					smallChan <- result.data
+					smallChan <- data
 				} else {
-					normalChan <- result.data
+					normalChan <- data
 				}
 			}
 		}
@@ -357,11 +354,6 @@ func (f *TCPForwarder) senderLoop() {
 
 // receiverLoop - получатель принимает сообщения из туннеля и направляет в соответствующие соединения
 func (f *TCPForwarder) receiverLoop() {
-	type readResult struct {
-		data []byte
-		err  error
-	}
-
 	// Каналы для приоритезации сообщений
 	priorityChan := make(chan []byte, 10) // ForwardMsgClose, ForwardMsgError - критический приоритет
 	highChan := make(chan []byte, 10)     // ForwardMsgOpen - высокий приоритет
@@ -369,27 +361,15 @@ func (f *TCPForwarder) receiverLoop() {
 	smallChan := make(chan []byte, 10)    // ForwardMsgData < 10 КБ - средний приоритет
 	normalChan := make(chan []byte, 10)   // ForwardMsgData >= 10 КБ - низкий приоритет
 
-	// Канал для результатов чтения
-	readChan := make(chan readResult, 1)
+	// Запускаем reader в отдельной горутине
+	go f.receiverReaderLoop(priorityChan, highChan, tinyChan, smallChan, normalChan)
 
-	go func() {
-		for {
-			data, err := f.controlConn.Receive()
-			select {
-			case readChan <- readResult{data: data, err: err}:
-			case <-f.stopChan:
-				return
-			case <-done:
-				return
-			}
-		}
-	}()
-
+	// Processor - обрабатывает сообщения с приоритезацией
 	for {
 		// Сначала проверяем stopChan
 		select {
 		case <-f.stopChan:
-			log.Debug("TCP forwarder receiver loop stopped")
+			log.Debug("TCP forwarder receiver processor stopped")
 			return
 		case <-done:
 			return
@@ -435,34 +415,48 @@ func (f *TCPForwarder) receiverLoop() {
 			continue
 		default:
 		}
+	}
+}
 
-		// Читаем новые сообщения только если все приоритетные каналы пусты
+// receiverReaderLoop читает сообщения из controlConn и распределяет по приоритетным каналам
+func (f *TCPForwarder) receiverReaderLoop(priorityChan, highChan, tinyChan, smallChan, normalChan chan []byte) {
+	defer log.Debug("TCP forwarder receiver reader stopped")
+
+	for {
 		select {
-		case result := <-readChan:
-			if result.err != nil {
-				log.Errorf("TCP forwarder receiver loop error: %v", result.err)
+		case <-f.stopChan:
+			return
+		case <-done:
+			return
+		default:
+			data, err := f.controlConn.Receive()
+			if err != nil {
+				if !errors.Is(err, net.ErrClosed) && !errors.Is(err, io.EOF) {
+					log.Errorf("TCP forwarder receiver reader error: %v", err)
+				}
 				return
 			}
+
 			// Распределяем сообщение по приоритету
-			_, msgType, payload, err := f.decodeMessage(result.data)
+			_, msgType, payload, err := f.decodeMessage(data)
 			if err != nil {
 				log.Errorf("TCP forwarder receiver: failed to decode message for priority: %v", err)
 				continue
 			}
 			switch msgType {
 			case ForwardMsgClose, ForwardMsgError:
-				priorityChan <- result.data
+				priorityChan <- data
 			case ForwardMsgOpen:
-				highChan <- result.data
+				highChan <- data
 			case ForwardMsgData:
 				// Приоритезация по размеру
 				payloadLen := len(payload)
 				if payloadLen < 1024 { // < 1 КБ
-					tinyChan <- result.data
+					tinyChan <- data
 				} else if payloadLen < 10240 { // < 10 КБ
-					smallChan <- result.data
+					smallChan <- data
 				} else {
-					normalChan <- result.data
+					normalChan <- data
 				}
 			}
 		}
