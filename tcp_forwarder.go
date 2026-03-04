@@ -247,6 +247,15 @@ func (f *TCPForwarder) senderLoop() {
 		data []byte
 		err  error
 	}
+
+	// Каналы для приоритезации сообщений
+	priorityChan := make(chan []byte, 10) // ForwardMsgClose, ForwardMsgError - критический приоритет
+	highChan := make(chan []byte, 10)     // ForwardMsgOpen - высокий приоритет
+	tinyChan := make(chan []byte, 10)     // ForwardMsgData < 1 КБ - очень высокий приоритет
+	smallChan := make(chan []byte, 10)    // ForwardMsgData < 10 КБ - средний приоритет
+	normalChan := make(chan []byte, 10)   // ForwardMsgData >= 10 КБ - низкий приоритет
+
+	// Канал для результатов чтения
 	readChan := make(chan readResult, 1)
 
 	go func() {
@@ -263,18 +272,85 @@ func (f *TCPForwarder) senderLoop() {
 	}()
 
 	for {
+		// Сначала проверяем stopChan
 		select {
 		case <-f.stopChan:
 			log.Debug("TCP forwarder sender loop stopped")
 			return
 		case <-done:
 			return
+		default:
+		}
+
+		// Приоритет 1: critical messages (ForwardMsgClose, ForwardMsgError)
+		select {
+		case data := <-priorityChan:
+			f.handleSenderMessage(data)
+			continue
+		default:
+		}
+
+		// Приоритет 2: high priority (ForwardMsgOpen)
+		select {
+		case data := <-highChan:
+			f.handleSenderMessage(data)
+			continue
+		default:
+		}
+
+		// Приоритет 3: tiny data (< 1 КБ)
+		select {
+		case data := <-tinyChan:
+			f.handleSenderMessage(data)
+			continue
+		default:
+		}
+
+		// Приоритет 4: small data (< 10 КБ)
+		select {
+		case data := <-smallChan:
+			f.handleSenderMessage(data)
+			continue
+		default:
+		}
+
+		// Приоритет 5: normal data (ForwardMsgData >= 10 КБ)
+		select {
+		case data := <-normalChan:
+			f.handleSenderMessage(data)
+			continue
+		default:
+		}
+
+		// Читаем новые сообщения только если все приоритетные каналы пусты
+		select {
 		case result := <-readChan:
 			if result.err != nil {
 				log.Errorf("TCP forwarder sender loop error: %v", result.err)
 				return
 			}
-			f.handleSenderMessage(result.data)
+			// Распределяем сообщение по приоритету
+			_, msgType, payload, err := f.decodeMessage(result.data)
+			if err != nil {
+				log.Errorf("TCP forwarder sender: failed to decode message for priority: %v", err)
+				continue
+			}
+			switch msgType {
+			case ForwardMsgClose, ForwardMsgError:
+				priorityChan <- result.data
+			case ForwardMsgOpen:
+				highChan <- result.data
+			case ForwardMsgData:
+				// Приоритезация по размеру
+				payloadLen := len(payload)
+				if payloadLen < 1024 { // < 1 КБ
+					tinyChan <- result.data
+				} else if payloadLen < 10240 { // < 10 КБ
+					smallChan <- result.data
+				} else {
+					normalChan <- result.data
+				}
+			}
 		}
 	}
 }
@@ -285,6 +361,15 @@ func (f *TCPForwarder) receiverLoop() {
 		data []byte
 		err  error
 	}
+
+	// Каналы для приоритезации сообщений
+	priorityChan := make(chan []byte, 10) // ForwardMsgClose, ForwardMsgError - критический приоритет
+	highChan := make(chan []byte, 10)     // ForwardMsgOpen - высокий приоритет
+	tinyChan := make(chan []byte, 10)     // ForwardMsgData < 1 КБ - очень высокий приоритет
+	smallChan := make(chan []byte, 10)    // ForwardMsgData < 10 КБ - средний приоритет
+	normalChan := make(chan []byte, 10)   // ForwardMsgData >= 10 КБ - низкий приоритет
+
+	// Канал для результатов чтения
 	readChan := make(chan readResult, 1)
 
 	go func() {
@@ -301,18 +386,85 @@ func (f *TCPForwarder) receiverLoop() {
 	}()
 
 	for {
+		// Сначала проверяем stopChan
 		select {
 		case <-f.stopChan:
 			log.Debug("TCP forwarder receiver loop stopped")
 			return
 		case <-done:
 			return
+		default:
+		}
+
+		// Приоритет 1: critical messages (ForwardMsgClose, ForwardMsgError)
+		select {
+		case data := <-priorityChan:
+			f.handleReceiverMessage(data)
+			continue
+		default:
+		}
+
+		// Приоритет 2: high priority (ForwardMsgOpen)
+		select {
+		case data := <-highChan:
+			f.handleReceiverMessage(data)
+			continue
+		default:
+		}
+
+		// Приоритет 3: tiny data (< 1 КБ)
+		select {
+		case data := <-tinyChan:
+			f.handleReceiverMessage(data)
+			continue
+		default:
+		}
+
+		// Приоритет 4: small data (< 10 КБ)
+		select {
+		case data := <-smallChan:
+			f.handleReceiverMessage(data)
+			continue
+		default:
+		}
+
+		// Приоритет 5: normal data (ForwardMsgData >= 10 КБ)
+		select {
+		case data := <-normalChan:
+			f.handleReceiverMessage(data)
+			continue
+		default:
+		}
+
+		// Читаем новые сообщения только если все приоритетные каналы пусты
+		select {
 		case result := <-readChan:
 			if result.err != nil {
 				log.Errorf("TCP forwarder receiver loop error: %v", result.err)
 				return
 			}
-			f.handleReceiverMessage(result.data)
+			// Распределяем сообщение по приоритету
+			_, msgType, payload, err := f.decodeMessage(result.data)
+			if err != nil {
+				log.Errorf("TCP forwarder receiver: failed to decode message for priority: %v", err)
+				continue
+			}
+			switch msgType {
+			case ForwardMsgClose, ForwardMsgError:
+				priorityChan <- result.data
+			case ForwardMsgOpen:
+				highChan <- result.data
+			case ForwardMsgData:
+				// Приоритезация по размеру
+				payloadLen := len(payload)
+				if payloadLen < 1024 { // < 1 КБ
+					tinyChan <- result.data
+				} else if payloadLen < 10240 { // < 10 КБ
+					smallChan <- result.data
+				} else {
+					normalChan <- result.data
+				}
+			}
 		}
 	}
 }
