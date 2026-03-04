@@ -8,6 +8,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"errors"
 	"fmt"
 	"math/big"
 	"net"
@@ -461,7 +462,7 @@ func (s *WebDAVServer) EnableTCPForwarding(client *croc.Client) error {
 	}
 
 	// Параметры туннеля
-	roomSuffix := 2 // Используем другой суффикс комнаты для TCP форвардинга
+	roomSuffix := 1
 	relayPort := basePort + roomSuffix + 1
 	roomName := fmt.Sprintf("%s-%d", client.Options.RoomName, roomSuffix)
 	relayAddrFull := net.JoinHostPort(host, strconv.Itoa(relayPort))
@@ -557,7 +558,9 @@ func (s *WebDAVServer) acceptLocalConnections(forwarder *TCPForwarder) {
 			s.tcpForwardingMu.RUnlock()
 
 			if active {
-				log.Errorf("Failed to accept connection: %v", err)
+				if !errors.Is(err, net.ErrClosed) {
+					log.Errorf("Failed to accept connection: %v", err)
+				}
 			} else {
 				log.Debugf("TCP listener stopped (forwarding disabled)")
 				return
@@ -575,7 +578,9 @@ func (s *WebDAVServer) acceptLocalConnections(forwarder *TCPForwarder) {
 				}
 			}()
 			if err := forwarder.ForwardConnection(c); err != nil {
-				log.Errorf("Failed to forward connection: %v", err)
+				if !errors.Is(err, net.ErrClosed) {
+					log.Errorf("Failed to forward connection: %v", err)
+				}
 				c.Close()
 			}
 		}(conn)
