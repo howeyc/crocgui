@@ -14,6 +14,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -65,12 +66,9 @@ type WebDAVWithDirectoryListing struct {
 
 // DetectPathTraversal проверяет путь на попытки directory traversal
 // Возвращает true, если обнаружена попытка выхода за пределы корневой директории
-func DetectPathTraversal(path string) (hasTraversal bool, cleanedPath string) {
+func DetectPathTraversal(p string) (hasTraversal bool, cleanedPath string) {
 	// Нормализуем путь (убираем . и лишние слеши)
-	cleaned := filepath.Clean(path)
-
-	// Убираем ведущий слеш для унификации
-	cleaned = strings.TrimPrefix(cleaned, "/")
+	cleaned := path.Clean(p)
 
 	// Разбиваем на компоненты
 	parts := strings.Split(cleaned, "/")
@@ -127,7 +125,7 @@ func (h *WebDAVWithDirectoryListing) ServeHTTP(w http.ResponseWriter, r *http.Re
 		// Если это файл, устанавливаем правильный Content-Type
 		if info, err := h.fileSystem.Stat(context.Background(), r.URL.Path); err == nil && !info.IsDir() {
 			// Определяем MIME-тип по расширению через go-mime
-			ext := filepath.Ext(r.URL.Path)
+			ext := path.Ext(r.URL.Path)
 			mimeType := gomime.TypeByExtension(ext)
 
 			if mimeType != "" {

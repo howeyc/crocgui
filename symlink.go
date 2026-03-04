@@ -58,6 +58,11 @@ func Readlink(name string) (string, error) {
 		return os.Readlink(name)
 	}
 
+	if fileInfo.IsDir() {
+		// log.Debugf("Readlink: IsDir  %s: %v", name, err)
+		return "", os.ErrInvalid
+	}
+
 	// Псевдосимлинки проверяем ТОЛЬКО в каталоге SEND
 	parentDir := filepath.Base(filepath.Dir(name))
 	if parentDir != SEND {

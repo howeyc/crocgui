@@ -17,8 +17,7 @@ import (
 
 // Константы для TCP форвардинга
 const (
-	ForwardBufferSize = 64 * 1024 // 64KB - соответствует TCP_BUFFER_SIZE в оригинальной библиотеке croc
-	ForwardTimeout    = 100 * time.Millisecond
+	ForwardBufferSize = 32*1024 - 8 // 32760 байт - для соответствия общему размеру пакета croc (32776 байт)
 )
 
 // Пул буферов для уменьшения GC давления
@@ -136,9 +135,10 @@ func (f *TCPForwarder) ForwardConnection(localConn net.Conn) error {
 
 	log.Infof("TCP forwarder: opened connection %d", connID)
 
-	// Создаем два канала: для отправки данных в туннель и для получения данных от сервера
-	sendDataChan := make(chan []byte, 500)    // Увеличен буфер для уменьшения блокировок (32MB)
-	receiveDataChan := make(chan []byte, 500) // Увеличен буфер для уменьшения блокировок (32MB)
+	// Создаем два небуферизованных канала: для отправки данных в туннель и для получения данных от сервера
+	// Небуферизованные каналы обеспечивают истинное обратное давление для точного отображения прогресса
+	sendDataChan := make(chan []byte)
+	receiveDataChan := make(chan []byte)
 	f.connections.Store(connID, receiveDataChan)
 
 	// Отправляем сообщение об открытии соединения
@@ -161,18 +161,12 @@ func (f *TCPForwarder) ForwardConnection(localConn net.Conn) error {
 			n, err := localConn.Read(buffer)
 			if n > 0 {
 				totalRead += n
-				// Отправляем данные в туннель через канал (блокирующая отправка с таймаутом 100ms)
+				// Отправляем данные в туннель через канал (блокирующая отправка)
 				data := make([]byte, n)
 				copy(data, buffer[:n])
 
-				// Блокирующая отправка с таймаутом - данные не теряются!
-				select {
-				case sendDataChan <- data:
-					// Успешно отправлено
-				case <-time.After(ForwardTimeout):
-					// Кратковременная задержка приемлема - канал освободится очень быстро
-					sendDataChan <- data
-				}
+				// Блокирующая отправка без таймаута - обеспечивает истинное обратное давление
+				sendDataChan <- data
 			}
 			if err != nil {
 				if !errors.Is(err, io.EOF) && !errors.Is(err, net.ErrClosed) {
@@ -475,24 +469,12 @@ func (f *TCPForwarder) handleReceiverMessage(data []byte) {
 			return
 		}
 
-		// Отправляем данные в канал (блокирующая отправка с таймаутом 100ms)
+		// Отправляем данные в канал (блокирующая отправка)
 		dataCopy := make([]byte, len(payload))
 		copy(dataCopy, payload)
 
-		// Блокирующая отправка с таймаутом - данные не теряются!
-		select {
-		case receiveDataChan <- dataCopy:
-			// Успешно отправлено
-		case <-time.After(ForwardTimeout):
-			// Кратковременная задержка приемлема - канал освободится очень быстро
-			// После ожидания проверяем, что канал еще открыт
-			select {
-			case receiveDataChan <- dataCopy:
-				// Успешно отправлено после ожидания
-			default:
-				// Канал закрыт - игнорируем данные без лога (нормальная ситуация)
-			}
-		}
+		// Блокирующая отправка без таймаута - обеспечивает истинное обратное давление
+		receiveDataChan <- dataCopy
 
 	case ForwardMsgClose:
 		val, ok := f.connections.Load(connID)
@@ -517,8 +499,8 @@ func (f *TCPForwarder) handleReceiverMessage(data []byte) {
 
 // sendMessage отправляет зашифрованное сообщение через croc туннель
 func (f *TCPForwarder) sendMessage(connID ForwarderConnID, msgType byte, payload []byte) error {
-	// Формируем пакет: [connID(8)][msgType(1)][payloadLen(4)][payload...]
-	packet := make([]byte, 13+len(payload))
+	// Формируем пакет: [connID(8)][msgType(4)][payloadLen(4)][payload...]
+	packet := make([]byte, 16+len(payload))
 
 	// Записываем connID
 	packet[0] = byte(connID)
@@ -530,17 +512,20 @@ func (f *TCPForwarder) sendMessage(connID ForwarderConnID, msgType byte, payload
 	packet[6] = byte(connID >> 48)
 	packet[7] = byte(connID >> 56)
 
-	// Записываем тип сообщения
+	// Записываем тип сообщения (4 байта)
 	packet[8] = msgType
+	packet[9] = 0
+	packet[10] = 0
+	packet[11] = 0
 
 	// Записываем длину payload
-	packet[9] = byte(len(payload))
-	packet[10] = byte(len(payload) >> 8)
-	packet[11] = byte(len(payload) >> 16)
-	packet[12] = byte(len(payload) >> 24)
+	packet[12] = byte(len(payload))
+	packet[13] = byte(len(payload) >> 8)
+	packet[14] = byte(len(payload) >> 16)
+	packet[15] = byte(len(payload) >> 24)
 
 	// Записываем payload
-	copy(packet[13:], payload)
+	copy(packet[16:], payload)
 
 	// Шифруем пакет
 	encrypted, err := crypt.Encrypt(packet, f.key)
@@ -567,8 +552,8 @@ func (f *TCPForwarder) decodeMessage(data []byte) (connID ForwarderConnID, msgTy
 		return 0, 0, nil, err
 	}
 
-	// Проверяем минимальную длину
-	if len(decrypted) < 13 {
+	// Проверяем минимальную длину (16 байт заголовка)
+	if len(decrypted) < 16 {
 		return 0, 0, nil, io.ErrUnexpectedEOF
 	}
 
@@ -582,18 +567,18 @@ func (f *TCPForwarder) decodeMessage(data []byte) (connID ForwarderConnID, msgTy
 		ForwarderConnID(decrypted[6])<<48 |
 		ForwarderConnID(decrypted[7])<<56
 
-	// Читаем тип сообщения
+	// Читаем тип сообщения (4 байта)
 	msgType = decrypted[8]
 
 	// Читаем длину payload
-	payloadLen := int(decrypted[9]) |
-		int(decrypted[10])<<8 |
-		int(decrypted[11])<<16 |
-		int(decrypted[12])<<24
+	payloadLen := int(decrypted[12]) |
+		int(decrypted[13])<<8 |
+		int(decrypted[14])<<16 |
+		int(decrypted[15])<<24
 
 	// Читаем payload
-	if payloadLen > 0 && len(decrypted) >= 13+payloadLen {
-		payload = decrypted[13 : 13+payloadLen]
+	if payloadLen > 0 && len(decrypted) >= 16+payloadLen {
+		payload = decrypted[16 : 16+payloadLen]
 	} else if payloadLen > 0 {
 		return 0, 0, nil, io.ErrUnexpectedEOF
 	}
