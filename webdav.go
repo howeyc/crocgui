@@ -115,7 +115,7 @@ func (h *WebDAVWithDirectoryListing) ServeHTTP(w http.ResponseWriter, r *http.Re
 	}
 	// Для GET запросов проверяем, является ли путь директорией
 	if r.Method == http.MethodGet {
-		log.Debugf("Request %s %s", r.Method, r.URL.Path)
+		log.Infof("Request %s %s", r.Method, r.URL.Path)
 		// Используем ту же FileSystem, что и webdav.Handler
 		if info, err := h.fileSystem.Stat(context.Background(), r.URL.Path); err == nil && info.IsDir() {
 			// Это директория - показываем список файлов
@@ -240,7 +240,7 @@ func (s *WebDAVServer) createLocalHandler(root string) http.Handler {
 			if err != nil {
 				log.Errorf("WebDAV request %s %s: %v", r.Method, r.URL.Path, err)
 			} else {
-				log.Debugf("WebDAV request %s %s", r.Method, r.URL.Path)
+				log.Infof("WebDAV request %s %s", r.Method, r.URL.Path)
 			}
 			// Для MOVE и COPY запросов логируем заголовок Destination
 			if r.Method == "MOVE" || r.Method == "COPY" {
