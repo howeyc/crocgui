@@ -23,6 +23,7 @@ import (
 	"time"
 
 	gomime "github.com/cubewise-code/go-mime"
+	"github.com/schollz/croc/v10/src/comm"
 	"github.com/schollz/croc/v10/src/croc"
 	"github.com/schollz/croc/v10/src/models"
 	"github.com/schollz/croc/v10/src/tcp"
@@ -486,7 +487,7 @@ func (s *WebDAVServer) EnableTCPForwarding(client *croc.Client) error {
 	defer s.mu.Unlock()
 
 	// Проверяем, не активен ли уже форвардинг
-	if s.tcpForwarding && s.tcpForwarder != nil && s.tcpForwarder.IsActive() {
+	if s.tcpForwarding && s.tcpForwarder != nil {
 		return fmt.Errorf("TCP forwarding already active")
 	}
 
@@ -503,26 +504,52 @@ func (s *WebDAVServer) EnableTCPForwarding(client *croc.Client) error {
 		return fmt.Errorf("invalid port number %s: %w", portStr, err)
 	}
 
-	// Параметры туннеля
-	roomSuffix := 1
-	relayPort := basePort + roomSuffix + 1
-	roomName := fmt.Sprintf("%s-%d", client.Options.RoomName, roomSuffix)
-	relayAddrFull := net.JoinHostPort(host, strconv.Itoa(relayPort))
+	// Параметры туннеля - создаем 2 соединения с roomSuffix от 1 до 2
+	var conns []*comm.Comm
+	var connErrors []error
+	var firstRelayPort int
+	var firstRoomName string
 
-	log.Infof("TCP forwarding: establishing connection to %s (room: %s)", relayAddrFull, roomName)
+	for roomSuffix := 1; roomSuffix <= 2; roomSuffix++ {
+		relayPort := basePort + roomSuffix + 1
+		roomName := fmt.Sprintf("%s-%d", client.Options.RoomName, roomSuffix)
+		relayAddrFull := net.JoinHostPort(host, strconv.Itoa(relayPort))
 
-	// Устанавливаем соединение
-	conn, banner, externalIP, err := tcp.ConnectToTCPServer(
-		relayAddrFull,
-		client.Options.RelayPassword,
-		roomName,
-		10*time.Second,
-	)
-	if err != nil {
-		return fmt.Errorf("failed to establish tunnel: %w", err)
+		log.Infof("TCP forwarding: establishing connection %d to %s (room: %s)", roomSuffix, relayAddrFull, roomName)
+
+		// Устанавливаем соединение
+		conn, banner, externalIP, err := tcp.ConnectToTCPServer(
+			relayAddrFull,
+			client.Options.RelayPassword,
+			roomName,
+			10*time.Second,
+		)
+		if err != nil {
+			connErrors = append(connErrors, fmt.Errorf("failed to establish tunnel %d: %w", roomSuffix, err))
+			// Продолжаем, чтобы закрыть все открытые соединения
+			break
+		}
+
+		log.Debugf("TCP forwarding tunnel %d connected: banner=%s, externalIP=%s", roomSuffix, banner, externalIP)
+		conns = append(conns, conn)
+
+		// Сохраняем первый порт и комнату для логирования
+		if roomSuffix == 1 {
+			firstRelayPort = relayPort
+			firstRoomName = roomName
+		}
 	}
 
-	log.Debugf("TCP forwarding tunnel connected: banner=%s, externalIP=%s", banner, externalIP)
+	// Если были ошибки, закрываем все соединения и возвращаем ошибку
+	if len(connErrors) > 0 || len(conns) != 2 {
+		for _, conn := range conns {
+			conn.Close()
+		}
+		if len(connErrors) > 0 {
+			return fmt.Errorf("failed to establish all tunnels: %v", connErrors[0])
+		}
+		return fmt.Errorf("failed to establish all 2 tunnels")
+	}
 
 	// Создаем TCP форвардер
 	// На стороне отправителя: localServerAddr - адрес локального WebDAV сервера
@@ -531,15 +558,18 @@ func (s *WebDAVServer) EnableTCPForwarding(client *croc.Client) error {
 	if client.Options.IsSender {
 		localServerAddr = s.addr // Адрес локального WebDAV сервера
 	}
-	tcpForwarder := NewTCPForwarder(conn, client.Options.IsSender, client.Key, localServerAddr)
+	tcpForwarder := NewTCPForwarder(conns, client.Options.IsSender, client.Key, localServerAddr)
 
 	if client.Options.IsSender {
 		// Отправитель: запускаем форвардер
 		if err := tcpForwarder.Start(); err != nil {
-			conn.Close()
+			// Закрываем все соединения при ошибке
+			for _, conn := range conns {
+				conn.Close()
+			}
 			return fmt.Errorf("failed to start TCP forwarder sender: %w", err)
 		}
-		log.Infof("TCP forwarder sender started (relay port %d, room %s, local server %s)", relayPort, roomName, localServerAddr)
+		log.Infof("TCP forwarder sender started (relay port %d, room %s, local server %s)", firstRelayPort, firstRoomName, localServerAddr)
 
 	} else {
 		// Получатель: останавливаем WebDAV сервер перед созданием TCP listener
@@ -550,7 +580,10 @@ func (s *WebDAVServer) EnableTCPForwarding(client *croc.Client) error {
 
 		// Запускаем форвардер
 		if err := tcpForwarder.Start(); err != nil {
-			conn.Close()
+			// Закрываем все соединения при ошибке
+			for _, conn := range conns {
+				conn.Close()
+			}
 			return fmt.Errorf("failed to start TCP forwarder receiver: %w", err)
 		}
 
@@ -559,13 +592,16 @@ func (s *WebDAVServer) EnableTCPForwarding(client *croc.Client) error {
 		listener, err := net.Listen("tcp", localAddr)
 		if err != nil {
 			tcpForwarder.Stop()
-			conn.Close()
+			// Закрываем все соединения при ошибке
+			for _, conn := range conns {
+				conn.Close()
+			}
 			return fmt.Errorf("failed to create TCP listener on %s: %w", localAddr, err)
 		}
 
 		s.tcpListener = listener
 		log.Infof("TCP forwarder receiver listening on %s (relay port %d, room %s)",
-			localAddr, relayPort, roomName)
+			localAddr, firstRelayPort, firstRoomName)
 
 		// Запускаем горутину для принятия локальных соединений
 		go s.acceptLocalConnections(tcpForwarder)
@@ -579,7 +615,7 @@ func (s *WebDAVServer) EnableTCPForwarding(client *croc.Client) error {
 	// Сохраняем форвардер
 	s.tcpForwarder = tcpForwarder
 	s.tcpForwarding = true
-	log.Infof("TCP forwarding successfully enabled on relay port %d (room %s)", relayPort, roomName)
+	log.Infof("TCP forwarding successfully enabled on relay port %d (room %s)", firstRelayPort, firstRoomName)
 
 	return nil
 }
@@ -731,7 +767,7 @@ func (s *WebDAVServer) startLocked() error {
 func (s *WebDAVServer) IsTCPForwardingActive() bool {
 	s.tcpForwardingMu.RLock()
 	defer s.tcpForwardingMu.RUnlock()
-	return s.tcpForwarding && s.tcpForwarder != nil && s.tcpForwarder.IsActive()
+	return s.tcpForwarding && s.tcpForwarder != nil
 }
 func defAddress(hp string, ports ...string) (host, port, address string) {
 	var err error

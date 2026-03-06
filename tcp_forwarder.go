@@ -3,757 +3,407 @@ package main
 
 import (
 	"crypto/rand"
+	"encoding/binary"
 	"errors"
-	"fmt"
 	"io"
 	"net"
 	"sync"
-	"time"
 
 	"github.com/schollz/croc/v10/src/comm"
 	"github.com/schollz/croc/v10/src/crypt"
 	log "github.com/schollz/logger"
 )
 
-// Константы для TCP форвардинга
 const (
-	ForwardBufferSize = 32*1024 - 8 // 32760 байт - для соответствия общему размеру пакета croc (32776 байт)
+	ForwardBufferSize = 32*1024 - 8
 )
 
-// Пул буферов для уменьшения GC давления
-var forwardBufferPool = sync.Pool{
-	New: func() interface{} {
-		return make([]byte, ForwardBufferSize)
-	},
-}
-
-// ForwarderConnID уникальный идентификатор forwarded connection
 type ForwarderConnID uint64
 
-// ForwardMessage типы сообщений для портфорвардинга
 const (
-	ForwardMsgOpen  = 0x01 // Открытие нового соединения
-	ForwardMsgData  = 0x02 // Данные соединения
-	ForwardMsgClose = 0x03 // Закрытие соединения
-	ForwardMsgError = 0x04 // Ошибка соединения
+	ForwardMsgOpen  = 0x01
+	ForwardMsgData  = 0x02
+	ForwardMsgClose = 0x03
 )
 
-// TCPForwarder управляет TCP форвардингом через croc туннель
 type TCPForwarder struct {
-	controlConn *comm.Comm
-	key         []byte
-	isSender    bool
-
-	// На стороне отправителя: map[connID]net.Conn - активные forwarded connections
-	// На стороне получателя: map[connID]chan []byte - каналы для отправки данных
-	connections sync.Map
-
-	// На стороне отправителя: адрес локального сервера для подключения
+	conns           []*comm.Comm
+	key             []byte
+	isSender        bool
 	localServerAddr string
 
-	active   bool
-	stopChan chan struct{}
-	mu       sync.RWMutex
+	activeConns sync.Map
+	stopChan    chan struct{}
+	wg          sync.WaitGroup
 }
 
-// NewTCPForwarder создает новый TCP форвардер
-// localServerAddr - адрес локального сервера для подключения на стороне отправителя (например, "127.0.0.1:9009")
-func NewTCPForwarder(conn *comm.Comm, isSender bool, key []byte, localServerAddr string) *TCPForwarder {
+type forwardedConn struct {
+	local    net.Conn
+	tunnelCh chan []byte
+	closeCh  chan struct{}
+	once     sync.Once
+	connID   ForwarderConnID
+	f        *TCPForwarder
+}
+
+func NewTCPForwarder(conns []*comm.Comm, isSender bool, sharedKey []byte, localServerAddr string) *TCPForwarder {
 	return &TCPForwarder{
-		controlConn:     conn,
+		conns:           conns,
+		key:             sharedKey,
 		isSender:        isSender,
-		key:             key,
 		localServerAddr: localServerAddr,
 		stopChan:        make(chan struct{}),
 	}
 }
 
-// Start запускает форвардер
 func (f *TCPForwarder) Start() error {
-	f.mu.Lock()
-	defer f.mu.Unlock()
+	log.Infof("Starting TCP forwarder (sender=%v)", f.isSender)
 
-	if f.active {
-		return nil
-	}
-
-	f.active = true
-
-	if f.isSender {
-		go f.senderLoop()
-		log.Info("TCP forwarder sender started")
-	} else {
-		go f.receiverLoop()
-		log.Info("TCP forwarder receiver started")
-	}
+	// Единый ридер для обоих каналов
+	f.wg.Add(1)
+	go f.reader()
 
 	return nil
 }
 
-// Stop останавливает форвардер
 func (f *TCPForwarder) Stop() error {
-	f.mu.Lock()
-	defer f.mu.Unlock()
+	log.Info("Stopping TCP forwarder")
+	close(f.stopChan)
 
-	if !f.active {
-		return nil
-	}
-
-	f.active = false
-
-	chlose(f.stopChan)
-
-	// Закрываем все активные соединения
-	f.connections.Range(func(key, value interface{}) bool {
-		if conn, ok := value.(net.Conn); ok {
-			conn.Close()
-		} else if ch, ok := value.(chan []byte); ok {
-			chlose(ch)
+	f.activeConns.Range(func(_, v interface{}) bool {
+		if fc, ok := v.(*forwardedConn); ok {
+			fc.close()
 		}
 		return true
 	})
 
-	log.Info("TCP forwarder stopped")
+	for _, conn := range f.conns {
+		if conn != nil {
+			conn.Close()
+		}
+	}
+
+	f.wg.Wait()
 	return nil
 }
 
-// IsActive возвращает true если форвардер активен
-func (f *TCPForwarder) IsActive() bool {
-	f.mu.RLock()
-	defer f.mu.RUnlock()
-	return f.active
-}
+// reader читает из обоих каналов в одном select
+func (f *TCPForwarder) reader() {
+	defer f.wg.Done()
+	log.Debug("Reader started")
 
-// ForwardConnection пробрасывает локальное соединение через croc туннель (на стороне получателя)
-func (f *TCPForwarder) ForwardConnection(localConn net.Conn) error {
-	if f.isSender {
-		return io.ErrClosedPipe // Не для отправителя
+	// Создаем каналы для получения сообщений от comm.Receive
+	type msg struct {
+		data []byte
+		err  error
+		idx  int
 	}
 
-	// Генерируем уникальный ID для соединения
-	connID := f.generateID()
+	ch0 := make(chan msg)
+	ch1 := make(chan msg)
 
-	log.Infof("TCP forwarder: opened connection %d", connID)
-
-	// Создаем два небуферизованных канала: для отправки данных в туннель и для получения данных от сервера
-	// Небуферизованные каналы обеспечивают истинное обратное давление для точного отображения прогресса
-	sendDataChan := make(chan []byte)
-	receiveDataChan := make(chan []byte)
-	f.connections.Store(connID, receiveDataChan)
-
-	// Отправляем сообщение об открытии соединения
-	if err := f.sendMessage(connID, ForwardMsgOpen, nil); err != nil {
-		f.connections.Delete(connID)
-		return err
-	}
-
-	// Запускаем горутину для чтения из локального соединения и отправки в туннель
+	// Запускаем горутины для чтения из каждого канала
 	go func() {
-		defer localConn.Close()
-		defer chlose(sendDataChan)
-		defer f.connections.Delete(connID)
-
-		buffer := forwardBufferPool.Get().([]byte)
-		defer forwardBufferPool.Put(buffer)
-
-		totalRead := 0
 		for {
-			n, err := localConn.Read(buffer)
-			if n > 0 {
-				totalRead += n
-				// Отправляем данные в туннель через канал (блокирующая отправка)
-				data := make([]byte, n)
-				copy(data, buffer[:n])
-
-				// Блокирующая отправка без таймаута - обеспечивает истинное обратное давление
-				sendDataChan <- data
-			}
-			if err != nil {
-				if !errors.Is(err, io.EOF) && !errors.Is(err, net.ErrClosed) {
-					log.Errorf("TCP forwarder: read error for connection %d: %v", connID, err)
-				}
-				break
-			}
-		}
-
-		// Отправляем сообщение о закрытии соединения
-		_ = f.sendMessage(connID, ForwardMsgClose, nil)
-		log.Infof("TCP forwarder: closed connection %d (read %d total bytes)", connID, totalRead)
-	}()
-
-	// Запускаем горутину для отправки данных из sendDataChan в туннель
-	go func() {
-		defer localConn.Close()
-		defer func() {
-			if r := recover(); r != nil {
-				log.Errorf("TCP forwarder: recovered from panic in defer for connID=%d: %v", connID, r)
-			}
-			chlose(receiveDataChan)
-		}()
-		defer f.connections.Delete(connID)
-
-		for {
+			data, err := f.conns[0].Receive()
 			select {
-			case data, ok := <-sendDataChan:
-				if !ok {
-					return
-				}
-				// Отправляем данные в туннель
-				if err := f.sendMessage(connID, ForwardMsgData, data); err != nil {
-					log.Errorf("TCP forwarder: failed to send data to tunnel for connID=%d: %v", connID, err)
-					return
-				}
 			case <-f.stopChan:
 				return
-			case <-done:
-				return
+			case ch0 <- msg{data: data, err: err, idx: 0}:
 			}
 		}
 	}()
 
-	// Запускаем горутину для получения данных из receiveDataChan и записи в localConn
 	go func() {
-		defer localConn.Close()
-		defer f.connections.Delete(connID)
-
-		totalWritten := 0
 		for {
+			data, err := f.conns[1].Receive()
 			select {
-			case data, ok := <-receiveDataChan:
-				if !ok {
-					return
-				}
-				if _, err := localConn.Write(data); err != nil {
-					if !errors.Is(err, net.ErrClosed) {
-						log.Errorf("TCP forwarder: write error for connection %d: %v", connID, err)
-					}
-					return
-				}
-				totalWritten += len(data)
 			case <-f.stopChan:
 				return
-			case <-done:
-				return
+			case ch1 <- msg{data: data, err: err, idx: 1}:
 			}
 		}
 	}()
 
-	return nil
-}
-
-// senderLoop - отправитель принимает forwarded connections и пробрасывает к локальному серверу
-func (f *TCPForwarder) senderLoop() {
-	// Каналы для приоритезации сообщений
-	priorityChan := make(chan []byte, 10) // ForwardMsgClose, ForwardMsgError - критический приоритет
-	highChan := make(chan []byte, 10)     // ForwardMsgOpen - высокий приоритет
-	tinyChan := make(chan []byte, 10)     // ForwardMsgData < 1 КБ - очень высокий приоритет
-	smallChan := make(chan []byte, 10)    // ForwardMsgData < 10 КБ - средний приоритет
-	normalChan := make(chan []byte, 10)   // ForwardMsgData >= 10 КБ - низкий приоритет
-
-	// Запускаем reader в отдельной горутине
-	go f.senderReaderLoop(priorityChan, highChan, tinyChan, smallChan, normalChan)
-
-	// Processor - обрабатывает сообщения с приоритезацией
-	for {
-		// Сначала проверяем stopChan
-		select {
-		case <-f.stopChan:
-			log.Debug("TCP forwarder sender processor stopped")
-			return
-		case <-done:
-			return
-		default:
-		}
-
-		// Приоритет 1: critical messages (ForwardMsgClose, ForwardMsgError)
-		select {
-		case data := <-priorityChan:
-			f.handleSenderMessage(data)
-			continue
-		default:
-		}
-
-		// Приоритет 2: high priority (ForwardMsgOpen)
-		select {
-		case data := <-highChan:
-			f.handleSenderMessage(data)
-			continue
-		default:
-		}
-
-		// Приоритет 3: tiny data (< 1 КБ)
-		select {
-		case data := <-tinyChan:
-			f.handleSenderMessage(data)
-			continue
-		default:
-		}
-
-		// Приоритет 4: small data (< 10 КБ)
-		select {
-		case data := <-smallChan:
-			f.handleSenderMessage(data)
-			continue
-		default:
-		}
-
-		// Приоритет 5: normal data (ForwardMsgData >= 10 КБ)
-		select {
-		case data := <-normalChan:
-			f.handleSenderMessage(data)
-			continue
-		default:
-		}
-	}
-}
-
-// senderReaderLoop читает сообщения из controlConn и распределяет по приоритетным каналам
-func (f *TCPForwarder) senderReaderLoop(priorityChan, highChan, tinyChan, smallChan, normalChan chan []byte) {
-	defer log.Debug("TCP forwarder sender reader stopped")
-
+	// Единый цикл обработки сообщений
 	for {
 		select {
 		case <-f.stopChan:
+			log.Debug("Reader stopped")
 			return
-		case <-done:
-			return
-		default:
-			data, err := f.controlConn.Receive()
-			if err != nil {
-				if !errors.Is(err, net.ErrClosed) && !errors.Is(err, io.EOF) {
-					log.Errorf("TCP forwarder sender reader error: %v", err)
+
+		case m := <-ch0:
+			if m.err != nil {
+				if !errors.Is(m.err, net.ErrClosed) && !errors.Is(m.err, io.EOF) {
+					log.Errorf("Reader ch0 error: %v", m.err)
 				}
 				return
 			}
+			f.processMessage(m.data, 0)
 
-			// Распределяем сообщение по приоритету
-			_, msgType, payload, err := f.decodeMessage(data)
-			if err != nil {
-				log.Errorf("TCP forwarder sender: failed to decode message for priority: %v", err)
-				continue
-			}
-			switch msgType {
-			case ForwardMsgClose, ForwardMsgError:
-				priorityChan <- data
-			case ForwardMsgOpen:
-				highChan <- data
-			case ForwardMsgData:
-				// Приоритезация по размеру
-				payloadLen := len(payload)
-				if payloadLen < 1024 { // < 1 КБ
-					tinyChan <- data
-				} else if payloadLen < 10240 { // < 10 КБ
-					smallChan <- data
-				} else {
-					normalChan <- data
-				}
-			}
-		}
-	}
-}
-
-// receiverLoop - получатель принимает сообщения из туннеля и направляет в соответствующие соединения
-func (f *TCPForwarder) receiverLoop() {
-	// Каналы для приоритезации сообщений
-	priorityChan := make(chan []byte, 10) // ForwardMsgClose, ForwardMsgError - критический приоритет
-	highChan := make(chan []byte, 10)     // ForwardMsgOpen - высокий приоритет
-	tinyChan := make(chan []byte, 10)     // ForwardMsgData < 1 КБ - очень высокий приоритет
-	smallChan := make(chan []byte, 10)    // ForwardMsgData < 10 КБ - средний приоритет
-	normalChan := make(chan []byte, 10)   // ForwardMsgData >= 10 КБ - низкий приоритет
-
-	// Запускаем reader в отдельной горутине
-	go f.receiverReaderLoop(priorityChan, highChan, tinyChan, smallChan, normalChan)
-
-	// Processor - обрабатывает сообщения с приоритезацией
-	for {
-		// Сначала проверяем stopChan
-		select {
-		case <-f.stopChan:
-			log.Debug("TCP forwarder receiver processor stopped")
-			return
-		case <-done:
-			return
-		default:
-		}
-
-		// Приоритет 1: critical messages (ForwardMsgClose, ForwardMsgError)
-		select {
-		case data := <-priorityChan:
-			f.handleReceiverMessage(data)
-			continue
-		default:
-		}
-
-		// Приоритет 2: high priority (ForwardMsgOpen)
-		select {
-		case data := <-highChan:
-			f.handleReceiverMessage(data)
-			continue
-		default:
-		}
-
-		// Приоритет 3: tiny data (< 1 КБ)
-		select {
-		case data := <-tinyChan:
-			f.handleReceiverMessage(data)
-			continue
-		default:
-		}
-
-		// Приоритет 4: small data (< 10 КБ)
-		select {
-		case data := <-smallChan:
-			f.handleReceiverMessage(data)
-			continue
-		default:
-		}
-
-		// Приоритет 5: normal data (ForwardMsgData >= 10 КБ)
-		select {
-		case data := <-normalChan:
-			f.handleReceiverMessage(data)
-			continue
-		default:
-		}
-	}
-}
-
-// receiverReaderLoop читает сообщения из controlConn и распределяет по приоритетным каналам
-func (f *TCPForwarder) receiverReaderLoop(priorityChan, highChan, tinyChan, smallChan, normalChan chan []byte) {
-	defer log.Debug("TCP forwarder receiver reader stopped")
-
-	for {
-		select {
-		case <-f.stopChan:
-			return
-		case <-done:
-			return
-		default:
-			data, err := f.controlConn.Receive()
-			if err != nil {
-				if !errors.Is(err, net.ErrClosed) && !errors.Is(err, io.EOF) {
-					log.Errorf("TCP forwarder receiver reader error: %v", err)
+		case m := <-ch1:
+			if m.err != nil {
+				if !errors.Is(m.err, net.ErrClosed) && !errors.Is(m.err, io.EOF) {
+					log.Errorf("Reader ch1 error: %v", m.err)
 				}
 				return
 			}
-
-			// Распределяем сообщение по приоритету
-			_, msgType, payload, err := f.decodeMessage(data)
-			if err != nil {
-				log.Errorf("TCP forwarder receiver: failed to decode message for priority: %v", err)
-				continue
-			}
-			switch msgType {
-			case ForwardMsgClose, ForwardMsgError:
-				priorityChan <- data
-			case ForwardMsgOpen:
-				highChan <- data
-			case ForwardMsgData:
-				// Приоритезация по размеру
-				payloadLen := len(payload)
-				if payloadLen < 1024 { // < 1 КБ
-					tinyChan <- data
-				} else if payloadLen < 10240 { // < 10 КБ
-					smallChan <- data
-				} else {
-					normalChan <- data
-				}
-			}
+			f.processMessage(m.data, 1)
 		}
 	}
 }
 
-// handleSenderMessage обрабатывает сообщения на стороне отправителя
-func (f *TCPForwarder) handleSenderMessage(data []byte) {
-	connID, msgType, payload, err := f.decodeMessage(data)
+func (f *TCPForwarder) processMessage(encrypted []byte, readerIdx int) {
+	decrypted, err := crypt.Decrypt(encrypted, f.key)
 	if err != nil {
-		log.Errorf("TCP forwarder sender: failed to decode message: %v", err)
+		log.Debugf("Reader %d: decrypt error (ignored): %v", readerIdx, err)
 		return
 	}
 
+	if len(decrypted) < 16 {
+		log.Debugf("Reader %d: message too short", readerIdx)
+		return
+	}
+
+	connID := ForwarderConnID(binary.LittleEndian.Uint64(decrypted[0:8]))
+	msgType := decrypted[8]
+	payloadLen := binary.LittleEndian.Uint32(decrypted[12:16])
+
+	if len(decrypted) < 16+int(payloadLen) {
+		log.Debugf("Reader %d: incomplete message", readerIdx)
+		return
+	}
+	payload := decrypted[16 : 16+int(payloadLen)]
+
+	log.Debugf("Reader %d: conn=%d type=%d len=%d", readerIdx, connID, msgType, payloadLen)
+
+	if f.isSender {
+		f.handleSenderMessage(connID, msgType, payload, readerIdx)
+	} else {
+		f.handleReceiverMessage(connID, msgType, payload, readerIdx)
+	}
+}
+
+func (f *TCPForwarder) handleSenderMessage(connID ForwarderConnID, msgType byte, payload []byte, readerIdx int) {
 	switch msgType {
 	case ForwardMsgOpen:
-		log.Infof("TCP forwarder: opened connection %d on sender", connID)
+		log.Infof("OPEN conn=%d from reader=%d", connID, readerIdx)
 
-		// Создаем соединение к локальному серверу
-		if f.localServerAddr == "" {
-			log.Errorf("TCP forwarder sender: localServerAddr is empty, cannot create connection for connID=%d", connID)
-			f.sendMessage(connID, ForwardMsgError, []byte("local server address not configured"))
-			return
-		}
-
-		localConn, err := net.Dial("tcp", f.localServerAddr)
+		local, err := net.Dial("tcp", f.localServerAddr)
 		if err != nil {
-			log.Errorf("TCP forwarder sender: failed to dial local server %s for connID=%d: %v", f.localServerAddr, connID, err)
-			f.sendMessage(connID, ForwardMsgError, []byte(fmt.Sprintf("failed to connect to local server: %v", err)))
+			log.Errorf("OPEN conn=%d dial error: %v", connID, err)
 			return
 		}
+		log.Debugf("OPEN conn=%d connected to %s", connID, f.localServerAddr)
 
-		log.Infof("TCP forwarder: connected to local server %s for connID=%d", f.localServerAddr, connID)
+		fc := &forwardedConn{
+			local:    local,
+			tunnelCh: make(chan []byte, 10),
+			closeCh:  make(chan struct{}),
+			connID:   connID,
+			f:        f,
+		}
+		f.activeConns.Store(connID, fc)
 
-		// Сохраняем соединение в connections
-		f.connections.Store(connID, localConn)
+		f.wg.Add(2)
+		go fc.readLoop()
+		go fc.writeLoop()
 
-		// Запускаем горутину для чтения из локального соединения и отправки в туннель
-		go f.senderReadLoop(connID, localConn)
+		log.Debugf("OPEN conn=%d both loops started", connID)
 
 	case ForwardMsgData:
-		// Получаем соединение для записи данных
-		val, ok := f.connections.Load(connID)
-		if !ok {
-			log.Warnf("TCP forwarder: no connection %d for data", connID)
-			return
-		}
-
-		localConn, ok := val.(net.Conn)
-		if !ok {
-			log.Errorf("TCP forwarder: invalid connection %d, type=%T", connID, val)
-			return
-		}
-
-		// Пишем данные в локальное соединение
-		if len(payload) > 0 {
-			if _, err := localConn.Write(payload); err != nil {
-				if !errors.Is(err, net.ErrClosed) {
-					log.Errorf("TCP forwarder: write error for connection %d: %v", connID, err)
+		if val, ok := f.activeConns.Load(connID); ok {
+			if fc, ok := val.(*forwardedConn); ok {
+				select {
+				case fc.tunnelCh <- payload:
+					log.Debugf("DATA conn=%d: queued %d bytes", connID, len(payload))
+				case <-fc.closeCh:
+					log.Debugf("DATA conn=%d: dropped (closing)", connID)
+				case <-f.stopChan:
+					log.Debugf("DATA conn=%d: dropped (stopping)", connID)
 				}
-				f.closeSenderConnection(connID, localConn)
-				return
 			}
+		} else {
+			log.Debugf("DATA conn=%d: not found (waiting for OPEN?)", connID)
 		}
 
 	case ForwardMsgClose:
-		val, ok := f.connections.Load(connID)
-		if ok {
-			if localConn, ok := val.(net.Conn); ok {
-				f.closeSenderConnection(connID, localConn)
-			}
-		}
-
-	case ForwardMsgError:
-		log.Errorf("TCP forwarder: error for connection %d: %s", connID, string(payload))
-		val, ok := f.connections.Load(connID)
-		if ok {
-			if localConn, ok := val.(net.Conn); ok {
-				f.closeSenderConnection(connID, localConn)
+		log.Infof("CLOSE conn=%d from reader=%d", connID, readerIdx)
+		if val, ok := f.activeConns.Load(connID); ok {
+			if fc, ok := val.(*forwardedConn); ok {
+				fc.close()
 			}
 		}
 	}
 }
 
-// senderReadLoop читает данные из локального соединения и отправляет в туннель
-func (f *TCPForwarder) senderReadLoop(connID ForwarderConnID, localConn net.Conn) {
-	defer func() {
-		if r := recover(); r != nil {
-			log.Errorf("TCP forwarder sender: recovered from panic in senderReadLoop for connID=%d: %v", connID, r)
+func (f *TCPForwarder) handleReceiverMessage(connID ForwarderConnID, msgType byte, payload []byte, readerIdx int) {
+	switch msgType {
+	case ForwardMsgData:
+		if val, ok := f.activeConns.Load(connID); ok {
+			if fc, ok := val.(*forwardedConn); ok {
+				select {
+				case fc.tunnelCh <- payload:
+					log.Debugf("DATA conn=%d: queued %d bytes", connID, len(payload))
+				case <-fc.closeCh:
+					log.Debugf("DATA conn=%d: dropped (closing)", connID)
+				case <-f.stopChan:
+					log.Debugf("DATA conn=%d: dropped (stopping)", connID)
+				}
+			}
+		} else {
+			log.Debugf("DATA conn=%d: not found", connID)
 		}
-		f.closeSenderConnection(connID, localConn)
-	}()
 
-	buffer := forwardBufferPool.Get().([]byte)
-	defer forwardBufferPool.Put(buffer)
-
-	totalRead := 0
-	for {
-		n, err := localConn.Read(buffer)
-		if n > 0 {
-			totalRead += n
-
-			// Отправляем данные в туннель
-			if err := f.sendMessage(connID, ForwardMsgData, buffer[:n]); err != nil {
-				log.Errorf("TCP forwarder sender: failed to send data for connID=%d: %v", connID, err)
-				return
+	case ForwardMsgClose:
+		log.Infof("CLOSE conn=%d from reader=%d", connID, readerIdx)
+		if val, ok := f.activeConns.Load(connID); ok {
+			if fc, ok := val.(*forwardedConn); ok {
+				fc.close()
 			}
 		}
+	}
+}
+
+func (f *TCPForwarder) ForwardConnection(local net.Conn) error {
+	if f.isSender {
+		return errors.New("ForwardConnection only for receiver")
+	}
+
+	connID := f.generateID()
+	log.Infof("Forwarding new connection %d (%s -> %s)", connID, local.LocalAddr(), local.RemoteAddr())
+
+	fc := &forwardedConn{
+		local:    local,
+		tunnelCh: make(chan []byte, 10),
+		closeCh:  make(chan struct{}),
+		connID:   connID,
+		f:        f,
+	}
+	f.activeConns.Store(connID, fc)
+
+	log.Debugf("Conn %d: sending OPEN", connID)
+	if err := f.sendMessage(connID, ForwardMsgOpen, nil); err != nil {
+		log.Errorf("Conn %d: OPEN failed: %v", connID, err)
+		f.activeConns.Delete(connID)
+		local.Close()
+		return err
+	}
+
+	f.wg.Add(2)
+	go fc.readLoop()
+	go fc.writeLoop()
+
+	log.Debugf("Conn %d: read/write loops started", connID)
+	return nil
+}
+
+func (fc *forwardedConn) readLoop() {
+	defer fc.f.wg.Done()
+	defer fc.close()
+
+	buf := make([]byte, ForwardBufferSize)
+	log.Debugf("Conn %d readLoop started", fc.connID)
+
+	for {
+		select {
+		case <-fc.closeCh:
+			log.Debugf("Conn %d readLoop: closed", fc.connID)
+			return
+		case <-fc.f.stopChan:
+			log.Debugf("Conn %d readLoop: stopped", fc.connID)
+			return
+		default:
+		}
+
+		n, err := fc.local.Read(buf)
 		if err != nil {
 			if !errors.Is(err, io.EOF) && !errors.Is(err, net.ErrClosed) {
-				log.Errorf("TCP forwarder sender: read error for connection %d: %v", connID, err)
+				log.Errorf("Conn %d read error: %v", fc.connID, err)
+			} else {
+				log.Debugf("Conn %d readLoop: local closed (%v)", fc.connID, err)
 			}
-			break
-		}
-	}
-
-	// Отправляем сообщение о закрытии соединения
-	_ = f.sendMessage(connID, ForwardMsgClose, nil)
-	log.Infof("TCP forwarder sender: closed connection %d (read %d total bytes)", connID, totalRead)
-}
-
-// closeSenderConnection закрывает соединение на стороне отправителя
-func (f *TCPForwarder) closeSenderConnection(connID ForwarderConnID, localConn net.Conn) {
-	f.connections.Delete(connID)
-	localConn.Close()
-}
-
-// handleReceiverMessage обрабатывает сообщения на стороне получателя
-func (f *TCPForwarder) handleReceiverMessage(data []byte) {
-	defer func() {
-		if r := recover(); r != nil {
-			log.Warnf("TCP forwarder: recovered from panic in handleReceiverMessage: %v", r)
-		}
-	}()
-
-	connID, msgType, payload, err := f.decodeMessage(data)
-	if err != nil {
-		log.Errorf("TCP forwarder receiver: failed to decode message: %v", err)
-		return
-	}
-
-	switch msgType {
-	case ForwardMsgOpen:
-		// Соединение открывается при первом ForwardConnection()
-
-	case ForwardMsgData:
-		val, ok := f.connections.Load(connID)
-		if !ok {
-			// Соединение закрыто - игнорируем данные (нормальная ситуация при разрыве)
 			return
 		}
 
-		receiveDataChan, ok := val.(chan []byte)
-		if !ok {
-			log.Errorf("TCP forwarder receiver: invalid connection %d, type=%T", connID, val)
-			return
-		}
-
-		// Отправляем данные в канал (блокирующая отправка)
-		dataCopy := make([]byte, len(payload))
-		copy(dataCopy, payload)
-
-		// Блокирующая отправка без таймаута - обеспечивает истинное обратное давление
-		receiveDataChan <- dataCopy
-
-	case ForwardMsgClose:
-		val, ok := f.connections.Load(connID)
-		if ok {
-			if receiveDataChan, ok := val.(chan []byte); ok {
-				chlose(receiveDataChan)
+		if n > 0 {
+			log.Debugf("Conn %d: read %d bytes from local", fc.connID, n)
+			if err := fc.f.sendMessage(fc.connID, ForwardMsgData, buf[:n]); err != nil {
+				log.Errorf("Conn %d: send error: %v", fc.connID, err)
+				return
 			}
-			f.connections.Delete(connID)
-		}
-
-	case ForwardMsgError:
-		log.Errorf("TCP forwarder: error for connection %d: %s", connID, string(payload))
-		val, ok := f.connections.Load(connID)
-		if ok {
-			if receiveDataChan, ok := val.(chan []byte); ok {
-				chlose(receiveDataChan)
-			}
-			f.connections.Delete(connID)
 		}
 	}
 }
 
-// sendMessage отправляет зашифрованное сообщение через croc туннель
+func (fc *forwardedConn) writeLoop() {
+	defer fc.f.wg.Done()
+	defer fc.close()
+
+	log.Debugf("Conn %d writeLoop started", fc.connID)
+
+	for {
+		select {
+		case <-fc.closeCh:
+			log.Debugf("Conn %d writeLoop: closed", fc.connID)
+			return
+		case <-fc.f.stopChan:
+			log.Debugf("Conn %d writeLoop: stopped", fc.connID)
+			return
+		case data, ok := <-fc.tunnelCh:
+			if !ok {
+				log.Debugf("Conn %d writeLoop: channel closed", fc.connID)
+				return
+			}
+
+			log.Debugf("Conn %d: writing %d bytes to local", fc.connID, len(data))
+			if _, err := fc.local.Write(data); err != nil {
+				if !errors.Is(err, net.ErrClosed) {
+					log.Errorf("Conn %d write error: %v", fc.connID, err)
+				} else {
+					log.Debugf("Conn %d writeLoop: local closed", fc.connID)
+				}
+				return
+			}
+		}
+	}
+}
+
+func (fc *forwardedConn) close() {
+	fc.once.Do(func() {
+		log.Infof("Closing conn %d", fc.connID)
+		close(fc.closeCh)
+		fc.local.Close()
+		fc.f.activeConns.Delete(fc.connID)
+		go fc.f.sendMessage(fc.connID, ForwardMsgClose, nil)
+	})
+}
+
 func (f *TCPForwarder) sendMessage(connID ForwarderConnID, msgType byte, payload []byte) error {
-	// Формируем пакет: [connID(8)][msgType(4)][payloadLen(4)][payload...]
 	packet := make([]byte, 16+len(payload))
 
-	// Записываем connID
-	packet[0] = byte(connID)
-	packet[1] = byte(connID >> 8)
-	packet[2] = byte(connID >> 16)
-	packet[3] = byte(connID >> 24)
-	packet[4] = byte(connID >> 32)
-	packet[5] = byte(connID >> 40)
-	packet[6] = byte(connID >> 48)
-	packet[7] = byte(connID >> 56)
-
-	// Записываем тип сообщения (4 байта)
+	binary.LittleEndian.PutUint64(packet[0:8], uint64(connID))
 	packet[8] = msgType
-	packet[9] = 0
-	packet[10] = 0
-	packet[11] = 0
-
-	// Записываем длину payload
-	packet[12] = byte(len(payload))
-	packet[13] = byte(len(payload) >> 8)
-	packet[14] = byte(len(payload) >> 16)
-	packet[15] = byte(len(payload) >> 24)
-
-	// Записываем payload
+	binary.LittleEndian.PutUint32(packet[12:16], uint32(len(payload)))
 	copy(packet[16:], payload)
 
-	// Шифруем пакет
+	log.Debugf("Send: conn=%d type=%d len=%d", connID, msgType, len(payload))
+
 	encrypted, err := crypt.Encrypt(packet, f.key)
 	if err != nil {
-		log.Errorf("TCP forwarder: encryption error for connID=%d: %v", connID, err)
 		return err
 	}
 
-	// Отправляем через croc туннель
-	err = f.controlConn.Send(encrypted)
-	if err != nil {
-		if !errors.Is(err, net.ErrClosed) {
-			log.Errorf("TCP forwarder: send error for connID=%d: %v", connID, err)
-		}
+	idx := 0
+	if msgType == ForwardMsgData {
+		idx = 1
 	}
-	return err
+
+	return f.conns[idx].Send(encrypted)
 }
 
-// decodeMessage декодирует сообщение из croc туннеля
-func (f *TCPForwarder) decodeMessage(data []byte) (connID ForwarderConnID, msgType byte, payload []byte, err error) {
-	// Расшифровываем
-	decrypted, err := crypt.Decrypt(data, f.key)
-	if err != nil {
-		return 0, 0, nil, err
-	}
-
-	// Проверяем минимальную длину (16 байт заголовка)
-	if len(decrypted) < 16 {
-		return 0, 0, nil, io.ErrUnexpectedEOF
-	}
-
-	// Читаем connID
-	connID = ForwarderConnID(decrypted[0]) |
-		ForwarderConnID(decrypted[1])<<8 |
-		ForwarderConnID(decrypted[2])<<16 |
-		ForwarderConnID(decrypted[3])<<24 |
-		ForwarderConnID(decrypted[4])<<32 |
-		ForwarderConnID(decrypted[5])<<40 |
-		ForwarderConnID(decrypted[6])<<48 |
-		ForwarderConnID(decrypted[7])<<56
-
-	// Читаем тип сообщения (4 байта)
-	msgType = decrypted[8]
-
-	// Читаем длину payload
-	payloadLen := int(decrypted[12]) |
-		int(decrypted[13])<<8 |
-		int(decrypted[14])<<16 |
-		int(decrypted[15])<<24
-
-	// Читаем payload
-	if payloadLen > 0 && len(decrypted) >= 16+payloadLen {
-		payload = decrypted[16 : 16+payloadLen]
-	} else if payloadLen > 0 {
-		return 0, 0, nil, io.ErrUnexpectedEOF
-	}
-
-	return connID, msgType, payload, nil
-}
-
-// generateID генерирует уникальный ID соединения
 func (f *TCPForwarder) generateID() ForwarderConnID {
 	var b [8]byte
-	_, err := rand.Read(b[:])
-	if err != nil {
-		log.Errorf("Failed to generate connection ID: %v", err)
-		return ForwarderConnID(time.Now().UnixNano())
-	}
-	return ForwarderConnID(b[0]) |
-		ForwarderConnID(b[1])<<8 |
-		ForwarderConnID(b[2])<<16 |
-		ForwarderConnID(b[3])<<24 |
-		ForwarderConnID(b[4])<<32 |
-		ForwarderConnID(b[5])<<40 |
-		ForwarderConnID(b[6])<<48 |
-		ForwarderConnID(b[7])<<56
-}
-
-func chlose[T any](ch chan T) {
-	if ch == nil {
-		return
-	}
-	defer func() { recover() }()
-	close(ch)
+	rand.Read(b[:])
+	return ForwarderConnID(binary.LittleEndian.Uint64(b[:]))
 }
