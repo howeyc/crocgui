@@ -1059,7 +1059,7 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 		excludeRecents := false
 		a.Lifecycle().SetOnExitedForeground(func() {
 			log.Debug("ExitedForeground " + wHandle(w))
-			if !notFinish {
+			if !notFinish && !(davServer.IsTCPForwardingActive() || davServer.IsActive()) {
 				if excludeRecents {
 					// Для Андроида 9 это просто finish
 					// excludeFromRecents()

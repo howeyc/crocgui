@@ -1,16 +1,18 @@
 //go:build android
 
+// notification_android.go
 package main
 
 /*
 #include <jni.h>
 #include <stdlib.h>
 #include <string.h>
+#include <android/log.h>
 
-void LogD(const char* message);
+#define LogD(...) __android_log_print(ANDROID_LOG_DEBUG, "croc", __VA_ARGS__)
 
-// Get Android API level
-jint get_api_level(JNIEnv* env) {
+// Get Android API level - static
+static jint get_api_level(JNIEnv* env) {
     jclass version_class = (*env)->FindClass(env, "android/os/Build$VERSION");
     if (version_class == NULL) {
         LogD("C: ERROR - Build.VERSION class not found");
@@ -107,8 +109,10 @@ static void createCrocNotificationChannel(JNIEnv* env, jobject context) {
 }
 
 static void showCrocNotification(JNIEnv* env, jobject context, char* title, char* content) {
-    // Create notification channel for Android 8+ (API level 26+)
     jint api_level = get_api_level(env);
+    LogD("showCrocNotification: API level = %d", api_level);
+
+    // Create notification channel for Android 8+ (API level 26+)
     if (api_level >= 26) {
         createCrocNotificationChannel(env, context);
     }
@@ -129,7 +133,7 @@ static void showCrocNotification(JNIEnv* env, jobject context, char* title, char
 
     jobject launch_intent = (*env)->NewObject(env, intent_class, intent_constructor);
 
-    // Устанавливаем действие и категорию для запуска приложения
+    // Устанавливаем действие MAIN и категорию LAUNCHER
     jmethodID set_action = (*env)->GetMethodID(env, intent_class, "setAction", "(Ljava/lang/String;)Landroid/content/Intent;");
     if (set_action == NULL) {
         LogD("C: ERROR - setAction method not found");
@@ -153,22 +157,7 @@ static void showCrocNotification(JNIEnv* env, jobject context, char* title, char
     jstring category_string = (*env)->NewStringUTF(env, "android.intent.category.LAUNCHER");
     (*env)->CallObjectMethod(env, launch_intent, add_category, category_string);
 
-    // Устанавлием флаги для правильного запуска
-    jmethodID set_flags = (*env)->GetMethodID(env, intent_class, "setFlags", "(I)Landroid/content/Intent;");
-    if (set_flags == NULL) {
-        LogD("C: ERROR - setFlags method not found");
-        (*env)->DeleteLocalRef(env, action_string);
-        (*env)->DeleteLocalRef(env, category_string);
-        (*env)->DeleteLocalRef(env, launch_intent);
-        (*env)->DeleteLocalRef(env, intent_class);
-        return;
-    }
-
-    // jint flags = 0x10000000 | 0x00200000; // FLAG_ACTIVITY_NEW_TASK | FLAG_ACTIVITY_RESET_TASK_IF_NEEDED
-    jint flags = 0x10000000 | 0x00800000; // NEW_TASK | EXCLUDE_FROM_RECENTS
-    (*env)->CallObjectMethod(env, launch_intent, set_flags, flags);
-
-    // Устанавливаем класс активности для запуска
+    // Устанавливаем пакет и класс активности
     jmethodID set_class = (*env)->GetMethodID(env, intent_class, "setClassName", "(Ljava/lang/String;Ljava/lang/String;)Landroid/content/Intent;");
     if (set_class == NULL) {
         LogD("C: ERROR - setClassName method not found");
@@ -183,7 +172,14 @@ static void showCrocNotification(JNIEnv* env, jobject context, char* title, char
     jstring class_name = (*env)->NewStringUTF(env, "org.golang.app.GoNativeActivity");
     (*env)->CallObjectMethod(env, launch_intent, set_class, package_name, class_name);
 
-    // Создаем PendingIntent
+    // Устанавливаем флаги
+    jmethodID set_flags = (*env)->GetMethodID(env, intent_class, "setFlags", "(I)Landroid/content/Intent;");
+    if (set_flags != NULL) {
+        jint flags = 0x10000000 | 0x00200000; // FLAG_ACTIVITY_NEW_TASK | FLAG_ACTIVITY_CLEAR_TOP
+        (*env)->CallObjectMethod(env, launch_intent, set_flags, flags);
+    }
+
+    // Создаем PendingIntent с правильными флагами для Android 12+
     jclass pending_intent_class = (*env)->FindClass(env, "android/app/PendingIntent");
     if (pending_intent_class == NULL) {
         LogD("C: ERROR - PendingIntent class not found");
@@ -211,7 +207,14 @@ static void showCrocNotification(JNIEnv* env, jobject context, char* title, char
     }
 
     jint request_code = 0;
-    jint pending_flags = 0x8000000; // FLAG_UPDATE_CURRENT
+
+    // Правильные флаги для Android 12+ (API 31+)
+    jint pending_flags = 0x04000000; // FLAG_IMMUTABLE (добавлен в API 23, обязателен с API 31)
+
+    // Для Android 12+ используем FLAG_IMMUTABLE, для старых версий можем использовать 0
+    if (api_level < 31) {
+        pending_flags = 0;
+    }
 
     jobject pending_intent = (*env)->CallStaticObjectMethod(env, pending_intent_class,
         get_activity_method, context, request_code, launch_intent, pending_flags);
@@ -257,7 +260,6 @@ static void showCrocNotification(JNIEnv* env, jobject context, char* title, char
 
     // Use channel for Android 8+ (API level 26+)
     if (api_level >= 26) {
-        // For Android 8+ use constructor with channel ID
         builder_constructor = (*env)->GetMethodID(env, builder_class, "<init>",
             "(Landroid/content/Context;Ljava/lang/String;)V");
         if (builder_constructor == NULL) {
@@ -278,7 +280,6 @@ static void showCrocNotification(JNIEnv* env, jobject context, char* title, char
         builder = (*env)->NewObject(env, builder_class, builder_constructor, context, channel_id);
         (*env)->DeleteLocalRef(env, channel_id);
     } else {
-        // For older Android versions
         builder_constructor = (*env)->GetMethodID(env, builder_class, "<init>",
             "(Landroid/content/Context;)V");
         if (builder_constructor == NULL) {
@@ -304,50 +305,38 @@ static void showCrocNotification(JNIEnv* env, jobject context, char* title, char
 
     jmethodID set_title = (*env)->GetMethodID(env, builder_class, "setContentTitle",
         "(Ljava/lang/CharSequence;)Landroid/app/Notification$Builder;");
-    if (set_title == NULL) {
-        LogD("C: ERROR - setContentTitle method not found");
-    } else {
+    if (set_title != NULL) {
         (*env)->CallObjectMethod(env, builder, set_title, jtitle);
     }
 
     jmethodID set_content = (*env)->GetMethodID(env, builder_class, "setContentText",
         "(Ljava/lang/CharSequence;)Landroid/app/Notification$Builder;");
-    if (set_content == NULL) {
-        LogD("C: ERROR - setContentText method not found");
-    } else {
+    if (set_content != NULL) {
         (*env)->CallObjectMethod(env, builder, set_content, jcontent);
     }
 
     jmethodID set_small_icon = (*env)->GetMethodID(env, builder_class, "setSmallIcon",
         "(I)Landroid/app/Notification$Builder;");
-    if (set_small_icon == NULL) {
-        LogD("C: ERROR - setSmallIcon method not found");
-    } else {
+    if (set_small_icon != NULL) {
         (*env)->CallObjectMethod(env, builder, set_small_icon, 17301651); // android.R.drawable.ic_dialog_info
     }
 
     jmethodID set_auto_cancel = (*env)->GetMethodID(env, builder_class, "setAutoCancel",
         "(Z)Landroid/app/Notification$Builder;");
-    if (set_auto_cancel == NULL) {
-        LogD("C: ERROR - setAutoCancel method not found");
-    } else {
+    if (set_auto_cancel != NULL) {
         (*env)->CallObjectMethod(env, builder, set_auto_cancel, JNI_TRUE);
     }
 
     jmethodID set_content_intent = (*env)->GetMethodID(env, builder_class, "setContentIntent",
         "(Landroid/app/PendingIntent;)Landroid/app/Notification$Builder;");
-    if (set_content_intent == NULL) {
-        LogD("C: ERROR - setContentIntent method not found");
-    } else {
+    if (set_content_intent != NULL && pending_intent != NULL) {
         (*env)->CallObjectMethod(env, builder, set_content_intent, pending_intent);
     }
 
     // Build the notification
     jmethodID build_method = (*env)->GetMethodID(env, builder_class, "build",
         "()Landroid/app/Notification;");
-    if (build_method == NULL) {
-        LogD("C: ERROR - build method not found");
-    } else {
+    if (build_method != NULL) {
         jobject notification = (*env)->CallObjectMethod(env, builder, build_method);
 
         // Show the notification

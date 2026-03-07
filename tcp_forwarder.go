@@ -142,7 +142,7 @@ func (f *TCPForwarder) cleanupClosedConns() {
 				return true
 			})
 			if deleted > 0 {
-				log.Debugf("Cleaned up %d old closed connection entries", deleted)
+				// log.Debugf("Cleaned up %d old closed connection entries", deleted)
 			}
 		}
 	}
@@ -187,7 +187,7 @@ func (f *TCPForwarder) Stop() error {
 // reader читает из обоих каналов в одном select
 func (f *TCPForwarder) reader() {
 	defer f.wg.Done()
-	log.Debug("Reader started")
+	// log.Debug("Reader started")
 
 	// Создаем каналы для получения сообщений от comm.Receive
 	type msg struct {
@@ -226,7 +226,7 @@ func (f *TCPForwarder) reader() {
 	for {
 		select {
 		case <-f.stopChan:
-			log.Debug("Reader stopped")
+			// log.Debug("Reader stopped")
 			return
 
 		case m := <-ch0:
@@ -267,12 +267,12 @@ func (f *TCPForwarder) processMessage(encrypted []byte, readerIdx int) {
 	payloadLen := binary.LittleEndian.Uint32(decrypted[12:16])
 
 	if len(decrypted) < 16+int(payloadLen) {
-		log.Debugf("Reader %d: incomplete message", readerIdx)
+		// log.Debugf("Reader %d: incomplete message", readerIdx)
 		return
 	}
 	payload := decrypted[16 : 16+int(payloadLen)]
 
-	log.Debugf("Reader %d: conn=%d type=%d len=%d", readerIdx, connID, msgType, payloadLen)
+	// log.Debugf("Reader %d: conn=%d type=%d len=%d", readerIdx, connID, msgType, payloadLen)
 
 	if f.isSender {
 		f.handleSenderMessage(connID, msgType, payload, readerIdx)
@@ -292,7 +292,7 @@ func (f *TCPForwarder) handleSenderMessage(connID ForwarderConnID, msgType byte,
 			f.pendingConns.Delete(connID)
 			return
 		}
-		log.Debugf("OPEN conn=%d connected to %s", connID, f.localServerAddr)
+		// log.Debugf("OPEN conn=%d connected to %s", connID, f.localServerAddr)
 
 		fc := &forwardedConn{
 			local:    local,
@@ -307,11 +307,11 @@ func (f *TCPForwarder) handleSenderMessage(connID ForwarderConnID, msgType byte,
 			if pd, ok := pendingVal.(*pendingData); ok {
 				pd.timer.Stop()
 				if len(pd.chunks) > 0 {
-					log.Debugf("OPEN conn=%d: found %d pending data chunks", connID, len(pd.chunks))
+					// log.Debugf("OPEN conn=%d: found %d pending data chunks", connID, len(pd.chunks))
 					for _, data := range pd.chunks {
 						select {
 						case fc.tunnelCh <- data:
-							log.Debugf("OPEN conn=%d: delivered pending %d bytes", connID, len(data))
+							// log.Debugf("OPEN conn=%d: delivered pending %d bytes", connID, len(data))
 						default:
 							go func(d []byte) {
 								select {
@@ -332,7 +332,7 @@ func (f *TCPForwarder) handleSenderMessage(connID ForwarderConnID, msgType byte,
 		go fc.readLoop()
 		go fc.writeLoop()
 
-		log.Debugf("OPEN conn=%d both loops started", connID)
+		// log.Debugf("OPEN conn=%d both loops started", connID)
 
 	case ForwardMsgData:
 		// Проверяем активные соединения
@@ -340,11 +340,11 @@ func (f *TCPForwarder) handleSenderMessage(connID ForwarderConnID, msgType byte,
 			if fc, ok := val.(*forwardedConn); ok {
 				select {
 				case fc.tunnelCh <- payload:
-					log.Debugf("DATA conn=%d: queued %d bytes", connID, len(payload))
+					// log.Debugf("DATA conn=%d: queued %d bytes", connID, len(payload))
 				case <-fc.closeCh:
-					log.Debugf("DATA conn=%d: dropped (closing)", connID)
+					// log.Debugf("DATA conn=%d: dropped (closing)", connID)
 				case <-f.stopChan:
-					log.Debugf("DATA conn=%d: dropped (stopping)", connID)
+					// log.Debugf("DATA conn=%d: dropped (stopping)", connID)
 				}
 				return
 			}
@@ -352,12 +352,12 @@ func (f *TCPForwarder) handleSenderMessage(connID ForwarderConnID, msgType byte,
 
 		// Проверяем, не было ли соединение уже закрыто
 		if _, ok := f.closedConns.Load(connID); ok {
-			log.Debugf("DATA conn=%d: already closed, dropping %d bytes", connID, len(payload))
+			// log.Debugf("DATA conn=%d: already closed, dropping %d bytes", connID, len(payload))
 			return
 		}
 
 		// Если активного соединения нет и оно не закрыто - буферизируем
-		log.Debugf("DATA conn=%d: not found, buffering %d bytes (waiting for OPEN)", connID, len(payload))
+		// log.Debugf("DATA conn=%d: not found, buffering %d bytes (waiting for OPEN)", connID, len(payload))
 
 		pd := f.getOrCreatePending(connID)
 
@@ -375,7 +375,7 @@ func (f *TCPForwarder) handleSenderMessage(connID ForwarderConnID, msgType byte,
 		}
 
 	case ForwardMsgClose:
-		log.Infof("CLOSE conn=%d from reader=%d", connID, readerIdx)
+		// log.Debugf("CLOSE conn=%d from reader=%d", connID, readerIdx)
 		f.pendingConns.Delete(connID)
 
 		// Помечаем соединение как закрытое (даже если активного соединения нет)
@@ -397,11 +397,11 @@ func (f *TCPForwarder) handleReceiverMessage(connID ForwarderConnID, msgType byt
 			if fc, ok := val.(*forwardedConn); ok {
 				select {
 				case fc.tunnelCh <- payload:
-					log.Debugf("DATA conn=%d: queued %d bytes", connID, len(payload))
+					// log.Debugf("DATA conn=%d: queued %d bytes", connID, len(payload))
 				case <-fc.closeCh:
-					log.Debugf("DATA conn=%d: dropped (closing)", connID)
+					// log.Debugf("DATA conn=%d: dropped (closing)", connID)
 				case <-f.stopChan:
-					log.Debugf("DATA conn=%d: dropped (stopping)", connID)
+					// log.Debugf("DATA conn=%d: dropped (stopping)", connID)
 				}
 				return
 			}
@@ -409,12 +409,12 @@ func (f *TCPForwarder) handleReceiverMessage(connID ForwarderConnID, msgType byt
 
 		// Проверяем, не было ли соединение уже закрыто
 		if _, ok := f.closedConns.Load(connID); ok {
-			log.Debugf("DATA conn=%d: already closed, dropping %d bytes", connID, len(payload))
+			// log.Debugf("DATA conn=%d: already closed, dropping %d bytes", connID, len(payload))
 			return
 		}
 
 		// Если активного соединения нет и оно не закрыто - буферизируем
-		log.Debugf("DATA conn=%d: not found, buffering %d bytes", connID, len(payload))
+		// log.Debugf("DATA conn=%d: not found, buffering %d bytes", connID, len(payload))
 
 		pd := f.getOrCreatePending(connID)
 
@@ -423,7 +423,7 @@ func (f *TCPForwarder) handleReceiverMessage(connID ForwarderConnID, msgType byt
 			dataCopy := make([]byte, len(payload))
 			copy(dataCopy, payload)
 			pd.chunks = append(pd.chunks, dataCopy)
-			log.Debugf("DATA conn=%d: buffered, total %d chunks", connID, len(pd.chunks))
+			// log.Debugf("DATA conn=%d: buffered, total %d chunks", connID, len(pd.chunks))
 
 			// Сброс таймера при получении данных
 			pd.timer.Reset(PendingTimeout)
@@ -475,7 +475,7 @@ func (f *TCPForwarder) ForwardConnection(local net.Conn) error {
 		if pd, ok := pendingVal.(*pendingData); ok {
 			pd.timer.Stop()
 			if len(pd.chunks) > 0 {
-				log.Debugf("Conn %d: found %d pending data chunks", connID, len(pd.chunks))
+				// log.Debugf("Conn %d: found %d pending data chunks", connID, len(pd.chunks))
 				// Отправляем все накопленные данные в канал
 				for _, data := range pd.chunks {
 					select {
@@ -487,9 +487,9 @@ func (f *TCPForwarder) ForwardConnection(local net.Conn) error {
 							select {
 							case fc.tunnelCh <- d:
 							case <-fc.closeCh:
-								log.Debugf("Conn %d: dropped pending data (closing)", connID)
+								// log.Debugf("Conn %d: dropped pending data (closing)", connID)
 							case <-f.stopChan:
-								log.Debugf("Conn %d: dropped pending data (stopping)", connID)
+								// log.Debugf("Conn %d: dropped pending data (stopping)", connID)
 							}
 						}(data)
 					}
@@ -500,7 +500,7 @@ func (f *TCPForwarder) ForwardConnection(local net.Conn) error {
 
 	f.activeConns.Store(connID, fc)
 
-	log.Debugf("Conn %d: sending OPEN", connID)
+	// log.Debugf("Conn %d: sending OPEN", connID)
 	if err := f.sendMessage(connID, ForwardMsgOpen, nil); err != nil {
 		log.Errorf("Conn %d: OPEN failed: %v", connID, err)
 		f.activeConns.Delete(connID)
@@ -512,7 +512,7 @@ func (f *TCPForwarder) ForwardConnection(local net.Conn) error {
 	go fc.readLoop()
 	go fc.writeLoop()
 
-	log.Debugf("Conn %d: read/write loops started", connID)
+	// log.Debugf("Conn %d: read/write loops started", connID)
 	return nil
 }
 
@@ -521,15 +521,15 @@ func (fc *forwardedConn) readLoop() {
 	defer fc.close()
 
 	buf := make([]byte, ForwardBufferSize)
-	log.Debugf("Conn %d readLoop started", fc.connID)
+	// log.Debugf("Conn %d readLoop started", fc.connID)
 
 	for {
 		select {
 		case <-fc.closeCh:
-			log.Debugf("Conn %d readLoop: closed", fc.connID)
+			// log.Debugf("Conn %d readLoop: closed", fc.connID)
 			return
 		case <-fc.f.stopChan:
-			log.Debugf("Conn %d readLoop: stopped", fc.connID)
+			// log.Debugf("Conn %d readLoop: stopped", fc.connID)
 			return
 		default:
 		}
@@ -539,13 +539,13 @@ func (fc *forwardedConn) readLoop() {
 			if !errors.Is(err, io.EOF) && !errors.Is(err, net.ErrClosed) {
 				log.Errorf("Conn %d read error: %v", fc.connID, err)
 			} else {
-				log.Debugf("Conn %d readLoop: local closed (%v)", fc.connID, err)
+				// log.Debugf("Conn %d readLoop: local closed (%v)", fc.connID, err)
 			}
 			return
 		}
 
 		if n > 0 {
-			log.Debugf("Conn %d: read %d bytes from local", fc.connID, n)
+			// log.Debugf("Conn %d: read %d bytes from local", fc.connID, n)
 			if err := fc.f.sendMessage(fc.connID, ForwardMsgData, buf[:n]); err != nil {
 				log.Errorf("Conn %d: send error: %v", fc.connID, err)
 				return
@@ -558,28 +558,28 @@ func (fc *forwardedConn) writeLoop() {
 	defer fc.f.wg.Done()
 	defer fc.close()
 
-	log.Debugf("Conn %d writeLoop started", fc.connID)
+	// log.Debugf("Conn %d writeLoop started", fc.connID)
 
 	for {
 		select {
 		case <-fc.closeCh:
-			log.Debugf("Conn %d writeLoop: closed", fc.connID)
+			// log.Debugf("Conn %d writeLoop: closed", fc.connID)
 			return
 		case <-fc.f.stopChan:
-			log.Debugf("Conn %d writeLoop: stopped", fc.connID)
+			// log.Debugf("Conn %d writeLoop: stopped", fc.connID)
 			return
 		case data, ok := <-fc.tunnelCh:
 			if !ok {
-				log.Debugf("Conn %d writeLoop: channel closed", fc.connID)
+				// log.Debugf("Conn %d writeLoop: channel closed", fc.connID)
 				return
 			}
 
-			log.Debugf("Conn %d: writing %d bytes to local", fc.connID, len(data))
+			// log.Debugf("Conn %d: writing %d bytes to local", fc.connID, len(data))
 			if _, err := fc.local.Write(data); err != nil {
 				if !errors.Is(err, net.ErrClosed) {
 					log.Errorf("Conn %d write error: %v", fc.connID, err)
 				} else {
-					log.Debugf("Conn %d writeLoop: local closed", fc.connID)
+					// log.Debugf("Conn %d writeLoop: local closed", fc.connID)
 				}
 				return
 			}
@@ -589,7 +589,7 @@ func (fc *forwardedConn) writeLoop() {
 
 func (fc *forwardedConn) close() {
 	fc.once.Do(func() {
-		log.Infof("Closing conn %d", fc.connID)
+		// log.Debugf("Closing conn %d", fc.connID)
 		close(fc.closeCh)
 		fc.local.Close()
 		fc.f.activeConns.Delete(fc.connID)
@@ -617,7 +617,7 @@ func (f *TCPForwarder) sendMessage(connID ForwarderConnID, msgType byte, payload
 	binary.LittleEndian.PutUint32(packet[12:16], uint32(len(payload)))
 	copy(packet[16:], payload)
 
-	log.Debugf("Send: conn=%d type=%d len=%d", connID, msgType, len(payload))
+	// log.Debugf("Send: conn=%d type=%d len=%d", connID, msgType, len(payload))
 
 	encrypted, err := crypt.Encrypt(packet, f.key)
 	if err != nil {
@@ -632,10 +632,25 @@ func (f *TCPForwarder) sendMessage(connID ForwarderConnID, msgType byte, payload
 	return f.conns[idx].Send(encrypted)
 }
 
-func (f *TCPForwarder) generateID() ForwarderConnID {
+func (f *TCPForwarder) generateID0() ForwarderConnID {
 	var b [8]byte
 	rand.Read(b[:])
 	return ForwarderConnID(binary.LittleEndian.Uint64(b[:]))
+}
+
+func (f *TCPForwarder) generateID() ForwarderConnID {
+	// Используем nanosecond timestamp как основу
+	timestamp := uint64(time.Now().UnixNano())
+
+	// Добавляем немного случайности для уникальности в пределах одной наносекунды
+	var b [4]byte
+	rand.Read(b[:])
+	random := binary.LittleEndian.Uint32(b[:])
+
+	// Комбинируем: старшие 32 бита - время, младшие 32 бита - случайность
+	id := (timestamp << 32) | uint64(random)
+
+	return ForwarderConnID(id)
 }
 
 func (f *TCPForwarder) getOrCreatePending(connID ForwarderConnID) *pendingData {
