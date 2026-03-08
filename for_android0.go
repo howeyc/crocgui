@@ -282,7 +282,7 @@ func OpenDAV(s string) error {
 		return err
 	}
 
-	if schemes, _, ok := isDAV(s); ok {
+	if schemes, _, _, ok := isDAV(s); ok {
 		// Если зарегистрированы схемы то через них
 		for _, scheme := range schemes[1:] {
 			if registered(scheme) {

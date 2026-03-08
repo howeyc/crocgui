@@ -234,8 +234,9 @@ func fromURI(u string) (st, ne, as, a6, ps, pd, s5, ct string, err error) {
 	return
 }
 
-func isDAV(cc string) (schemes []string, ccNew string, ok bool) {
-	u, err := url.Parse(cc)
+func isDAV(cc string) (schemes []string, ccNew string, u *url.URL, ok bool) {
+	var err error
+	u, err = url.Parse(cc)
 	if err != nil {
 		return
 	}

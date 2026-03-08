@@ -1,6 +1,6 @@
 module crocgui
 
-go 1.24.3
+go 1.25.0
 
 replace github.com/schollz/croc/v10 => ../croc
 
@@ -14,7 +14,7 @@ require (
 	github.com/schollz/logger v1.2.0
 	github.com/schollz/pake/v3 v3.1.0
 	github.com/ulikunitz/xz v0.5.12
-	golang.org/x/text v0.32.0
+	golang.org/x/text v0.34.0
 )
 
 require (
@@ -59,11 +59,11 @@ require (
 	github.com/tscholl2/siec v0.0.0-20240310163802-c2c6f6198406 // indirect
 	github.com/twmb/murmur3 v1.1.8 // indirect
 	github.com/yuin/goldmark v1.7.8 // indirect
-	golang.org/x/crypto v0.46.0 // indirect
+	golang.org/x/crypto v0.48.0 // indirect
 	golang.org/x/image v0.24.0 // indirect
-	golang.org/x/net v0.48.0 // indirect
-	golang.org/x/sys v0.39.0 // indirect
-	golang.org/x/term v0.38.0 // indirect
+	golang.org/x/net v0.51.0 // indirect
+	golang.org/x/sys v0.41.0 // indirect
+	golang.org/x/term v0.40.0 // indirect
 	golang.org/x/time v0.14.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

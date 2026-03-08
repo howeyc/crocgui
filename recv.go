@@ -110,7 +110,7 @@ func recvTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 			a.Preferences().SetString("connect", ct)
 			cc = fmt.Sprintf("%s: %s", lp("Relay"), ne)
 		} else {
-			if _, ccn, ok := isDAV(cc); ok {
+			if _, ccn, _, ok := isDAV(cc); ok {
 				// Открываем в браузере
 				if err := OpenURL(ccn); err == nil {
 					return
