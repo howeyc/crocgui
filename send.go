@@ -622,77 +622,56 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 		return ft
 	}
 
-	// Конструктор для WebDAVFileTree с OnSelected callback
-	newWebDAVTreeWithOnSelected := func(webdavURL *url.URL, extractPath bool) *WebDAVFileTree {
-		log.Debugf("[newWebDAVTreeWithOnSelected] Starting to create WebDAV tree for: %s", webdavURL.String())
+	// Функция для создания FileTree
+	createFileTree := func(rootPath string, sCheck *widget.Check, hostSelect *Select, port *widget.Entry) *xw.FileTree {
+		ft := xw.NewFileTree(storage.NewFileURI(rootPath))
+
+		ft.OnSelected = func(id widget.TreeNodeID) {
+			var path string
+			if strings.HasPrefix(rootPath, tempDir) {
+				rootStr := storage.NewFileURI(rootPath).String()
+				path = strings.Replace(id, rootStr, "", 1)
+			}
+			_, u := defWeb(
+				HTTP,
+				sCheck.Checked,
+				hostSelect.Selected,
+				port.Text,
+				path)
+			OpenURL(u.String())
+			ft.UnselectAll()
+		}
+		ft.OpenAllBranches()
+		return ft
+	}
+
+	// Функция для создания WebDAV дерева
+	createWebDAVTree := func(webdavURL *url.URL) *WebDAVFileTree {
+		log.Debugf("[createWebDAVTree] Creating WebDAV tree for: %s", webdavURL.String())
 		ft := NewWebDAVFileTree(webdavURL)
-		log.Debugf("[newWebDAVTreeWithOnSelected] NewWebDAVFileTree returned: %+v", ft)
 
 		if ft == nil {
-			// Не удалось создать WebDAV дерево
-			log.Debugf("[newWebDAVTreeWithOnSelected] Failed to create tree (returned nil)")
+			log.Debugf("[createWebDAVTree] Failed to create tree (returned nil)")
 			return nil
 		}
 
 		ft.OnSelected = func(uid widget.TreeNodeID) {
-			log.Debugf("[newWebDAVTreeWithOnSelected] OnSelected callback triggered")
-			log.Debugf("[newWebDAVTreeWithOnSelected] Selected ID: %s", uid)
-			log.Debugf("[newWebDAVTreeWithOnSelected] Is this root? %v", uid == webdavURL.String())
+			log.Debugf("[createWebDAVTree] OnSelected: %s", uid)
 
-			// Получаем информацию о файле из кэша
-			if node, ok := ft.nodeCache[uid]; ok {
-				log.Debugf("[newWebDAVTreeWithOnSelected] File info from cache: Name=%s, IsDir=%v, Path=%s",
-					node.Name, node.IsDir, node.Path)
-			} else {
-				log.Debugf("[newWebDAVTreeWithOnSelected] File NOT found in cache for ID: %s", uid)
-			}
-
-			// Формируем полный URL для открытия
-			// uid - это полный путь, начинающийся с /
-			// uid уже URL-encoded (например: /%D0%9A%D0%BB%D1%83%D0%B1...)
 			var fullURLStr string
-
 			if !strings.HasPrefix(uid, webdavURL.String()) {
-				// Если uid не полный URL, собираем полный URL вручную
-				// ВАЖНО: НЕ используем url.URL.Path так как он перекодирует URL
-				// uid уже закодирован, просто присоединяем его к базовому URL
 				fullURLStr = fmt.Sprintf("%s://%s%s", webdavURL.Scheme, webdavURL.Host, uid)
 			} else {
-				// uid уже полный URL
 				fullURLStr = uid
 			}
 
-			log.Debugf("[newWebDAVTreeWithOnSelected] Full URL to open: %s", fullURLStr)
-
-			// Открываем URL с задержкой, чтобы UI успел обновиться
-			log.Debugf("[newWebDAVTreeWithOnSelected] Scheduling URL open...")
+			log.Debugf("[createWebDAVTree] Opening URL: %s", fullURLStr)
 			time.AfterFunc(100*time.Millisecond, func() {
-				log.Debugf("[newWebDAVTreeWithOnSelected] Opening URL: %s", fullURLStr)
 				OpenURL(fullURLStr)
-				log.Debugf("[newWebDAVTreeWithOnSelected] URL opened")
 			})
-
-			log.Debugf("[newWebDAVTreeWithOnSelected] OnSelected callback completed")
 		}
 
-		// Проверяем что callback установлен
-		if ft.OnSelected != nil {
-			log.Debugf("[newWebDAVTreeWithOnSelected] OnSelected callback is set")
-		} else {
-			log.Errorf("[newWebDAVTreeWithOnSelected] WARNING: OnSelected callback is nil!")
-		}
-
-		log.Debugf("[newWebDAVTreeWithOnSelected] Calling OpenAllBranches")
 		ft.OpenAllBranches()
-		log.Debugf("[newWebDAVTreeWithOnSelected] Tree creation completed")
-
-		// Проверяем callback после OpenAllBranches
-		if ft.OnSelected != nil {
-			log.Debugf("[newWebDAVTreeWithOnSelected] After OpenAllBranches: OnSelected is still set")
-		} else {
-			log.Errorf("[newWebDAVTreeWithOnSelected] After OpenAllBranches: WARNING: OnSelected is nil!")
-		}
-
 		return ft
 	}
 
@@ -706,12 +685,12 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 				// Если ошибка - показываем заглушку ../croc
 				_, _, proxyURL, ok := isDAV(link.URL.String())
 				if ok {
-					webdavTree := newWebDAVTreeWithOnSelected(proxyURL, false)
+					webdavTree := createWebDAVTree(proxyURL)
 
 					if webdavTree != nil {
 						// WebDAV дерево успешно создано - используем напрямую
 						scroller.Content = webdavTree
-						scroller.Refresh()
+						// Не вызываем Refresh() - Fyne автоматически обновляет контент при назначении
 						showPage()
 						return
 					}
@@ -720,10 +699,10 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 				// Ошибка - заглушка CROC
 				root := filepath.FromSlash(filepath.Join(filepath.Dir(join()), CROC))
 				os.MkdirAll(root, 0700)
-				ft = newFileTreeWithOnSelected(storage.NewFileURI(root), false)
+				ft = createFileTree(root, sCheck, hostSelect, port)
 			} else {
 				// Прокси выключен: ft root = join()
-				ft = newFileTreeWithOnSelected(storage.NewFileURI(join()), true)
+				ft = createFileTree(join(), sCheck, hostSelect, port)
 			}
 			scroller.Content = ft
 			scroller.Refresh()

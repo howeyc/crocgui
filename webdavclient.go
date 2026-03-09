@@ -297,7 +297,8 @@ type WebDAVFileTree struct {
 	listCache    map[widget.TreeNodeID][]widget.TreeNodeID
 	nodeCache    map[widget.TreeNodeID]*WebDAVFileNode
 	loadingNodes map[widget.TreeNodeID]bool
-	isRefreshing bool // Защита от многократных обновлений
+	isRefreshing bool      // Защита от многократных обновлений
+	lastRefresh  time.Time // Время последнего обновления для debounce
 }
 
 // NewWebDAVFileTree создает новый WebDAVFileTree
@@ -329,6 +330,7 @@ func NewWebDAVFileTree(rootURL *url.URL) *WebDAVFileTree {
 		listCache:    make(map[widget.TreeNodeID][]widget.TreeNodeID),
 		nodeCache:    make(map[widget.TreeNodeID]*WebDAVFileNode),
 		loadingNodes: make(map[widget.TreeNodeID]bool),
+		lastRefresh:  time.Now(), // Инициализируем время создания для debounce
 	}
 
 	// Проверяем соединение с сервером
@@ -540,12 +542,52 @@ func (t *WebDAVFileTree) Refresh() {
 		t.isRefreshing = false
 	}()
 
-	log.Debugf("[Refresh] Refreshing tree UI")
+	// Debounce: не обновляем если прошло менее 500ms с последнего обновления
+	if !t.lastRefresh.IsZero() && time.Since(t.lastRefresh) < 500*time.Millisecond {
+		log.Debugf("[Refresh] Skipping - refreshed too recently (%v ago)", time.Since(t.lastRefresh))
+		return
+	}
 
-	// Только обновляем UI без перезагрузки данных с сервера
-	// Данные уже есть в кэше
+	t.lastRefresh = time.Now()
+	log.Debugf("[Refresh] Starting full tree refresh")
+
+	// 1. Очищаем весь кэш
+	t.listCache = make(map[widget.TreeNodeID][]widget.TreeNodeID)
+	t.nodeCache = make(map[widget.TreeNodeID]*WebDAVFileNode)
+	log.Debugf("[Refresh] Cleared all caches")
+
+	// 2. Перезагружаем корневые элементы с сервера
+	rootID := t.Root
+	rootChildren, err := t.loadChildren(rootID)
+	if err != nil {
+		log.Errorf("[Refresh] Failed to reload root children: %v", err)
+		fyne.LogError("Failed to reload root children", err)
+		return
+	}
+
+	// 3. Сохраняем корень и его детей в новый кэш
+	t.nodeCache[rootID] = &WebDAVFileNode{
+		Path:    t.rootURL.Path,
+		Name:    t.rootURL.String(),
+		IsDir:   true,
+		Size:    0,
+		ModTime: time.Now(),
+	}
+
+	var rootChildIDs []widget.TreeNodeID
+	for _, child := range rootChildren {
+		childID := child.Path
+		t.nodeCache[childID] = child
+		rootChildIDs = append(rootChildIDs, childID)
+	}
+	t.listCache[rootID] = rootChildIDs
+
+	log.Debugf("[Refresh] Reloaded %d root children", len(rootChildIDs))
+
+	// 4. Обновляем UI виджета Tree
 	t.Tree.Refresh()
-	log.Debugf("[Refresh] Tree UI refreshed")
+
+	log.Debugf("[Refresh] Tree refresh completed")
 }
 
 // GetNodeURL возвращает URL для заданного узла

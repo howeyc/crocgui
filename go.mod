@@ -8,7 +8,7 @@ replace github.com/schollz/peerdiscovery => ../peerdiscovery
 
 require (
 	fyne.io/fyne/v2 v2.7.2
-	fyne.io/x/fyne v0.0.0-20260128204654-7fd4ce591d29
+	fyne.io/x/fyne v0.0.0-20260219123538-e09698d18b34
 	github.com/adrg/xdg v0.5.3
 	github.com/schollz/croc/v10 v10.3.1-0.20251120031407-82cdeb19a87f
 	github.com/schollz/logger v1.2.0
