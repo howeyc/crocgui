@@ -532,23 +532,22 @@ func (fc *forwardedConn) readLoop() {
 			// log.Debugf("Conn %d readLoop: stopped", fc.connID)
 			return
 		default:
-		}
-
-		n, err := fc.local.Read(buf)
-		if err != nil {
-			if !errors.Is(err, io.EOF) && !errors.Is(err, net.ErrClosed) {
-				log.Errorf("Conn %d read error: %v", fc.connID, err)
-			} else {
-				// log.Debugf("Conn %d readLoop: local closed (%v)", fc.connID, err)
-			}
-			return
-		}
-
-		if n > 0 {
-			// log.Debugf("Conn %d: read %d bytes from local", fc.connID, n)
-			if err := fc.f.sendMessage(fc.connID, ForwardMsgData, buf[:n]); err != nil {
-				log.Errorf("Conn %d: send error: %v", fc.connID, err)
+			n, err := fc.local.Read(buf)
+			if err != nil {
+				if !errors.Is(err, io.EOF) && !errors.Is(err, net.ErrClosed) {
+					log.Errorf("Conn %d read error: %v", fc.connID, err)
+					// } else {
+					// 	log.Debugf("Conn %d readLoop: local closed (%v)", fc.connID, err)
+				}
 				return
+			}
+
+			if n > 0 {
+				if err := fc.f.sendMessage(fc.connID, ForwardMsgData, buf[:n]); err != nil {
+					log.Errorf("Conn %d: send error: %v", fc.connID, err)
+					return
+				}
+				// log.Debugf("Conn %d: read %d bytes from local", fc.connID, n)
 			}
 		}
 	}

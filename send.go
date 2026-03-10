@@ -943,6 +943,7 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 				caffeinate(1)
 				defer func() {
 					// Конец
+					davServer.DisableTCPForwarding()
 					caffeinate(-1)
 					ticker.Stop()
 					fyne.Do(func() {
@@ -955,7 +956,6 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 						removeEntrys(false)
 						reload()
 						showPage()
-						davServer.DisableTCPForwarding()
 						log.Warnf("NumGoroutine %d", runtime.NumGoroutine())
 					})
 				}()
@@ -1037,7 +1037,10 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 							})
 						}
 						if client.Step1ChannelSecured {
-							if !davControl.Hidden && davServer.IsActive() && !davServer.IsTCPForwardingActive() {
+							if !davControl.Hidden && davServer.IsActive() {
+								if davServer.IsTCPForwardingActive() {
+									continue
+								}
 								err := davServer.EnableTCPForwarding(client)
 								if err != nil {
 									log.Errorf("failed to enable port forwarding: %v", err)

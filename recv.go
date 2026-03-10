@@ -679,6 +679,7 @@ func recvTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 			caffeinate(1)
 			defer func() {
 				// Конец
+				davServer.DisableTCPForwarding()
 				caffeinate(-1)
 				ticker.Stop()
 				if longCdLock {
@@ -686,7 +687,6 @@ func recvTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 					time.Sleep(time.Second * 30)
 				}
 				cdLock.Store(0)
-				davServer.DisableTCPForwarding()
 				fyne.Do(func() {
 					allShow(false, cosSH...)
 					allEnabled(true, cosED...)
@@ -735,8 +735,10 @@ func recvTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 						return
 					}
 					if client.Step1ChannelSecured {
-						// Включаем бинарный прокси для WebDAV (если сервер активен)
-						if davServer.IsActive() && !davServer.IsTCPForwardingActive() {
+						if davServer.IsActive() {
+							if davServer.IsTCPForwardingActive() {
+								continue
+							}
 							err := davServer.EnableTCPForwarding(client)
 							if err != nil {
 								log.Errorf("failed to enable port forwarding: %v", err)
