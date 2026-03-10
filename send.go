@@ -749,14 +749,21 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 	cosED = append(cosED, treeButton)
 
 	mainButton = widget.NewButtonWithIcon(lp("Send"), theme.MailSendIcon(), func() {
+		fyne.Do(func() { topline.SetText("") })
 		if entry.Validate() != nil {
 			log.Error("no receive code entered")
-			NewToast(w, lp("Secret must be longer than 5 characters")).Show()
+			fyne.Do(func() {
+				topline.SetText(lp("Secret must be longer than 5 characters"))
+				NewToast(w, lp("Secret must be longer than 5 characters")).Show()
+			})
 			return
 		}
 
 		if !seady() || swap && !ready() {
-			NewToast(w, lp("Pick a file to send")).Show()
+			fyne.Do(func() {
+				topline.SetText(lp("Pick a file to send"))
+				NewToast(w, lp("Pick a file to send")).Show()
+			})
 			return
 		}
 		filepaths := []string{}
@@ -790,7 +797,10 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 			// Посылаем если есть файлы
 			if len(filepaths) < 1 {
 				log.Error("no files ready")
-				NewToast(w, lp("Pick a file to send")).Show()
+				fyne.Do(func() {
+					topline.SetText(lp("Pick a file to send"))
+					NewToast(w, lp("Pick a file to send")).Show()
+				})
 				return
 			}
 		}
@@ -847,7 +857,10 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 					return
 				}
 				if len(filesInfo) < 1 {
-					fyne.Do(NewToast(w, lp("Pick a file to send")).Show)
+					fyne.Do(func() {
+						topline.SetText(lp("Pick a file to send"))
+						NewToast(w, lp("Pick a file to send")).Show()
+					})
 					return
 				}
 
@@ -856,7 +869,10 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 				filesInfo, emptyFolders, totalNumberFolders = filter(filesInfo, emptyFolders, totalNumberFolders, Exclude, allowed...)
 				// log.Debugf("filtered filesInfo %+v %v %d", filesInfo, emptyfolders, totalNumberFolders)
 				if len(filesInfo) < 1 {
-					fyne.Do(NewToast(w, lp("Pick a file to send")).Show)
+					fyne.Do(func() {
+						topline.SetText(lp("Pick a file to send"))
+						NewToast(w, lp("Pick a file to send")).Show()
+					})
 					return
 				}
 			}

@@ -584,9 +584,13 @@ func recvTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 	}
 	OnSelectedTab[RECVi] = reload
 	mainButton = widget.NewButtonWithIcon(lp("Download"), theme.DownloadIcon(), func() {
+		fyne.Do(func() { topline.SetText("") })
 		if entry.Validate() != nil {
 			log.Error("no receive code entered")
-			NewToast(w, lp("Secret must be longer than 5 characters")).Show()
+			fyne.Do(func() {
+				topline.SetText(lp("Secret must be longer than 5 characters"))
+				NewToast(w, lp("Secret must be longer than 5 characters")).Show()
+			})
 			return
 		}
 

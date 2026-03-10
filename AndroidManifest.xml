@@ -2,8 +2,8 @@
 <manifest
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
-    android:versionCode="1750"
-    android:versionName="1.11.46"
+    android:versionCode="1751"
+    android:versionName="1.11.47"
     package="com.github.howeyc.crocgui">
 
     <!--
