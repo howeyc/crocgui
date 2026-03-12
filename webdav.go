@@ -51,6 +51,7 @@ type WebDAVServer struct {
 	// Callback для уведомления о смене состояния прокси
 	onProxyStateChanged func(enabled bool)
 	remote              bool
+	local               bool
 
 	tcpForwarder    *TCPForwarder
 	tcpListener     net.Listener
@@ -474,6 +475,26 @@ func (s *WebDAVServer) IsActive() bool {
 	return s.active
 }
 
+// IsLocal returns the current state of the server.
+func (s *WebDAVServer) IsLocal() bool {
+	if !s.IsActive() {
+		return false
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.local
+}
+
+// SetLocal
+func (s *WebDAVServer) SetLocal(ok bool) {
+	if !s.IsActive() {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.local = ok
+}
+
 // SetProxyStateChangeCallback устанавливает callback для уведомления о смене состояния прокси
 func (s *WebDAVServer) SetProxyStateChangeCallback(cb func(bool)) {
 	s.mu.Lock()
@@ -769,6 +790,7 @@ func (s *WebDAVServer) IsTCPForwardingActive() bool {
 	defer s.tcpForwardingMu.RUnlock()
 	return s.tcpForwarding && s.tcpForwarder != nil
 }
+
 func defAddress(hp string, ports ...string) (host, port, address string) {
 	var err error
 	host, port, err = net.SplitHostPort(hp)

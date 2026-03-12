@@ -29,10 +29,12 @@ import (
 
 func recvTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 	var (
-		cosED, cosSH []fyne.CanvasObject
-		removeEntry  func(fpath string, fe *fyne.Container, del bool)
-		showPage     func()
-		reload       func()
+		cosED,
+		cosSH,
+		cosDAV []fyne.CanvasObject
+		removeEntry func(fpath string, fe *fyne.Container, del bool)
+		showPage    func()
+		reload      func()
 
 		boxholder = container.NewVBox()
 		scroller  = container.NewVScroll(boxholder)
@@ -55,7 +57,10 @@ func recvTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 	var cancelButton *widget.Button
 	cancelChan := make(chan struct{}, 1)
 	hideCancel := func() {
-		fyne.Do(cancelButton.Hide)
+		fyne.Do(func() {
+			cancelButton.Hide()
+			mainButton.Show()
+		})
 		select {
 		case <-cancelChan:
 		default:
@@ -70,7 +75,10 @@ func recvTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 			close(cancelChan)
 		}
 		cancelChan = make(chan struct{})
-		fyne.Do(cancelButton.Show)
+		fyne.Do(func() {
+			mainButton.Hide()
+			cancelButton.Show()
+		})
 	}
 	cosSH = append(cosSH, prog, cancelButton)
 	allShow(false, cosSH...)
@@ -145,7 +153,6 @@ func recvTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 			fileentries.Clear()
 			fyne.Do(func() {
 				boxholder.RemoveAll()
-				// treeOff()
 			})
 			return
 		}
@@ -164,6 +171,7 @@ func recvTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 		})
 	})
 	cosED = append(cosED, deleteAllButton)
+	cosDAV = append(cosDAV, deleteAllButton)
 
 	ready = func() (ok bool) {
 		ok = true
@@ -199,7 +207,6 @@ func recvTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 			fyne.Do(func() {
 				boxholder.Remove(fe)
 				doMonitor.DoRequest(boxholder.Refresh)
-				// treeOff()
 			})
 		}
 		if del {
@@ -231,7 +238,6 @@ func recvTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 								}
 							})
 							doMonitor.DoRequest(boxholder.Refresh)
-							// treeOff()
 						})
 						return
 					}
@@ -354,7 +360,6 @@ func recvTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 			}
 			boxholder.Add(newentry)
 			doMonitor.DoRequest(boxholder.Refresh)
-			// treeOff()
 		})
 		return
 	} //addEntry
@@ -557,7 +562,6 @@ func recvTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 				s *widget.Button,
 				l *widget.Label) {
 				d.Show()
-				// p.Hide()
 				s.Show()
 				if isLinkDir(path) {
 					name += slash
@@ -585,6 +589,14 @@ func recvTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 	OnSelectedTab[RECVi] = reload
 	mainButton = widget.NewButtonWithIcon(lp("Download"), theme.DownloadIcon(), func() {
 		fyne.Do(func() { topline.SetText("") })
+		if davServer.IsLocal() {
+			log.Error("WebDav")
+			fyne.Do(func() {
+				topline.SetText("WebDav")
+				NewToast(w, "WebDav").Show()
+			})
+			return
+		}
 		if entry.Validate() != nil {
 			log.Error("no receive code entered")
 			fyne.Do(func() {
@@ -669,6 +681,9 @@ func recvTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 		var filename string
 		showCancel()
 		allEnabled(false, cosED...)
+		if davServer.IsActive() || davServer.IsTCPForwardingActive() {
+			allEnabled(true, cosDAV...)
+		}
 
 		if totpCheck.Checked {
 			totpProg.Hide()
@@ -692,6 +707,7 @@ func recvTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 				}
 				cdLock.Store(0)
 				fyne.Do(func() {
+					mainButton.Show()
 					allShow(false, cosSH...)
 					allEnabled(true, cosED...)
 					if totpCheck.Checked {
@@ -852,6 +868,7 @@ func recvTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 		ShowFilesSave()
 	})
 	cosED = append(cosED, saveAllButton)
+	cosDAV = append(cosDAV, saveAllButton)
 
 	downloadButton := widget.NewButtonWithIcon("", theme.FolderIcon(), func() {
 		if !mapEmpty(&fileentries) {
@@ -862,21 +879,7 @@ func recvTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 		}
 	})
 	cosED = append(cosED, downloadButton)
-
-	// for _, name := range ls(join()) {
-	// 	path := filepath.Join(join(), name)
-	// 	if name == "" {
-	// 		continue
-	// 	}
-	// 	if fpath == path {
-	// 		err := os.Remove(fpath)
-	// 		log.Debugf("Removed partially received %s: %v", fpath, err)
-	// 		if err != nil {
-	// 			continue
-	// 		}
-	// 		a.Preferences().SetString("DeleteFile", "")
-	// 	}
-	// }
+	cosDAV = append(cosDAV, downloadButton)
 
 	filesSave = func(lu fyne.ListableURI, err error) {
 		var (

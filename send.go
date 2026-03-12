@@ -57,12 +57,14 @@ const (
 
 func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 	var (
-		cosED, cosSH []fyne.CanvasObject
-		removeEntry  func(fpath string, fe *fyne.Container, del bool)
-		showPage     func()
-		reload       func()
-		treeOff      = func() {}
-		scRefresh    = func() {}
+		cosED,
+		cosSH,
+		cosDAV []fyne.CanvasObject
+		removeEntry func(fpath string, fe *fyne.Container, del bool)
+		showPage    func()
+		reload      func()
+		treeOff     = func() {}
+		scRefresh   = func() {}
 
 		boxholder = container.NewVBox()
 		scroller  = container.NewVScroll(boxholder)
@@ -81,7 +83,10 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 	var cancelButton *widget.Button
 	cancelChan := make(chan struct{}, 1)
 	hideCancel := func() {
-		fyne.Do(cancelButton.Hide)
+		fyne.Do(func() {
+			cancelButton.Hide()
+			mainButton.Show()
+		})
 		select {
 		case <-cancelChan:
 		default:
@@ -96,7 +101,11 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 			close(cancelChan)
 		}
 		cancelChan = make(chan struct{})
-		fyne.Do(cancelButton.Show)
+		davServer.SetLocal(true)
+		fyne.Do(func() {
+			mainButton.Hide()
+			cancelButton.Show()
+		})
 	}
 	cosSH = append(cosSH, prog, cancelButton)
 	allShow(false, cosSH...)
@@ -161,6 +170,7 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 		})
 	})
 	cosED = append(cosED, deleteAllButton)
+	cosDAV = append(cosDAV, deleteAllButton)
 
 	seady := func() (ok bool) {
 		ok = true
@@ -484,7 +494,6 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 
 				l *widget.Label) {
 				d.Show()
-				// p.Hide()
 
 				if isLinkDir(path) {
 					name += slash
@@ -939,6 +948,9 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 			fyne.Do(func() {
 
 				allEnabled(false, cosED...)
+				if !davControl.Hidden && (davServer.IsActive() || davServer.IsTCPForwardingActive()) {
+					allEnabled(true, cosDAV...)
+				}
 
 				if totpCheck.Checked {
 					totpProg.Hide()
@@ -962,8 +974,9 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 					davServer.DisableTCPForwarding()
 					caffeinate(-1)
 					ticker.Stop()
+					davServer.SetLocal(false)
 					fyne.Do(func() {
-						// prog.SetValue(0)
+						mainButton.Show()
 						allShow(false, cosSH...)
 						allEnabled(true, cosED...)
 						if totpCheck.Checked {
@@ -1049,7 +1062,9 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 							fyne.Do(func() {
 								toplineW.SetText(lp("Have them press the Download now"))
 								NewToast(w, lp("Have them press the Download now")).Show()
-								progW.SetMax(totalMax)
+								if !(!davControl.Hidden && (davServer.IsActive() || davServer.IsTCPForwardingActive())) {
+									progW.SetMax(totalMax)
+								}
 							})
 						}
 						if client.Step1ChannelSecured {
@@ -1533,6 +1548,7 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 		source.Close()
 	})
 	cosED = append(cosED, addClipButton)
+	cosDAV = append(cosDAV, addClipButton)
 
 	addFileButton := widget.NewButtonWithIcon("", theme.ContentAddIcon(), func() {
 		if supported, err := IsFilePickerSupported(); err != nil {
@@ -1609,6 +1625,7 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 		}, w)
 	})
 	cosED = append(cosED, addFileButton)
+	cosDAV = append(cosDAV, addFileButton)
 
 	addFolderButton := widget.NewButtonWithIcon("", theme.FolderNewIcon(), func() {
 		folderOpen := func(u fyne.ListableURI, e error) {
@@ -1693,6 +1710,7 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 		ShowFolderOpen(folderOpen, w)
 	})
 	cosED = append(cosED, addFolderButton)
+	cosDAV = append(cosDAV, addFolderButton)
 
 	reDir = widget.NewButtonWithIcon("", theme.UploadIcon(), func() {
 		if !seady() {
@@ -1753,8 +1771,8 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 		),
 		davControl,
 		mainButton,
-		prog,
 		cancelButton,
+		prog,
 	)
 
 	ti = container.NewTabItemWithIcon(lp("Send"), theme.MailSendIcon(),
@@ -1781,18 +1799,6 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 	}
 
 	return
-}
-
-// Большой диалог для десктопа
-func ShowFileOpen0(callback func(fyne.URIReadCloser, error), parent fyne.Window) {
-	if isMobile {
-		notFinish = true
-		dialog.ShowFileOpen(callback, parent)
-		return
-	}
-	fd := dialog.NewFileOpen(callback, parent)
-	fd.Resize(parent.Canvas().Size())
-	fd.Show()
 }
 
 func ShowFileOpen(callback func(fyne.URIReadCloser, error), parent fyne.Window) {
