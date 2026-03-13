@@ -270,7 +270,7 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 		dst = filepath.FromSlash(dst)
 		// log.Debugf("addEntry %s", dst)
 		if _, ok := load(&fileentries, dst); ok {
-			log.Debugf("exists %s", dst)
+			// log.Debugf("exists %s", dst)
 			return nil
 		}
 		base := filepath.Base(dst)
@@ -469,7 +469,7 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 		inZip := make(map[string]bool)
 		prefixs := []string{}
 		p, n := lsr(join())
-		log.Debugf("lsr %v", n)
+		// log.Debugf("lsr %v", n)
 		for _, path := range p {
 			ext := filepath.Ext(path)
 			if strings.ToLower(ext) == DOTZIP {
@@ -521,7 +521,7 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 			removeEntry(path, fe, true)
 		})
 	}
-	OnSelectedTab[SENTi] = reload
+	OnSelectedTab[SENDi] = reload
 
 	reload()
 
@@ -742,7 +742,6 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 			ft.OpenAllBranches()
 			scroller.Content = ft
 		}
-		scroller.Refresh()
 	}
 
 	treeButton = widget.NewButtonWithIcon("", theme.VisibilityIcon(), func() {

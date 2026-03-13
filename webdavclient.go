@@ -530,11 +530,17 @@ func (t *WebDAVFileTree) loadChildren(id widget.TreeNodeID) ([]*WebDAVFileNode, 
 	return children, nil
 }
 
-// Refresh обновляет дерево файлов
+// Refresh обновляет дерево файлов почему-то на каждой вкладке
 func (t *WebDAVFileTree) Refresh() {
+	if at != nil {
+		if atSI := at.SelectedIndex(); atSI != SENDi {
+			log.Debugf("[Refresh] from %d", atSI)
+			return
+		}
+	}
 	// Защита от многократных обновлений
 	if t.isRefreshing {
-		log.Debugf("[Refresh] Already refreshing, skipping")
+		// log.Debugf("[Refresh] Already refreshing, skipping")
 		return
 	}
 	t.isRefreshing = true
@@ -542,19 +548,19 @@ func (t *WebDAVFileTree) Refresh() {
 		t.isRefreshing = false
 	}()
 
-	// Debounce: не обновляем если прошло менее 500ms с последнего обновления
+	// Debounce: не обновляем если прошло менее 1s с последнего обновления
 	if !t.lastRefresh.IsZero() && time.Since(t.lastRefresh) < time.Second {
-		log.Debugf("[Refresh] Skipping - refreshed too recently (%v ago)", time.Since(t.lastRefresh))
+		// log.Debugf("[Refresh] Skipping - refreshed too recently (%v ago)", time.Since(t.lastRefresh))
 		return
 	}
 
 	t.lastRefresh = time.Now()
-	log.Debugf("[Refresh] Starting full tree refresh")
+	// log.Debugf("[Refresh] Starting full tree refresh")
 
 	// 1. Очищаем весь кэш
 	t.listCache = make(map[widget.TreeNodeID][]widget.TreeNodeID)
 	t.nodeCache = make(map[widget.TreeNodeID]*WebDAVFileNode)
-	log.Debugf("[Refresh] Cleared all caches")
+	// log.Debugf("[Refresh] Cleared all caches")
 
 	// 2. Перезагружаем корневые элементы с сервера
 	rootID := t.Root
@@ -582,12 +588,12 @@ func (t *WebDAVFileTree) Refresh() {
 	}
 	t.listCache[rootID] = rootChildIDs
 
-	log.Debugf("[Refresh] Reloaded %d root children", len(rootChildIDs))
+	// log.Debugf("[Refresh] Reloaded %d root children", len(rootChildIDs))
 
 	// 4. Обновляем UI виджета Tree
 	t.Tree.Refresh()
 
-	log.Debugf("[Refresh] Tree refresh completed")
+	// log.Debugf("[Refresh] Tree refresh completed")
 }
 
 // GetNodeURL возвращает URL для заданного узла

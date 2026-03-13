@@ -85,7 +85,7 @@ const (
 )
 
 const (
-	SENTi = iota
+	SENDi = iota
 	RECVi
 	LOGi
 	SETTINGSi

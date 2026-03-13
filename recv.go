@@ -254,7 +254,7 @@ func recvTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 		dst = filepath.FromSlash(dst)
 		// log.Debugf("addEntry %s", dst)
 		if fe, ok := load(&fileentries, dst); ok {
-			log.Debugf("exists %s", dst)
+			// log.Debugf("exists %s", dst)
 			deleteButton := fe.Objects[feDel]
 			progFile := fe.Objects[feBar]
 			saveButton := fe.Objects[feSave]
@@ -534,7 +534,7 @@ func recvTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 		inZip := make(map[string]bool)
 		prefixs := []string{}
 		p, n := lsr(join())
-		log.Debugf("lsr %v", n)
+		// log.Debugf("lsr %v", n)
 		for _, path := range p {
 			ext := filepath.Ext(path)
 			if strings.ToLower(ext) == DOTZIP {
