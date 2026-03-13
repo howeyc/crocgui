@@ -2,6 +2,7 @@
 package main
 
 import (
+	"context"
 	"encoding/xml"
 	"fmt"
 	"io"
@@ -302,7 +303,7 @@ type WebDAVFileTree struct {
 }
 
 // NewWebDAVFileTree создает новый WebDAVFileTree
-// Возвращает nil если не удается подключиться к серверу
+// Возвращает дерево без блокирующей проверки соединения
 func NewWebDAVFileTree(rootURL *url.URL) *WebDAVFileTree {
 	log.Debugf("[NewWebDAVFileTree] Creating tree with rootURL: %s", rootURL.String())
 
@@ -333,21 +334,8 @@ func NewWebDAVFileTree(rootURL *url.URL) *WebDAVFileTree {
 		lastRefresh:  time.Now(), // Инициализируем время создания для debounce
 	}
 
-	// Проверяем соединение с сервером
-	log.Debugf("[NewWebDAVFileTree] Testing connection to server...")
-	rootChildren, err := tree.loadChildren(rootURL.String())
-	if err != nil {
-		log.Errorf("[NewWebDAVFileTree] Failed to connect to WebDAV server: %v", err)
-		fyne.LogError("Failed to connect to WebDAV server", err)
-		return nil
-	}
-
-	log.Debugf("[NewWebDAVFileTree] Connection successful! Root has %d children", len(rootChildren))
-
-	// Сохраняем детей корня в кэш для отображения
+	// Добавляем корень в кэш как директорию
 	rootID := rootURL.String()
-
-	// Добавляем сам корень в кэш как директорию
 	tree.nodeCache[rootID] = &WebDAVFileNode{
 		Path:    rootURL.Path,
 		Name:    rootURL.String(),
@@ -356,15 +344,6 @@ func NewWebDAVFileTree(rootURL *url.URL) *WebDAVFileTree {
 		ModTime: time.Now(),
 	}
 	log.Debugf("[NewWebDAVFileTree] Added root to nodeCache as directory")
-
-	var rootChildIDs []widget.TreeNodeID
-	for _, child := range rootChildren {
-		childID := child.Path
-		tree.nodeCache[childID] = child
-		rootChildIDs = append(rootChildIDs, childID)
-	}
-	tree.listCache[rootID] = rootChildIDs
-	log.Debugf("[NewWebDAVFileTree] Cached %d root children", len(rootChildIDs))
 
 	tree.IsBranch = func(id widget.TreeNodeID) bool {
 		node, ok := tree.nodeCache[id]
@@ -377,24 +356,44 @@ func NewWebDAVFileTree(rootURL *url.URL) *WebDAVFileTree {
 			return ids
 		}
 
-		// Загружаем с сервера
-		children, err := tree.loadChildren(id)
-		if err != nil {
-			log.Errorf("[ChildUIDs] Failed to load children for ID %s: %v", id, err)
-			fyne.LogError("Failed to load children for "+id, err)
-			return nil
+		// Если уже загружается, возвращаем пустой список
+		if tree.loadingNodes[id] {
+			log.Debugf("[ChildUIDs] Already loading %s, skipping", id)
+			return []widget.TreeNodeID{}
 		}
 
-		// Сохраняем в кэш
-		var ids []widget.TreeNodeID
-		for _, child := range children {
-			childID := child.Path
-			tree.nodeCache[childID] = child
-			ids = append(ids, childID)
-		}
+		// Запускаем асинхронную загрузку
+		tree.loadingNodes[id] = true
+		go func() {
+			defer func() {
+				delete(tree.loadingNodes, id)
+			}()
 
-		tree.listCache[id] = ids
-		return ids
+			children, err := tree.loadChildren(id)
+			if err != nil {
+				log.Errorf("[ChildUIDs] Failed to load children for ID %s: %v", id, err)
+				fyne.LogError("Failed to load children for "+id, err)
+				return
+			}
+
+			// Сохраняем в кэш
+			var ids []widget.TreeNodeID
+			for _, child := range children {
+				childID := child.Path
+				tree.nodeCache[childID] = child
+				ids = append(ids, childID)
+			}
+
+			tree.listCache[id] = ids
+
+			// Обновляем UI
+			fyne.Do(func() {
+				tree.Tree.Refresh()
+			})
+		}()
+
+		// Возвращаем пустой список, загрузка в фоне
+		return []widget.TreeNodeID{}
 	}
 
 	tree.UpdateNode = func(id widget.TreeNodeID, branch bool, node fyne.CanvasObject) {
@@ -530,6 +529,37 @@ func (t *WebDAVFileTree) loadChildren(id widget.TreeNodeID) ([]*WebDAVFileNode, 
 	return children, nil
 }
 
+// CheckConnection проверяет соединение с WebDAV сервером с timeout
+// Возвращает nil если соединение успешно установлено
+func (t *WebDAVFileTree) CheckConnection(ctx context.Context) error {
+	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+
+	// Создаем отдельный клиент с коротким timeout
+	client := &http.Client{
+		Timeout: 2 * time.Second,
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "PROPFIND", t.rootURL.String(), nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Depth", "0")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to connect to server: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusMultiStatus && resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+	}
+
+	return nil
+}
+
 // Refresh обновляет дерево файлов почему-то на каждой вкладке
 func (t *WebDAVFileTree) Refresh() {
 	if at != nil {
@@ -557,43 +587,75 @@ func (t *WebDAVFileTree) Refresh() {
 	t.lastRefresh = time.Now()
 	// log.Debugf("[Refresh] Starting full tree refresh")
 
-	// 1. Очищаем весь кэш
-	t.listCache = make(map[widget.TreeNodeID][]widget.TreeNodeID)
-	t.nodeCache = make(map[widget.TreeNodeID]*WebDAVFileNode)
-	// log.Debugf("[Refresh] Cleared all caches")
+	// Запускаем асинхронное обновление с timeout
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
 
-	// 2. Перезагружаем корневые элементы с сервера
-	rootID := t.Root
-	rootChildren, err := t.loadChildren(rootID)
-	if err != nil {
-		log.Errorf("[Refresh] Failed to reload root children: %v", err)
-		fyne.LogError("Failed to reload root children", err)
-		return
-	}
+		// Проверяем соединение
+		err := t.CheckConnection(ctx)
+		if err != nil {
+			log.Errorf("[Refresh] Failed to check connection: %v", err)
+			fyne.LogError("WebDAV connection failed, switching to placeholder", err)
 
-	// 3. Сохраняем корень и его детей в новый кэш
-	t.nodeCache[rootID] = &WebDAVFileNode{
-		Path:    t.rootURL.Path,
-		Name:    t.rootURL.String(),
-		IsDir:   true,
-		Size:    0,
-		ModTime: time.Now(),
-	}
+			// Fallback на placeholder
+			fyne.Do(func() {
+				// Очищаем кэш
+				t.listCache = make(map[widget.TreeNodeID][]widget.TreeNodeID)
+				t.nodeCache = make(map[widget.TreeNodeID]*WebDAVFileNode)
 
-	var rootChildIDs []widget.TreeNodeID
-	for _, child := range rootChildren {
-		childID := child.Path
-		t.nodeCache[childID] = child
-		rootChildIDs = append(rootChildIDs, childID)
-	}
-	t.listCache[rootID] = rootChildIDs
+				// Добавляем только корень
+				rootID := t.Root
+				t.nodeCache[rootID] = &WebDAVFileNode{
+					Path:    t.rootURL.Path,
+					Name:    t.rootURL.String(),
+					IsDir:   true,
+					Size:    0,
+					ModTime: time.Now(),
+				}
+				t.listCache[rootID] = []widget.TreeNodeID{}
 
-	// log.Debugf("[Refresh] Reloaded %d root children", len(rootChildIDs))
+				t.Tree.Refresh()
+			})
+			return
+		}
 
-	// 4. Обновляем UI виджета Tree
-	t.Tree.Refresh()
+		// Соединение успешно, обновляем данные
+		rootID := t.Root
+		rootChildren, err := t.loadChildren(rootID)
+		if err != nil {
+			log.Errorf("[Refresh] Failed to reload root children: %v", err)
+			fyne.LogError("Failed to reload root children", err)
+			return
+		}
 
-	// log.Debugf("[Refresh] Tree refresh completed")
+		// Сохраняем корень и его детей в кэш
+		fyne.Do(func() {
+			t.listCache = make(map[widget.TreeNodeID][]widget.TreeNodeID)
+			t.nodeCache = make(map[widget.TreeNodeID]*WebDAVFileNode)
+
+			t.nodeCache[rootID] = &WebDAVFileNode{
+				Path:    t.rootURL.Path,
+				Name:    t.rootURL.String(),
+				IsDir:   true,
+				Size:    0,
+				ModTime: time.Now(),
+			}
+
+			var rootChildIDs []widget.TreeNodeID
+			for _, child := range rootChildren {
+				childID := child.Path
+				t.nodeCache[childID] = child
+				rootChildIDs = append(rootChildIDs, childID)
+			}
+			t.listCache[rootID] = rootChildIDs
+
+			// log.Debugf("[Refresh] Reloaded %d root children", len(rootChildIDs))
+
+			// Обновляем UI виджета Tree
+			t.Tree.Refresh()
+		})
+	}()
 }
 
 // GetNodeURL возвращает URL для заданного узла

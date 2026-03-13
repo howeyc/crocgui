@@ -618,11 +618,11 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 	newFileTreeWithOnSelected := func(rootURI fyne.URI, extractPath bool) *xw.FileTree {
 		ft := xw.NewFileTree(rootURI)
 
-		ft.OnSelected = func(id widget.TreeNodeID) {
+		ft.OnSelected = func(uid widget.TreeNodeID) {
 			var path string
 			if extractPath {
 				rootStr := storage.NewFileURI(join()).String()
-				path = strings.Replace(id, rootStr, "", 1)
+				path = strings.Replace(uid, rootStr, "", 1)
 			}
 			_, u := defWeb(
 				HTTP,
@@ -631,7 +631,7 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 				port.Text,
 				path)
 			OpenURL(u.String())
-			ft.UnselectAll()
+			ft.Unselect(uid)
 		}
 		ft.OpenAllBranches()
 		return ft
@@ -641,11 +641,11 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 	createFileTree := func(rootPath string, sCheck *widget.Check, hostSelect *Select, port *widget.Entry) *xw.FileTree {
 		ft := xw.NewFileTree(storage.NewFileURI(rootPath))
 
-		ft.OnSelected = func(id widget.TreeNodeID) {
+		ft.OnSelected = func(uid widget.TreeNodeID) {
 			var path string
 			if strings.HasPrefix(rootPath, tempDir) {
 				rootStr := storage.NewFileURI(rootPath).String()
-				path = strings.Replace(id, rootStr, "", 1)
+				path = strings.Replace(uid, rootStr, "", 1)
 			}
 			_, u := defWeb(
 				HTTP,
@@ -654,7 +654,7 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 				port.Text,
 				path)
 			OpenURL(u.String())
-			ft.UnselectAll()
+			ft.Unselect(uid)
 		}
 		ft.OpenAllBranches()
 		return ft
@@ -670,6 +670,25 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 			return nil
 		}
 
+		// Запускаем асинхронную проверку соединения
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			defer cancel()
+
+			err := ft.CheckConnection(ctx)
+			if err != nil {
+				log.Errorf("[createWebDAVTree] Connection check failed: %v", err)
+				fyne.LogError("WebDAV connection failed", err)
+				// При ошибке соединения дерево остается пустым (placeholder)
+			} else {
+				log.Debugf("[createWebDAVTree] Connection successful, refreshing tree")
+				// При успешном соединении обновляем дерево
+				fyne.Do(func() {
+					ft.Refresh()
+				})
+			}
+		}()
+
 		ft.OnSelected = func(uid widget.TreeNodeID) {
 			log.Debugf("[createWebDAVTree] OnSelected: %s", uid)
 
@@ -684,6 +703,7 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 			time.AfterFunc(100*time.Millisecond, func() {
 				OpenURL(fullURLStr)
 			})
+			ft.Unselect(uid)
 		}
 
 		ft.OpenAllBranches()
@@ -696,32 +716,36 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 			allEnabled(!enabled, cosED...)
 			allEnabled(!enabled, cosSH...)
 			if enabled {
-				// Прокси включен: показываем WebDAV дерево файлов
-				// Если ошибка - показываем заглушку ../croc
-				_, _, proxyURL, ok := isDAV(link.URL.String())
-				if ok {
-					webdavTree := createWebDAVTree(proxyURL)
-
-					if webdavTree != nil {
-						// WebDAV дерево успешно создано - используем напрямую
-						scroller.Content = webdavTree
-						// Не вызываем Refresh() - Fyne автоматически обновляет контент при назначении
-						showPage()
-						return
-					}
-				}
-
-				// Ошибка - заглушка CROC
+				// Сначала показываем placeholder
 				root := filepath.FromSlash(filepath.Join(filepath.Dir(join()), CROC))
 				os.MkdirAll(root, 0700)
 				ft = createFileTree(root, sCheck, hostSelect, port)
+				scroller.Content = ft
+				scroller.Refresh()
+				showPage()
+
+				// В фоне проверяем WebDAV соединение
+				go func() {
+					_, _, proxyURL, ok := isDAV(link.URL.String())
+					if ok {
+						webdavTree := createWebDAVTree(proxyURL)
+
+						if webdavTree != nil {
+							// WebDAV дерево успешно создано - переключаемся на него
+							fyne.Do(func() {
+								scroller.Content = webdavTree
+								scroller.Refresh()
+							})
+						}
+					}
+				}()
 			} else {
 				// Прокси выключен: ft root = join()
 				ft = createFileTree(join(), sCheck, hostSelect, port)
+				scroller.Content = ft
+				scroller.Refresh()
+				showPage()
 			}
-			scroller.Content = ft
-			scroller.Refresh()
-			showPage()
 		})
 	})
 
