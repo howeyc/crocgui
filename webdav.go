@@ -434,9 +434,6 @@ func generateTLSConfig(addrs ...string) (*tls.Config, error) {
 
 // Stop останавливает сервер и прокси если есть
 func (s *WebDAVServer) Stop() error {
-	// Останавливаем прокси если есть
-	s.DisableTCPForwarding()
-
 	s.mu.Lock()
 	defer s.mu.Unlock()
 

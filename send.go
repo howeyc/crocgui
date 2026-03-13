@@ -756,6 +756,7 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 		davServer.Stop()
 	}
 	cosED = append(cosED, treeButton)
+	cosDAV = append(cosDAV, treeButton)
 
 	mainButton = widget.NewButtonWithIcon(lp("Send"), theme.MailSendIcon(), func() {
 		fyne.Do(func() { topline.SetText("") })
@@ -1713,15 +1714,17 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 	cosDAV = append(cosDAV, addFolderButton)
 
 	reDir = widget.NewButtonWithIcon("", theme.UploadIcon(), func() {
-		if !seady() {
-			log.Error("not all files ready for send")
-			NewToast(w, "not all files ready for send").Show()
-			return
-		}
-		if !ready() {
-			log.Error("not all files ready for recv")
-			NewToast(w, "not all files ready for recv").Show()
-			return
+		if !(!davControl.Hidden && (davServer.IsActive() || davServer.IsTCPForwardingActive())) {
+			if !seady() {
+				log.Error("not all files ready for send")
+				NewToast(w, "not all files ready for send").Show()
+				return
+			}
+			if !ready() {
+				log.Error("not all files ready for recv")
+				NewToast(w, "not all files ready for recv").Show()
+				return
+			}
 		}
 
 		swap = !swap
@@ -1744,6 +1747,7 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 		}
 	})
 	cosED = append(cosED, reDir)
+	cosDAV = append(cosDAV, reDir)
 
 	top := container.NewVBox(
 		container.NewHBox(topline,
