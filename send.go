@@ -85,7 +85,9 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 	hideCancel := func() {
 		fyne.Do(func() {
 			cancelButton.Hide()
+
 			mainButton.Show()
+			davServer.SetLocal(false)
 		})
 		select {
 		case <-cancelChan:
@@ -101,9 +103,10 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 			close(cancelChan)
 		}
 		cancelChan = make(chan struct{})
-		davServer.SetLocal(true)
 		fyne.Do(func() {
 			mainButton.Hide()
+			davServer.SetLocal(true)
+
 			cancelButton.Show()
 		})
 	}
@@ -522,6 +525,7 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 
 	reload()
 
+	// Старуем вебдав-сервер с новыми параметрами
 	updateLink := func() {}
 	prev := a.Preferences().String("webdav-host")
 	if !slices.Contains(hostSelectOptions(LOCAL), prev) {
@@ -585,7 +589,9 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 		davServer.Start(addr, join(), sCheck.Checked, hostSelect.Options...)
 		time.AfterFunc(time.Second, func() {
 			if !davServer.IsActive() {
-				link.Hide()
+				fyne.Do(func() {
+					link.Hide()
+				})
 			}
 		})
 	}
@@ -719,8 +725,10 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 		})
 	})
 
+	var treeButton *widget.Button
+	// Обновляем скроллер
 	scRefresh = func() {
-		if davControl.Hidden {
+		if treeButton.Icon == theme.VisibilityIcon() {
 			boxholder.Refresh()
 		} else {
 			root := storage.NewFileURI(join())
@@ -737,20 +745,21 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 		scroller.Refresh()
 	}
 
-	var treeButton *widget.Button
 	treeButton = widget.NewButtonWithIcon("", theme.VisibilityIcon(), func() {
-		if davControl.Hidden {
+		if treeButton.Icon == theme.VisibilityIcon() {
+			treeButton.SetIcon(theme.VisibilityOffIcon())
 			updateLink()
 			davControl.Show()
-			treeButton.SetIcon(theme.VisibilityOffIcon())
 			scRefresh()
 			return
 		}
 		treeOff()
 	})
 	treeOff = func() {
-		davControl.Hide()
 		treeButton.SetIcon(theme.VisibilityIcon())
+		if mainButton.Visible() {
+			davControl.Hide()
+		}
 		scroller.Content = boxholder
 		scroller.Refresh()
 		davServer.Stop()
@@ -778,7 +787,7 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 		}
 		filepaths := []string{}
 		allowed := []string{}
-		if davControl.Hidden {
+		if treeButton.Icon == theme.VisibilityIcon() {
 			fileentries.Range(func(key, value interface{}) bool {
 				path := key.(string)
 				fe := value.(*fyne.Container)
@@ -819,7 +828,7 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 
 		// Пути посылаемых файлов абсолютны. Переходим в каталог только если zipfolder
 		cdLocked := false
-		if hasFolder(join()) && ZipFolder && davControl.Hidden {
+		if hasFolder(join()) && ZipFolder && treeButton.Icon == theme.VisibilityIcon() {
 			log.Debug("hasFolders(join()) && zipfolder")
 			if cdLock.CompareAndSwap(0, 1) {
 				cdLocked = true
@@ -852,7 +861,7 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 				err                error
 			)
 
-			if davControl.Hidden {
+			if treeButton.Icon == theme.VisibilityIcon() {
 				filesInfo, emptyFolders, totalNumberFolders, err = croc.GetFilesInfo(filepaths, ZipFolder, GitIgnore, Exclude)
 
 				if cdLocked {
@@ -901,7 +910,7 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 				NoPrompt:     true,
 				DisableLocal: a.Preferences().Bool("disable-local"),
 				// Чтоб не было 2-х ридеров на одном порту
-				NoMultiplexing:   a.Preferences().Bool("disable-multiplexing") || !davControl.Hidden || davServer.IsActive() || davServer.IsTCPForwardingActive(),
+				NoMultiplexing:   a.Preferences().Bool("disable-multiplexing") || treeButton.Icon == theme.VisibilityOffIcon(),
 				NoCompress:       a.Preferences().Bool("disable-compression"),
 				OnlyLocal:        a.Preferences().Bool("force-local"),
 				Curve:            a.Preferences().String("pake-curve"),
@@ -949,7 +958,7 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 			fyne.Do(func() {
 
 				allEnabled(false, cosED...)
-				if !davControl.Hidden && (davServer.IsActive() || davServer.IsTCPForwardingActive()) {
+				if treeButton.Icon == theme.VisibilityOffIcon() {
 					allEnabled(true, cosDAV...)
 				}
 
@@ -975,9 +984,12 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 					davServer.DisableTCPForwarding()
 					caffeinate(-1)
 					ticker.Stop()
-					davServer.SetLocal(false)
 					fyne.Do(func() {
 						mainButton.Show()
+						davServer.SetLocal(false)
+						if treeButton.Icon == theme.VisibilityIcon() {
+							davControl.Hide()
+						}
 						allShow(false, cosSH...)
 						allEnabled(true, cosED...)
 						if totpCheck.Checked {
@@ -1063,13 +1075,13 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 							fyne.Do(func() {
 								toplineW.SetText(lp("Have them press the Download now"))
 								NewToast(w, lp("Have them press the Download now")).Show()
-								if !(!davControl.Hidden && (davServer.IsActive() || davServer.IsTCPForwardingActive())) {
+								if treeButton.Icon == theme.VisibilityIcon() {
 									progW.SetMax(totalMax)
 								}
 							})
 						}
 						if client.Step1ChannelSecured {
-							if !davControl.Hidden && davServer.IsActive() {
+							if treeButton.Icon == theme.VisibilityOffIcon() && davServer.IsActive() {
 								if davServer.IsTCPForwardingActive() {
 									continue
 								}
@@ -1162,7 +1174,7 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 		excludeRecents := false
 		a.Lifecycle().SetOnExitedForeground(func() {
 			log.Debug("ExitedForeground " + wHandle(w))
-			if !notFinish && !(davServer.IsTCPForwardingActive() || davServer.IsActive()) {
+			if !notFinish && treeButton.Icon == theme.VisibilityIcon() {
 				if excludeRecents {
 					// Для Андроида 9 это просто finish
 					// excludeFromRecents()
@@ -1714,7 +1726,7 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 	cosDAV = append(cosDAV, addFolderButton)
 
 	reDir = widget.NewButtonWithIcon("", theme.UploadIcon(), func() {
-		if !(!davControl.Hidden && (davServer.IsActive() || davServer.IsTCPForwardingActive())) {
+		if treeButton.Icon == theme.VisibilityIcon() {
 			if !seady() {
 				log.Error("not all files ready for send")
 				NewToast(w, "not all files ready for send").Show()
@@ -1741,7 +1753,7 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 		}
 		removeEntrys(false)
 		reload()
-		if davControl.Visible() {
+		if davServer.IsActive() {
 			treeOff()
 			treeButton.OnTapped()
 		}
