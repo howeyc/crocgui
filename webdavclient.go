@@ -166,7 +166,7 @@ func (c *WebDAVClient) PropFind(u *url.URL, depth string) ([]webdav.Property, er
 
 // ListChildren возвращает список дочерних элементов для заданного пути
 func (c *WebDAVClient) ListChildren(u *url.URL) ([]*WebDAVFileNode, error) {
-	log.Debugf("[ListChildren] Request URL: %s", u.String())
+	// log.Debugf("[ListChildren] Request URL: %s", u.String())
 
 	// Делаем PROPFIND с Depth: 1 для получения содержимого папки
 	propfindXML := `<?xml version="1.0" encoding="utf-8"?>
@@ -195,7 +195,7 @@ func (c *WebDAVClient) ListChildren(u *url.URL) ([]*WebDAVFileNode, error) {
 	}
 	defer resp.Body.Close()
 
-	log.Debugf("[ListChildren] Response status: %d", resp.StatusCode)
+	// log.Debugf("[ListChildren] Response status: %d", resp.StatusCode)
 
 	if resp.StatusCode != http.StatusMultiStatus {
 		body, _ := io.ReadAll(resp.Body)
@@ -226,18 +226,18 @@ func (c *WebDAVClient) ListChildren(u *url.URL) ([]*WebDAVFileNode, error) {
 		return nil, fmt.Errorf("failed to decode XML: %w", err)
 	}
 
-	log.Debugf("[ListChildren] Total response elements: %d", len(multistatus.Response))
+	// log.Debugf("[ListChildren] Total response elements: %d", len(multistatus.Response))
 
 	// Пропускаем первый элемент (саму папку) и обрабатываем детей
 	var children []*WebDAVFileNode
 	for i, resp := range multistatus.Response {
 		if i == 0 {
-			log.Debugf("[ListChildren] Skipping root element: %v", resp.Href)
+			// log.Debugf("[ListChildren] Skipping root element: %v", resp.Href)
 			continue // Пропускаем саму папку
 		}
 
 		if len(resp.Href) == 0 || len(resp.Propstat) == 0 {
-			log.Debugf("[ListChildren] Skipping response %d: no href or propstat", i)
+			// log.Debugf("[ListChildren] Skipping response %d: no href or propstat", i)
 			continue
 		}
 
@@ -273,7 +273,7 @@ func (c *WebDAVClient) ListChildren(u *url.URL) ([]*WebDAVFileNode, error) {
 			name = decoded
 		}
 
-		log.Debugf("[ListChildren] Found child %d: name=%s, isDir=%v, path=%s", len(children), name, isDir, href)
+		// log.Debugf("[ListChildren] Found child %d: name=%s, isDir=%v, path=%s", len(children), name, isDir, href)
 
 		children = append(children, &WebDAVFileNode{
 			Path:    href,
@@ -284,7 +284,7 @@ func (c *WebDAVClient) ListChildren(u *url.URL) ([]*WebDAVFileNode, error) {
 		})
 	}
 
-	log.Debugf("[ListChildren] Returning %d children for URL: %s", len(children), u.String())
+	// log.Debugf("[ListChildren] Returning %d children for URL: %s", len(children), u.String())
 	return children, nil
 }
 
@@ -306,7 +306,7 @@ type WebDAVFileTree struct {
 // NewWebDAVFileTree создает новый WebDAVFileTree
 // Всегда возвращает дерево, даже при отсутствии соединения (placeholder)
 func NewWebDAVFileTree(rootURL *url.URL) *WebDAVFileTree {
-	log.Debugf("[NewWebDAVFileTree] Creating tree with rootURL: %v", rootURL)
+	// log.Debugf("[NewWebDAVFileTree] Creating tree with rootURL: %v", rootURL)
 
 	// Если URL nil, создаём placeholder с базовым URL
 	if rootURL == nil {
@@ -348,7 +348,7 @@ func NewWebDAVFileTree(rootURL *url.URL) *WebDAVFileTree {
 		Size:    0,
 		ModTime: time.Now(),
 	}
-	log.Debugf("[NewWebDAVFileTree] Added root to nodeCache as directory")
+	// log.Debugf("[NewWebDAVFileTree] Added root to nodeCache as directory")
 
 	tree.IsBranch = func(id widget.TreeNodeID) bool {
 		node, ok := tree.nodeCache[id]
@@ -363,7 +363,7 @@ func NewWebDAVFileTree(rootURL *url.URL) *WebDAVFileTree {
 
 		// Если уже загружается, возвращаем пустой список
 		if tree.loadingNodes[id] {
-			log.Debugf("[ChildUIDs] Already loading %s, skipping", id)
+			// log.Debugf("[ChildUIDs] Already loading %s, skipping", id)
 			return []widget.TreeNodeID{}
 		}
 
@@ -403,7 +403,7 @@ func NewWebDAVFileTree(rootURL *url.URL) *WebDAVFileTree {
 	}
 
 	tree.UpdateNode = func(id widget.TreeNodeID, branch bool, node fyne.CanvasObject) {
-		log.Debugf("[UpdateNode] id=%s, branch=%v", id, branch)
+		// log.Debugf("[UpdateNode] id=%s, branch=%v", id, branch)
 		c := node.(*fyne.Container)
 
 		var label string
@@ -413,16 +413,16 @@ func NewWebDAVFileTree(rootURL *url.URL) *WebDAVFileTree {
 			// Получаем имя из кэша или из URL
 			if nodeInfo, ok := tree.nodeCache[id]; ok {
 				label = nodeInfo.Name
-				log.Debugf("[UpdateNode] Found in nodeCache: name=%s", label)
+				// log.Debugf("[UpdateNode] Found in nodeCache: name=%s", label)
 			} else {
 				// Извлекаем из URL
 				parsed, err := url.Parse(id)
 				if err == nil {
 					label = path.Base(parsed.Path)
-					log.Debugf("[UpdateNode] Extracted from URL path: name=%s", label)
+					// log.Debugf("[UpdateNode] Extracted from URL path: name=%s", label)
 				} else {
 					label = id
-					log.Debugf("[UpdateNode] Using raw id as label: %s", label)
+					// log.Debugf("[UpdateNode] Using raw id as label: %s", label)
 				}
 			}
 		}
@@ -450,10 +450,10 @@ func NewWebDAVFileTree(rootURL *url.URL) *WebDAVFileTree {
 	}
 
 	tree.OnBranchClosed = func(id widget.TreeNodeID) {
-		log.Debugf("[OnBranchClosed] Branch closed: %s", id)
+		// log.Debugf("[OnBranchClosed] Branch closed: %s", id)
 		// Не удаляем кэш для корня
 		if id == tree.Root {
-			log.Debugf("[OnBranchClosed] Skipping cache clear for root")
+			// log.Debugf("[OnBranchClosed] Skipping cache clear for root")
 			// Вызываем Refresh принудительно
 			tree.lastRefresh = time.Time{}
 			tree.Refresh()
@@ -462,7 +462,7 @@ func NewWebDAVFileTree(rootURL *url.URL) *WebDAVFileTree {
 		}
 		// Очищаем кэш при закрытии папки
 		delete(tree.listCache, id)
-		log.Debugf("[OnBranchClosed] Cleared cache for: %s", id)
+		// log.Debugf("[OnBranchClosed] Cleared cache for: %s", id)
 	}
 
 	tree.ExtendBaseWidget(tree)
@@ -471,7 +471,7 @@ func NewWebDAVFileTree(rootURL *url.URL) *WebDAVFileTree {
 
 // loadChildren загружает список детей для заданного узла
 func (t *WebDAVFileTree) loadChildren(id widget.TreeNodeID) ([]*WebDAVFileNode, error) {
-	log.Debugf("[loadChildren] Loading children for ID: %s", id)
+	// log.Debugf("[loadChildren] Loading children for ID: %s", id)
 
 	// Строим полный URL для запроса
 	var targetURL *url.URL
@@ -479,7 +479,7 @@ func (t *WebDAVFileTree) loadChildren(id widget.TreeNodeID) ([]*WebDAVFileNode, 
 
 	if id == t.Root {
 		targetURL = t.rootURL
-		log.Debugf("[loadChildren] ID is root, using rootURL: %s", targetURL.String())
+		// log.Debugf("[loadChildren] ID is root, using rootURL: %s", targetURL.String())
 	} else {
 		targetURL, err = url.Parse(id)
 		if err != nil {
@@ -493,7 +493,7 @@ func (t *WebDAVFileTree) loadChildren(id widget.TreeNodeID) ([]*WebDAVFileNode, 
 		if targetURL.Host == "" {
 			targetURL.Host = t.rootURL.Host
 		}
-		log.Debugf("[loadChildren] Built targetURL: %s", targetURL.String())
+		// log.Debugf("[loadChildren] Built targetURL: %s", targetURL.String())
 	}
 
 	// Загружаем с сервера
@@ -503,11 +503,11 @@ func (t *WebDAVFileTree) loadChildren(id widget.TreeNodeID) ([]*WebDAVFileNode, 
 		return nil, err
 	}
 
-	log.Debugf("[loadChildren] Loaded %d children from server", len(children))
+	// log.Debugf("[loadChildren] Loaded %d children from server", len(children))
 
 	// Сортируем если нужно
 	if t.Sorter != nil {
-		log.Debugf("[loadChildren] Using custom sorter")
+		// log.Debugf("[loadChildren] Using custom sorter")
 		slices.SortFunc(children, func(a, b *WebDAVFileNode) int {
 			if t.Sorter(a, b) {
 				return -1
@@ -516,7 +516,7 @@ func (t *WebDAVFileTree) loadChildren(id widget.TreeNodeID) ([]*WebDAVFileNode, 
 		})
 	} else {
 		// Сортировка по умолчанию: папки сначала, потом по алфавиту
-		log.Debugf("[loadChildren] Using default sorter (folders first, alphabetical)")
+		// log.Debugf("[loadChildren] Using default sorter (folders first, alphabetical)")
 		slices.SortFunc(children, func(a, b *WebDAVFileNode) int {
 			// Папки перед файлами
 			if a.IsDir != b.IsDir {
@@ -536,7 +536,7 @@ func (t *WebDAVFileTree) loadChildren(id widget.TreeNodeID) ([]*WebDAVFileNode, 
 		})
 	}
 
-	log.Debugf("[loadChildren] Returning %d sorted children for ID: %s", len(children), id)
+	// log.Debugf("[loadChildren] Returning %d sorted children for ID: %s", len(children), id)
 	return children, nil
 }
 
@@ -575,7 +575,7 @@ func (t *WebDAVFileTree) CheckConnection(ctx context.Context) error {
 func (t *WebDAVFileTree) Refresh() {
 	if at != nil {
 		if atSI := at.SelectedIndex(); atSI != SENDi {
-			log.Debugf("[Refresh] from %d", atSI)
+			// log.Debugf("[Refresh] from %d", atSI)
 			return
 		}
 	}
