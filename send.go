@@ -614,9 +614,28 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 	)
 	davControl.Hide()
 
+	// Сортировка для FileTree: папки сначала, потом файлы, всё по алфавиту
+	fileTreeSorter := func(uid1, uid2 fyne.URI) bool {
+		info1, err1 := os.Stat(uid1.Path())
+		info2, err2 := os.Stat(uid2.Path())
+
+		isDir1 := err1 == nil && info1.IsDir()
+		isDir2 := err2 == nil && info2.IsDir()
+
+		// Папки перед файлами
+		if isDir1 != isDir2 {
+			return isDir1
+		}
+
+		// Внутри одной группы - по алфавиту
+		return uid1.String() < uid2.String()
+	}
+
 	// Конструктор для FileTree с OnSelected callback
 	newFileTreeWithOnSelected := func(rootURI fyne.URI, extractPath bool) *xw.FileTree {
 		ft := xw.NewFileTree(rootURI)
+
+		ft.Sorter = fileTreeSorter
 
 		ft.OnSelected = func(uid widget.TreeNodeID) {
 			var path string
@@ -640,6 +659,8 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 	// Функция для создания FileTree
 	createFileTree := func(rootPath string, sCheck *widget.Check, hostSelect *Select, port *widget.Entry) *xw.FileTree {
 		ft := xw.NewFileTree(storage.NewFileURI(rootPath))
+
+		ft.Sorter = fileTreeSorter
 
 		ft.OnSelected = func(uid widget.TreeNodeID) {
 			var path string
