@@ -303,14 +303,18 @@ type WebDAVFileTree struct {
 }
 
 // NewWebDAVFileTree создает новый WebDAVFileTree
-// Возвращает дерево без блокирующей проверки соединения
+// Всегда возвращает дерево, даже при отсутствии соединения (placeholder)
 func NewWebDAVFileTree(rootURL *url.URL) *WebDAVFileTree {
-	log.Debugf("[NewWebDAVFileTree] Creating tree with rootURL: %s", rootURL.String())
+	log.Debugf("[NewWebDAVFileTree] Creating tree with rootURL: %v", rootURL)
 
-	// Проверяем что URL валиден
+	// Если URL nil, создаём placeholder с базовым URL
 	if rootURL == nil {
-		log.Errorf("[NewWebDAVFileTree] rootURL is nil")
-		return nil
+		log.Warnf("[NewWebDAVFileTree] rootURL is nil, creating placeholder")
+		rootURL = &url.URL{
+			Scheme: "http",
+			Host:   "localhost:8080",
+			Path:   "/",
+		}
 	}
 
 	tree := &WebDAVFileTree{
@@ -448,6 +452,10 @@ func NewWebDAVFileTree(rootURL *url.URL) *WebDAVFileTree {
 		// Не удаляем кэш для корня
 		if id == tree.Root {
 			log.Debugf("[OnBranchClosed] Skipping cache clear for root")
+			// Вызываем Refresh принудительно
+			tree.lastRefresh = time.Time{}
+			tree.Refresh()
+			tree.OpenAllBranches()
 			return
 		}
 		// Очищаем кэш при закрытии папки
@@ -608,7 +616,7 @@ func (t *WebDAVFileTree) Refresh() {
 				rootID := t.Root
 				t.nodeCache[rootID] = &WebDAVFileNode{
 					Path:    t.rootURL.Path,
-					Name:    t.rootURL.String(),
+					Name:    CROC,
 					IsDir:   true,
 					Size:    0,
 					ModTime: time.Now(),

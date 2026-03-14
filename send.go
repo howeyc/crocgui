@@ -665,29 +665,8 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 		log.Debugf("[createWebDAVTree] Creating WebDAV tree for: %s", webdavURL.String())
 		ft := NewWebDAVFileTree(webdavURL)
 
-		if ft == nil {
-			log.Debugf("[createWebDAVTree] Failed to create tree (returned nil)")
-			return nil
-		}
-
-		// Запускаем асинхронную проверку соединения
-		go func() {
-			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-			defer cancel()
-
-			err := ft.CheckConnection(ctx)
-			if err != nil {
-				log.Errorf("[createWebDAVTree] Connection check failed: %v", err)
-				fyne.LogError("WebDAV connection failed", err)
-				// При ошибке соединения дерево остается пустым (placeholder)
-			} else {
-				log.Debugf("[createWebDAVTree] Connection successful, refreshing tree")
-				// При успешном соединении обновляем дерево
-				fyne.Do(func() {
-					ft.Refresh()
-				})
-			}
-		}()
+		// Обновляем дерево - Refresh() сам проверит соединение
+		ft.Refresh()
 
 		ft.OnSelected = func(uid widget.TreeNodeID) {
 			log.Debugf("[createWebDAVTree] OnSelected: %s", uid)
@@ -730,13 +709,11 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 					if ok {
 						webdavTree := createWebDAVTree(proxyURL)
 
-						if webdavTree != nil {
-							// WebDAV дерево успешно создано - переключаемся на него
-							fyne.Do(func() {
-								scroller.Content = webdavTree
-								scroller.Refresh()
-							})
-						}
+						// WebDAV дерево успешно создано - переключаемся на него
+						fyne.Do(func() {
+							scroller.Content = webdavTree
+							scroller.Refresh()
+						})
 					}
 				}()
 			} else {
@@ -765,6 +742,7 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 			}
 			ft.OpenAllBranches()
 			scroller.Content = ft
+			scroller.Refresh()
 		}
 	}
 
