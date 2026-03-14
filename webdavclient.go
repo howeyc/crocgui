@@ -390,9 +390,10 @@ func NewWebDAVFileTree(rootURL *url.URL) *WebDAVFileTree {
 
 			tree.listCache[id] = ids
 
-			// Обновляем UI
+			// Обновляем UI и открываем все ветки
 			fyne.Do(func() {
 				tree.Tree.Refresh()
+				tree.OpenAllBranches()
 			})
 		}()
 
@@ -662,6 +663,9 @@ func (t *WebDAVFileTree) Refresh() {
 
 			// Обновляем UI виджета Tree
 			t.Tree.Refresh()
+
+			// Открываем все ветки после успешной загрузки
+			t.OpenAllBranches()
 		})
 	}()
 }
