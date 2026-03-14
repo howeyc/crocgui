@@ -34,7 +34,6 @@ import (
 	"fyne.io/fyne/v2/storage"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
-	xw "fyne.io/x/fyne/widget"
 	"github.com/schollz/croc/v10/src/comm"
 	"github.com/schollz/croc/v10/src/croc"
 	"github.com/schollz/croc/v10/src/message"
@@ -72,7 +71,6 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 		mainButton  *widget.Button
 		prog        = widget.NewProgressBar()
 		fileentries sync.Map
-		ft          *xw.FileTree
 	)
 	var (
 		addEntry func(dst string, f func(d *widget.Button, p *widget.ProgressBar,
@@ -614,73 +612,6 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 	)
 	davControl.Hide()
 
-	// Сортировка для FileTree: папки сначала, потом файлы, всё по алфавиту
-	fileTreeSorter := func(uid1, uid2 fyne.URI) bool {
-		info1, err1 := os.Stat(uid1.Path())
-		info2, err2 := os.Stat(uid2.Path())
-
-		isDir1 := err1 == nil && info1.IsDir()
-		isDir2 := err2 == nil && info2.IsDir()
-
-		// Папки перед файлами
-		if isDir1 != isDir2 {
-			return isDir1
-		}
-
-		// Внутри одной группы - по алфавиту
-		return uid1.String() < uid2.String()
-	}
-
-	// Конструктор для FileTree с OnSelected callback
-	newFileTreeWithOnSelected := func(rootURI fyne.URI, extractPath bool) *xw.FileTree {
-		ft := xw.NewFileTree(rootURI)
-
-		ft.Sorter = fileTreeSorter
-
-		ft.OnSelected = func(uid widget.TreeNodeID) {
-			var path string
-			if extractPath {
-				rootStr := storage.NewFileURI(join()).String()
-				path = strings.Replace(uid, rootStr, "", 1)
-			}
-			_, u := defWeb(
-				HTTP,
-				sCheck.Checked,
-				hostSelect.Selected,
-				port.Text,
-				path)
-			OpenURL(u.String())
-			ft.Unselect(uid)
-		}
-		ft.OpenAllBranches()
-		return ft
-	}
-
-	// Функция для создания FileTree
-	createFileTree := func(rootPath string, sCheck *widget.Check, hostSelect *Select, port *widget.Entry) *xw.FileTree {
-		ft := xw.NewFileTree(storage.NewFileURI(rootPath))
-
-		ft.Sorter = fileTreeSorter
-
-		ft.OnSelected = func(uid widget.TreeNodeID) {
-			var path string
-			if strings.HasPrefix(rootPath, tempDir) {
-				rootStr := storage.NewFileURI(rootPath).String()
-				path = strings.Replace(uid, rootStr, "", 1)
-			}
-			_, u := defWeb(
-				HTTP,
-				sCheck.Checked,
-				hostSelect.Selected,
-				port.Text,
-				path)
-			OpenURL(u.String())
-			ft.Unselect(uid)
-		}
-		ft.OpenAllBranches()
-		return ft
-	}
-
 	// Функция для создания WebDAV дерева
 	createWebDAVTree := func(webdavURL *url.URL) *WebDAVFileTree {
 		log.Debugf("[createWebDAVTree] Creating WebDAV tree for: %s", webdavURL.String())
@@ -716,35 +647,21 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 			allEnabled(!enabled, cosED...)
 			allEnabled(!enabled, cosSH...)
 			if enabled {
-				// Сначала показываем placeholder
-				root := filepath.FromSlash(filepath.Join(filepath.Dir(join()), CROC))
-				os.MkdirAll(root, 0700)
-				ft = createFileTree(root, sCheck, hostSelect, port)
-				scroller.Content = ft
-				scroller.Refresh()
-				showPage()
-
-				// В фоне проверяем WebDAV соединение
-				go func() {
-					_, _, proxyURL, ok := isDAV(link.URL.String())
-					if ok {
-						webdavTree := createWebDAVTree(proxyURL)
-
-						// WebDAV дерево успешно создано - переключаемся на него
-						fyne.Do(func() {
-							scroller.Content = webdavTree
-							scroller.Refresh()
-						})
-					}
-				}()
-			} else {
-				// Прокси выключен: ft root = join()
-				ft = createFileTree(join(), sCheck, hostSelect, port)
-				scroller.Content = ft
-				scroller.Refresh()
 				showPage()
 			}
+
 		})
+		// В фоне проверяем WebDAV соединение
+		go func() {
+			_, _, proxyURL, _ := isDAV(link.URL.String())
+			webdavTree := createWebDAVTree(proxyURL)
+
+			// WebDAV дерево успешно создано - переключаемся на него
+			fyne.Do(func() {
+				scroller.Content = webdavTree
+				scroller.Refresh()
+			})
+		}()
 	})
 
 	var treeButton *widget.Button
@@ -753,16 +670,10 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 		if treeButton.Icon == theme.VisibilityIcon() {
 			boxholder.Refresh()
 		} else {
-			root := storage.NewFileURI(join())
-			if ft == nil || ft.Root != root.String() {
-				log.Debugf("root %s", root.String())
-				ft = newFileTreeWithOnSelected(root, true)
-			} else {
-				log.Debugf("ft.Root %s", ft.Root)
-				ft.Refresh()
-			}
-			ft.OpenAllBranches()
-			scroller.Content = ft
+			// Используем WebDAVTree для локальных файлов через локальный WebDAV сервер
+			_, _, proxyURL, _ := isDAV(link.URL.String())
+			webdavTree := createWebDAVTree(proxyURL)
+			scroller.Content = webdavTree
 			scroller.Refresh()
 		}
 	}
