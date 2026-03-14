@@ -654,11 +654,11 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 		// В фоне проверяем WebDAV соединение
 		go func() {
 			_, _, proxyURL, _ := isDAV(link.URL.String())
-			webdavTree := createWebDAVTree(proxyURL)
+			ft := createWebDAVTree(proxyURL)
 
 			// WebDAV дерево успешно создано - переключаемся на него
 			fyne.Do(func() {
-				scroller.Content = webdavTree
+				scroller.Content = ft
 				scroller.Refresh()
 			})
 		}()
@@ -672,8 +672,9 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 		} else {
 			// Используем WebDAVTree для локальных файлов через локальный WebDAV сервер
 			_, _, proxyURL, _ := isDAV(link.URL.String())
-			webdavTree := createWebDAVTree(proxyURL)
-			scroller.Content = webdavTree
+			ft := createWebDAVTree(proxyURL)
+
+			scroller.Content = ft
 			scroller.Refresh()
 		}
 	}
@@ -1359,6 +1360,7 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 			// log.Debug("mainH " + mH)
 			fyne.Do(func() {
 				at.OnSelected(at.Selected())
+				at.Refresh()
 			})
 		})
 	} else {
@@ -1375,6 +1377,7 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 			log.Debug("EnteredForeground " + wHandle(w))
 			fyne.Do(func() {
 				at.OnSelected(at.Selected())
+				at.Refresh()
 			})
 		})
 		if !GUI {
