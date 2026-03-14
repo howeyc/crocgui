@@ -8,6 +8,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"sort"
 	"strings"
 )
 
@@ -42,6 +43,14 @@ func (h *WebDAVWithDirectoryListing) serveDirectoryListing(w http.ResponseWriter
 			http.Error(w, "Error reading directory", http.StatusInternalServerError)
 			return
 		}
+
+		// Сортируем: сначала каталоги, потом файлы, внутри групп по алфавиту
+		sort.Slice(fileInfos, func(i, j int) bool {
+			if fileInfos[i].IsDir() != fileInfos[j].IsDir() {
+				return fileInfos[i].IsDir()
+			}
+			return fileInfos[i].Name() < fileInfos[j].Name()
+		})
 
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 

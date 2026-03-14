@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"slices"
 	"strings"
 	"time"
 
@@ -507,31 +508,32 @@ func (t *WebDAVFileTree) loadChildren(id widget.TreeNodeID) ([]*WebDAVFileNode, 
 	// Сортируем если нужно
 	if t.Sorter != nil {
 		log.Debugf("[loadChildren] Using custom sorter")
-		for i := 0; i < len(children); i++ {
-			for j := i + 1; j < len(children); j++ {
-				if !t.Sorter(children[i], children[j]) {
-					children[i], children[j] = children[j], children[i]
-				}
+		slices.SortFunc(children, func(a, b *WebDAVFileNode) int {
+			if t.Sorter(a, b) {
+				return -1
 			}
-		}
+			return 1
+		})
 	} else {
 		// Сортировка по умолчанию: папки сначала, потом по алфавиту
 		log.Debugf("[loadChildren] Using default sorter (folders first, alphabetical)")
-		for i := 0; i < len(children); i++ {
-			for j := i + 1; j < len(children); j++ {
-				// Папки перед файлами
-				if children[i].IsDir != children[j].IsDir {
-					if !children[i].IsDir {
-						children[i], children[j] = children[j], children[i]
-					}
-				} else {
-					// Внутри одной группы - по алфавиту
-					if children[i].Name > children[j].Name {
-						children[i], children[j] = children[j], children[i]
-					}
+		slices.SortFunc(children, func(a, b *WebDAVFileNode) int {
+			// Папки перед файлами
+			if a.IsDir != b.IsDir {
+				if a.IsDir {
+					return -1
 				}
+				return 1
 			}
-		}
+			// Внутри одной группы - по алфавиту
+			if a.Name < b.Name {
+				return -1
+			}
+			if a.Name > b.Name {
+				return 1
+			}
+			return 0
+		})
 	}
 
 	log.Debugf("[loadChildren] Returning %d sorted children for ID: %s", len(children), id)
