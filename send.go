@@ -71,6 +71,7 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 		mainButton  *widget.Button
 		prog        = widget.NewProgressBar()
 		fileentries sync.Map
+		treeButton  = widget.NewButtonWithIcon("", theme.VisibilityIcon(), nil)
 	)
 	var (
 		addEntry func(dst string, f func(d *widget.Button, p *widget.ProgressBar,
@@ -625,6 +626,12 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 		link.SetURL(&u)
 		link.Show()
 
+		// Обновляем адрес в TCP форвардере если активен
+		davServer.UpdateForwardingAddr(addr)
+		if treeButton.Icon == theme.VisibilityIcon() {
+			return
+		}
+
 		davServer.Start(addr, join(), sCheck.Checked, hostSelect.Options...)
 		time.AfterFunc(time.Second, func() {
 			if !davServer.IsActive() {
@@ -633,8 +640,6 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 				})
 			} else {
 				go switchToWebDAVTree()
-				// Обновляем адрес в TCP форвардере если активен
-				davServer.UpdateForwardingAddr(addr)
 			}
 		})
 	}
@@ -672,7 +677,6 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 		go switchToWebDAVTree()
 	})
 
-	var treeButton *widget.Button
 	// Обновляем скроллер
 	scRefresh = func() {
 		if treeButton.Icon == theme.VisibilityIcon() {
@@ -686,7 +690,7 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 		}
 	}
 
-	treeButton = widget.NewButtonWithIcon("", theme.VisibilityIcon(), func() {
+	treeButton.OnTapped = func() {
 		if treeButton.Icon == theme.VisibilityIcon() {
 			treeButton.SetIcon(theme.VisibilityOffIcon())
 			updateLink()
@@ -695,7 +699,8 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 			return
 		}
 		treeOff()
-	})
+	}
+
 	treeOff = func() {
 		treeButton.SetIcon(theme.VisibilityIcon())
 		if mainButton.Visible() {
