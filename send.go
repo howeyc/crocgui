@@ -523,6 +523,35 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 
 	reload()
 
+	// Функция для создания WebDAV дерева
+	createWebDAVTree := func(webdavURL *url.URL) *WebDAVFileTree {
+		log.Debugf("[createWebDAVTree] Creating WebDAV tree for: %s", webdavURL.String())
+		ft := NewWebDAVFileTree(webdavURL)
+
+		// Обновляем дерево - Refresh() сам проверит соединение
+		ft.Refresh()
+
+		ft.OnSelected = func(uid widget.TreeNodeID) {
+			log.Debugf("[createWebDAVTree] OnSelected: %s", uid)
+
+			var fullURLStr string
+			if !strings.HasPrefix(uid, webdavURL.String()) {
+				fullURLStr = fmt.Sprintf("%s://%s%s", webdavURL.Scheme, webdavURL.Host, uid)
+			} else {
+				fullURLStr = uid
+			}
+
+			log.Debugf("[createWebDAVTree] Opening URL: %s", fullURLStr)
+			time.AfterFunc(100*time.Millisecond, func() {
+				OpenURL(fullURLStr)
+			})
+			ft.Unselect(uid)
+		}
+
+		ft.OpenAllBranches()
+		return ft
+	}
+
 	// Старуем вебдав-сервер с новыми параметрами
 	updateLink := func() {}
 	prev := a.Preferences().String("webdav-host")
@@ -573,6 +602,18 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 	}
 	port := widget.NewEntry()
 
+	// Функция для переключения на WebDAV дерево
+	switchToWebDAVTree := func() {
+		_, _, proxyURL, _ := isDAV(link.URL.String())
+		ft := createWebDAVTree(proxyURL)
+
+		// WebDAV дерево успешно создано - переключаемся на него
+		doMonitor.DoRequest(func() {
+			scroller.Content = ft
+			at.Refresh()
+		})
+	}
+
 	updateLink = func() {
 		addr, u := defWeb(
 			DAV,
@@ -590,6 +631,8 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 				fyne.Do(func() {
 					link.Hide()
 				})
+			} else {
+				go switchToWebDAVTree()
 			}
 		})
 	}
@@ -612,35 +655,6 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 	)
 	davControl.Hide()
 
-	// Функция для создания WebDAV дерева
-	createWebDAVTree := func(webdavURL *url.URL) *WebDAVFileTree {
-		log.Debugf("[createWebDAVTree] Creating WebDAV tree for: %s", webdavURL.String())
-		ft := NewWebDAVFileTree(webdavURL)
-
-		// Обновляем дерево - Refresh() сам проверит соединение
-		ft.Refresh()
-
-		ft.OnSelected = func(uid widget.TreeNodeID) {
-			log.Debugf("[createWebDAVTree] OnSelected: %s", uid)
-
-			var fullURLStr string
-			if !strings.HasPrefix(uid, webdavURL.String()) {
-				fullURLStr = fmt.Sprintf("%s://%s%s", webdavURL.Scheme, webdavURL.Host, uid)
-			} else {
-				fullURLStr = uid
-			}
-
-			log.Debugf("[createWebDAVTree] Opening URL: %s", fullURLStr)
-			time.AfterFunc(100*time.Millisecond, func() {
-				OpenURL(fullURLStr)
-			})
-			ft.Unselect(uid)
-		}
-
-		ft.OpenAllBranches()
-		return ft
-	}
-
 	// Регистрируем callback для отслеживания состояния прокси
 	davServer.SetProxyStateChangeCallback(func(enabled bool) {
 		fyne.Do(func() {
@@ -652,16 +666,7 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 
 		})
 		// В фоне проверяем WebDAV соединение
-		go func() {
-			_, _, proxyURL, _ := isDAV(link.URL.String())
-			ft := createWebDAVTree(proxyURL)
-
-			// WebDAV дерево успешно создано - переключаемся на него
-			fyne.Do(func() {
-				scroller.Content = ft
-				scroller.Refresh()
-			})
-		}()
+		go switchToWebDAVTree()
 	})
 
 	var treeButton *widget.Button
@@ -694,8 +699,10 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 		if mainButton.Visible() {
 			davControl.Hide()
 		}
-		scroller.Content = boxholder
-		scroller.Refresh()
+		doMonitor.DoRequest(func() {
+			scroller.Content = boxholder
+			scroller.Refresh()
+		})
 		davServer.Stop()
 	}
 	cosED = append(cosED, treeButton)
@@ -1358,7 +1365,7 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 			processIntent()
 			mH = wHandle(w)
 			// log.Debug("mainH " + mH)
-			fyne.Do(func() {
+			doMonitor.DoRequest(func() {
 				at.OnSelected(at.Selected())
 				at.Refresh()
 			})
@@ -1375,7 +1382,7 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 		})
 		a.Lifecycle().SetOnEnteredForeground(func() {
 			log.Debug("EnteredForeground " + wHandle(w))
-			fyne.Do(func() {
+			doMonitor.DoRequest(func() {
 				at.OnSelected(at.Selected())
 				at.Refresh()
 			})
@@ -1746,7 +1753,7 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 					return
 				}
 			}
-			ps.Content.Refresh()
+			doMonitor.DoRequest(ps.Content.Refresh)
 		})
 	}
 
@@ -1981,7 +1988,7 @@ func allEnabled(enabled bool, cos ...fyne.CanvasObject) {
 				w.Disable()
 			}
 		}
-		co.Refresh()
+		doMonitor.DoRequest(co.Refresh)
 	}
 }
 
