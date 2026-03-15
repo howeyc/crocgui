@@ -384,7 +384,7 @@ func settingsTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 		}
 		if text != ip.Text {
 			ip.Text = text
-			doMonitor.DoRequest(relayForm.Refresh)
+			de.Bounce(relayForm.Refresh)
 		}
 		// Обновляем опции селекта при изменении адреса релея
 		hostSelect.Options = hostSelectOptions(OFF)

@@ -74,8 +74,8 @@ func (dm *DoMonitor) executeAll(pending map[uintptr]func()) {
 	})
 }
 
-func (dm *DoMonitor) DoRequest(fn func()) {
-	// log.Debugf("DoRequest %v", fn)
+func (dm *DoMonitor) Bounce(fn func()) {
+	// log.Debugf("Bounce %v", fn)
 	select {
 	case dm.requests <- fn:
 	default:
@@ -84,4 +84,4 @@ func (dm *DoMonitor) DoRequest(fn func()) {
 	}
 }
 
-var doMonitor = NewDoMonitor()
+var de = NewDoMonitor()

@@ -206,28 +206,28 @@ func recvTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 			fileentries.Delete(key)
 			fyne.Do(func() {
 				boxholder.Remove(fe)
-				doMonitor.DoRequest(boxholder.Refresh)
+				de.Bounce(boxholder.Refresh)
 			})
 		}
 		if del {
 			isDir := isLinkDir(path)
 			l := []string{path}
 			remove := os.Remove
-			de := "file"
+			d := "file"
 
 			if _, err := os.Stat(path); err == nil {
 				if isDir {
 					remove = os.RemoveAll
-					de = "dir"
+					d = "dir"
 					l = append(l, lsr2(path)...)
 					log.Debugf("remove dirs %v", l)
 				}
 
 				if err := remove(path); err != nil {
-					log.Errorf("remove %s %s: %v", de, path, err)
+					log.Errorf("remove %s %s: %v", d, path, err)
 					return
 				} else {
-					log.Debugf("remove %s %s", de, path)
+					log.Debugf("remove %s %s", d, path)
 					if isDir {
 						fyne.Do(func() {
 							forEachFileEntry(&fileentries, func(sub string, fe *fyne.Container) {
@@ -237,7 +237,7 @@ func recvTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 									boxholder.Remove(fe)
 								}
 							})
-							doMonitor.DoRequest(boxholder.Refresh)
+							de.Bounce(boxholder.Refresh)
 						})
 						return
 					}
@@ -359,7 +359,7 @@ func recvTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 					labelFile)
 			}
 			boxholder.Add(newentry)
-			doMonitor.DoRequest(boxholder.Refresh)
+			de.Bounce(boxholder.Refresh)
 		})
 		return
 	} //addEntry

@@ -401,8 +401,8 @@ func ls(path string) (files []string) {
 		return
 	}
 
-	for _, de := range des {
-		files = append(files, de.Name())
+	for _, d := range des {
+		files = append(files, d.Name())
 	}
 	return
 }

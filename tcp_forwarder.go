@@ -184,6 +184,46 @@ func (f *TCPForwarder) Stop() error {
 	return nil
 }
 
+// UpdateLocalServerAddr обновляет адрес локального сервера
+// Закрывает все активные TCP соединения и очищает карты
+func (f *TCPForwarder) UpdateLocalServerAddr(addr string) {
+	log.Infof("TCP forwarder: updating local server address to %s", addr)
+
+	// 1. Закрываем все активные TCP соединения
+	f.activeConns.Range(func(_, v interface{}) bool {
+		if fc, ok := v.(*forwardedConn); ok {
+			fc.close()
+		}
+		return true
+	})
+
+	// 2. Очищаем карту активных соединений
+	f.activeConns.Range(func(key, _ interface{}) bool {
+		f.activeConns.Delete(key)
+		return true
+	})
+
+	// 3. Очищаем pending (останавливаем таймеры)
+	f.pendingConns.Range(func(key, value interface{}) bool {
+		if pd, ok := value.(*pendingData); ok {
+			pd.timer.Stop()
+		}
+		f.pendingConns.Delete(key)
+		return true
+	})
+
+	// 4. Очищаем closedConns
+	f.closedConns.Range(func(key, _ interface{}) bool {
+		f.closedConns.Delete(key)
+		return true
+	})
+
+	// 5. Обновляем адрес
+	f.localServerAddr = addr
+
+	log.Infof("TCP forwarder: all connections closed, address updated to %s", addr)
+}
+
 // reader читает из обоих каналов в одном select
 func (f *TCPForwarder) reader() {
 	defer f.wg.Done()

@@ -206,7 +206,7 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 			fileentries.Delete(key)
 			fyne.Do(func() {
 				boxholder.Remove(fe)
-				doMonitor.DoRequest(scRefresh)
+				scRefresh()
 			})
 		}
 		if del {
@@ -227,21 +227,21 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 			}
 			l := []string{path}
 			remove := os.Remove
-			de := "file"
+			d := "file"
 
 			if _, err := os.Stat(path); err == nil && del {
 				if isDir {
 					remove = os.RemoveAll
-					de = "dir"
+					d = "dir"
 					l = append(l, lsr2(path)...)
 					log.Debugf("remove dirs %v", l)
 				}
 
 				if err := remove(path); err != nil {
-					log.Errorf("remove %s %s: %v", de, path, err)
+					log.Errorf("remove %s %s: %v", d, path, err)
 					return
 				} else {
-					log.Debugf("remove %s %s", de, path)
+					log.Debugf("remove %s %s", d, path)
 					if isDir {
 						fyne.Do(func() {
 							forEachFileEntry(&fileentries, func(sub string, fe *fyne.Container) {
@@ -251,7 +251,7 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 									boxholder.Remove(fe)
 								}
 							})
-							doMonitor.DoRequest(scRefresh)
+							scRefresh()
 						})
 						return
 					}
@@ -316,7 +316,7 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 					labelFile)
 			}
 			boxholder.Add(newentry)
-			doMonitor.DoRequest(scRefresh)
+			scRefresh()
 		})
 		return
 	} //addEntry
@@ -548,7 +548,7 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 			ft.Unselect(uid)
 		}
 
-		ft.OpenAllBranches()
+		// ft.OpenAllBranches()
 		return ft
 	}
 
@@ -605,13 +605,13 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 	// Функция для переключения на WebDAV дерево
 	switchToWebDAVTree := func() {
 		_, _, proxyURL, _ := isDAV(link.URL.String())
-		ft := createWebDAVTree(proxyURL)
-
-		// WebDAV дерево успешно создано - переключаемся на него
-		doMonitor.DoRequest(func() {
-			scroller.Content = ft
-			at.Refresh()
-		})
+		// fyne.Do(func() {
+		scroller.Content = createWebDAVTree(proxyURL)
+		// at.Refresh()
+		// scroller.Refresh()
+		// ti.Content.Refresh()
+		de.Bounce(ti.Content.Refresh)
+		// })
 	}
 
 	updateLink = func() {
@@ -633,6 +633,8 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 				})
 			} else {
 				go switchToWebDAVTree()
+				// Обновляем адрес в TCP форвардере если активен
+				davServer.UpdateForwardingAddr(addr)
 			}
 		})
 	}
@@ -645,6 +647,7 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 	hostSelect.SetSelected(prev)
 	port.SetText(a.Preferences().String("webdav-port"))
 	cosED = append(cosED, port)
+	cosDAV = append(cosDAV, sCheck, hostSelect, port)
 
 	davControl := container.NewBorder(
 		nil,
@@ -673,14 +676,13 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 	// Обновляем скроллер
 	scRefresh = func() {
 		if treeButton.Icon == theme.VisibilityIcon() {
-			boxholder.Refresh()
+			de.Bounce(boxholder.Refresh)
 		} else {
 			// Используем WebDAVTree для локальных файлов через локальный WebDAV сервер
 			_, _, proxyURL, _ := isDAV(link.URL.String())
-			ft := createWebDAVTree(proxyURL)
-
-			scroller.Content = ft
-			scroller.Refresh()
+			scroller.Content = createWebDAVTree(proxyURL)
+			// scroller.Refresh()
+			de.Bounce(ti.Content.Refresh)
 		}
 	}
 
@@ -699,7 +701,7 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 		if mainButton.Visible() {
 			davControl.Hide()
 		}
-		doMonitor.DoRequest(func() {
+		fyne.Do(func() {
 			scroller.Content = boxholder
 			scroller.Refresh()
 		})
@@ -1365,10 +1367,12 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 			processIntent()
 			mH = wHandle(w)
 			// log.Debug("mainH " + mH)
-			doMonitor.DoRequest(func() {
-				at.OnSelected(at.Selected())
-				at.Refresh()
-			})
+			// fyne.Do(func() {
+			at.OnSelected(at.Selected())
+			// at.Refresh()
+			// at.Selected().Content.Refresh()
+			de.Bounce(ti.Content.Refresh)
+			// })
 		})
 	} else {
 		a.Lifecycle().SetOnExitedForeground(func() {
@@ -1382,10 +1386,11 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 		})
 		a.Lifecycle().SetOnEnteredForeground(func() {
 			log.Debug("EnteredForeground " + wHandle(w))
-			doMonitor.DoRequest(func() {
-				at.OnSelected(at.Selected())
-				at.Refresh()
-			})
+			// fyne.Do(func() {
+			at.OnSelected(at.Selected())
+			// at.Refresh()
+			de.Bounce(ti.Content.Refresh)
+			// })
 		})
 		if !GUI {
 			if stat, err := os.Stdin.Stat(); err == nil && ((stat.Mode() & os.ModeCharDevice) == 0) {
@@ -1753,7 +1758,7 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 					return
 				}
 			}
-			doMonitor.DoRequest(ps.Content.Refresh)
+			de.Bounce(ti.Content.Refresh)
 		})
 	}
 
@@ -1988,7 +1993,7 @@ func allEnabled(enabled bool, cos ...fyne.CanvasObject) {
 				w.Disable()
 			}
 		}
-		doMonitor.DoRequest(co.Refresh)
+		de.Bounce(co.Refresh)
 	}
 }
 

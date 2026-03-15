@@ -788,6 +788,15 @@ func (s *WebDAVServer) IsTCPForwardingActive() bool {
 	return s.tcpForwarding && s.tcpForwarder != nil
 }
 
+// UpdateForwardingAddr обновляет адрес локального сервера в активном TCP форвардере
+func (s *WebDAVServer) UpdateForwardingAddr(addr string) {
+	s.tcpForwardingMu.Lock()
+	defer s.tcpForwardingMu.Unlock()
+	if s.tcpForwarder != nil {
+		s.tcpForwarder.UpdateLocalServerAddr(addr)
+	}
+}
+
 func defAddress(hp string, ports ...string) (host, port, address string) {
 	var err error
 	host, port, err = net.SplitHostPort(hp)
