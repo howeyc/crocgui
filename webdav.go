@@ -53,10 +53,11 @@ type WebDAVServer struct {
 	remote              bool
 	local               bool
 
-	tcpForwarder    *TCPForwarder
-	tcpListener     net.Listener
-	tcpForwarding   bool
-	tcpForwardingMu sync.RWMutex
+	tcpForwarder     *TCPForwarder
+	tcpListener      net.Listener
+	tcpForwarding    bool
+	tcpForwardingMu  sync.RWMutex
+	listenerStopChan chan struct{}
 }
 
 // WebDAVWithDirectoryListing оборачивает стандартный WebDAV handler для поддержки
@@ -590,6 +591,7 @@ func (s *WebDAVServer) EnableTCPForwarding(client *croc.Client) error {
 		log.Infof("TCP forwarder sender started (relay port %d, room %s, local server %s)", firstRelayPort, firstRoomName, localServerAddr)
 
 	} else {
+		s.remote = true
 		// Получатель: останавливаем WebDAV сервер перед созданием TCP listener
 		if s.active {
 			log.Infof("Stopping WebDAV server to enable TCP forwarding on %s", s.addr)
@@ -618,6 +620,7 @@ func (s *WebDAVServer) EnableTCPForwarding(client *croc.Client) error {
 		}
 
 		s.tcpListener = listener
+		s.listenerStopChan = make(chan struct{})
 		log.Infof("TCP forwarder receiver listening on %s (relay port %d, room %s)",
 			localAddr, firstRelayPort, firstRoomName)
 
@@ -626,7 +629,6 @@ func (s *WebDAVServer) EnableTCPForwarding(client *croc.Client) error {
 
 		if s.onProxyStateChanged != nil {
 			s.onProxyStateChanged(true)
-			s.remote = true
 		}
 	}
 
@@ -647,39 +649,45 @@ func (s *WebDAVServer) acceptLocalConnections(forwarder *TCPForwarder) {
 	}()
 
 	for {
-		conn, err := s.tcpListener.Accept()
-		if err != nil {
-			s.tcpForwardingMu.RLock()
-			active := s.tcpForwarding
-			s.tcpForwardingMu.RUnlock()
+		select {
+		case <-s.listenerStopChan:
+			log.Debugf("TCP listener stopped via stop channel")
+			return
+		default:
+			conn, err := s.tcpListener.Accept()
+			if err != nil {
+				s.tcpForwardingMu.RLock()
+				active := s.tcpForwarding
+				s.tcpForwardingMu.RUnlock()
 
-			if active {
-				if !errors.Is(err, net.ErrClosed) {
-					log.Errorf("Failed to accept connection: %v", err)
+				if active {
+					if !errors.Is(err, net.ErrClosed) {
+						log.Errorf("Failed to accept connection: %v", err)
+					}
+				} else {
+					log.Debugf("TCP listener stopped (forwarding disabled)")
+					return
 				}
-			} else {
-				log.Debugf("TCP listener stopped (forwarding disabled)")
-				return
+				continue
 			}
-			continue
+
+			log.Debugf("TCP forwarding: accepted connection from %s", conn.RemoteAddr())
+
+			// Пробрасываем соединение через форвардер
+			go func(c net.Conn) {
+				defer func() {
+					if r := recover(); r != nil {
+						log.Errorf("ForwardConnection panic: %v", r)
+					}
+				}()
+				if err := forwarder.ForwardConnection(c); err != nil {
+					if !errors.Is(err, net.ErrClosed) {
+						log.Errorf("Failed to forward connection: %v", err)
+					}
+					c.Close()
+				}
+			}(conn)
 		}
-
-		log.Debugf("TCP forwarding: accepted connection from %s", conn.RemoteAddr())
-
-		// Пробрасываем соединение через форвардер
-		go func(c net.Conn) {
-			defer func() {
-				if r := recover(); r != nil {
-					log.Errorf("ForwardConnection panic: %v", r)
-				}
-			}()
-			if err := forwarder.ForwardConnection(c); err != nil {
-				if !errors.Is(err, net.ErrClosed) {
-					log.Errorf("Failed to forward connection: %v", err)
-				}
-				c.Close()
-			}
-		}(conn)
 	}
 }
 
@@ -693,6 +701,12 @@ func (s *WebDAVServer) DisableTCPForwarding() {
 	}
 
 	log.Info("Disabling TCP forwarding...")
+
+	// Останавливаем горутину acceptLocalConnections
+	if s.listenerStopChan != nil {
+		close(s.listenerStopChan)
+		s.listenerStopChan = nil
+	}
 
 	// Останавливаем TCP listener если есть
 	if s.tcpListener != nil {
@@ -788,13 +802,69 @@ func (s *WebDAVServer) IsTCPForwardingActive() bool {
 	return s.tcpForwarding && s.tcpForwarder != nil
 }
 
+func (s *WebDAVServer) IsRemote() bool {
+	s.tcpForwardingMu.RLock()
+	defer s.tcpForwardingMu.RUnlock()
+	return s.remote
+}
+
 // UpdateForwardingAddr обновляет адрес локального сервера в активном TCP форвардере
 func (s *WebDAVServer) UpdateForwardingAddr(addr string) {
 	s.tcpForwardingMu.Lock()
 	defer s.tcpForwardingMu.Unlock()
-	if s.tcpForwarder != nil {
-		s.tcpForwarder.UpdateLocalServerAddr(addr)
+
+	if s.tcpForwarder == nil {
+		return
 	}
+
+	// Используем tcpListener для идентификации: nil = отправитель, не-nil = получатель
+	if s.remote {
+		// Получатель: пересоздаем listener на новом порту
+		s.updateListenerAddr(addr)
+	} else {
+		// Отправитель: обновляем адрес локального WebDAV сервера
+		s.tcpForwarder.UpdateLocalServerAddr(addr)
+		log.Infof("TCP forwarder: updated local server address to %s (sender)", addr)
+	}
+}
+
+// updateListenerAddr пересоздает listener на новом адресе без прерывания туннеля
+func (s *WebDAVServer) updateListenerAddr(addr string) {
+	if s.tcpListener == nil {
+		return
+	}
+
+	log.Infof("TCP forwarder: updating listener address from %s to %s", s.addr, addr)
+
+	// 1. Останавливаем старую горутину acceptLocalConnections
+	close(s.listenerStopChan)
+	s.listenerStopChan = make(chan struct{})
+
+	// 2. Закрываем текущий listener
+	oldListener := s.tcpListener
+	s.tcpListener = nil
+	oldListener.Close()
+	log.Debugf("TCP forwarder: old listener closed")
+
+	// 2. Создаем новый listener на новом адресе
+	newListener, err := net.Listen("tcp", addr)
+	if err != nil {
+		log.Errorf("TCP forwarder: failed to create new listener on %s: %v", addr, err)
+		// Восстанавливаем старый listener
+		if restoreListener, restoreErr := net.Listen("tcp", s.addr); restoreErr == nil {
+			s.tcpListener = restoreListener
+			log.Infof("TCP forwarder: restored listener on old address %s", s.addr)
+		}
+		return
+	}
+
+	s.tcpListener = newListener
+	s.addr = addr
+	log.Infof("TCP forwarder: new listener created on %s", addr)
+
+	// 3. Перезапускаем acceptLocalConnections с новым listener
+	go s.acceptLocalConnections(s.tcpForwarder)
+	log.Infof("TCP forwarder: restarted acceptLocalConnections with new listener")
 }
 
 func defAddress(hp string, ports ...string) (host, port, address string) {

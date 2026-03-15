@@ -632,6 +632,11 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 			return
 		}
 
+		if davServer.IsRemote() {
+			go switchToWebDAVTree()
+			return
+		}
+
 		davServer.Start(addr, join(), sCheck.Checked, hostSelect.Options...)
 		time.AfterFunc(time.Second, func() {
 			if !davServer.IsActive() {
@@ -669,12 +674,15 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 			allEnabled(!enabled, cosED...)
 			allEnabled(!enabled, cosSH...)
 			if enabled {
+				go switchToWebDAVTree()
+				allEnabled(true, cosDAV...)
 				showPage()
+			} else {
+				if treeButton.Icon == theme.VisibilityIcon() {
+					davControl.Hide()
+				}
 			}
-
 		})
-		// В фоне проверяем WebDAV соединение
-		go switchToWebDAVTree()
 	})
 
 	// Обновляем скроллер
@@ -703,12 +711,21 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 
 	treeOff = func() {
 		treeButton.SetIcon(theme.VisibilityIcon())
-		if mainButton.Visible() {
+		// if davServer.IsRemote() {
+		// 	if !mainButton.Disabled() {
+		// 		davControl.Hide()
+		// 	}
+		// } else if mainButton.Visible() {
+		// 	davControl.Hide()
+		// }
+		if davServer.IsRemote() && !mainButton.Disabled() ||
+			!davServer.IsRemote() && mainButton.Visible() {
 			davControl.Hide()
 		}
 		fyne.Do(func() {
 			scroller.Content = boxholder
-			scroller.Refresh()
+			// scroller.Refresh()
+			de.Bounce(ti.Content.Refresh)
 		})
 		davServer.Stop()
 	}
