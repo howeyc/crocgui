@@ -590,10 +590,10 @@ func recvTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 	mainButton = widget.NewButtonWithIcon(lp("Download"), theme.DownloadIcon(), func() {
 		fyne.Do(func() { topline.SetText("") })
 		if davServer.IsLocal() {
-			log.Error("WebDav")
+			log.Error("WebDav IsLocal")
 			fyne.Do(func() {
-				topline.SetText("WebDav")
-				NewToast(w, "WebDav").Show()
+				topline.SetText("WebDav IsLocal")
+				NewToast(w, "WebDav IsLocal").Show()
 			})
 			return
 		}

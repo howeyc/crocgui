@@ -605,14 +605,11 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 
 	// Функция для переключения на WebDAV дерево
 	switchToWebDAVTree := func() {
-		_, _, proxyURL, _ := isDAV(link.URL.String())
-		// fyne.Do(func() {
-		scroller.Content = createWebDAVTree(proxyURL)
-		// at.Refresh()
-		// scroller.Refresh()
-		// ti.Content.Refresh()
-		de.Bounce(ti.Content.Refresh)
-		// })
+		if davServer.IsActive() || davServer.IsTCPForwardingActive() {
+			_, _, proxyURL, _ := isDAV(link.URL.String())
+			scroller.Content = createWebDAVTree(proxyURL)
+			de.Bounce(ti.Content.Refresh)
+		}
 	}
 
 	updateLink = func() {
@@ -691,10 +688,7 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 			de.Bounce(boxholder.Refresh)
 		} else {
 			// Используем WebDAVTree для локальных файлов через локальный WebDAV сервер
-			_, _, proxyURL, _ := isDAV(link.URL.String())
-			scroller.Content = createWebDAVTree(proxyURL)
-			// scroller.Refresh()
-			de.Bounce(ti.Content.Refresh)
+			switchToWebDAVTree()
 		}
 	}
 
@@ -711,22 +705,12 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 
 	treeOff = func() {
 		treeButton.SetIcon(theme.VisibilityIcon())
-		// if davServer.IsRemote() {
-		// 	if !mainButton.Disabled() {
-		// 		davControl.Hide()
-		// 	}
-		// } else if mainButton.Visible() {
-		// 	davControl.Hide()
-		// }
 		if davServer.IsRemote() && !mainButton.Disabled() ||
 			!davServer.IsRemote() && mainButton.Visible() {
 			davControl.Hide()
 		}
-		fyne.Do(func() {
-			scroller.Content = boxholder
-			// scroller.Refresh()
-			de.Bounce(ti.Content.Refresh)
-		})
+		scroller.Content = boxholder
+		de.Bounce(ti.Content.Refresh)
 		davServer.Stop()
 	}
 	cosED = append(cosED, treeButton)

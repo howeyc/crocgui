@@ -245,7 +245,7 @@ func main() {
 		isMobile = true
 		GUI = true
 		setOut(GUI)
-	case "unix":
+	case "linux":
 		replacer = strings.NewReplacer(
 			"\x1b[0;34;1m[trace]\t\x1b[0m", "",
 			"\x1b[0;36m[debug]\t\x1b[0m", "",
