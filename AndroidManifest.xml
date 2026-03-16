@@ -3,7 +3,7 @@
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
     android:versionCode="1757"
-    android:versionName="1.11.48"
+    android:versionName="1.11.49"
     package="com.github.howeyc.crocgui">
 
     <!--
