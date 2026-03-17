@@ -2,13 +2,13 @@
 <manifest
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
-    android:versionCode="1758"
+    android:versionCode="1761"
     android:versionName="1.11.50"
     package="com.github.howeyc.crocgui">
 
     <!--
     <uses-sdk
-        android:minSdkVersion="21"
+        android:minSdkVersion="23"
         android:targetSdkVersion="35" /> 
     -->
 
@@ -40,8 +40,7 @@
                 <data android:mimeType="*/*" />
             </intent-filter>
 
-            <!-- <intent-filter android:autoVerify="true"> -->            
-            <intent-filter>
+            <intent-filter android:autoVerify="true">            
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
