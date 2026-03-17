@@ -660,7 +660,7 @@ func recvTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 			opt.TestFlag = false
 		}
 
-		ctx, ctc := context.WithCancel(context.Background())
+		ctx, ctc := context.WithCancel(appCtx)
 		client, err := crocNew(noRestart, ctx, opt)
 		if err != nil {
 			log.Errorf("croc: %v", err)
@@ -730,7 +730,7 @@ func recvTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 			once := true
 			for {
 				select {
-				case <-done:
+				case <-appCtx.Done():
 					return
 				case <-doneChan:
 					return

@@ -35,7 +35,7 @@ func (dm *DoMonitor) monitor() {
 
 	for {
 		select {
-		case <-done:
+		case <-appCtx.Done():
 			return
 
 		case fn := <-dm.requests:
@@ -76,6 +76,10 @@ func (dm *DoMonitor) executeAll(pending map[uintptr]func()) {
 
 func (dm *DoMonitor) Bounce(fn func()) {
 	// log.Debugf("Bounce %v", fn)
+	if dm == nil {
+		fyne.Do(fn)
+		return
+	}
 	select {
 	case dm.requests <- fn:
 	default:
@@ -84,4 +88,4 @@ func (dm *DoMonitor) Bounce(fn func()) {
 	}
 }
 
-var de = NewDoMonitor()
+var de *DoMonitor

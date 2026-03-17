@@ -203,7 +203,7 @@ func (pw *ProgressWriter) Write(p []byte) (n int, err error) {
 	select {
 	case <-pw.cancel:
 		return 0, ErrWriteCanceled
-	case <-done:
+	case <-appCtx.Done():
 		return 0, ErrApplicationShutdown
 	default:
 	}

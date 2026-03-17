@@ -2,7 +2,6 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"os"
@@ -14,7 +13,7 @@ import (
 
 func (h *WebDAVWithDirectoryListing) serveDirectoryListing(w http.ResponseWriter, r *http.Request) {
 	// Открываем директорию через FileSystem
-	f, err := h.fileSystem.OpenFile(context.Background(), r.URL.Path, os.O_RDONLY, 0)
+	f, err := h.fileSystem.OpenFile(appCtx, r.URL.Path, os.O_RDONLY, 0)
 	if err != nil {
 		http.Error(w, "Error opening directory", http.StatusInternalServerError)
 		return
@@ -248,7 +247,7 @@ func (h *WebDAVWithDirectoryListing) serveDirectoryListing(w http.ResponseWriter
 
 			// Используем Stat от FileSystem для определения типа
 			// Это гарантирует правильную обработку симлинков через ResolvingFileSystem
-			stat, err := h.fileSystem.Stat(context.Background(), fullPath)
+			stat, err := h.fileSystem.Stat(appCtx, fullPath)
 			if err != nil {
 				// Если не можем получить stat, пропускаем элемент
 				continue

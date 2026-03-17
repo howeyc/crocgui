@@ -103,7 +103,8 @@ var (
 	isMobile               bool
 	isAndroid              bool
 	ErrApplicationShutdown error
-	done                   chan struct{}
+	appCtx                 context.Context
+	appCancel              context.CancelFunc
 	cdLock                 atomic.Int32
 	uriFromIntent          = make(chan string, 100)
 	textFromIntent         = make(chan string, 100)
@@ -215,7 +216,8 @@ func main() {
 		return filepath.FromSlash(filepath.Join(append([]string{tempDir, SEND}, elem...)...))
 	}
 	ErrApplicationShutdown = errors.New("application shutdown")
-	done = make(chan struct{})
+	appCtx, appCancel = context.WithCancel(context.Background())
+	de = NewDoMonitor()
 	replacer = strings.NewReplacer(
 		"[trace]\t", "",
 		"[debug]\t", "",
@@ -409,7 +411,7 @@ func ls(path string) (files []string) {
 
 func cleanup(w fyne.Window) {
 	saveAccordionState()
-	close(done)
+	appCancel()
 	if err := os.Chdir(join()); err == nil {
 		utils.RemoveMarkedFiles()
 	}

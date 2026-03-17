@@ -398,7 +398,7 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 					return nil
 				}))
 			select {
-			case <-done:
+			case <-appCtx.Done():
 			default:
 				wg.Wait()
 				log.Debugf("copyFiles done")
@@ -887,7 +887,7 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 			var sendErr error
 
 			log.Warnf("Restart %v", !noRestart)
-			ctx, ctc := context.WithCancel(context.Background())
+			ctx, ctc := context.WithCancel(appCtx)
 			client, err := crocNew(noRestart, ctx, opt)
 			if err != nil {
 				log.Errorf("croc: %v", err)
@@ -964,7 +964,7 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 				once := true
 				for {
 					select {
-					case <-done:
+					case <-appCtx.Done():
 						return
 					case <-doneChan:
 						if !swap && sendErr == nil {
@@ -1179,7 +1179,7 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 							}
 							oH = nH
 						}
-					case <-done:
+					case <-appCtx.Done():
 						log.Debug("done")
 						return
 					case text := <-textFromIntent:
@@ -1313,7 +1313,7 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 												return nil
 											}))
 										select {
-										case <-done:
+										case <-appCtx.Done():
 										default:
 											wg.Wait()
 											log.Debugf("copyFiles done")
@@ -1422,7 +1422,7 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 						}
 					}
 					select {
-					case <-done:
+					case <-appCtx.Done():
 					default:
 						wga.Wait()
 						log.Debugf("done %v", fnames)
@@ -1448,7 +1448,7 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 					}
 				}
 				select {
-				case <-done:
+				case <-appCtx.Done():
 				default:
 					wga.Wait()
 					log.Debugf("done %v", os.Args[1:])
@@ -1476,7 +1476,7 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 					}
 				}
 				select {
-				case <-done:
+				case <-appCtx.Done():
 				default:
 					wga.Wait()
 					log.Debugf("done %v", uris)
@@ -1666,7 +1666,7 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 						return nil
 					}))
 				select {
-				case <-done:
+				case <-appCtx.Done():
 				default:
 					wg.Wait()
 					log.Debugf("copyFiles done")
@@ -2065,7 +2065,7 @@ func setupTOTP(a fyne.App, entry *widget.Entry, totpCheck *widget.Check, totpLab
 					defer ticker.Stop()
 					for {
 						select {
-						case <-done:
+						case <-appCtx.Done():
 							return
 						case <-ticker.C:
 							update()

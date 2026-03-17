@@ -295,7 +295,7 @@ func (f *ResolvingFile) Readdir(count int) ([]os.FileInfo, error) {
 
 // Stat implements webdav.File
 func (f *ResolvingFile) Stat() (os.FileInfo, error) {
-	return f.fs.Stat(context.Background(), f.name)
+	return f.fs.Stat(appCtx, f.name)
 }
 
 // Write implements webdav.File with read-only check

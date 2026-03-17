@@ -119,14 +119,14 @@ func (h *WebDAVWithDirectoryListing) ServeHTTP(w http.ResponseWriter, r *http.Re
 	if r.Method == http.MethodGet {
 		log.Infof("Request %s %s", r.Method, r.URL.Path)
 		// Используем ту же FileSystem, что и webdav.Handler
-		if info, err := h.fileSystem.Stat(context.Background(), r.URL.Path); err == nil && info.IsDir() {
+		if info, err := h.fileSystem.Stat(appCtx, r.URL.Path); err == nil && info.IsDir() {
 			// Это директория - показываем список файлов
 			h.serveDirectoryListing(w, r)
 			return
 		}
 
 		// Если это файл, устанавливаем правильный Content-Type
-		if info, err := h.fileSystem.Stat(context.Background(), r.URL.Path); err == nil && !info.IsDir() {
+		if info, err := h.fileSystem.Stat(appCtx, r.URL.Path); err == nil && !info.IsDir() {
 			// Определяем MIME-тип по расширению через go-mime
 			ext := path.Ext(r.URL.Path)
 			mimeType := gomime.TypeByExtension(ext)
@@ -144,7 +144,7 @@ func (h *WebDAVWithDirectoryListing) ServeHTTP(w http.ResponseWriter, r *http.Re
 				}
 			} else {
 				// Если тип не определен, используем DetectContentType как fallback
-				file, err := h.fileSystem.OpenFile(context.Background(), r.URL.Path, os.O_RDONLY, 0)
+				file, err := h.fileSystem.OpenFile(appCtx, r.URL.Path, os.O_RDONLY, 0)
 				if err == nil {
 					defer file.Close()
 					buffer := make([]byte, 512)
@@ -453,7 +453,7 @@ func (s *WebDAVServer) stopLocked() error {
 		return nil
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(appCtx, WebDAVTimeout)
 	defer cancel()
 
 	if err := s.server.Shutdown(ctx); err != nil {
@@ -726,7 +726,7 @@ func (s *WebDAVServer) DisableTCPForwarding() {
 	// Восстанавливаем WebDAV сервер, если он был остановлен
 	// Используем сохраненные параметры
 	select {
-	case <-done:
+	case <-appCtx.Done():
 	default:
 		if s.onProxyStateChanged != nil {
 			s.onProxyStateChanged(false)

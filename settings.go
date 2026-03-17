@@ -188,7 +188,7 @@ func settingsTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 	hostBinding := binding.BindPreferenceString("host", a.Preferences())
 	prev := OFF
 
-	ctx, ctc := context.WithCancel(context.Background())
+	ctx, ctc := context.WithCancel(appCtx)
 	var hostSelect *Select
 	hostSelect = NewSelect(hostSelectOptions(OFF), func(next string) {
 		if next == prev {
@@ -209,7 +209,7 @@ func settingsTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 				hostSelect.SetSelected(OFF) // рекурсия
 				return
 			}
-			ctx, ctc = context.WithCancel(context.Background())
+			ctx, ctc = context.WithCancel(appCtx)
 		} else {
 			if next == OFF {
 				// disableLocalBinding.Set(false)

@@ -110,7 +110,7 @@ func (t *Toast) hideWithAnimation(startPos fyne.Position) {
 	// Ждем завершения анимации или сигнала отмены
 	go func() {
 		select {
-		case <-done:
+		case <-appCtx.Done():
 			return
 		case <-time.After(AnimationDuration + 50*time.Millisecond):
 			fyne.Do(func() {

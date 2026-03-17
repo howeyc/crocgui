@@ -11,6 +11,7 @@ import (
 	"path"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"fyne.io/fyne/v2"
@@ -19,6 +20,7 @@ import (
 	"fyne.io/fyne/v2/widget"
 	log "github.com/schollz/logger"
 	"golang.org/x/net/webdav"
+	"golang.org/x/sync/singleflight"
 )
 
 const (
@@ -302,9 +304,10 @@ type WebDAVFileTree struct {
 	rootURL      *url.URL
 	listCache    map[widget.TreeNodeID][]widget.TreeNodeID
 	nodeCache    map[widget.TreeNodeID]*WebDAVFileNode
-	loadingNodes map[widget.TreeNodeID]bool
-	isRefreshing bool      // Защита от многократных обновлений
-	lastRefresh  time.Time // Время последнего обновления для debounce
+	isRefreshing bool               // Защита от многократных обновлений
+	lastRefresh  time.Time          // Время последнего обновления для debounce
+	mu           sync.RWMutex       // Защита от concurrent map access
+	requestGroup singleflight.Group // Предотвращает дублирование запросов
 }
 
 // NewWebDAVFileTree создает новый WebDAVFileTree
@@ -335,12 +338,11 @@ func NewWebDAVFileTree(rootURL *url.URL) *WebDAVFileTree {
 				return container.NewBorder(nil, nil, icon, nil, widget.NewLabel("Template Object"))
 			},
 		},
-		client:       NewWebDAVClient(),
-		rootURL:      rootURL,
-		listCache:    make(map[widget.TreeNodeID][]widget.TreeNodeID),
-		nodeCache:    make(map[widget.TreeNodeID]*WebDAVFileNode),
-		loadingNodes: make(map[widget.TreeNodeID]bool),
-		lastRefresh:  time.Now(), // Инициализируем время создания для debounce
+		client:      NewWebDAVClient(),
+		rootURL:     rootURL,
+		listCache:   make(map[widget.TreeNodeID][]widget.TreeNodeID),
+		nodeCache:   make(map[widget.TreeNodeID]*WebDAVFileNode),
+		lastRefresh: time.Now(), // Инициализируем время создания для debounce
 	}
 
 	// Добавляем корень в кэш как директорию
@@ -355,53 +357,66 @@ func NewWebDAVFileTree(rootURL *url.URL) *WebDAVFileTree {
 	// log.Debugf("[NewWebDAVFileTree] Added root to nodeCache as directory")
 
 	tree.IsBranch = func(id widget.TreeNodeID) bool {
+		tree.mu.RLock()
+		defer tree.mu.RUnlock()
 		node, ok := tree.nodeCache[id]
 		return ok && node.IsDir
 	}
 
 	tree.ChildUIDs = func(id widget.TreeNodeID) []widget.TreeNodeID {
 		// Если уже загружено, возвращаем из кэша
-		if ids, ok := tree.listCache[id]; ok {
+		tree.mu.RLock()
+		ids, ok := tree.listCache[id]
+		tree.mu.RUnlock()
+		if ok {
 			return ids
 		}
 
-		// Если уже загружается, возвращаем пустой список
-		if tree.loadingNodes[id] {
-			// log.Debugf("[ChildUIDs] Already loading %s, skipping", id)
-			return []widget.TreeNodeID{}
-		}
-
-		// Запускаем асинхронную загрузку
-		tree.loadingNodes[id] = true
+		// Запускаем асинхронную загрузку с singleflight
+		// Это предотвратит дублирование запросов к серверу
 		go func() {
-			defer func() {
-				delete(tree.loadingNodes, id)
-			}()
+			ch := tree.requestGroup.DoChan(id, func() (interface{}, error) {
+				return tree.loadChildren(id)
+			})
 
-			children, err := tree.loadChildren(id)
-			if err != nil {
-				log.Errorf("[ChildUIDs] Failed to load children for ID %s: %v", id, err)
-				fyne.LogError("Failed to load children for "+id, err)
-				// Показываем заглушку при ошибке загрузки
-				tree.showPlaceholder()
+			select {
+			case result := <-ch:
+				if result.Err != nil {
+					log.Errorf("[ChildUIDs] Failed to load children for ID %s: %v", id, result.Err)
+					fyne.LogError("Failed to load children for "+id, result.Err)
+					// Показываем заглушку при ошибке загрузки только для корня
+					if id == tree.Root {
+						tree.showPlaceholder()
+					}
+					return
+				}
+
+				children := result.Val.([]*WebDAVFileNode)
+
+				// Сохраняем в кэш с защитой
+				var ids []widget.TreeNodeID
+				for _, child := range children {
+					childID := child.Path
+					tree.mu.Lock()
+					tree.nodeCache[childID] = child
+					tree.mu.Unlock()
+					ids = append(ids, childID)
+				}
+
+				tree.mu.Lock()
+				tree.listCache[id] = ids
+				tree.mu.Unlock()
+
+				// Обновляем UI и открываем все ветки
+				fyne.Do(func() {
+					tree.Tree.Refresh()
+					tree.OpenAllBranches()
+				})
+
+			case <-appCtx.Done():
+				// Отмена при закрытии приложения
 				return
 			}
-
-			// Сохраняем в кэш
-			var ids []widget.TreeNodeID
-			for _, child := range children {
-				childID := child.Path
-				tree.nodeCache[childID] = child
-				ids = append(ids, childID)
-			}
-
-			tree.listCache[id] = ids
-
-			// Обновляем UI и открываем все ветки
-			fyne.Do(func() {
-				tree.Tree.Refresh()
-				tree.OpenAllBranches()
-			})
 		}()
 
 		// Возвращаем пустой список, загрузка в фоне
@@ -417,7 +432,10 @@ func NewWebDAVFileTree(rootURL *url.URL) *WebDAVFileTree {
 			label = id
 		} else {
 			// Получаем имя из кэша или из URL
-			if nodeInfo, ok := tree.nodeCache[id]; ok {
+			tree.mu.RLock()
+			nodeInfo, ok := tree.nodeCache[id]
+			tree.mu.RUnlock()
+			if ok {
 				label = nodeInfo.Name
 				// log.Debugf("[UpdateNode] Found in nodeCache: name=%s", label)
 			} else {
@@ -467,7 +485,9 @@ func NewWebDAVFileTree(rootURL *url.URL) *WebDAVFileTree {
 			return
 		}
 		// Очищаем кэш при закрытии папки
+		tree.mu.Lock()
 		delete(tree.listCache, id)
+		tree.mu.Unlock()
 		// log.Debugf("[OnBranchClosed] Cleared cache for: %s", id)
 	}
 
@@ -548,19 +568,28 @@ func (t *WebDAVFileTree) loadChildren(id widget.TreeNodeID) ([]*WebDAVFileNode, 
 
 // showPlaceholder показывает заглушку CROC при ошибке соединения
 func (t *WebDAVFileTree) showPlaceholder() {
-	fyne.Do(func() {
-		t.listCache = make(map[widget.TreeNodeID][]widget.TreeNodeID)
-		t.nodeCache = make(map[widget.TreeNodeID]*WebDAVFileNode)
+	rootID := t.Root
 
-		rootID := t.Root
-		t.nodeCache[rootID] = &WebDAVFileNode{
-			Path:    t.rootURL.Path,
-			Name:    CROC,
-			IsDir:   true,
-			Size:    0,
-			ModTime: time.Now(),
-		}
-		t.listCache[rootID] = []widget.TreeNodeID{}
+	// Создаем новые кэши для атомарной замены
+	newListCache := make(map[widget.TreeNodeID][]widget.TreeNodeID)
+	newNodeCache := make(map[widget.TreeNodeID]*WebDAVFileNode)
+
+	newNodeCache[rootID] = &WebDAVFileNode{
+		Path:    t.rootURL.Path,
+		Name:    CROC,
+		IsDir:   true,
+		Size:    0,
+		ModTime: time.Now(),
+	}
+	newListCache[rootID] = []widget.TreeNodeID{}
+
+	// Атомарная замена кэша
+	fyne.Do(func() {
+		t.mu.Lock()
+		t.listCache = newListCache
+		t.nodeCache = newNodeCache
+		t.mu.Unlock()
+
 		t.Tree.Refresh()
 	})
 }
@@ -621,36 +650,30 @@ func (t *WebDAVFileTree) Refresh() {
 	t.lastRefresh = time.Now()
 	// log.Debugf("[Refresh] Starting full tree refresh")
 
-	// Запускаем асинхронное обновление с timeout
+	// Запускаем асинхронное обновление с timeout и singleflight
 	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), WebDAVTimeout)
-		defer cancel()
+		ch := t.requestGroup.DoChan("refresh", func() (interface{}, error) {
+			// Проверяем соединение
+			ctx, cancel := context.WithTimeout(appCtx, WebDAVTimeout)
+			defer cancel()
 
-		// Проверяем соединение
-		err := t.CheckConnection(ctx)
-		if err != nil {
-			log.Errorf("[Refresh] Failed to check connection: %v", err)
-			fyne.LogError("WebDAV connection failed, switching to placeholder", err)
-			// Fallback на placeholder
-			t.showPlaceholder()
-			return
-		}
+			err := t.CheckConnection(ctx)
+			if err != nil {
+				return nil, fmt.Errorf("connection check failed: %w", err)
+			}
 
-		// Соединение успешно, обновляем данные
-		rootID := t.Root
-		rootChildren, err := t.loadChildren(rootID)
-		if err != nil {
-			log.Errorf("[Refresh] Failed to reload root children: %v", err)
-			fyne.LogError("Failed to reload root children", err)
-			return
-		}
+			// Соединение успешно, обновляем данные
+			rootID := t.Root
+			rootChildren, err := t.loadChildren(rootID)
+			if err != nil {
+				return nil, fmt.Errorf("failed to load root children: %w", err)
+			}
 
-		// Сохраняем корень и его детей в кэш
-		fyne.Do(func() {
-			t.listCache = make(map[widget.TreeNodeID][]widget.TreeNodeID)
-			t.nodeCache = make(map[widget.TreeNodeID]*WebDAVFileNode)
+			// Создаем новые кэши для атомарной замены
+			newListCache := make(map[widget.TreeNodeID][]widget.TreeNodeID)
+			newNodeCache := make(map[widget.TreeNodeID]*WebDAVFileNode)
 
-			t.nodeCache[rootID] = &WebDAVFileNode{
+			newNodeCache[rootID] = &WebDAVFileNode{
 				Path:    t.rootURL.Path,
 				Name:    t.rootURL.String(),
 				IsDir:   true,
@@ -661,19 +684,55 @@ func (t *WebDAVFileTree) Refresh() {
 			var rootChildIDs []widget.TreeNodeID
 			for _, child := range rootChildren {
 				childID := child.Path
-				t.nodeCache[childID] = child
+				newNodeCache[childID] = child
 				rootChildIDs = append(rootChildIDs, childID)
 			}
-			t.listCache[rootID] = rootChildIDs
+			newListCache[rootID] = rootChildIDs
 
 			// log.Debugf("[Refresh] Reloaded %d root children", len(rootChildIDs))
 
-			// Обновляем UI виджета Tree
-			t.Tree.Refresh()
-
-			// Открываем все ветки после успешной загрузки
-			t.OpenAllBranches()
+			// Возвращаем кэши для обновления UI
+			return struct {
+				listCache map[widget.TreeNodeID][]widget.TreeNodeID
+				nodeCache map[widget.TreeNodeID]*WebDAVFileNode
+			}{listCache: newListCache, nodeCache: newNodeCache}, nil
 		})
+
+		select {
+		case result := <-ch:
+			if result.Err != nil {
+				log.Errorf("[Refresh] Failed to refresh: %v", result.Err)
+				fyne.LogError("WebDAV refresh failed", result.Err)
+				// Fallback на placeholder только при ошибке соединения
+				if strings.Contains(result.Err.Error(), "connection check failed") {
+					t.showPlaceholder()
+				}
+				return
+			}
+
+			caches := result.Val.(struct {
+				listCache map[widget.TreeNodeID][]widget.TreeNodeID
+				nodeCache map[widget.TreeNodeID]*WebDAVFileNode
+			})
+
+			// Атомарная замена кэша
+			fyne.Do(func() {
+				t.mu.Lock()
+				t.listCache = caches.listCache
+				t.nodeCache = caches.nodeCache
+				t.mu.Unlock()
+
+				// Обновляем UI виджета Tree
+				t.Tree.Refresh()
+
+				// Открываем все ветки после успешной загрузки
+				t.OpenAllBranches()
+			})
+
+		case <-appCtx.Done():
+			// Отмена при закрытии приложения
+			return
+		}
 	}()
 }
 
