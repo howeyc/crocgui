@@ -21,6 +21,10 @@ import (
 	"golang.org/x/net/webdav"
 )
 
+const (
+	WebDAVTimeout = 3 * time.Second
+)
+
 // WebDAVURI представляет WebDAV URL
 type WebDAVURI struct {
 	*url.URL
@@ -111,7 +115,7 @@ type WebDAVClient struct {
 func NewWebDAVClient() *WebDAVClient {
 	return &WebDAVClient{
 		httpClient: &http.Client{
-			Timeout: 30 * time.Second,
+			Timeout: WebDAVTimeout,
 		},
 	}
 }
@@ -378,6 +382,8 @@ func NewWebDAVFileTree(rootURL *url.URL) *WebDAVFileTree {
 			if err != nil {
 				log.Errorf("[ChildUIDs] Failed to load children for ID %s: %v", id, err)
 				fyne.LogError("Failed to load children for "+id, err)
+				// Показываем заглушку при ошибке загрузки
+				tree.showPlaceholder()
 				return
 			}
 
@@ -540,16 +546,33 @@ func (t *WebDAVFileTree) loadChildren(id widget.TreeNodeID) ([]*WebDAVFileNode, 
 	return children, nil
 }
 
+// showPlaceholder показывает заглушку CROC при ошибке соединения
+func (t *WebDAVFileTree) showPlaceholder() {
+	fyne.Do(func() {
+		t.listCache = make(map[widget.TreeNodeID][]widget.TreeNodeID)
+		t.nodeCache = make(map[widget.TreeNodeID]*WebDAVFileNode)
+
+		rootID := t.Root
+		t.nodeCache[rootID] = &WebDAVFileNode{
+			Path:    t.rootURL.Path,
+			Name:    CROC,
+			IsDir:   true,
+			Size:    0,
+			ModTime: time.Now(),
+		}
+		t.listCache[rootID] = []widget.TreeNodeID{}
+		t.Tree.Refresh()
+	})
+}
+
 // CheckConnection проверяет соединение с WebDAV сервером с timeout
 // Возвращает nil если соединение успешно установлено
 func (t *WebDAVFileTree) CheckConnection(ctx context.Context) error {
-	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, WebDAVTimeout)
 	defer cancel()
 
 	// Создаем отдельный клиент с коротким timeout
-	client := &http.Client{
-		Timeout: 2 * time.Second,
-	}
+	client := &http.Client{}
 
 	req, err := http.NewRequestWithContext(ctx, "PROPFIND", t.rootURL.String(), nil)
 	if err != nil {
@@ -600,7 +623,7 @@ func (t *WebDAVFileTree) Refresh() {
 
 	// Запускаем асинхронное обновление с timeout
 	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), WebDAVTimeout)
 		defer cancel()
 
 		// Проверяем соединение
@@ -608,26 +631,8 @@ func (t *WebDAVFileTree) Refresh() {
 		if err != nil {
 			log.Errorf("[Refresh] Failed to check connection: %v", err)
 			fyne.LogError("WebDAV connection failed, switching to placeholder", err)
-
 			// Fallback на placeholder
-			fyne.Do(func() {
-				// Очищаем кэш
-				t.listCache = make(map[widget.TreeNodeID][]widget.TreeNodeID)
-				t.nodeCache = make(map[widget.TreeNodeID]*WebDAVFileNode)
-
-				// Добавляем только корень
-				rootID := t.Root
-				t.nodeCache[rootID] = &WebDAVFileNode{
-					Path:    t.rootURL.Path,
-					Name:    CROC,
-					IsDir:   true,
-					Size:    0,
-					ModTime: time.Now(),
-				}
-				t.listCache[rootID] = []widget.TreeNodeID{}
-
-				t.Tree.Refresh()
-			})
+			t.showPlaceholder()
 			return
 		}
 

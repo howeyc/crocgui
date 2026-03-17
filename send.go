@@ -58,7 +58,8 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 	var (
 		cosED,
 		cosSH,
-		cosDAV []fyne.CanvasObject
+		cosDAV,
+		cosDAVremote []fyne.CanvasObject
 		removeEntry func(fpath string, fe *fyne.Container, del bool)
 		showPage    func()
 		reload      func()
@@ -639,6 +640,7 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 			if !davServer.IsActive() {
 				fyne.Do(func() {
 					link.Hide()
+					de.Bounce(ti.Content.Refresh)
 				})
 			} else {
 				go switchToWebDAVTree()
@@ -655,6 +657,7 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 	port.SetText(a.Preferences().String("webdav-port"))
 	cosED = append(cosED, port)
 	cosDAV = append(cosDAV, sCheck, hostSelect, port)
+	cosDAVremote = append(cosDAVremote, sCheck, hostSelect, port)
 
 	davControl := container.NewBorder(
 		nil,
@@ -672,7 +675,7 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 			allEnabled(!enabled, cosSH...)
 			if enabled {
 				go switchToWebDAVTree()
-				allEnabled(true, cosDAV...)
+				allEnabled(true, cosDAVremote...)
 				showPage()
 			} else {
 				if treeButton.Icon == theme.VisibilityIcon() {
@@ -687,7 +690,6 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 		if treeButton.Icon == theme.VisibilityIcon() {
 			de.Bounce(boxholder.Refresh)
 		} else {
-			// Используем WebDAVTree для локальных файлов через локальный WebDAV сервер
 			switchToWebDAVTree()
 		}
 	}
@@ -715,6 +717,7 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 	}
 	cosED = append(cosED, treeButton)
 	cosDAV = append(cosDAV, treeButton)
+	cosDAVremote = append(cosDAVremote, treeButton)
 
 	mainButton = widget.NewButtonWithIcon(lp("Send"), theme.MailSendIcon(), func() {
 		fyne.Do(func() { topline.SetText("") })
