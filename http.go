@@ -2,6 +2,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
@@ -9,7 +10,96 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
+	"time"
 )
+
+// Message представляет сообщение в чате
+type Message struct {
+	ID        string    `json:"id"`
+	Text      string    `json:"text"`
+	Sender    string    `json:"sender"`
+	Timestamp time.Time `json:"timestamp"`
+}
+
+// ChatStorage хранит сообщения в памяти
+type ChatStorage struct {
+	messages []Message
+	mu       sync.RWMutex
+}
+
+var chatStore = &ChatStorage{
+	messages: make([]Message, 0),
+}
+
+// addMessage добавляет новое сообщение в хранилище
+func (cs *ChatStorage) addMessage(text, sender string) Message {
+	cs.mu.Lock()
+	defer cs.mu.Unlock()
+
+	msg := Message{
+		ID:        fmt.Sprintf("%d", time.Now().UnixNano()),
+		Text:      text,
+		Sender:    sender,
+		Timestamp: time.Now(),
+	}
+
+	cs.messages = append(cs.messages, msg)
+	return msg
+}
+
+// getMessages возвращает все сообщения
+func (cs *ChatStorage) getMessages() []Message {
+	cs.mu.RLock()
+	defer cs.mu.RUnlock()
+
+	result := make([]Message, len(cs.messages))
+	copy(result, cs.messages)
+	return result
+}
+
+// handleGetMessages обрабатывает GET запрос для получения всех сообщений
+func handleGetMessages(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	messages := chatStore.getMessages()
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(messages)
+}
+
+// handleSendMessage обрабатывает POST запрос для отправки сообщения
+func handleSendMessage(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Text   string `json:"text"`
+		Sender string `json:"sender"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+
+	if req.Text == "" {
+		http.Error(w, "Text is required", http.StatusBadRequest)
+		return
+	}
+
+	if req.Sender == "" {
+		req.Sender = "Anonymous"
+	}
+
+	msg := chatStore.addMessage(req.Text, req.Sender)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(msg)
+}
 
 func (h *WebDAVWithDirectoryListing) serveDirectoryListing(w http.ResponseWriter, r *http.Request) {
 	// Открываем директорию через FileSystem
@@ -66,12 +156,25 @@ func (h *WebDAVWithDirectoryListing) serveDirectoryListing(w http.ResponseWriter
 		// Формируем кликабельную цепочку родительских каталогов
 		breadcrumbs := h.generateBreadcrumbs(displayPath)
 
-		fmt.Fprintf(w, `<!DOCTYPE html>
+		// Формируем заголовок страницы
+		title := "WebDAV"
+		rootDir := join()
+		if rootDir != "" {
+			title = filepath.Base(rootDir)
+		}
+		if displayPath != "/" {
+			title += displayPath
+		}
+
+		// Используем strings.Builder для построения HTML
+		var html strings.Builder
+
+		html.WriteString(`<!DOCTYPE html>
 <html>
 <head>
 	<meta charset="utf-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<title>%s</title>
+	<title>` + title + `</title>
 	<link rel="icon" type="image/png" href="/favicon.ico">
     <link rel="shortcut icon" href="/favicon.ico" type="image/x-icon">
     <link rel="apple-touch-icon" href="/favicon.ico">
@@ -113,49 +216,142 @@ func (h *WebDAVWithDirectoryListing) serveDirectoryListing(w http.ResponseWriter
 			font-weight: 500;
 		}
 		.directory-listing {
-			width: 100%%;
+			width: 100%;
 			border-collapse: collapse;
+			box-sizing: border-box;
 		}
+
 		.directory-listing tr {
 			transition: background-color 0.15s ease;
 		}
+
 		.directory-listing tr:hover {
 			background-color: #f5f5f5;
 		}
+
 		.directory-listing td {
 			padding: 8px 12px;
 			border-bottom: 1px solid #eee;
 		}
+
 		.directory-listing .name {
-			width: 60%%;
+			width: auto;
+			white-space: nowrap;
 		}
+
 		.directory-listing .size {
-			width: 15%%;
+			width: 1%;
+			white-space: nowrap;
 			text-align: right;
 			color: #666;
 			font-family: monospace;
 		}
+
 		.directory-listing .date {
-			width: 25%%;
+			width: 1%;
+			white-space: nowrap;
 			color: #666;
 			font-family: monospace;
 		}
+
 		.directory-listing a {
 			color: #0066cc;
 			text-decoration: none;
 		}
+
 		.directory-listing a:hover {
 			text-decoration: underline;
 		}
-		.footer {
-			margin-top: 20px;
-			text-align: right;
-			color: #666;
-			font-size: 0.9em;
-			border-top: 1px solid #eee;
-			padding-top: 10px;
+
+		/* Стили чата */
+		.chat-container {
+			margin-top: 15px;
+			padding-top: 15px;
 		}
-		
+		.chat-messages {
+			max-height: 200px;
+			overflow-y: auto;
+			background-color: #f8f9fa;
+			border: 1px solid #ddd;
+			border-radius: 4px;
+			padding: 10px;
+			margin-bottom: 10px;
+		}
+		.chat-message {
+			margin-bottom: 8px;
+			display: flex;
+			flex-direction: column;
+		}
+		.chat-message.own {
+			align-items: flex-end;
+		}
+		.chat-message-content {
+			max-width: 80%;
+			padding: 6px 10px;
+			border-radius: 12px;
+			word-wrap: break-word;
+			word-break: break-word;
+			overflow-wrap: break-word;
+			white-space: pre-wrap;
+			font-size: 0.85em;
+		}
+		.chat-message.own .chat-message-content {
+			background-color: #007bff;
+			color: white;
+			border-bottom-right-radius: 2px;
+		}
+		.chat-message.other .chat-message-content {
+			background-color: #e9ecef;
+			color: #333;
+			border-bottom-left-radius: 2px;
+		}
+		.chat-message-sender {
+			font-size: 0.75em;
+			color: #999;
+			margin-bottom: 2px;
+			margin-left: 3px;
+		}
+		.chat-message-time {
+			font-size: 0.7em;
+			color: #999;
+			margin-top: 2px;
+			text-align: right;
+		}
+		.chat-input-container {
+			display: flex;
+			gap: 8px;
+		}
+		.chat-input {
+			flex: 1;
+			padding: 6px 10px;
+			border: 1px solid #ccc;
+			border-radius: 4px;
+			font-family: inherit;
+			font-size: 0.85em;
+			height: 30px;
+		}
+		.chat-input:focus {
+			outline: none;
+			border-color: #007bff;
+		}
+		.chat-send-btn {
+			padding: 6px 15px;
+			background-color: #007bff;
+			color: white;
+			border: none;
+			border-radius: 4px;
+			cursor: pointer;
+			font-size: 0.85em;
+			font-weight: 500;
+			transition: background-color 0.2s;
+		}
+		.chat-send-btn:hover {
+			background-color: #0056b3;
+		}
+		.chat-send-btn:active {
+			background-color: #004494;
+		}
+
 		/* Медиа-запрос для мобильных устройств */
 		@media (max-width: 768px) {
 			body {
@@ -169,13 +365,9 @@ func (h *WebDAVWithDirectoryListing) serveDirectoryListing(w http.ResponseWriter
 				border-radius: 8px;
 				margin-bottom: 16px;
 			}
-			.directory-listing {
-			}
-			.directory-listing td {
-				border-bottom-width: 1px;
-			}
 			.directory-listing .name {
-				width: 75%%;
+				white-space: normal;
+				width: auto;
 			}
 			.directory-listing .name a {
 				display: inline-block;
@@ -184,14 +376,12 @@ func (h *WebDAVWithDirectoryListing) serveDirectoryListing(w http.ResponseWriter
 				overflow-wrap: break-word;
 			}
 			.directory-listing .size {
-				width: 25%%;
+				width: 25%;
 				font-size: 0.5em;
+				white-space: normal;
 			}
 			.directory-listing .date {
 				display: none;
-			}
-			.footer {
-				font-size: 0.5em;
 			}
 		}
 		
@@ -209,9 +399,6 @@ func (h *WebDAVWithDirectoryListing) serveDirectoryListing(w http.ResponseWriter
 			.breadcrumbs .separator {
 				margin: 0 8px;
 			}
-			.directory-listing {
-				font-size: 1.0em;
-			}
 			.directory-listing td {
 				padding: 10px 5px;
 			}
@@ -219,24 +406,21 @@ func (h *WebDAVWithDirectoryListing) serveDirectoryListing(w http.ResponseWriter
 				font-size: 1em;
 			}
 			.directory-listing .size {
-				width: 25%%;
+				width: 25%;
 				font-size: 0.5em;
 			}
 			.directory-listing .date {
 				display: none;
-			}
-			.footer {
-				font-size: 0.5em;
 			}
 		}
 	</style>
 </head>
 <body>
 	<div class="container">
-	%s
+	` + breadcrumbs + `
 	<table class="directory-listing">
 			<tbody>
-`, filepath.Base(join())+displayPath, breadcrumbs)
+`)
 
 		// Проверяем каждый элемент через Stat FileSystem для правильного определения типа
 		for _, info := range fileInfos {
@@ -268,22 +452,144 @@ func (h *WebDAVWithDirectoryListing) serveDirectoryListing(w http.ResponseWriter
 			// Форматируем дату
 			modTime := stat.ModTime().Format("2006-01-02 15:04:05")
 
-			fmt.Fprintf(w, `<tr>
-	<td class="name"><a href="%s">%s</a></td>
-	<td class="size">%s</td>
-	<td class="date">%s</td>
+			html.WriteString(`<tr>
+	<td class="name"><a href="` + filePath + `">` + name + `</a></td>
+	<td class="size">` + size + `</td>
+	<td class="date">` + modTime + `</td>
 </tr>
-`, filePath, name, size, modTime)
+`)
 		}
 
-		fmt.Fprintf(w, `			</tbody>
+		html.WriteString(`			</tbody>
 		</table>
-		<div class="footer">
-			%d items
+	</div>
+
+	<!-- Панель чата -->
+	<div class="chat-container">
+		<div class="chat-messages" id="chatMessages"></div>
+		<div class="chat-input-container">
+			<input type="text" class="chat-input" id="chatInput" placeholder="Type a message...">
+			<button class="chat-send-btn" id="chatSendBtn">Send</button>
 		</div>
 	</div>
+
+	<script>
+		// Получаем уникальный идентификатор для текущего пользователя
+		let currentUserId = localStorage.getItem('chatUserId') || 'user_' + Math.random().toString(36).substr(2, 9);
+		localStorage.setItem('chatUserId', currentUserId);
+
+		const chatMessages = document.getElementById('chatMessages');
+		const chatInput = document.getElementById('chatInput');
+		const chatSendBtn = document.getElementById('chatSendBtn');
+
+		let lastMessageCount = 0;
+
+		// Форматирование времени
+		function formatTime(timestamp) {
+			const date = new Date(timestamp);
+			return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+		}
+
+		// Определение является ли сообщение своим
+		function isOwnMessage(sender) {
+			return sender === currentUserId;
+		}
+
+		// Отображение сообщения
+		function displayMessage(msg) {
+			const msgDiv = document.createElement('div');
+			msgDiv.className = 'chat-message ' + (isOwnMessage(msg.sender) ? 'own' : 'other');
+
+			const senderDiv = document.createElement('div');
+			senderDiv.className = 'chat-message-sender';
+
+			const contentDiv = document.createElement('div');
+			contentDiv.className = 'chat-message-content';
+			contentDiv.textContent = msg.text;
+
+			const timeDiv = document.createElement('div');
+			timeDiv.className = 'chat-message-time';
+			timeDiv.textContent = formatTime(msg.timestamp);
+
+			if (!isOwnMessage(msg.sender)) {
+				msgDiv.appendChild(senderDiv);
+			}
+			msgDiv.appendChild(contentDiv);
+			msgDiv.appendChild(timeDiv);
+
+			chatMessages.appendChild(msgDiv);
+			chatMessages.scrollTop = chatMessages.scrollHeight;
+		}
+
+		// Загрузка сообщений
+		async function loadMessages() {
+			try {
+				const response = await fetch('/api/messages');
+				if (!response.ok) return;
+
+				const messages = await response.json();
+
+				// Отображаем только новые сообщения
+				if (messages.length > lastMessageCount) {
+					const newMessages = messages.slice(lastMessageCount);
+					newMessages.forEach(displayMessage);
+					lastMessageCount = messages.length;
+				}
+			} catch (error) {
+				console.error('Error loading messages:', error);
+			}
+		}
+
+		// Отправка сообщения
+		async function sendMessage() {
+			const text = chatInput.value.trim();
+			if (!text) return;
+
+			try {
+				const response = await fetch('/api/messages', {
+					method: 'POST',
+					headers: {
+						'Content-Type': 'application/json',
+					},
+					body: JSON.stringify({
+						text: text,
+						sender: currentUserId
+					})
+				});
+
+				if (!response.ok) {
+					console.error('Failed to send message');
+					return;
+				}
+
+				chatInput.value = '';
+				await loadMessages();
+			} catch (error) {
+				console.error('Error sending message:', error);
+			}
+		}
+
+		// Обработчики событий
+		chatSendBtn.addEventListener('click', sendMessage);
+
+		chatInput.addEventListener('keydown', (e) => {
+			if (e.key === 'Enter') {
+				e.preventDefault();
+				sendMessage();
+			}
+		});
+
+		// Периодическая загрузка сообщений (каждые 2 секунды)
+		setInterval(loadMessages, 2000);
+
+		// Начальная загрузка
+		loadMessages();
+	</script>
 </body>
-</html>`, len(fileInfos))
+</html>`)
+
+		// Отправляем HTML клиенту
+		w.Write([]byte(html.String()))
 	}
 }
 
@@ -303,8 +609,18 @@ func formatSize(size int64) string {
 
 // generateBreadcrumbs создает кликабельную цепочку родительских каталогов
 func (h *WebDAVWithDirectoryListing) generateBreadcrumbs(currentPath string) string {
-	root := filepath.Base(join())
 	separator := `<span class="separator">›</span>`
+
+	// Получаем имя корневой директории
+	root := "Root"
+	rootDir := join()
+	if rootDir != "" {
+		base := filepath.Base(rootDir)
+		if base != "" && base != "." {
+			root = base
+		}
+	}
+
 	if currentPath == "/" {
 		return fmt.Sprintf(`<div class="breadcrumbs"><a href="/">%s</a>%s</div>`, root, separator)
 	}
