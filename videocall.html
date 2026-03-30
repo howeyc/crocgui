@@ -15,16 +15,6 @@
             flex-direction: column;
             overflow: hidden;
         }
-        .status-bar {
-            padding: 8px 16px;
-            background: #16213e;
-            text-align: center;
-            font-size: 0.9em;
-            color: #aaa;
-            border-bottom: 1px solid #0f3460;
-        }
-        .status-bar .room-id { color: #e94560; font-weight: bold; }
-        .status-bar.connected { color: #4ecca3; }
         .videos {
             flex: 1;
             display: flex;
@@ -46,17 +36,6 @@
             width: 100%;
             height: 100%;
             object-fit: cover;
-        }
-        .video-label {
-            position: absolute;
-            bottom: 8px;
-            left: 8px;
-            background: rgba(0,0,0,0.6);
-            padding: 4px 10px;
-            border-radius: 12px;
-            font-size: 0.75em;
-            color: #ccc;
-            z-index: 5;
         }
         /* PiP: маленькое локальное видео в углу */
         .pip-container {
@@ -82,12 +61,6 @@
             height: 100%;
             object-fit: cover;
         }
-        .pip-container .video-label {
-            bottom: 4px;
-            left: 4px;
-            font-size: 0.65em;
-            padding: 2px 8px;
-        }
         .waiting-overlay {
             position: absolute;
             top: 0; left: 0; right: 0; bottom: 0;
@@ -110,33 +83,43 @@
         @keyframes spin { to { transform: rotate(360deg); } }
         .waiting-text { color: #aaa; font-size: 1em; }
 
-        .controls {
-            padding: 12px 16px;
-            background: #16213e;
+        .pip-controls {
+            position: absolute;
+            bottom: 0; left: 0; right: 0;
             display: flex;
             justify-content: center;
-            gap: 12px;
-            border-top: 1px solid #0f3460;
+            gap: 4px;
+            padding: 4px;
+            background: rgba(0,0,0,0.5);
+            z-index: 25;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .pip-container:hover .pip-controls,
+        .pip-controls.has-off {
+            opacity: 1;
         }
         .ctrl-btn {
-            width: 52px; height: 52px;
-            border-radius: 50%;
+            height: 28px;
+            border-radius: 14px;
             border: none;
             cursor: pointer;
-            font-size: 1.3em;
+            font-size: 0.7em;
+            font-weight: 600;
+            padding: 0 10px;
             display: flex;
             align-items: center;
             justify-content: center;
             transition: all 0.2s;
             color: white;
         }
-        .ctrl-btn:hover { transform: scale(1.1); }
+        .ctrl-btn:hover { transform: scale(1.05); }
         .ctrl-btn:active { transform: scale(0.95); }
         .ctrl-btn.mic { background: #4ecca3; }
         .ctrl-btn.mic.off { background: #e94560; }
         .ctrl-btn.cam { background: #4ecca3; }
         .ctrl-btn.cam.off { background: #e94560; }
-        .ctrl-btn.hangup { background: #e94560; width: 64px; height: 64px; font-size: 1.5em; }
+        .ctrl-btn.hangup { background: #e94560; }
         .ctrl-btn.hangup:hover { background: #ff6b6b; }
 
         .error-banner {
@@ -155,22 +138,15 @@
                 bottom: 8px;
                 right: 8px;
             }
-            .ctrl-btn { width: 46px; height: 46px; font-size: 1.1em; }
-            .ctrl-btn.hangup { width: 56px; height: 56px; }
         }
     </style>
 </head>
 <body>
-    <div class="status-bar" id="statusBar">
-        Connecting to room <span class="room-id" id="roomDisplay">...</span>
-    </div>
-
     <div class="error-banner" id="errorBanner"></div>
 
     <div class="videos">
         <div class="video-container main-video">
             <video id="remoteVideo" autoplay playsinline></video>
-            <div class="video-label">Peer</div>
             <div class="waiting-overlay hidden" id="waitingOverlay">
                 <div class="waiting-spinner"></div>
                 <div class="waiting-text" id="waitingText">Waiting for peer...</div>
@@ -178,16 +154,15 @@
             <!-- PiP: локальное видео в углу (тап — смена угла) -->
             <div class="pip-container pip-br" id="pipContainer">
                 <video id="localVideo" autoplay muted playsinline></video>
-                <div class="video-label">You</div>
+                <div class="pip-controls" id="pipControls">
+                    <button class="ctrl-btn mic" id="micBtn" title="Mic">Mic</button>
+                    <button class="ctrl-btn hangup" id="hangupBtn" title="Close">Close</button>
+                    <button class="ctrl-btn cam" id="camBtn" title="Cam">Cam</button>
+                </div>
             </div>
         </div>
     </div>
 
-    <div class="controls">
-        <button class="ctrl-btn mic" id="micBtn" title="Microphone">🎤</button>
-        <button class="ctrl-btn hangup" id="hangupBtn" title="Hang up">📞</button>
-        <button class="ctrl-btn cam" id="camBtn" title="Camera">📷</button>
-    </div>
 
     <script>
         // ============= Конфигурация =============
@@ -198,8 +173,6 @@
         // ============= Элементы UI =============
         var localVideo = document.getElementById('localVideo');
         var remoteVideo = document.getElementById('remoteVideo');
-        var statusBar = document.getElementById('statusBar');
-        var roomDisplay = document.getElementById('roomDisplay');
         var waitingOverlay = document.getElementById('waitingOverlay');
         var waitingText = document.getElementById('waitingText');
         var errorBanner = document.getElementById('errorBanner');
@@ -236,7 +209,8 @@
         var pipCorner = 0;
         var pipContainer = document.getElementById('pipContainer');
         pipContainer.addEventListener('click', function(e) {
-            e.stopPropagation();
+            // Не переключаем угол при клике на кнопки
+            if (e.target.closest('.pip-controls')) return;
             pipCorner = (pipCorner + 1) % pipCorners.length;
             pipCorners.forEach(function(c) { pipContainer.classList.remove(c); });
             pipContainer.classList.add(pipCorners[pipCorner]);
@@ -245,7 +219,6 @@
         if (!roomID) {
             showError('No room ID specified. URL: /videocall.html?room=ROOM_ID');
         } else {
-            roomDisplay.textContent = roomID;
             init();
         }
 
@@ -260,7 +233,8 @@
                 localVideo.srcObject = localStream;
 
                 // Пробуем создать комнату
-                isCreator = await tryCreateRoom();
+                var createResult = await tryCreateRoom();
+                isCreator = createResult.created;
 
                 if (isCreator) {
                     myPeerID = 'host';
@@ -300,9 +274,11 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ room: roomID })
                 });
-                return resp.ok;
+                if (!resp.ok) return { created: false };
+                var data = await resp.json();
+                return { created: data.status === 'created' };
             } catch (e) {
-                return false;
+                return { created: false };
             }
         }
 
@@ -347,11 +323,30 @@
                     '&peer=' + encodeURIComponent(remotePeerID) +
                     '&after=' + afterIndex);
                 if (!resp.ok) return [];
-                var data = await resp.json();
-                return data.chunks || [];
+                var buf = await resp.arrayBuffer();
+                return parseChunksBinary(buf);
             } catch (e) {
                 return [];
             }
+        }
+
+        // Парсинг бинарного формата: count|index|size|data|...
+        function parseChunksBinary(buf) {
+            var chunks = [];
+            var view = new DataView(buf);
+            var offset = 0;
+            if (buf.byteLength < 4) return chunks;
+            var count = view.getUint32(offset); offset += 4;
+            for (var i = 0; i < count; i++) {
+                if (offset + 8 > buf.byteLength) break;
+                var index = view.getUint32(offset); offset += 4;
+                var size = view.getUint32(offset); offset += 4;
+                if (offset + size > buf.byteLength) break;
+                var data = buf.slice(offset, offset + size);
+                offset += size;
+                chunks.push({ index: index, data: data });
+            }
+            return chunks;
         }
 
         async function endCall() {
@@ -363,10 +358,6 @@
         // ============= Звонок =============
         function startCall() {
             isActive = true;
-
-            // Обновляем UI
-            statusBar.innerHTML = 'Connected — room <span class="room-id">' + roomID + '</span>';
-            statusBar.classList.add('connected');
 
             // Настройка MSE для удалённого видео
             setupMSE();
@@ -477,7 +468,7 @@
                 var chunk = chunks[i];
                 if (chunk.index > lastReceivedIndex) {
                     lastReceivedIndex = chunk.index;
-                    // Сохраняем чанк в любом случае — обработаем когда MSE будет готов
+                    // Данные уже бинарные — сразу в очередь
                     mseQueue.push(chunk.data);
                 }
             }
@@ -571,7 +562,8 @@
                 track.enabled = audioEnabled;
             });
             micBtn.classList.toggle('off', !audioEnabled);
-            micBtn.textContent = audioEnabled ? '🎤' : '🔇';
+            micBtn.textContent = audioEnabled ? 'Mic' : 'Muted';
+            updateControlsVisibility();
         });
 
         camBtn.addEventListener('click', function() {
@@ -581,12 +573,22 @@
                 track.enabled = videoEnabled;
             });
             camBtn.classList.toggle('off', !videoEnabled);
-            camBtn.textContent = videoEnabled ? '📷' : '📵';
+            camBtn.textContent = videoEnabled ? 'Cam' : 'Off';
+            updateControlsVisibility();
         });
 
         hangupBtn.addEventListener('click', function() {
             hangup();
         });
+
+        function updateControlsVisibility() {
+            var pipControls = document.getElementById('pipControls');
+            if (micBtn.classList.contains('off') || camBtn.classList.contains('off')) {
+                pipControls.classList.add('has-off');
+            } else {
+                pipControls.classList.remove('has-off');
+            }
+        }
 
         function hangup() {
             isActive = false;
@@ -611,9 +613,6 @@
             }
 
             endCall();
-
-            statusBar.textContent = 'Call ended';
-            statusBar.classList.remove('connected');
 
             setTimeout(function() { window.close(); }, 1500);
         }

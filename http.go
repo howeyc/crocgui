@@ -352,6 +352,12 @@ func (h *WebDAVWithDirectoryListing) serveDirectoryListing(w http.ResponseWriter
 			background-color: #004494;
 		}
 
+		@keyframes pulse {
+			0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(233,69,96,0.7); }
+			50% { transform: scale(1.1); box-shadow: 0 0 12px 4px rgba(233,69,96,0.5); }
+			100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(233,69,96,0.7); }
+		}
+
 		/* Медиа-запрос для мобильных устройств */
 		@media (max-width: 768px) {
 			body {
@@ -470,7 +476,8 @@ func (h *WebDAVWithDirectoryListing) serveDirectoryListing(w http.ResponseWriter
 		<div class="chat-input-container">
 			<input type="text" class="chat-input" id="chatInput" placeholder="Type a message...">
 			<button class="chat-send-btn" id="chatSendBtn">Send</button>
-			<button class="chat-send-btn" id="chatCallBtn" style="background-color:#28a745;padding:6px 10px;" title="Video Call">📹</button>
+			<button class="chat-send-btn" id="chatCallBtn" style="background-color:#28a745;padding:6px 10px;" title="Video Call">Call</button>
+			<button class="chat-send-btn" id="chatAnswerBtn" style="display:none;background-color:#e94560;padding:6px 10px;animation:pulse 1.5s infinite;" title="Answer Video Call">Answer</button>
 		</div>
 	</div>
 
@@ -496,6 +503,8 @@ func (h *WebDAVWithDirectoryListing) serveDirectoryListing(w http.ResponseWriter
 			return sender === currentUserId;
 		}
 
+		let answerTimeout = null;
+
 		// Отображение сообщения
 		function displayMessage(msg) {
 			const msgDiv = document.createElement('div');
@@ -520,6 +529,50 @@ func (h *WebDAVWithDirectoryListing) serveDirectoryListing(w http.ResponseWriter
 
 			chatMessages.appendChild(msgDiv);
 			chatMessages.scrollTop = chatMessages.scrollHeight;
+
+			// Проверяем, является ли сообщение входящим звонком
+			if (!isOwnMessage(msg.sender)) {
+				var callMatch = msg.text.match(/📤 Video call: (\/videocall\S+)/);
+				if (callMatch) {
+					var callUrl = callMatch[1];
+					// Проверяем что звонок свежий (не старше 30 секунд)
+					var msgTime = new Date(msg.timestamp).getTime();
+					var now = Date.now();
+					if (now - msgTime < 30000) {
+						showAnswerButton(callUrl);
+					}
+				}
+			}
+		}
+
+		function showAnswerButton(callUrl) {
+			var chatAnswerBtn = document.getElementById('chatAnswerBtn');
+			chatAnswerBtn.style.display = 'inline-block';
+
+			// Очищаем предыдущий таймер
+			if (answerTimeout) clearTimeout(answerTimeout);
+
+			// Автоскрытие через 30 секунд
+			answerTimeout = setTimeout(function() {
+				chatAnswerBtn.style.display = 'none';
+			}, 30000);
+
+			// Обработчик клика — только если ещё не привязан
+			if (!chatAnswerBtn.dataset.bound) {
+				chatAnswerBtn.dataset.bound = 'true';
+				chatAnswerBtn.addEventListener('click', function() {
+					if (answerTimeout) clearTimeout(answerTimeout);
+					chatAnswerBtn.style.display = 'none';
+					window.open(callUrl, '_blank');
+				});
+			} else {
+				// Обновляем URL для нового звонка
+				chatAnswerBtn.onclick = function() {
+					if (answerTimeout) clearTimeout(answerTimeout);
+					chatAnswerBtn.style.display = 'none';
+					window.open(callUrl, '_blank');
+				};
+			}
 		}
 
 		// Загрузка сообщений
@@ -590,18 +643,18 @@ func (h *WebDAVWithDirectoryListing) serveDirectoryListing(w http.ResponseWriter
 		const chatCallBtn = document.getElementById('chatCallBtn');
 		chatCallBtn.addEventListener('click', function() {
 			const roomId = 'call_' + Math.random().toString(36).substr(2, 8);
-			// Отправляем ссылку в чат
-			const callUrl = window.location.origin + '/videocall.html?room=' + roomId;
+			// Отправляем относительную ссылку в чат
+			const callUrl = '/videocall.html?room=' + roomId;
 			fetch('/api/messages', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
-					text: '📹 Video call: ' + callUrl,
+					text: '📤 Video call: ' + callUrl,
 					sender: currentUserId
 				})
 			}).then(function() {
 				// Открываем видеозвонок в новой вкладке
-				window.open('/videocall.html?room=' + roomId, '_blank');
+				window.open(callUrl, '_blank');
 				loadMessages();
 			});
 		});

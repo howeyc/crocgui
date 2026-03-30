@@ -3,6 +3,7 @@ package main
 
 import (
 	_ "embed"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -52,10 +53,14 @@ const (
 	maxChunkSize     = 1 << 20 // 1 MB максимальный размер чанка
 )
 
-// createRoom создаёт новую комнату видеозвонка
-func (vs *VideoCallStorage) createRoom(roomID string) *VideoCallRoom {
+// createRoom создаёт новую комнату видеозвонка или возвращает ошибку если комната уже существует
+func (vs *VideoCallStorage) createRoom(roomID string) (*VideoCallRoom, error) {
 	vs.mu.Lock()
 	defer vs.mu.Unlock()
+
+	if _, exists := vs.rooms[roomID]; exists {
+		return nil, fmt.Errorf("room already exists")
+	}
 
 	room := &VideoCallRoom{
 		ID:          roomID,
@@ -66,7 +71,7 @@ func (vs *VideoCallStorage) createRoom(roomID string) *VideoCallRoom {
 		WaitingChan: make(chan struct{}),
 	}
 	vs.rooms[roomID] = room
-	return room
+	return room, nil
 }
 
 // getRoom возвращает комнату по ID
@@ -176,10 +181,20 @@ func handleCallCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	room := callStore.createRoom(req.Room)
+	room, err := callStore.createRoom(req.Room)
+	if err != nil {
+		// Комната уже существует — значит мы не создатель, а присоединяющийся
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"status": "already_exists",
+			"room":   req.Room,
+		})
+		return
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
+		"status":    "created",
 		"room":      room.ID,
 		"createdAt": room.CreatedAt,
 	})
@@ -323,10 +338,7 @@ func handleCallChunkGet(w http.ResponseWriter, r *http.Request) {
 	// Пытаемся получить чанки сразу
 	chunks := room.getChunksAfter(peerID, afterIndex)
 	if len(chunks) > 0 {
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"chunks": chunks,
-		})
+		writeChunksBinary(w, chunks)
 		return
 	}
 
@@ -340,17 +352,12 @@ func handleCallChunkGet(w http.ResponseWriter, r *http.Request) {
 		case <-ticker.C:
 			chunks = room.getChunksAfter(peerID, afterIndex)
 			if len(chunks) > 0 {
-				w.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(w).Encode(map[string]interface{}{
-					"chunks": chunks,
-				})
+				writeChunksBinary(w, chunks)
 				return
 			}
 		case <-deadline:
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"chunks": []VideoChunk{},
-			})
+			// Пустой ответ — 0 чанков
+			writeChunksBinary(w, nil)
 			return
 		case <-r.Context().Done():
 			return
@@ -398,6 +405,24 @@ func handleCallAPI(w http.ResponseWriter, r *http.Request) {
 		handleCallEnd(w, r)
 	default:
 		http.NotFound(w, r)
+	}
+}
+
+// writeChunksBinary записывает чанки в бинарном формате:
+// [4 байта: count (uint32 BE)]
+// для каждого чанка:
+//
+//	[4 байта: index (uint32 BE)]
+//	[4 байта: size (uint32 BE)]
+//	[N байт: data (raw binary)]
+func writeChunksBinary(w http.ResponseWriter, chunks []VideoChunk) {
+	w.Header().Set("Content-Type", "application/octet-stream")
+	count := uint32(len(chunks))
+	binary.Write(w, binary.BigEndian, count)
+	for _, chunk := range chunks {
+		binary.Write(w, binary.BigEndian, uint32(chunk.Index))
+		binary.Write(w, binary.BigEndian, uint32(len(chunk.Data)))
+		w.Write(chunk.Data)
 	}
 }
 
