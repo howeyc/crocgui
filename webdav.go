@@ -273,6 +273,18 @@ func (s *WebDAVServer) handlerRouter(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Обработка API видеозвонков
+	if strings.HasPrefix(r.URL.Path, "/api/call/") {
+		handleCallAPI(w, r)
+		return
+	}
+
+	// Отдача страницы видеозвонка
+	if r.URL.Path == "/videocall.html" {
+		serveVideoCallHTML(w, r)
+		return
+	}
+
 	s.mu.RLock()
 	handler := s.localHandler
 	s.mu.RUnlock()

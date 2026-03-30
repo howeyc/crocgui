@@ -470,6 +470,7 @@ func (h *WebDAVWithDirectoryListing) serveDirectoryListing(w http.ResponseWriter
 		<div class="chat-input-container">
 			<input type="text" class="chat-input" id="chatInput" placeholder="Type a message...">
 			<button class="chat-send-btn" id="chatSendBtn">Send</button>
+			<button class="chat-send-btn" id="chatCallBtn" style="background-color:#28a745;padding:6px 10px;" title="Video Call">📹</button>
 		</div>
 	</div>
 
@@ -584,6 +585,26 @@ func (h *WebDAVWithDirectoryListing) serveDirectoryListing(w http.ResponseWriter
 
 		// Начальная загрузка
 		loadMessages();
+
+		// Видеозвонок
+		const chatCallBtn = document.getElementById('chatCallBtn');
+		chatCallBtn.addEventListener('click', function() {
+			const roomId = 'call_' + Math.random().toString(36).substr(2, 8);
+			// Отправляем ссылку в чат
+			const callUrl = window.location.origin + '/videocall.html?room=' + roomId;
+			fetch('/api/messages', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					text: '📹 Video call: ' + callUrl,
+					sender: currentUserId
+				})
+			}).then(function() {
+				// Открываем видеозвонок в новой вкладке
+				window.open('/videocall.html?room=' + roomId, '_blank');
+				loadMessages();
+			});
+		});
 	</script>
 </body>
 </html>`)
