@@ -39,22 +39,34 @@
             object-fit: contain;
             background: #000;
         }
-        .remote-tap-hint {
+        .remote-controls {
             position: absolute;
-            top: 50%;
+            top: 8px;
             left: 50%;
-            transform: translate(-50%, -50%);
-            background: rgba(0,0,0,0.7);
-            padding: 8px 16px;
-            border-radius: 8px;
-            font-size: 0.85em;
-            color: #ccc;
-            pointer-events: none;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 4px;
+            z-index: 15;
             opacity: 0;
             transition: opacity 0.3s;
-            z-index: 15;
         }
-        .remote-tap-hint.show { opacity: 1; }
+        @media (hover: hover) {
+            .video-container:hover > .remote-controls,
+            .remote-controls.has-off {
+                opacity: 1;
+            }
+        }
+        @media (hover: none), (max-width: 600px) {
+            .remote-controls {
+                opacity: 1;
+            }
+        }
+        .ctrl-btn.speaker { background: #4ecca3; }
+        .ctrl-btn.speaker.off { background: #e94560; }
+        .ctrl-btn.fullscreen { background: #4ecca3; }
+        .ctrl-btn.fullscreen.off { background: #e94560; }
+        .ctrl-btn.screen { background: #4ecca3; }
+        .ctrl-btn.screen.off { background: #e94560; }
         /* PiP: маленькое локальное видео в углу */
         .pip-container {
             position: absolute;
@@ -170,19 +182,12 @@
         }
 
         @media (max-width: 600px) {
-            .videos {
-                padding-bottom: 48px;
-            }
             .pip-container {
                 width: 30%;
                 height: auto;
                 aspect-ratio: 4/3;
                 min-width: 80px;
             }
-            .pip-container.pip-br { bottom: 56px; right: 8px; top: auto; left: auto; }
-            .pip-container.pip-bl { bottom: 56px; left: 8px; top: auto; right: auto; }
-            .pip-container.pip-tl { top: 8px; left: 8px; bottom: auto; right: auto; }
-            .pip-container.pip-tr { top: 8px; right: 8px; bottom: auto; left: auto; }
             .ctrl-btn {
                 height: 24px;
                 width: 24px;
@@ -197,7 +202,11 @@
     <div class="videos">
         <div class="video-container main-video">
             <video id="remoteVideo" autoplay playsinline></video>
-            <div class="remote-tap-hint" id="remoteTapHint"></div>
+            <div class="remote-controls" id="remoteControls">
+                <button class="ctrl-btn speaker" id="remoteMuteBtn" title="Remote Audio">🔈</button>
+                <button class="ctrl-btn fullscreen off" id="fullscreenBtn" title="Fullscreen">⬚</button>
+                <button class="ctrl-btn screen" id="remoteScreenBtn" title="Remote Video">💻</button>
+            </div>
             <div class="waiting-overlay hidden" id="waitingOverlay">
                 <div class="waiting-spinner"></div>
                 <div class="waiting-text" id="waitingText">Waiting for peer...</div>
@@ -221,19 +230,6 @@
         var POLL_INTERVAL_MS = 50;     // Интервал опроса сервера (мс)
         var MAX_BUFFER_SECONDS = 10;   // Максимальный буфер MSE в секундах
         var ALIVE_CHECK_MS = 3000;     // Интервал проверки активности пира
-        var PEER_TIMEOUT_SEC = 5;      // Таймаут отсутствия GET от пира
-
-        // Стандартные разрешения для тапа на remoteVideo (по убыванию)
-        var STD_RESOLUTIONS = [
-            { w: 1280, h: 720 },
-            { w: 854,  h: 480 },
-            { w: 640,  h: 480 },
-            { w: 640,  h: 360 },
-            { w: 426,  h: 240 },
-            { w: 320,  h: 240 },
-            { w: 160,  h: 120 },
-            { w: 0,    h: 0 },      // Скрытие видео
-        ];
 
         // ============= Элементы UI =============
         var localVideo = document.getElementById('localVideo');
@@ -244,7 +240,9 @@
         var micBtn = document.getElementById('micBtn');
         var camBtn = document.getElementById('camBtn');
         var hangupBtn = document.getElementById('hangupBtn');
-        var remoteTapHint = document.getElementById('remoteTapHint');
+        var remoteMuteBtn = document.getElementById('remoteMuteBtn');
+        var remoteScreenBtn = document.getElementById('remoteScreenBtn');
+        var fullscreenBtn = document.getElementById('fullscreenBtn');
 
         // ============= Состояние =============
         var params = new URLSearchParams(window.location.search);
@@ -271,8 +269,23 @@
         var mseCodec = '';           // Выбранный кодек
         var trimScheduled = false;   // Throttle для trimBuffer
 
-        // Индекс текущего разрешения remote (начинаем с W*0.8)
-        var currentResIdx = -1;
+        // Remote audio/video state
+        var remoteAudioOn = true;
+        var remoteVideoOn = true;
+
+        // ============= Fullscreen =============
+        function enterFullscreen() {
+            var el = document.documentElement;
+            if (el.requestFullscreen) el.requestFullscreen();
+            else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+            else if (el.msRequestFullscreen) el.msRequestFullscreen();
+        }
+
+        function exitFullscreen() {
+            if (document.exitFullscreen) document.exitFullscreen();
+            else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+            else if (document.msExitFullscreen) document.msExitFullscreen();
+        }
 
         // PiP: переключение углов по тапу
         var pipCorners = ['pip-br', 'pip-bl', 'pip-tl', 'pip-tr'];
@@ -285,61 +298,54 @@
             pipContainer.classList.add(pipCorners[pipCorner]);
         });
 
-        // Тап на remoteVideo → уменьшение разрешения
-        remoteVideo.addEventListener('click', function() {
-            if (!localStream) return;
-
-            // Находим текущий индекс или начинаем с 0
-            if (currentResIdx < 0) {
-                currentResIdx = 0;
+        // Fullscreen toggle button
+        fullscreenBtn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            if (document.fullscreenElement || document.webkitFullscreenElement) {
+                exitFullscreen();
             } else {
-                currentResIdx++;
-            }
-
-            if (currentResIdx >= STD_RESOLUTIONS.length) {
-                currentResIdx = STD_RESOLUTIONS.length - 1;
-            }
-
-            var res = STD_RESOLUTIONS[currentResIdx];
-
-            if (res.w === 0) {
-                // Скрываем видео (чёрный кадр)
-                localStream.getVideoTracks().forEach(function(track) {
-                    track.enabled = false;
-                });
-                videoEnabled = false;
-                camBtn.classList.add('off');
-                camBtn.textContent = '📷';
-                updateControlsVisibility();
-                showTapHint('Video off');
-            } else {
-                // Включаем видео если было выключено
-                localStream.getVideoTracks().forEach(function(track) {
-                    track.enabled = true;
-                    videoEnabled = true;
-                });
-                camBtn.classList.remove('off');
-                camBtn.textContent = '📷';
-
-                // Применяем новое разрешение
-                var track = localStream.getVideoTracks()[0];
-                if (track && track.applyConstraints) {
-                    track.applyConstraints({
-                        width: { ideal: res.w },
-                        height: { ideal: res.h }
-                    }).catch(function(e) {
-                        console.warn('applyConstraints error:', e);
-                    });
-                }
-                showTapHint(res.w + 'x' + res.h);
-                updateControlsVisibility();
+                enterFullscreen();
             }
         });
 
-        function showTapHint(text) {
-            remoteTapHint.textContent = text;
-            remoteTapHint.classList.add('show');
-            setTimeout(function() { remoteTapHint.classList.remove('show'); }, 1500);
+        // Синхронизация кнопки с реальным состоянием fullscreen
+        function syncFullscreenBtn() {
+            if (document.fullscreenElement || document.webkitFullscreenElement) {
+                fullscreenBtn.classList.remove('off');
+            } else {
+                fullscreenBtn.classList.add('off');
+            }
+        }
+        document.addEventListener('fullscreenchange', syncFullscreenBtn);
+        document.addEventListener('webkitfullscreenchange', syncFullscreenBtn);
+
+        // Remote controls: mute/unmute remote audio
+        remoteMuteBtn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            remoteAudioOn = !remoteAudioOn;
+            remoteVideo.muted = !remoteAudioOn;
+            remoteMuteBtn.classList.toggle('off', !remoteAudioOn);
+            remoteMuteBtn.textContent = '🔈';
+            updateRemoteControlsVisibility();
+        });
+
+        // Remote controls: show/hide remote video
+        remoteScreenBtn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            remoteVideoOn = !remoteVideoOn;
+            remoteVideo.style.visibility = remoteVideoOn ? 'visible' : 'hidden';
+            remoteScreenBtn.classList.toggle('off', !remoteVideoOn);
+            remoteScreenBtn.textContent = '💻';
+            updateRemoteControlsVisibility();
+        });
+
+        function updateRemoteControlsVisibility() {
+            var rc = document.getElementById('remoteControls');
+            if (remoteMuteBtn.classList.contains('off') || remoteScreenBtn.classList.contains('off')) {
+                rc.classList.add('has-off');
+            } else {
+                rc.classList.remove('has-off');
+            }
         }
 
         if (!roomID) {
@@ -362,10 +368,12 @@
                     audio: true
                 });
 
-                // Находим ближайший STD_RESOLUTIONS для currentResIdx
-                initResIdx(localStream);
-
                 localVideo.srcObject = localStream;
+
+                // Fullscreen: на мобильной убирает панели Chrome
+                if ('ontouchstart' in window) {
+                    enterFullscreen();
+                }
 
                 // Пробуем создать комнату
                 var createResult = await tryCreateRoom();
@@ -399,24 +407,6 @@
                     showError('Error: ' + err.message);
                 }
             }
-        }
-
-        // Определяем начальный индекс в STD_RESOLUTIONS по реальному разрешению
-        function initResIdx(stream) {
-            var track = stream.getVideoTracks()[0];
-            if (!track) return;
-            var settings = track.getSettings();
-            var rw = settings.width || 640;
-            var rh = settings.height || 480;
-
-            // Ищем ближайшее меньшее или равное в STD_RESOLUTIONS
-            currentResIdx = 0;
-            for (var i = 0; i < STD_RESOLUTIONS.length; i++) {
-                if (STD_RESOLUTIONS[i].w >= rw) {
-                    currentResIdx = i;
-                }
-            }
-            console.log('Initial res idx: ' + currentResIdx + ' (' + rw + 'x' + rh + ')');
         }
 
         // ============= API =============
@@ -547,7 +537,7 @@
             remoteVideo.src = URL.createObjectURL(mediaSource);
 
             mediaSource.addEventListener('sourceopen', function() {
-                var actualCodec = mediaRecorder ? mediaRecorder.mimeType : mseCodec;
+                var actualCodec = mseCodec;
                 console.log('MSE: sourceopen, codec:', actualCodec);
 
                 try {
@@ -782,6 +772,7 @@
             }
 
             endCall();
+            exitFullscreen();
 
             setTimeout(function() { window.close(); }, 1500);
         }
@@ -799,6 +790,7 @@
             if (localStream) {
                 localStream.getTracks().forEach(function(track) { track.stop(); });
             }
+            exitFullscreen();
             endCall();
         });
     </script>
