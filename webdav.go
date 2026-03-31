@@ -309,6 +309,12 @@ func (s *WebDAVServer) Start(addr, root string, useTLS bool, addrs ...string) er
 		}
 		s.stopLocked()
 	}
+
+	// Создаём корневой каталог если не существует
+	if err := os.MkdirAll(root, 0700); err != nil {
+		log.Warnf("WebDAV: failed to create root directory %s: %v", root, err)
+	}
+
 	caffeinate(1)
 	s.useTLS = useTLS
 
@@ -768,6 +774,11 @@ func (s *WebDAVServer) DisableTCPForwarding() {
 func (s *WebDAVServer) startLocked() error {
 	if s.active {
 		return nil // Уже запущен
+	}
+
+	// Создаём корневой каталог если не существует
+	if err := os.MkdirAll(s.root, 0700); err != nil {
+		log.Warnf("WebDAV: failed to create root directory %s: %v", s.root, err)
 	}
 
 	// Создаем локальный handler

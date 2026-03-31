@@ -189,9 +189,9 @@
                 min-width: 80px;
             }
             .ctrl-btn {
-                height: 24px;
-                width: 24px;
-                font-size: 0.65em;
+                height: 36px;
+                width: 36px;
+                font-size: 1em;
             }
         }
     </style>
@@ -212,7 +212,7 @@
                 <div class="waiting-text" id="waitingText">Waiting for peer...</div>
             </div>
             <!-- PiP: локальное видео QVGA в углу (тап — смена угла) -->
-            <div class="pip-container pip-br" id="pipContainer">
+            <div class="pip-container pip-tl" id="pipContainer">
                 <video id="localVideo" autoplay muted playsinline></video>
                 <div class="pip-controls" id="pipControls">
                     <button class="ctrl-btn mic" id="micBtn" title="Mic">🎤</button>
@@ -273,23 +273,9 @@
         var remoteAudioOn = true;
         var remoteVideoOn = true;
 
-        // ============= Fullscreen =============
-        function enterFullscreen() {
-            var el = document.documentElement;
-            if (el.requestFullscreen) el.requestFullscreen();
-            else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
-            else if (el.msRequestFullscreen) el.msRequestFullscreen();
-        }
-
-        function exitFullscreen() {
-            if (document.exitFullscreen) document.exitFullscreen();
-            else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
-            else if (document.msExitFullscreen) document.msExitFullscreen();
-        }
-
         // PiP: переключение углов по тапу
         var pipCorners = ['pip-br', 'pip-bl', 'pip-tl', 'pip-tr'];
-        var pipCorner = 0;
+        var pipCorner = 2; // начинаем с pip-tl (верхний левый)
         var pipContainer = document.getElementById('pipContainer');
         pipContainer.addEventListener('click', function(e) {
             if (e.target.closest('.pip-controls')) return;
@@ -298,7 +284,18 @@
             pipContainer.classList.add(pipCorners[pipCorner]);
         });
 
-        // Fullscreen toggle button
+        // Fullscreen toggle
+        function enterFullscreen() {
+            var el = document.documentElement;
+            if (el.requestFullscreen) el.requestFullscreen();
+            else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+        }
+
+        function exitFullscreen() {
+            if (document.exitFullscreen) document.exitFullscreen();
+            else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+        }
+
         fullscreenBtn.addEventListener('click', function(e) {
             e.stopPropagation();
             if (document.fullscreenElement || document.webkitFullscreenElement) {
@@ -308,7 +305,6 @@
             }
         });
 
-        // Синхронизация кнопки с реальным состоянием fullscreen
         function syncFullscreenBtn() {
             if (document.fullscreenElement || document.webkitFullscreenElement) {
                 fullscreenBtn.classList.remove('off');
@@ -369,11 +365,6 @@
                 });
 
                 localVideo.srcObject = localStream;
-
-                // Fullscreen: на мобильной убирает панели Chrome
-                if ('ontouchstart' in window) {
-                    enterFullscreen();
-                }
 
                 // Пробуем создать комнату
                 var createResult = await tryCreateRoom();
@@ -772,7 +763,6 @@
             }
 
             endCall();
-            exitFullscreen();
 
             setTimeout(function() { window.close(); }, 1500);
         }
@@ -790,7 +780,6 @@
             if (localStream) {
                 localStream.getTracks().forEach(function(track) { track.stop(); });
             }
-            exitFullscreen();
             endCall();
         });
     </script>
