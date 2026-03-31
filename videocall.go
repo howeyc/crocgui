@@ -11,6 +11,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	log "github.com/schollz/logger"
 )
 
 //go:embed videocall.html
@@ -37,6 +39,16 @@ type VideoCallRoom struct {
 
 	// Для уведомления о входящем звонке
 	WaitingChan chan struct{} // закрывается когда второй участник подключился
+
+	// Согласование кодеков
+	CreatorCodecs   []string
+	NegotiatedCodec string
+
+	// Разрешение для адаптивного качества
+	CreatorWidth  int
+	CreatorHeight int
+	GuestWidth    int
+	GuestHeight   int
 
 	mu sync.Mutex
 }
@@ -175,7 +187,10 @@ func handleCallCreate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		Room string `json:"room"`
+		Room   string   `json:"room"`
+		Codecs []string `json:"codecs"`
+		Width  int      `json:"width"`
+		Height int      `json:"height"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request", http.StatusBadRequest)
@@ -196,6 +211,13 @@ func handleCallCreate(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
+
+	// Сохраняем кодеки и разрешение создателя
+	room.mu.Lock()
+	room.CreatorCodecs = req.Codecs
+	room.CreatorWidth = req.Width
+	room.CreatorHeight = req.Height
+	room.mu.Unlock()
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
@@ -227,9 +249,18 @@ func handleCallWait(w http.ResponseWriter, r *http.Request) {
 	// Ждём до 30 секунд пока подключится второй участник
 	select {
 	case <-room.WaitingChan:
+		room.mu.Lock()
+		codec := room.NegotiatedCodec
+		gw := room.GuestWidth
+		gh := room.GuestHeight
+		room.mu.Unlock()
+
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"status": "joined",
+			"codec":  codec,
+			"width":  gw,
+			"height": gh,
 		})
 	case <-time.After(30 * time.Second):
 		w.Header().Set("Content-Type", "application/json")
@@ -249,7 +280,10 @@ func handleCallJoin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		Room string `json:"room"`
+		Room   string   `json:"room"`
+		Codecs []string `json:"codecs"`
+		Width  int      `json:"width"`
+		Height int      `json:"height"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request", http.StatusBadRequest)
@@ -266,13 +300,49 @@ func handleCallJoin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Согласовываем кодек: находим первый кодек создателя, который поддерживает гость
+	room.mu.Lock()
+	negotiatedCodec := ""
+	if len(room.CreatorCodecs) > 0 && len(req.Codecs) > 0 {
+		for _, cc := range room.CreatorCodecs {
+			for _, gc := range req.Codecs {
+				if cc == gc {
+					negotiatedCodec = cc
+					break
+				}
+			}
+			if negotiatedCodec != "" {
+				break
+			}
+		}
+	}
+	if negotiatedCodec != "" {
+		room.NegotiatedCodec = negotiatedCodec
+	}
+	room.mu.Unlock()
+
+	log.Debugf("Codec negotiation: creator=%v guest=%v negotiated=%s", room.CreatorCodecs, req.Codecs, negotiatedCodec)
+
 	// Уведомляем инициатора
 	room.notifyPeerJoined()
+
+	// Сохраняем разрешение гостя и возвращаем разрешение создателя
+	room.mu.Lock()
+	room.GuestWidth = req.Width
+	room.GuestHeight = req.Height
+	cw := room.CreatorWidth
+	ch := room.CreatorHeight
+	room.mu.Unlock()
+
+	log.Debugf("Resolution: creator=%dx%d guest=%dx%d", cw, ch, req.Width, req.Height)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"status": "joined",
 		"room":   room.ID,
+		"codec":  negotiatedCodec,
+		"width":  cw,
+		"height": ch,
 	})
 }
 

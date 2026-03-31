@@ -266,8 +266,18 @@
         var sourceBuffer = null;
         var mseQueue = [];           // Очередь чанков для appendBuffer
         var mseReady = false;        // MediaSource готов к приёму данных
-        var mseCodec = '';           // Выбранный кодек
+        var negotiatedCodec = '';    // Согласованный кодек
         var trimScheduled = false;   // Throttle для trimBuffer
+        var firstAppendDone = false; // Для play() после первого append
+
+        // Диагностические счётчики
+        var diagSentChunks = 0;
+        var diagSentBytes = 0;
+        var diagRecvChunks = 0;
+        var diagRecvBytes = 0;
+        var diagMSEAppends = 0;
+        var diagMSEErrors = 0;
+        var diagLastLogTime = 0;
 
         // Remote audio/video state
         var remoteAudioOn = true;
@@ -350,6 +360,91 @@
             init();
         }
 
+        // ============= Диагностическое логирование (раскомментировать для отладки) =============
+        function diagLog(msg) {}
+        /*
+        function diagLog(msg) {
+            console.log('[DIAG] ' + msg);
+            try {
+                fetch('/api/messages', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text: '🔧[' + myPeerID + '] ' + msg, sender: 'vc_' + roomID })
+                });
+            } catch (e) {}
+        }
+        */
+
+        function diagStats() {
+            if (!isActive) return;
+            var bufInfo = 'none';
+            try {
+                if (remoteVideo.buffered && remoteVideo.buffered.length > 0) {
+                    var s = remoteVideo.buffered.start(0);
+                    var e = remoteVideo.buffered.end(remoteVideo.buffered.length - 1);
+                    bufInfo = (e - s).toFixed(1) + 's [' + s.toFixed(1) + '-' + e.toFixed(1) + ']';
+                }
+            } catch (e) {}
+            var sbState = sourceBuffer ? (sourceBuffer.updating ? 'updating' : 'ready') : 'null';
+            var ct = remoteVideo.currentTime.toFixed(1);
+            var paused = remoteVideo.paused ? ' PAUSED' : '';
+            var waiting = remoteVideo.readyState < 3 ? ' WAITING' : '';
+            diagLog('STAT sent:' + diagSentChunks + '(' + (diagSentBytes / 1024).toFixed(0) + 'KB) ' +
+                'recv:' + diagRecvChunks + '(' + (diagRecvBytes / 1024).toFixed(0) + 'KB) ' +
+                'appends:' + diagMSEAppends + ' errs:' + diagMSEErrors + ' ' +
+                'q:' + mseQueue.length + ' sb:' + sbState + ' buf:' + bufInfo +
+                ' ct:' + ct + paused + waiting);
+        }
+
+        setInterval(function() { diagStats(); }, 10000);
+
+        // Периодическая проверка: если currentTime отстаёт от буфера — прыгнуть вперёд
+        setInterval(function() {
+            if (!isActive || !mseReady) return;
+            try {
+                if (remoteVideo.buffered && remoteVideo.buffered.length > 0) {
+                    var bufEnd = remoteVideo.buffered.end(remoteVideo.buffered.length - 1);
+                    var ct = remoteVideo.currentTime;
+                    var bufStart = remoteVideo.buffered.start(0);
+
+                    // Если currentTime вне буфера (отстаёт более чем на 3 сек) — прыгнуть
+                    if (ct < bufStart - 0.5 || bufEnd - ct > 8) {
+                        var newTime = bufEnd - 2;
+                        diagLog('SEEK ct=' + ct.toFixed(1) + ' -> ' + newTime.toFixed(1) + ' buf=[' + bufStart.toFixed(1) + '-' + bufEnd.toFixed(1) + ']');
+                        remoteVideo.currentTime = newTime;
+                        if (remoteVideo.paused) {
+                            remoteVideo.play().catch(function(){});
+                        }
+                    }
+                }
+            } catch (e) {}
+        }, 3000);
+
+        // ============= Определение поддерживаемых кодеков =============
+        var ALL_CODECS = [
+            'video/webm;codecs="vp8,opus"',
+            'video/webm;codecs="vp9,opus"',
+            'video/webm;codecs="vp8"',
+            'video/webm;codecs="vp9"',
+            'video/webm',
+            'video/mp4;codecs="avc1.42E01E,mp4a.40.2"',
+            'video/mp4'
+        ];
+
+        function detectSupportedCodecs() {
+            var supported = [];
+            for (var i = 0; i < ALL_CODECS.length; i++) {
+                var c = ALL_CODECS[i];
+                if (MediaSource.isTypeSupported(c) &&
+                    (typeof MediaRecorder === 'undefined' || MediaRecorder.isTypeSupported(c))) {
+                    supported.push(c);
+                }
+            }
+            if (supported.length === 0) supported.push('video/webm;codecs="vp8,opus"');
+            console.log('Supported codecs:', supported);
+            return supported;
+        }
+
         // ============= Инициализация =============
         async function init() {
             try {
@@ -366,9 +461,14 @@
 
                 localVideo.srcObject = localStream;
 
+                // Определяем поддерживаемые кодеки до создания/подключения к комнате
+                var myCodecs = detectSupportedCodecs();
+
                 // Пробуем создать комнату
-                var createResult = await tryCreateRoom();
+                var createResult = await tryCreateRoom(myCodecs, W, H);
                 isCreator = createResult.created;
+
+                diagLog('INIT peer=' + (isCreator ? 'host' : 'guest') + ' codec=' + (negotiatedCodec || 'pending') + ' cam=' + W + 'x' + H);
 
                 if (isCreator) {
                     myPeerID = 'host';
@@ -380,11 +480,29 @@
                         showError('Peer did not join within 30 seconds');
                         return;
                     }
+                    // Получаем согласованный кодек от wait-ответа
+                    if (joined.codec) {
+                        negotiatedCodec = joined.codec;
+                        diagLog('CODEC negotiated=' + negotiatedCodec);
+                    }
+                    // Адаптивное разрешение: min(моё, пира)
+                    if (joined.width && joined.height) {
+                        await applyMinResolution(W, H, joined.width, joined.height);
+                    }
                     waitingOverlay.classList.add('hidden');
                 } else {
                     myPeerID = 'guest';
                     remotePeerID = 'host';
-                    await joinRoom();
+                    var joinResult = await joinRoom(myCodecs, W, H);
+                    // Получаем согласованный кодек от join-ответа
+                    if (joinResult && joinResult.codec) {
+                        negotiatedCodec = joinResult.codec;
+                        diagLog('CODEC negotiated=' + negotiatedCodec);
+                    }
+                    // Адаптивное разрешение: min(моё, пира)
+                    if (joinResult && joinResult.width && joinResult.height) {
+                        await applyMinResolution(W, H, joinResult.width, joinResult.height);
+                    }
                 }
 
                 startCall();
@@ -401,12 +519,12 @@
         }
 
         // ============= API =============
-        async function tryCreateRoom() {
+        async function tryCreateRoom(codecs, width, height) {
             try {
                 var resp = await fetch('/api/call/create', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ room: roomID })
+                    body: JSON.stringify({ room: roomID, codecs: codecs, width: width, height: height })
                 });
                 if (!resp.ok) return { created: false };
                 var data = await resp.json();
@@ -421,22 +539,24 @@
                 var resp = await fetch('/api/call/wait?room=' + encodeURIComponent(roomID));
                 if (!resp.ok) return false;
                 var data = await resp.json();
-                return data.status === 'joined';
+                if (data.status === 'joined') return data;
+                return false;
             } catch (e) {
                 return false;
             }
         }
 
-        async function joinRoom() {
+        async function joinRoom(codecs, width, height) {
             try {
                 var resp = await fetch('/api/call/join', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ room: roomID })
+                    body: JSON.stringify({ room: roomID, codecs: codecs, width: width, height: height })
                 });
-                return resp.ok;
+                if (!resp.ok) return null;
+                return await resp.json();
             } catch (e) {
-                return false;
+                return null;
             }
         }
 
@@ -446,6 +566,8 @@
                     method: 'POST',
                     body: buffer
                 });
+                diagSentChunks++;
+                diagSentBytes += buffer.byteLength;
             } catch (e) {
                 console.error('Send chunk error:', e);
             }
@@ -503,6 +625,28 @@
             } catch (e) {}
         }
 
+        // ============= Адаптивное разрешение =============
+        async function applyMinResolution(myW, myH, peerW, peerH) {
+            var newW = Math.min(myW, peerW);
+            var newH = Math.min(myH, peerH);
+            diagLog('RES min(' + myW + 'x' + myH + ', ' + peerW + 'x' + peerH + ') = ' + newW + 'x' + newH);
+            if (newW < myW || newH < myH) {
+                var videoTracks = localStream.getVideoTracks();
+                if (videoTracks.length > 0) {
+                    try {
+                        await videoTracks[0].applyConstraints({
+                            width: { ideal: newW },
+                            height: { ideal: newH }
+                        });
+                        var settings = videoTracks[0].getSettings();
+                        diagLog('RES applied ' + settings.width + 'x' + settings.height);
+                    } catch (e) {
+                        diagLog('RES apply failed: ' + e.message);
+                    }
+                }
+            }
+        }
+
         // ============= Звонок =============
         function startCall() {
             isActive = true;
@@ -522,17 +666,18 @@
 
         // ============= MSE: Media Source Extensions =============
         function setupMSE() {
-            mseCodec = detectCodec();
+            // Используем согласованный кодек, fallback на detectCodec()
+            var codec = negotiatedCodec || detectCodec();
+            console.log('MSE using codec:', codec);
 
             mediaSource = new MediaSource();
             remoteVideo.src = URL.createObjectURL(mediaSource);
 
             mediaSource.addEventListener('sourceopen', function() {
-                var actualCodec = mseCodec;
-                console.log('MSE: sourceopen, codec:', actualCodec);
+                console.log('MSE: sourceopen, codec:', codec);
 
                 try {
-                    sourceBuffer = mediaSource.addSourceBuffer(actualCodec);
+                    sourceBuffer = mediaSource.addSourceBuffer(codec);
                     sourceBuffer.mode = 'sequence';
 
                     sourceBuffer.addEventListener('updateend', function() {
@@ -540,6 +685,8 @@
                     });
 
                     sourceBuffer.addEventListener('error', function(e) {
+                        diagMSEErrors++;
+                        diagLog('MSE ERROR sb error');
                         console.error('MSE: SourceBuffer error:', e);
                     });
 
@@ -551,7 +698,7 @@
                     }
                 } catch (e) {
                     console.error('MSE: addSourceBuffer error:', e);
-                    showError('MSE codec not supported: ' + mseCodec);
+                    showError('MSE codec not supported: ' + codec);
                 }
             });
         }
@@ -576,7 +723,20 @@
             try {
                 var uint8 = new Uint8Array(chunkData);
                 sourceBuffer.appendBuffer(uint8);
+                diagMSEAppends++;
+
+                // После первого append — явно запустить воспроизведение
+                if (!firstAppendDone) {
+                    firstAppendDone = true;
+                    remoteVideo.play().then(function() {
+                        diagLog('PLAY started ct=' + remoteVideo.currentTime.toFixed(1));
+                    }).catch(function(e) {
+                        diagLog('PLAY failed: ' + e.message);
+                    });
+                }
             } catch (e) {
+                diagMSEErrors++;
+                diagLog('MSE ERR append ' + chunkData.byteLength + 'B: ' + e.message);
                 console.error('MSE: appendBuffer error:', e);
                 processMSEQueue();
             }
@@ -595,6 +755,10 @@
                 if (bufferDuration > MAX_BUFFER_SECONDS) {
                     var removeEnd = bufferEnd - MAX_BUFFER_SECONDS;
                     if (removeEnd > bufferStart + 0.5) {
+                        // Если currentTime в удаляемом диапазоне — сдвинуть к началу оставшегося
+                        if (remoteVideo.currentTime < removeEnd) {
+                            remoteVideo.currentTime = removeEnd + 0.1;
+                        }
                         sourceBuffer.remove(bufferStart, removeEnd);
                     }
                 }
@@ -609,6 +773,8 @@
                 if (chunk.index > lastReceivedIndex) {
                     lastReceivedIndex = chunk.index;
                     mseQueue.push(chunk.data);
+                    diagRecvChunks++;
+                    diagRecvBytes += chunk.data.byteLength;
                 }
             }
 
@@ -641,12 +807,15 @@
 
         // ============= MediaRecorder =============
         function setupMediaRecorder() {
+            var codec = negotiatedCodec || detectCodec();
+            console.log('MediaRecorder using codec:', codec);
             try {
                 mediaRecorder = new MediaRecorder(localStream, {
-                    mimeType: mseCodec,
+                    mimeType: codec,
                     videoBitsPerSecond: 300000
                 });
             } catch (e) {
+                console.warn('MediaRecorder failed with negotiated codec, trying default:', e);
                 try {
                     mediaRecorder = new MediaRecorder(localStream, {
                         videoBitsPerSecond: 300000
