@@ -21,6 +21,7 @@
             position: relative;
             padding: 8px;
             gap: 8px;
+            min-height: 0;
         }
         .video-container {
             flex: 1;
@@ -35,19 +36,35 @@
         .video-container video {
             width: 100%;
             height: 100%;
-            object-fit: cover;
+            object-fit: contain;
+            background: #000;
         }
+        .remote-tap-hint {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0,0,0,0.7);
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 0.85em;
+            color: #ccc;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s;
+            z-index: 15;
+        }
+        .remote-tap-hint.show { opacity: 1; }
         /* PiP: маленькое локальное видео в углу */
         .pip-container {
             position: absolute;
-            width: 25%;
-            min-width: 120px;
-            max-width: 240px;
-            aspect-ratio: 4/3;
+            width: 240px;
+            height: 180px;
             background: #000;
             border-radius: 8px;
             overflow: hidden;
             box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+            border: 1px solid rgba(255,255,255,0.3);
             z-index: 20;
             cursor: pointer;
             transition: top 0.3s ease, bottom 0.3s ease, left 0.3s ease, right 0.3s ease;
@@ -95,18 +112,27 @@
             opacity: 0;
             transition: opacity 0.3s;
         }
-        .pip-container:hover .pip-controls,
-        .pip-controls.has-off {
-            opacity: 1;
+        /* Десктоп: показываем кнопки только при hover */
+        @media (hover: hover) {
+            .pip-container:hover .pip-controls,
+            .pip-controls.has-off {
+                opacity: 1;
+            }
+        }
+        /* Мобильная: кнопки всегда видны */
+        @media (hover: none), (max-width: 600px) {
+            .pip-controls {
+                opacity: 1;
+            }
         }
         .ctrl-btn {
             height: 28px;
+            width: 28px;
             border-radius: 14px;
             border: none;
             cursor: pointer;
-            font-size: 0.7em;
-            font-weight: 600;
-            padding: 0 10px;
+            font-size: 0.75em;
+            padding: 0;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -119,8 +145,8 @@
         .ctrl-btn.mic.off { background: #e94560; }
         .ctrl-btn.cam { background: #4ecca3; }
         .ctrl-btn.cam.off { background: #e94560; }
-        .ctrl-btn.hangup { background: #e94560; }
-        .ctrl-btn.hangup:hover { background: #ff6b6b; }
+        .ctrl-btn.hangup { background: #4ecca3; }
+        .ctrl-btn.hangup:hover { background: #3db892; }
 
         .error-banner {
             background: #e94560;
@@ -131,12 +157,36 @@
         }
         .error-banner.show { display: block; }
 
-        @media (max-width: 600px) {
+        @media (max-height: 500px) {
             .pip-container {
-                width: 35%;
-                min-width: 100px;
-                bottom: 8px;
-                right: 8px;
+                width: 160px;
+                height: 120px;
+            }
+            .ctrl-btn {
+                height: 22px;
+                width: 22px;
+                font-size: 0.6em;
+            }
+        }
+
+        @media (max-width: 600px) {
+            .videos {
+                padding-bottom: 48px;
+            }
+            .pip-container {
+                width: 30%;
+                height: auto;
+                aspect-ratio: 4/3;
+                min-width: 80px;
+            }
+            .pip-container.pip-br { bottom: 56px; right: 8px; top: auto; left: auto; }
+            .pip-container.pip-bl { bottom: 56px; left: 8px; top: auto; right: auto; }
+            .pip-container.pip-tl { top: 8px; left: 8px; bottom: auto; right: auto; }
+            .pip-container.pip-tr { top: 8px; right: 8px; bottom: auto; left: auto; }
+            .ctrl-btn {
+                height: 24px;
+                width: 24px;
+                font-size: 0.65em;
             }
         }
     </style>
@@ -147,17 +197,18 @@
     <div class="videos">
         <div class="video-container main-video">
             <video id="remoteVideo" autoplay playsinline></video>
+            <div class="remote-tap-hint" id="remoteTapHint"></div>
             <div class="waiting-overlay hidden" id="waitingOverlay">
                 <div class="waiting-spinner"></div>
                 <div class="waiting-text" id="waitingText">Waiting for peer...</div>
             </div>
-            <!-- PiP: локальное видео в углу (тап — смена угла) -->
+            <!-- PiP: локальное видео QVGA в углу (тап — смена угла) -->
             <div class="pip-container pip-br" id="pipContainer">
                 <video id="localVideo" autoplay muted playsinline></video>
                 <div class="pip-controls" id="pipControls">
-                    <button class="ctrl-btn mic" id="micBtn" title="Mic">Mic</button>
-                    <button class="ctrl-btn hangup" id="hangupBtn" title="Close">Close</button>
-                    <button class="ctrl-btn cam" id="camBtn" title="Cam">Cam</button>
+                    <button class="ctrl-btn mic" id="micBtn" title="Mic">🎤</button>
+                    <button class="ctrl-btn hangup" id="hangupBtn" title="Close">❌</button>
+                    <button class="ctrl-btn cam" id="camBtn" title="Cam">📷</button>
                 </div>
             </div>
         </div>
@@ -169,6 +220,20 @@
         var CHUNK_INTERVAL_MS = 100;   // Интервал отправки чанков (мс)
         var POLL_INTERVAL_MS = 50;     // Интервал опроса сервера (мс)
         var MAX_BUFFER_SECONDS = 10;   // Максимальный буфер MSE в секундах
+        var ALIVE_CHECK_MS = 3000;     // Интервал проверки активности пира
+        var PEER_TIMEOUT_SEC = 5;      // Таймаут отсутствия GET от пира
+
+        // Стандартные разрешения для тапа на remoteVideo (по убыванию)
+        var STD_RESOLUTIONS = [
+            { w: 1280, h: 720 },
+            { w: 854,  h: 480 },
+            { w: 640,  h: 480 },
+            { w: 640,  h: 360 },
+            { w: 426,  h: 240 },
+            { w: 320,  h: 240 },
+            { w: 160,  h: 120 },
+            { w: 0,    h: 0 },      // Скрытие видео
+        ];
 
         // ============= Элементы UI =============
         var localVideo = document.getElementById('localVideo');
@@ -179,6 +244,7 @@
         var micBtn = document.getElementById('micBtn');
         var camBtn = document.getElementById('camBtn');
         var hangupBtn = document.getElementById('hangupBtn');
+        var remoteTapHint = document.getElementById('remoteTapHint');
 
         // ============= Состояние =============
         var params = new URLSearchParams(window.location.search);
@@ -187,6 +253,7 @@
         var localStream = null;
         var mediaRecorder = null;
         var pollInterval = null;
+        var aliveInterval = null;
         var isCreator = false;
         var audioEnabled = true;
         var videoEnabled = true;
@@ -204,17 +271,76 @@
         var mseCodec = '';           // Выбранный кодек
         var trimScheduled = false;   // Throttle для trimBuffer
 
+        // Индекс текущего разрешения remote (начинаем с W*0.8)
+        var currentResIdx = -1;
+
         // PiP: переключение углов по тапу
         var pipCorners = ['pip-br', 'pip-bl', 'pip-tl', 'pip-tr'];
         var pipCorner = 0;
         var pipContainer = document.getElementById('pipContainer');
         pipContainer.addEventListener('click', function(e) {
-            // Не переключаем угол при клике на кнопки
             if (e.target.closest('.pip-controls')) return;
             pipCorner = (pipCorner + 1) % pipCorners.length;
             pipCorners.forEach(function(c) { pipContainer.classList.remove(c); });
             pipContainer.classList.add(pipCorners[pipCorner]);
         });
+
+        // Тап на remoteVideo → уменьшение разрешения
+        remoteVideo.addEventListener('click', function() {
+            if (!localStream) return;
+
+            // Находим текущий индекс или начинаем с 0
+            if (currentResIdx < 0) {
+                currentResIdx = 0;
+            } else {
+                currentResIdx++;
+            }
+
+            if (currentResIdx >= STD_RESOLUTIONS.length) {
+                currentResIdx = STD_RESOLUTIONS.length - 1;
+            }
+
+            var res = STD_RESOLUTIONS[currentResIdx];
+
+            if (res.w === 0) {
+                // Скрываем видео (чёрный кадр)
+                localStream.getVideoTracks().forEach(function(track) {
+                    track.enabled = false;
+                });
+                videoEnabled = false;
+                camBtn.classList.add('off');
+                camBtn.textContent = '📷';
+                updateControlsVisibility();
+                showTapHint('Video off');
+            } else {
+                // Включаем видео если было выключено
+                localStream.getVideoTracks().forEach(function(track) {
+                    track.enabled = true;
+                    videoEnabled = true;
+                });
+                camBtn.classList.remove('off');
+                camBtn.textContent = '📷';
+
+                // Применяем новое разрешение
+                var track = localStream.getVideoTracks()[0];
+                if (track && track.applyConstraints) {
+                    track.applyConstraints({
+                        width: { ideal: res.w },
+                        height: { ideal: res.h }
+                    }).catch(function(e) {
+                        console.warn('applyConstraints error:', e);
+                    });
+                }
+                showTapHint(res.w + 'x' + res.h);
+                updateControlsVisibility();
+            }
+        });
+
+        function showTapHint(text) {
+            remoteTapHint.textContent = text;
+            remoteTapHint.classList.add('show');
+            setTimeout(function() { remoteTapHint.classList.remove('show'); }, 1500);
+        }
 
         if (!roomID) {
             showError('No room ID specified. URL: /videocall.html?room=ROOM_ID');
@@ -225,11 +351,20 @@
         // ============= Инициализация =============
         async function init() {
             try {
+                // Адаптивное разрешение: 80% ширины окна, max 1280x720
+                var W = Math.min(Math.floor(window.innerWidth * 0.8), 1280);
+                var H = Math.min(Math.floor(W * 3 / 4), 720);
+                console.log('Camera resolution: ' + W + 'x' + H);
+
                 // Получаем доступ к камере и микрофону
                 localStream = await navigator.mediaDevices.getUserMedia({
-                    video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' },
+                    video: { width: { ideal: W }, height: { ideal: H }, facingMode: 'user' },
                     audio: true
                 });
+
+                // Находим ближайший STD_RESOLUTIONS для currentResIdx
+                initResIdx(localStream);
+
                 localVideo.srcObject = localStream;
 
                 // Пробуем создать комнату
@@ -264,6 +399,24 @@
                     showError('Error: ' + err.message);
                 }
             }
+        }
+
+        // Определяем начальный индекс в STD_RESOLUTIONS по реальному разрешению
+        function initResIdx(stream) {
+            var track = stream.getVideoTracks()[0];
+            if (!track) return;
+            var settings = track.getSettings();
+            var rw = settings.width || 640;
+            var rh = settings.height || 480;
+
+            // Ищем ближайшее меньшее или равное в STD_RESOLUTIONS
+            currentResIdx = 0;
+            for (var i = 0; i < STD_RESOLUTIONS.length; i++) {
+                if (STD_RESOLUTIONS[i].w >= rw) {
+                    currentResIdx = i;
+                }
+            }
+            console.log('Initial res idx: ' + currentResIdx + ' (' + rw + 'x' + rh + ')');
         }
 
         // ============= API =============
@@ -321,12 +474,26 @@
             try {
                 var resp = await fetch('/api/call/chunk?room=' + encodeURIComponent(roomID) +
                     '&peer=' + encodeURIComponent(remotePeerID) +
+                    '&self=' + encodeURIComponent(myPeerID) +
                     '&after=' + afterIndex);
                 if (!resp.ok) return [];
                 var buf = await resp.arrayBuffer();
                 return parseChunksBinary(buf);
             } catch (e) {
                 return [];
+            }
+        }
+
+        // Проверка активности пира
+        async function checkPeerAlive() {
+            try {
+                var resp = await fetch('/api/call/alive?room=' + encodeURIComponent(roomID) +
+                    '&peer=' + encodeURIComponent(remotePeerID));
+                if (!resp.ok) return false;
+                var data = await resp.json();
+                return data.alive === true;
+            } catch (e) {
+                return false;
             }
         }
 
@@ -367,25 +534,25 @@
 
             // Запуск опроса сервера
             startPolling();
+
+            // Запуск проверки активности пира
+            startAliveCheck();
         }
 
         // ============= MSE: Media Source Extensions =============
         function setupMSE() {
-            // Определяем кодек синхронно — будем использовать тот же, что и MediaRecorder
             mseCodec = detectCodec();
 
-            // Создаём MediaSource
             mediaSource = new MediaSource();
             remoteVideo.src = URL.createObjectURL(mediaSource);
 
             mediaSource.addEventListener('sourceopen', function() {
-                // Используем реальный кодек из MediaRecorder (может отличаться от detectCodec)
                 var actualCodec = mediaRecorder ? mediaRecorder.mimeType : mseCodec;
                 console.log('MSE: sourceopen, codec:', actualCodec);
 
                 try {
                     sourceBuffer = mediaSource.addSourceBuffer(actualCodec);
-                    sourceBuffer.mode = 'sequence'; // Последовательный режим
+                    sourceBuffer.mode = 'sequence';
 
                     sourceBuffer.addEventListener('updateend', function() {
                         onMSEUpdateEnd();
@@ -397,7 +564,6 @@
 
                     mseReady = true;
 
-                    // КРИТИЧНО: обрабатываем уже накопленные чанки
                     if (mseQueue.length > 0) {
                         console.log('MSE: Processing ' + mseQueue.length + ' queued chunks');
                         processMSEQueue();
@@ -410,7 +576,6 @@
         }
 
         function onMSEUpdateEnd() {
-            // Планируем trim не чаще раза в секунду
             if (!trimScheduled) {
                 trimScheduled = true;
                 setTimeout(function() {
@@ -418,8 +583,6 @@
                     trimScheduled = false;
                 }, 1000);
             }
-
-            // Обрабатываем следующий чанк из очереди
             processMSEQueue();
         }
 
@@ -434,7 +597,6 @@
                 sourceBuffer.appendBuffer(uint8);
             } catch (e) {
                 console.error('MSE: appendBuffer error:', e);
-                // Пропускаем проблемный чанк
                 processMSEQueue();
             }
         }
@@ -455,12 +617,9 @@
                         sourceBuffer.remove(bufferStart, removeEnd);
                     }
                 }
-            } catch (e) {
-                // Silently ignore trim errors
-            }
+            } catch (e) {}
         }
 
-        // Обработка полученных чанков — ставим в MSE очередь
         function handleRemoteChunks(chunks) {
             if (!chunks || chunks.length === 0) return;
 
@@ -468,12 +627,10 @@
                 var chunk = chunks[i];
                 if (chunk.index > lastReceivedIndex) {
                     lastReceivedIndex = chunk.index;
-                    // Данные уже бинарные — сразу в очередь
                     mseQueue.push(chunk.data);
                 }
             }
 
-            // Пробуем обработать только если MSE готов
             if (mseReady) {
                 processMSEQueue();
             }
@@ -498,8 +655,6 @@
                     return codecs[i];
                 }
             }
-
-            // Fallback
             return 'video/webm;codecs="vp8,opus"';
         }
 
@@ -511,7 +666,6 @@
                     videoBitsPerSecond: 300000
                 });
             } catch (e) {
-                // Если кодек не поддерживается MediaRecorder, пробуем базовый
                 try {
                     mediaRecorder = new MediaRecorder(localStream, {
                         videoBitsPerSecond: 300000
@@ -537,7 +691,6 @@
                 console.error('MediaRecorder error:', e.error);
             };
 
-            // Генерируем чанки каждые CHUNK_INTERVAL_MS мс
             mediaRecorder.start(CHUNK_INTERVAL_MS);
         }
 
@@ -545,13 +698,25 @@
         function startPolling() {
             pollInterval = setInterval(function() {
                 if (!isActive) return;
-
                 getChunks(lastReceivedIndex).then(function(chunks) {
                     if (chunks && chunks.length > 0) {
                         handleRemoteChunks(chunks);
                     }
                 });
             }, POLL_INTERVAL_MS);
+        }
+
+        // ============= Проверка активности пира =============
+        function startAliveCheck() {
+            aliveInterval = setInterval(function() {
+                if (!isActive) return;
+                checkPeerAlive().then(function(alive) {
+                    if (!alive && isActive) {
+                        console.log('Peer disconnected (no GET requests)');
+                        hangup();
+                    }
+                });
+            }, ALIVE_CHECK_MS);
         }
 
         // ============= Управление =============
@@ -562,7 +727,7 @@
                 track.enabled = audioEnabled;
             });
             micBtn.classList.toggle('off', !audioEnabled);
-            micBtn.textContent = audioEnabled ? 'Mic' : 'Muted';
+            micBtn.textContent = '🎤';
             updateControlsVisibility();
         });
 
@@ -573,7 +738,7 @@
                 track.enabled = videoEnabled;
             });
             camBtn.classList.toggle('off', !videoEnabled);
-            camBtn.textContent = videoEnabled ? 'Cam' : 'Off';
+            camBtn.textContent = videoEnabled ? '📷' : '📷';
             updateControlsVisibility();
         });
 
@@ -599,6 +764,10 @@
             if (pollInterval) {
                 clearInterval(pollInterval);
                 pollInterval = null;
+            }
+            if (aliveInterval) {
+                clearInterval(aliveInterval);
+                aliveInterval = null;
             }
 
             if (localStream) {

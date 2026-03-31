@@ -32,6 +32,9 @@ type VideoCallRoom struct {
 	ChunkIdx  map[string]int64
 	ChunkLock map[string]*sync.Mutex
 
+	// Время последнего GET-запроса чанков от каждого пира
+	LastPollTime map[string]time.Time
+
 	// Для уведомления о входящем звонке
 	WaitingChan chan struct{} // закрывается когда второй участник подключился
 
@@ -49,8 +52,9 @@ var callStore = &VideoCallStorage{
 }
 
 const (
-	maxChunksPerPeer = 300     // ~30 секунд при 10 чанков/сек
-	maxChunkSize     = 1 << 20 // 1 MB максимальный размер чанка
+	maxChunksPerPeer = 300             // ~30 секунд при 10 чанков/сек
+	maxChunkSize     = 1 << 20         // 1 MB максимальный размер чанка
+	peerTimeout      = 5 * time.Second // Таймаут отсутствия GET от пира
 )
 
 // createRoom создаёт новую комнату видеозвонка или возвращает ошибку если комната уже существует
@@ -63,12 +67,13 @@ func (vs *VideoCallStorage) createRoom(roomID string) (*VideoCallRoom, error) {
 	}
 
 	room := &VideoCallRoom{
-		ID:          roomID,
-		CreatedAt:   time.Now(),
-		Chunks:      make(map[string][]VideoChunk),
-		ChunkIdx:    make(map[string]int64),
-		ChunkLock:   make(map[string]*sync.Mutex),
-		WaitingChan: make(chan struct{}),
+		ID:           roomID,
+		CreatedAt:    time.Now(),
+		Chunks:       make(map[string][]VideoChunk),
+		ChunkIdx:     make(map[string]int64),
+		ChunkLock:    make(map[string]*sync.Mutex),
+		LastPollTime: make(map[string]time.Time),
+		WaitingChan:  make(chan struct{}),
 	}
 	vs.rooms[roomID] = room
 	return room, nil
@@ -324,6 +329,8 @@ func handleCallChunkGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	selfPeerID := r.URL.Query().Get("self") // Кто запрашивает (для alive check)
+
 	var afterIndex int64 = -1
 	if afterStr != "" {
 		fmt.Sscanf(afterStr, "%d", &afterIndex)
@@ -333,6 +340,13 @@ func handleCallChunkGet(w http.ResponseWriter, r *http.Request) {
 	if room == nil {
 		http.Error(w, "Room not found", http.StatusNotFound)
 		return
+	}
+
+	// Записываем время опроса от инициатора запроса (для проверки активности пира)
+	if selfPeerID != "" {
+		room.mu.Lock()
+		room.LastPollTime[selfPeerID] = time.Now()
+		room.mu.Unlock()
 	}
 
 	// Пытаемся получить чанки сразу
@@ -363,6 +377,38 @@ func handleCallChunkGet(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+}
+
+// handleCallAlive обрабатывает GET /api/call/alive — проверка активности пира
+func handleCallAlive(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	roomID := r.URL.Query().Get("room")
+	peerID := r.URL.Query().Get("peer") // Чью активность проверяем
+
+	if roomID == "" || peerID == "" {
+		http.Error(w, "room and peer are required", http.StatusBadRequest)
+		return
+	}
+
+	room := callStore.getRoom(roomID)
+	if room == nil {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{"alive": false})
+		return
+	}
+
+	room.mu.Lock()
+	lastPoll, exists := room.LastPollTime[peerID]
+	room.mu.Unlock()
+
+	alive := exists && time.Since(lastPoll) < peerTimeout
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{"alive": alive})
 }
 
 // handleCallEnd обрабатывает DELETE /api/call/room — завершение звонка
@@ -401,6 +447,8 @@ func handleCallAPI(w http.ResponseWriter, r *http.Request) {
 		handleCallChunkPost(w, r)
 	case strings.HasSuffix(path, "/chunk") && r.Method == http.MethodGet:
 		handleCallChunkGet(w, r)
+	case strings.HasSuffix(path, "/alive"):
+		handleCallAlive(w, r)
 	case strings.HasSuffix(path, "/room"):
 		handleCallEnd(w, r)
 	default:

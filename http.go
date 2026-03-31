@@ -351,11 +351,28 @@ func (h *WebDAVWithDirectoryListing) serveDirectoryListing(w http.ResponseWriter
 		.chat-send-btn:active {
 			background-color: #004494;
 		}
-
-		@keyframes pulse {
-			0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(233,69,96,0.7); }
-			50% { transform: scale(1.1); box-shadow: 0 0 12px 4px rgba(233,69,96,0.5); }
-			100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(233,69,96,0.7); }
+		.chat-message-content a.call-link {
+			display: inline-block;
+			padding: 4px 12px;
+			border-radius: 16px;
+			text-decoration: none;
+			font-weight: 600;
+			font-size: 0.95em;
+			transition: all 0.2s;
+		}
+		.chat-message.own .chat-message-content a.call-link {
+			background: rgba(255,255,255,0.25);
+			color: #fff;
+		}
+		.chat-message.own .chat-message-content a.call-link:hover {
+			background: rgba(255,255,255,0.4);
+		}
+		.chat-message.other .chat-message-content a.call-link {
+			background: #28a745;
+			color: #fff;
+		}
+		.chat-message.other .chat-message-content a.call-link:hover {
+			background: #218838;
 		}
 
 		/* Медиа-запрос для мобильных устройств */
@@ -475,9 +492,8 @@ func (h *WebDAVWithDirectoryListing) serveDirectoryListing(w http.ResponseWriter
 		<div class="chat-messages" id="chatMessages"></div>
 		<div class="chat-input-container">
 			<input type="text" class="chat-input" id="chatInput" placeholder="Type a message...">
-			<button class="chat-send-btn" id="chatSendBtn">Send</button>
-			<button class="chat-send-btn" id="chatCallBtn" style="background-color:#28a745;padding:6px 10px;" title="Video Call">Call</button>
-			<button class="chat-send-btn" id="chatAnswerBtn" style="display:none;background-color:#e94560;padding:6px 10px;animation:pulse 1.5s infinite;" title="Answer Video Call">Answer</button>
+			<button class="chat-send-btn" id="chatSendBtn">💬Send</button>
+			<button class="chat-call-btn chat-send-btn" id="chatCallBtn" style="padding:6px 10px;" title="Video Call">📞Call</button>
 		</div>
 	</div>
 
@@ -503,8 +519,6 @@ func (h *WebDAVWithDirectoryListing) serveDirectoryListing(w http.ResponseWriter
 			return sender === currentUserId;
 		}
 
-		let answerTimeout = null;
-
 		// Отображение сообщения
 		function displayMessage(msg) {
 			const msgDiv = document.createElement('div');
@@ -515,7 +529,19 @@ func (h *WebDAVWithDirectoryListing) serveDirectoryListing(w http.ResponseWriter
 
 			const contentDiv = document.createElement('div');
 			contentDiv.className = 'chat-message-content';
-			contentDiv.textContent = msg.text;
+
+			// Проверяем, является ли сообщение приглашением на звонок
+			var callMatch = msg.text.match(/^📞\s*(\/videocall\S+)/);
+			if (callMatch) {
+				var a = document.createElement('a');
+				a.href = callMatch[1];
+				a.target = '_blank';
+				a.className = 'call-link';
+				a.textContent = '📞Call';
+				contentDiv.appendChild(a);
+			} else {
+				contentDiv.textContent = msg.text;
+			}
 
 			const timeDiv = document.createElement('div');
 			timeDiv.className = 'chat-message-time';
@@ -529,50 +555,6 @@ func (h *WebDAVWithDirectoryListing) serveDirectoryListing(w http.ResponseWriter
 
 			chatMessages.appendChild(msgDiv);
 			chatMessages.scrollTop = chatMessages.scrollHeight;
-
-			// Проверяем, является ли сообщение входящим звонком
-			if (!isOwnMessage(msg.sender)) {
-				var callMatch = msg.text.match(/📤 Video call: (\/videocall\S+)/);
-				if (callMatch) {
-					var callUrl = callMatch[1];
-					// Проверяем что звонок свежий (не старше 30 секунд)
-					var msgTime = new Date(msg.timestamp).getTime();
-					var now = Date.now();
-					if (now - msgTime < 30000) {
-						showAnswerButton(callUrl);
-					}
-				}
-			}
-		}
-
-		function showAnswerButton(callUrl) {
-			var chatAnswerBtn = document.getElementById('chatAnswerBtn');
-			chatAnswerBtn.style.display = 'inline-block';
-
-			// Очищаем предыдущий таймер
-			if (answerTimeout) clearTimeout(answerTimeout);
-
-			// Автоскрытие через 30 секунд
-			answerTimeout = setTimeout(function() {
-				chatAnswerBtn.style.display = 'none';
-			}, 30000);
-
-			// Обработчик клика — только если ещё не привязан
-			if (!chatAnswerBtn.dataset.bound) {
-				chatAnswerBtn.dataset.bound = 'true';
-				chatAnswerBtn.addEventListener('click', function() {
-					if (answerTimeout) clearTimeout(answerTimeout);
-					chatAnswerBtn.style.display = 'none';
-					window.open(callUrl, '_blank');
-				});
-			} else {
-				// Обновляем URL для нового звонка
-				chatAnswerBtn.onclick = function() {
-					if (answerTimeout) clearTimeout(answerTimeout);
-					chatAnswerBtn.style.display = 'none';
-					window.open(callUrl, '_blank');
-				};
-			}
 		}
 
 		// Загрузка сообщений
@@ -649,9 +631,9 @@ func (h *WebDAVWithDirectoryListing) serveDirectoryListing(w http.ResponseWriter
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
-					text: '📤 Video call: ' + callUrl,
-					sender: currentUserId
-				})
+						text: '📞 ' + callUrl,
+						sender: currentUserId
+					})
 			}).then(function() {
 				// Открываем видеозвонок в новой вкладке
 				window.open(callUrl, '_blank');
