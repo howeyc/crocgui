@@ -67,7 +67,6 @@
         .ctrl-btn.fullscreen.off { background: #e94560; }
         .ctrl-btn.screen { background: #4ecca3; }
         .ctrl-btn.screen.off { background: #e94560; }
-        /* PiP: маленькое локальное видео в углу */
         .pip-container {
             position: absolute;
             width: 240px;
@@ -111,7 +110,6 @@
         }
         @keyframes spin { to { transform: rotate(360deg); } }
         .waiting-text { color: #aaa; font-size: 1em; }
-
         .pip-controls {
             position: absolute;
             bottom: 0; left: 0; right: 0;
@@ -124,14 +122,12 @@
             opacity: 0;
             transition: opacity 0.3s;
         }
-        /* Десктоп: показываем кнопки только при hover */
         @media (hover: hover) {
             .pip-container:hover .pip-controls,
             .pip-controls.has-off {
                 opacity: 1;
             }
         }
-        /* Мобильная: кнопки всегда видны */
         @media (hover: none), (max-width: 600px) {
             .pip-controls {
                 opacity: 1;
@@ -159,7 +155,6 @@
         .ctrl-btn.cam.off { background: #e94560; }
         .ctrl-btn.hangup { background: #4ecca3; }
         .ctrl-btn.hangup:hover { background: #3db892; }
-
         .error-banner {
             background: #e94560;
             color: white;
@@ -168,37 +163,18 @@
             display: none;
         }
         .error-banner.show { display: block; }
-
         @media (max-height: 500px) {
-            .pip-container {
-                width: 160px;
-                height: 120px;
-            }
-            .ctrl-btn {
-                height: 22px;
-                width: 22px;
-                font-size: 0.6em;
-            }
+            .pip-container { width: 160px; height: 120px; }
+            .ctrl-btn { height: 22px; width: 22px; font-size: 0.6em; }
         }
-
         @media (max-width: 600px) {
-            .pip-container {
-                width: 30%;
-                height: auto;
-                aspect-ratio: 4/3;
-                min-width: 80px;
-            }
-            .ctrl-btn {
-                height: 36px;
-                width: 36px;
-                font-size: 1em;
-            }
+            .pip-container { width: 30%; height: auto; aspect-ratio: 4/3; min-width: 80px; }
+            .ctrl-btn { height: 36px; width: 36px; font-size: 1em; }
         }
     </style>
 </head>
 <body>
     <div class="error-banner" id="errorBanner"></div>
-
     <div class="videos">
         <div class="video-container main-video">
             <video id="remoteVideo" autoplay playsinline></video>
@@ -211,7 +187,6 @@
                 <div class="waiting-spinner"></div>
                 <div class="waiting-text" id="waitingText">Waiting for peer...</div>
             </div>
-            <!-- PiP: локальное видео QVGA в углу (тап — смена угла) -->
             <div class="pip-container pip-tl" id="pipContainer">
                 <video id="localVideo" autoplay muted playsinline></video>
                 <div class="pip-controls" id="pipControls">
@@ -223,13 +198,13 @@
         </div>
     </div>
 
-
     <script>
         // ============= Конфигурация =============
-        var CHUNK_INTERVAL_MS = 100;   // Интервал отправки чанков (мс)
-        var POLL_INTERVAL_MS = 50;     // Интервал опроса сервера (мс)
-        var MAX_BUFFER_SECONDS = 10;   // Максимальный буфер MSE в секундах
+        var CHUNK_INTERVAL_MS = 100;   // Интервал отправки чанков MediaRecorder (мс)
+        var HTTP_POLL_MS = 200;        // Интервал HTTP-опроса (fallback)
+        var MAX_BUFFER_SECONDS = 30;   // Максимальный буфер MSE (большой = нет агрессивного trim)
         var ALIVE_CHECK_MS = 3000;     // Интервал проверки активности пира
+        var WS_RECONNECT_MS = 2000;    // Интервал переподключения WebSocket
 
         // ============= Элементы UI =============
         var localVideo = document.getElementById('localVideo');
@@ -244,8 +219,6 @@
         var remoteScreenBtn = document.getElementById('remoteScreenBtn');
         var fullscreenBtn = document.getElementById('fullscreenBtn');
 
-
-        // ============= Общий ID пользователя для чата =============
         var _chatUserId = localStorage.getItem('chatUserId') || 'user_' + Math.random().toString(36).substr(2, 9);
         localStorage.setItem('chatUserId', _chatUserId);
 
@@ -255,27 +228,32 @@
         var isActive = false;
         var localStream = null;
         var mediaRecorder = null;
-        var pollInterval = null;
         var aliveInterval = null;
         var isCreator = false;
         var audioEnabled = true;
         var videoEnabled = true;
 
-        // Фиксированные peer ID: host (создатель) / guest (присоединившийся)
         var myPeerID = 'host';
         var remotePeerID = 'guest';
         var lastReceivedIndex = -1;
 
+        // WebSocket состояние
+        var ws = null;
+        var wsConnected = false;
+        var wsReconnectTimer = null;
+        var useHTTPFallback = false;
+        var httpPollInterval = null;
+
         // MSE состояние
         var mediaSource = null;
         var sourceBuffer = null;
-        var mseQueue = [];           // Очередь чанков для appendBuffer
-        var mseReady = false;        // MediaSource готов к приёму данных
-        var negotiatedCodec = '';    // Согласованный кодек
-        var trimScheduled = false;   // Throttle для trimBuffer
-        var firstAppendDone = false; // Для play() после первого append
+        var mseQueue = [];
+        var mseReady = false;
+        var negotiatedCodec = '';
+        var trimScheduled = false;
+        var firstAppendDone = false;
 
-        // Диагностические счётчики
+        // Диагностика
         var diagSentChunks = 0;
         var diagSentBytes = 0;
         var diagRecvChunks = 0;
@@ -284,13 +262,12 @@
         var diagMSEErrors = 0;
         var diagLastLogTime = 0;
 
-        // Remote audio/video state
         var remoteAudioOn = true;
         var remoteVideoOn = true;
 
-        // PiP: переключение углов по тапу
+        // PiP
         var pipCorners = ['pip-br', 'pip-bl', 'pip-tl', 'pip-tr'];
-        var pipCorner = 2; // начинаем с pip-tl (верхний левый)
+        var pipCorner = 2;
         var pipContainer = document.getElementById('pipContainer');
         pipContainer.addEventListener('click', function(e) {
             if (e.target.closest('.pip-controls')) return;
@@ -299,38 +276,29 @@
             pipContainer.classList.add(pipCorners[pipCorner]);
         });
 
-        // Fullscreen toggle
+        // Fullscreen
         function enterFullscreen() {
             var el = document.documentElement;
             if (el.requestFullscreen) el.requestFullscreen();
             else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
         }
-
         function exitFullscreen() {
             if (document.exitFullscreen) document.exitFullscreen();
             else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
         }
-
         fullscreenBtn.addEventListener('click', function(e) {
             e.stopPropagation();
-            if (document.fullscreenElement || document.webkitFullscreenElement) {
-                exitFullscreen();
-            } else {
-                enterFullscreen();
-            }
+            if (document.fullscreenElement || document.webkitFullscreenElement) exitFullscreen();
+            else enterFullscreen();
         });
-
         function syncFullscreenBtn() {
-            if (document.fullscreenElement || document.webkitFullscreenElement) {
-                fullscreenBtn.classList.remove('off');
-            } else {
-                fullscreenBtn.classList.add('off');
-            }
+            if (document.fullscreenElement || document.webkitFullscreenElement) fullscreenBtn.classList.remove('off');
+            else fullscreenBtn.classList.add('off');
         }
         document.addEventListener('fullscreenchange', syncFullscreenBtn);
         document.addEventListener('webkitfullscreenchange', syncFullscreenBtn);
 
-        // Remote controls: mute/unmute remote audio
+        // Remote controls
         remoteMuteBtn.addEventListener('click', function(e) {
             e.stopPropagation();
             remoteAudioOn = !remoteAudioOn;
@@ -339,8 +307,6 @@
             remoteMuteBtn.textContent = '🔈';
             updateRemoteControlsVisibility();
         });
-
-        // Remote controls: show/hide remote video
         remoteScreenBtn.addEventListener('click', function(e) {
             e.stopPropagation();
             remoteVideoOn = !remoteVideoOn;
@@ -349,14 +315,10 @@
             remoteScreenBtn.textContent = '💻';
             updateRemoteControlsVisibility();
         });
-
         function updateRemoteControlsVisibility() {
             var rc = document.getElementById('remoteControls');
-            if (remoteMuteBtn.classList.contains('off') || remoteScreenBtn.classList.contains('off')) {
-                rc.classList.add('has-off');
-            } else {
-                rc.classList.remove('has-off');
-            }
+            if (remoteMuteBtn.classList.contains('off') || remoteScreenBtn.classList.contains('off')) rc.classList.add('has-off');
+            else rc.classList.remove('has-off');
         }
 
         if (!roomID) {
@@ -365,10 +327,8 @@
             init();
         }
 
-        // ============= Диагностическое логирование (раскомментировать для отладки) =============
-    //    function diagLog(msg) {}
+        // ============= Диагностика =============
         function diagLog(msg) {
-            // console.log('[DIAG] ' + msg);
             try {
                 fetch('/api/messages', {
                     method: 'POST',
@@ -376,7 +336,7 @@
                     body: JSON.stringify({ text: '🔧 ' + msg, sender: _chatUserId })
                 });
             } catch (e) {}
-        } 
+        }
 
         function diagStats() {
             if (!isActive) return;
@@ -390,40 +350,46 @@
             } catch (e) {}
             var sbState = sourceBuffer ? (sourceBuffer.updating ? 'updating' : 'ready') : 'null';
             var ct = remoteVideo.currentTime.toFixed(1);
+            var rate = remoteVideo.playbackRate.toFixed(2);
             var paused = remoteVideo.paused ? ' PAUSED' : '';
             var waiting = remoteVideo.readyState < 3 ? ' WAITING' : '';
+            var transport = wsConnected ? 'WS' : (useHTTPFallback ? 'HTTP' : 'none');
             diagLog('STAT sent:' + diagSentChunks + '(' + (diagSentBytes / 1024).toFixed(0) + 'KB) ' +
                 'recv:' + diagRecvChunks + '(' + (diagRecvBytes / 1024).toFixed(0) + 'KB) ' +
                 'appends:' + diagMSEAppends + ' errs:' + diagMSEErrors + ' ' +
                 'q:' + mseQueue.length + ' sb:' + sbState + ' buf:' + bufInfo +
-                ' ct:' + ct + paused + waiting);
+                ' ct:' + ct + ' rate:' + rate + ' [' + transport + ']' + paused + waiting);
         }
-
         setInterval(function() { diagStats(); }, 10000);
 
-        // Периодическая проверка: если currentTime отстаёт от буфера — прыгнуть вперёд
+        // ============= Экстренный seek (только при >8с отставания) =============
         setInterval(function() {
             if (!isActive || !mseReady) return;
             try {
                 if (remoteVideo.buffered && remoteVideo.buffered.length > 0) {
                     var bufEnd = remoteVideo.buffered.end(remoteVideo.buffered.length - 1);
-                    var ct = remoteVideo.currentTime;
                     var bufStart = remoteVideo.buffered.start(0);
+                    var ct = remoteVideo.currentTime;
+                    var behind = bufEnd - ct;
 
-                    // Если currentTime вне буфера (отстаёт более чем на 3 сек) — прыгнуть
-                    if (ct < bufStart - 0.5 || bufEnd - ct > 8) {
-                        var newTime = bufEnd - 2;
-                        diagLog('SEEK ct=' + ct.toFixed(1) + ' -> ' + newTime.toFixed(1) + ' buf=[' + bufStart.toFixed(1) + '-' + bufEnd.toFixed(1) + ']');
-                        remoteVideo.currentTime = newTime;
-                        if (remoteVideo.paused) {
-                            remoteVideo.play().catch(function(){});
-                        }
+                    // Экстренный seek: только если отставание > 8 секунд
+                    if (behind > 8) {
+                        var target = bufEnd - 1;
+                        diagLog('SEEK ct=' + ct.toFixed(1) + ' -> ' + target.toFixed(1) + ' behind=' + behind.toFixed(1) + 's EMERGENCY');
+                        remoteVideo.currentTime = target;
+                        if (remoteVideo.paused) remoteVideo.play().catch(function(){});
+                    }
+
+                    // Если currentTime вне буфера — прыгнуть
+                    if (ct < bufStart - 0.5) {
+                        remoteVideo.currentTime = bufStart + 0.1;
+                        if (remoteVideo.paused) remoteVideo.play().catch(function(){});
                     }
                 }
             } catch (e) {}
-        }, 3000);
+        }, 2000);
 
-        // ============= Определение поддерживаемых кодеков =============
+        // ============= Кодеки =============
         var ALL_CODECS = [
             'video/webm;codecs="vp8,opus"',
             'video/webm;codecs="vp9,opus"',
@@ -444,30 +410,34 @@
                 }
             }
             if (supported.length === 0) supported.push('video/webm;codecs="vp8,opus"');
-            console.log('Supported codecs:', supported);
             return supported;
+        }
+
+        function detectCodec() {
+            var codecs = ALL_CODECS.slice();
+            for (var i = 0; i < codecs.length; i++) {
+                if (MediaSource.isTypeSupported(codecs[i]) &&
+                    (typeof MediaRecorder === 'undefined' || MediaRecorder.isTypeSupported(codecs[i]))) {
+                    return codecs[i];
+                }
+            }
+            return 'video/webm;codecs="vp8,opus"';
         }
 
         // ============= Инициализация =============
         async function init() {
             try {
-                // Адаптивное разрешение: 80% ширины окна, max 1280x720
                 var W = Math.min(Math.floor(window.innerWidth * 0.8), 1280);
                 var H = Math.min(Math.floor(W * 3 / 4), 720);
-                console.log('Camera resolution: ' + W + 'x' + H);
 
-                // Получаем доступ к камере и микрофону
                 localStream = await navigator.mediaDevices.getUserMedia({
                     video: { width: { ideal: W }, height: { ideal: H }, facingMode: 'user' },
                     audio: true
                 });
-
                 localVideo.srcObject = localStream;
 
-                // Определяем поддерживаемые кодеки до создания/подключения к комнате
                 var myCodecs = detectSupportedCodecs();
 
-                // Пробуем создать комнату
                 var createResult = await tryCreateRoom(myCodecs, W, H);
                 isCreator = createResult.created;
 
@@ -483,12 +453,10 @@
                         showError('Peer did not join within 30 seconds');
                         return;
                     }
-                    // Получаем согласованный кодек от wait-ответа
                     if (joined.codec) {
                         negotiatedCodec = joined.codec;
                         diagLog('CODEC negotiated=' + negotiatedCodec);
                     }
-                    // Адаптивное разрешение: min(моё, пира)
                     if (joined.width && joined.height) {
                         await applyMinResolution(W, H, joined.width, joined.height);
                     }
@@ -497,12 +465,10 @@
                     myPeerID = 'guest';
                     remotePeerID = 'host';
                     var joinResult = await joinRoom(myCodecs, W, H);
-                    // Получаем согласованный кодек от join-ответа
                     if (joinResult && joinResult.codec) {
                         negotiatedCodec = joinResult.codec;
                         diagLog('CODEC negotiated=' + negotiatedCodec);
                     }
-                    // Адаптивное разрешение: min(моё, пира)
                     if (joinResult && joinResult.width && joinResult.height) {
                         await applyMinResolution(W, H, joinResult.width, joinResult.height);
                     }
@@ -511,13 +477,9 @@
                 startCall();
             } catch (err) {
                 console.error('Init error:', err);
-                if (err.name === 'NotAllowedError') {
-                    showError('Camera and microphone access denied.');
-                } else if (err.name === 'NotFoundError') {
-                    showError('No camera or microphone found.');
-                } else {
-                    showError('Error: ' + err.message);
-                }
+                if (err.name === 'NotAllowedError') showError('Camera and microphone access denied.');
+                else if (err.name === 'NotFoundError') showError('No camera or microphone found.');
+                else showError('Error: ' + err.message);
             }
         }
 
@@ -563,20 +525,32 @@
             }
         }
 
+        // Отправка чанка: WebSocket приоритет, HTTP fallback
         async function sendChunk(buffer) {
+            diagSentChunks++;
+            diagSentBytes += buffer.byteLength;
+
+            if (wsConnected && ws && ws.readyState === WebSocket.OPEN) {
+                try {
+                    ws.send(buffer);
+                    return;
+                } catch (e) {
+                    console.warn('WS send error, falling back to HTTP:', e);
+                }
+            }
+
+            // HTTP fallback
             try {
                 await fetch('/api/call/chunk?room=' + encodeURIComponent(roomID) + '&peer=' + myPeerID, {
                     method: 'POST',
                     body: buffer
                 });
-                diagSentChunks++;
-                diagSentBytes += buffer.byteLength;
             } catch (e) {
                 console.error('Send chunk error:', e);
             }
         }
 
-        async function getChunks(afterIndex) {
+        async function getChunksHTTP(afterIndex) {
             try {
                 var resp = await fetch('/api/call/chunk?room=' + encodeURIComponent(roomID) +
                     '&peer=' + encodeURIComponent(remotePeerID) +
@@ -590,7 +564,6 @@
             }
         }
 
-        // Проверка активности пира
         async function checkPeerAlive() {
             try {
                 var resp = await fetch('/api/call/alive?room=' + encodeURIComponent(roomID) +
@@ -603,7 +576,6 @@
             }
         }
 
-        // Парсинг бинарного формата: count|index|size|data|...
         function parseChunksBinary(buf) {
             var chunks = [];
             var view = new DataView(buf);
@@ -637,10 +609,7 @@
                 var videoTracks = localStream.getVideoTracks();
                 if (videoTracks.length > 0) {
                     try {
-                        await videoTracks[0].applyConstraints({
-                            width: { ideal: newW },
-                            height: { ideal: newH }
-                        });
+                        await videoTracks[0].applyConstraints({ width: { ideal: newW }, height: { ideal: newH } });
                         var settings = videoTracks[0].getSettings();
                         diagLog('RES applied ' + settings.width + 'x' + settings.height);
                     } catch (e) {
@@ -650,35 +619,136 @@
             }
         }
 
+        // ============= WebSocket Transport =============
+        function connectWS() {
+            if (wsReconnectTimer) {
+                clearTimeout(wsReconnectTimer);
+                wsReconnectTimer = null;
+            }
+            if (!isActive) return;
+
+            var proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            var wsURL = proto + '//' + location.host + '/api/call/ws?room=' + encodeURIComponent(roomID) + '&peer=' + encodeURIComponent(myPeerID);
+
+            diagLog('WS connecting...');
+            try {
+                ws = new WebSocket(wsURL);
+                ws.binaryType = 'arraybuffer';
+            } catch (e) {
+                diagLog('WS create error: ' + e.message);
+                startHTTPFallback();
+                return;
+            }
+
+            ws.onopen = function() {
+                wsConnected = true;
+                useHTTPFallback = false;
+                diagLog('WS connected');
+                // Останавливаем HTTP polling если он был
+                if (httpPollInterval) {
+                    clearInterval(httpPollInterval);
+                    httpPollInterval = null;
+                }
+            };
+
+            ws.onmessage = function(event) {
+                if (event.data instanceof ArrayBuffer) {
+                    handleIncomingChunk(event.data);
+                }
+            };
+
+            ws.onclose = function(event) {
+                wsConnected = false;
+                diagLog('WS closed code=' + event.code);
+                if (isActive) {
+                    // Переподключение через 2 секунды
+                    wsReconnectTimer = setTimeout(function() {
+                        connectWS();
+                    }, WS_RECONNECT_MS);
+
+                    // Запускаем HTTP fallback пока WS переподключается
+                    if (!httpPollInterval) startHTTPFallback();
+                }
+            };
+
+            ws.onerror = function(err) {
+                console.warn('WS error');
+                // onclose будет вызван после onerror
+            };
+        }
+
+        function handleIncomingChunk(data) {
+            diagRecvChunks++;
+            diagRecvBytes += data.byteLength;
+            lastReceivedIndex++;
+            mseQueue.push(data);
+            if (mseReady) {
+                processMSEQueue();
+            }
+        }
+
+        function disconnectWS() {
+            if (wsReconnectTimer) {
+                clearTimeout(wsReconnectTimer);
+                wsReconnectTimer = null;
+            }
+            if (ws) {
+                ws.onclose = null;
+                ws.onerror = null;
+                ws.onmessage = null;
+                if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+                    ws.close();
+                }
+                ws = null;
+            }
+            wsConnected = false;
+        }
+
+        // ============= HTTP Fallback Polling =============
+        function startHTTPFallback() {
+            if (httpPollInterval) return;
+            useHTTPFallback = true;
+            diagLog('HTTP fallback started');
+            httpPollInterval = setInterval(function() {
+                if (!isActive || wsConnected) return;
+                getChunksHTTP(lastReceivedIndex).then(function(chunks) {
+                    if (chunks && chunks.length > 0) {
+                        handleRemoteChunksHTTP(chunks);
+                    }
+                });
+            }, HTTP_POLL_MS);
+        }
+
+        function handleRemoteChunksHTTP(chunks) {
+            if (!chunks || chunks.length === 0) return;
+            for (var i = 0; i < chunks.length; i++) {
+                var chunk = chunks[i];
+                if (chunk.index > lastReceivedIndex) {
+                    lastReceivedIndex = chunk.index;
+                    mseQueue.push(chunk.data);
+                    diagRecvChunks++;
+                    diagRecvBytes += chunk.data.byteLength;
+                }
+            }
+            if (mseReady) processMSEQueue();
+        }
+
         // ============= Звонок =============
         function startCall() {
             isActive = true;
-
-            // Настройка MSE для удалённого видео
             setupMSE();
-
-            // Настройка записи и отправки
             setupMediaRecorder();
-
-            // Запуск опроса сервера
-            startPolling();
-
-            // Запуск проверки активности пира
+            connectWS(); // WebSocket транспорт (с HTTP fallback)
             startAliveCheck();
         }
 
-        // ============= MSE: Media Source Extensions =============
+        // ============= MSE =============
         function setupMSE() {
-            // Используем согласованный кодек, fallback на detectCodec()
             var codec = negotiatedCodec || detectCodec();
-            console.log('MSE using codec:', codec);
-
             mediaSource = new MediaSource();
             remoteVideo.src = URL.createObjectURL(mediaSource);
 
             mediaSource.addEventListener('sourceopen', function() {
-                console.log('MSE: sourceopen, codec:', codec);
-
                 try {
                     sourceBuffer = mediaSource.addSourceBuffer(codec);
                     sourceBuffer.mode = 'sequence';
@@ -686,21 +756,14 @@
                     sourceBuffer.addEventListener('updateend', function() {
                         onMSEUpdateEnd();
                     });
-
                     sourceBuffer.addEventListener('error', function(e) {
                         diagMSEErrors++;
                         diagLog('MSE ERROR sb error');
-                        console.error('MSE: SourceBuffer error:', e);
                     });
 
                     mseReady = true;
-
-                    if (mseQueue.length > 0) {
-                        console.log('MSE: Processing ' + mseQueue.length + ' queued chunks');
-                        processMSEQueue();
-                    }
+                    if (mseQueue.length > 0) processMSEQueue();
                 } catch (e) {
-                    console.error('MSE: addSourceBuffer error:', e);
                     showError('MSE codec not supported: ' + codec);
                 }
             });
@@ -712,7 +775,7 @@
                 setTimeout(function() {
                     trimBuffer();
                     trimScheduled = false;
-                }, 1000);
+                }, 500); // чаще чем было (1000)
             }
             processMSEQueue();
         }
@@ -722,16 +785,23 @@
             if (mseQueue.length === 0) return;
 
             var chunkData = mseQueue.shift();
-
             try {
-                var uint8 = new Uint8Array(chunkData);
-                sourceBuffer.appendBuffer(uint8);
+                sourceBuffer.appendBuffer(new Uint8Array(chunkData));
                 diagMSEAppends++;
 
-                // После первого append — явно запустить воспроизведение
                 if (!firstAppendDone) {
                     firstAppendDone = true;
                     remoteVideo.play().then(function() {
+                        // На первом play — прыгнуть к live edge
+                        try {
+                            if (remoteVideo.buffered && remoteVideo.buffered.length > 0) {
+                                var bufEnd = remoteVideo.buffered.end(remoteVideo.buffered.length - 1);
+                                var target = Math.max(bufEnd - 0.3, remoteVideo.buffered.start(0) + 0.1);
+                                if (target > remoteVideo.currentTime + 0.5) {
+                                    remoteVideo.currentTime = target;
+                                }
+                            }
+                        } catch(e) {}
                         diagLog('PLAY started ct=' + remoteVideo.currentTime.toFixed(1));
                     }).catch(function(e) {
                         diagLog('PLAY failed: ' + e.message);
@@ -740,7 +810,6 @@
             } catch (e) {
                 diagMSEErrors++;
                 diagLog('MSE ERR append ' + chunkData.byteLength + 'B: ' + e.message);
-                console.error('MSE: appendBuffer error:', e);
                 processMSEQueue();
             }
         }
@@ -748,7 +817,6 @@
         function trimBuffer() {
             if (!sourceBuffer || sourceBuffer.updating) return;
             if (!remoteVideo.buffered || remoteVideo.buffered.length === 0) return;
-
             try {
                 var buffered = remoteVideo.buffered;
                 var bufferEnd = buffered.end(buffered.length - 1);
@@ -758,7 +826,6 @@
                 if (bufferDuration > MAX_BUFFER_SECONDS) {
                     var removeEnd = bufferEnd - MAX_BUFFER_SECONDS;
                     if (removeEnd > bufferStart + 0.5) {
-                        // Если currentTime в удаляемом диапазоне — сдвинуть к началу оставшегося
                         if (remoteVideo.currentTime < removeEnd) {
                             remoteVideo.currentTime = removeEnd + 0.1;
                         }
@@ -768,69 +835,24 @@
             } catch (e) {}
         }
 
-        function handleRemoteChunks(chunks) {
-            if (!chunks || chunks.length === 0) return;
-
-            for (var i = 0; i < chunks.length; i++) {
-                var chunk = chunks[i];
-                if (chunk.index > lastReceivedIndex) {
-                    lastReceivedIndex = chunk.index;
-                    mseQueue.push(chunk.data);
-                    diagRecvChunks++;
-                    diagRecvBytes += chunk.data.byteLength;
-                }
-            }
-
-            if (mseReady) {
-                processMSEQueue();
-            }
-        }
-
-        // ============= Определение кодека =============
-        function detectCodec() {
-            var codecs = [
-                'video/webm;codecs="vp8,opus"',
-                'video/webm;codecs="vp9,opus"',
-                'video/webm;codecs="vp8"',
-                'video/webm;codecs="vp9"',
-                'video/webm',
-                'video/mp4;codecs="avc1.42E01E,mp4a.40.2"',
-                'video/mp4'
-            ];
-
-            for (var i = 0; i < codecs.length; i++) {
-                if (MediaSource.isTypeSupported(codecs[i]) &&
-                    (typeof MediaRecorder === 'undefined' || MediaRecorder.isTypeSupported(codecs[i]))) {
-                    console.log('Selected codec:', codecs[i]);
-                    return codecs[i];
-                }
-            }
-            return 'video/webm;codecs="vp8,opus"';
-        }
-
         // ============= MediaRecorder =============
         function setupMediaRecorder() {
             var codec = negotiatedCodec || detectCodec();
-            console.log('MediaRecorder using codec:', codec);
             try {
                 mediaRecorder = new MediaRecorder(localStream, {
                     mimeType: codec,
                     videoBitsPerSecond: 300000
                 });
             } catch (e) {
-                console.warn('MediaRecorder failed with negotiated codec, trying default:', e);
                 try {
                     mediaRecorder = new MediaRecorder(localStream, {
                         videoBitsPerSecond: 300000
                     });
                 } catch (e2) {
-                    console.error('MediaRecorder error:', e2);
                     showError('MediaRecorder not supported: ' + e2.message);
                     return;
                 }
             }
-
-            console.log('MediaRecorder codec:', mediaRecorder.mimeType);
 
             mediaRecorder.ondataavailable = function(e) {
                 if (e.data && e.data.size > 0 && isActive) {
@@ -839,24 +861,10 @@
                     });
                 }
             };
-
             mediaRecorder.onerror = function(e) {
                 console.error('MediaRecorder error:', e.error);
             };
-
             mediaRecorder.start(CHUNK_INTERVAL_MS);
-        }
-
-        // ============= Опрос сервера =============
-        function startPolling() {
-            pollInterval = setInterval(function() {
-                if (!isActive) return;
-                getChunks(lastReceivedIndex).then(function(chunks) {
-                    if (chunks && chunks.length > 0) {
-                        handleRemoteChunks(chunks);
-                    }
-                });
-            }, POLL_INTERVAL_MS);
         }
 
         // ============= Проверка активности пира =============
@@ -865,7 +873,6 @@
                 if (!isActive) return;
                 checkPeerAlive().then(function(alive) {
                     if (!alive && isActive) {
-                        console.log('Peer disconnected (no GET requests)');
                         hangup();
                     }
                 });
@@ -876,9 +883,7 @@
         micBtn.addEventListener('click', function() {
             if (!localStream) return;
             audioEnabled = !audioEnabled;
-            localStream.getAudioTracks().forEach(function(track) {
-                track.enabled = audioEnabled;
-            });
+            localStream.getAudioTracks().forEach(function(t) { t.enabled = audioEnabled; });
             micBtn.classList.toggle('off', !audioEnabled);
             micBtn.textContent = '🎤';
             updateControlsVisibility();
@@ -887,47 +892,34 @@
         camBtn.addEventListener('click', function() {
             if (!localStream) return;
             videoEnabled = !videoEnabled;
-            localStream.getVideoTracks().forEach(function(track) {
-                track.enabled = videoEnabled;
-            });
+            localStream.getVideoTracks().forEach(function(t) { t.enabled = videoEnabled; });
             camBtn.classList.toggle('off', !videoEnabled);
             camBtn.textContent = videoEnabled ? '📷' : '📷';
             updateControlsVisibility();
         });
 
-        hangupBtn.addEventListener('click', function() {
-            hangup();
-        });
+        hangupBtn.addEventListener('click', function() { hangup(); });
 
         function updateControlsVisibility() {
-            var pipControls = document.getElementById('pipControls');
-            if (micBtn.classList.contains('off') || camBtn.classList.contains('off')) {
-                pipControls.classList.add('has-off');
-            } else {
-                pipControls.classList.remove('has-off');
-            }
+            var pc = document.getElementById('pipControls');
+            if (micBtn.classList.contains('off') || camBtn.classList.contains('off')) pc.classList.add('has-off');
+            else pc.classList.remove('has-off');
         }
 
         function hangup() {
             isActive = false;
 
-            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-                mediaRecorder.stop();
-            }
-            if (pollInterval) {
-                clearInterval(pollInterval);
-                pollInterval = null;
-            }
-            if (aliveInterval) {
-                clearInterval(aliveInterval);
-                aliveInterval = null;
+            disconnectWS();
+
+            if (httpPollInterval) {
+                clearInterval(httpPollInterval);
+                httpPollInterval = null;
             }
 
-            if (localStream) {
-                localStream.getTracks().forEach(function(track) { track.stop(); });
-            }
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+            if (aliveInterval) { clearInterval(aliveInterval); aliveInterval = null; }
+            if (localStream) localStream.getTracks().forEach(function(t) { t.stop(); });
 
-            // Закрываем MSE
             mseReady = false;
             mseQueue = [];
             if (mediaSource && mediaSource.readyState === 'open') {
@@ -935,7 +927,6 @@
             }
 
             endCall();
-
             setTimeout(function() { window.close(); }, 1500);
         }
 
@@ -946,12 +937,9 @@
 
         window.addEventListener('beforeunload', function() {
             isActive = false;
-            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-                mediaRecorder.stop();
-            }
-            if (localStream) {
-                localStream.getTracks().forEach(function(track) { track.stop(); });
-            }
+            disconnectWS();
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+            if (localStream) localStream.getTracks().forEach(function(t) { t.stop(); });
             endCall();
         });
     </script>

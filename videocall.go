@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/gorilla/websocket"
 	log "github.com/schollz/logger"
 )
 
@@ -50,6 +51,10 @@ type VideoCallRoom struct {
 	GuestWidth    int
 	GuestHeight   int
 
+	// WebSocket соединения для мгновенной доставки чанков
+	wsConns map[string]*wsConn // peerID -> ws connection (с мьютексом на запись)
+	wsMu    sync.Mutex
+
 	mu sync.Mutex
 }
 
@@ -63,10 +68,26 @@ var callStore = &VideoCallStorage{
 	rooms: make(map[string]*VideoCallRoom),
 }
 
+// WebSocket upgrader
+var wsUpgrader = websocket.Upgrader{
+	ReadBufferSize:  1 << 20, // 1 MB
+	WriteBufferSize: 1 << 20, // 1 MB
+	CheckOrigin: func(r *http.Request) bool {
+		return true // Разрешаем все origins для локального использования
+	},
+}
+
+// wsConn оборачивает WebSocket соединение с мьютексом для безопасной записи
+type wsConn struct {
+	conn *websocket.Conn
+	mu   sync.Mutex
+}
+
 const (
 	maxChunksPerPeer = 300             // ~30 секунд при 10 чанков/сек
 	maxChunkSize     = 1 << 20         // 1 MB максимальный размер чанка
 	peerTimeout      = 5 * time.Second // Таймаут отсутствия GET от пира
+	wsHistoryLimit   = 20              // Максимум чанков истории при WS подключении
 )
 
 // createRoom создаёт новую комнату видеозвонка или возвращает ошибку если комната уже существует
@@ -86,6 +107,7 @@ func (vs *VideoCallStorage) createRoom(roomID string) (*VideoCallRoom, error) {
 		ChunkLock:    make(map[string]*sync.Mutex),
 		LastPollTime: make(map[string]time.Time),
 		WaitingChan:  make(chan struct{}),
+		wsConns:      make(map[string]*wsConn),
 	}
 	vs.rooms[roomID] = room
 	return room, nil
@@ -176,6 +198,48 @@ func (r *VideoCallRoom) notifyPeerJoined() {
 		// Уже закрыт
 	default:
 		close(r.WaitingChan)
+	}
+}
+
+// setWS сохраняет WebSocket соединение пира
+func (r *VideoCallRoom) setWS(peerID string, conn *websocket.Conn) {
+	r.wsMu.Lock()
+	defer r.wsMu.Unlock()
+	// Закрываем предыдущее соединение если есть
+	if old, ok := r.wsConns[peerID]; ok {
+		old.conn.Close()
+	}
+	r.wsConns[peerID] = &wsConn{conn: conn}
+}
+
+// getWS возвращает WebSocket соединение пира
+func (r *VideoCallRoom) getWS(peerID string) *wsConn {
+	r.wsMu.Lock()
+	defer r.wsMu.Unlock()
+	return r.wsConns[peerID]
+}
+
+// removeWS удаляет WebSocket соединение пира
+func (r *VideoCallRoom) removeWS(peerID string) {
+	r.wsMu.Lock()
+	defer r.wsMu.Unlock()
+	delete(r.wsConns, peerID)
+}
+
+// forwardChunkToWS отправляет чанк пиру через WebSocket (thread-safe)
+func (r *VideoCallRoom) forwardChunkToWS(peerID string, data []byte) {
+	r.wsMu.Lock()
+	wsc := r.wsConns[peerID]
+	r.wsMu.Unlock()
+
+	if wsc == nil {
+		return
+	}
+
+	wsc.mu.Lock()
+	defer wsc.mu.Unlock()
+	if err := wsc.conn.WriteMessage(websocket.BinaryMessage, data); err != nil {
+		log.Debugf("WS forward error to %s: %v", peerID, err)
 	}
 }
 
@@ -346,7 +410,7 @@ func handleCallJoin(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// handleCallChunkPost обрабатывает POST /api/call/chunk — отправка WebM-чанка
+// handleCallChunkPost обрабатывает POST /api/call/chunk — отправка WebM-чанка (HTTP fallback)
 func handleCallChunkPost(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -377,13 +441,35 @@ func handleCallChunkPost(w http.ResponseWriter, r *http.Request) {
 
 	idx := room.addChunk(peerID, data)
 
+	// Определяем remote peer и перенаправляем чанк через WS
+	remotePeer := getRemotePeer(room, peerID)
+	if remotePeer != "" {
+		room.forwardChunkToWS(remotePeer, data)
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"index": idx,
 	})
 }
 
-// handleCallChunkGet обрабатывает GET /api/call/chunk — получение WebM-чанков (long poll)
+// getRemotePeer возвращает ID другого пира в комнате
+func getRemotePeer(room *VideoCallRoom, myPeerID string) string {
+	room.mu.Lock()
+	defer room.mu.Unlock()
+	for peerID := range room.ChunkIdx {
+		if peerID != myPeerID {
+			return peerID
+		}
+	}
+	// Если только один пир, пробуем по имени
+	if myPeerID == "host" {
+		return "guest"
+	}
+	return "host"
+}
+
+// handleCallChunkGet обрабатывает GET /api/call/chunk — получение WebM-чанков (HTTP fallback)
 func handleCallChunkGet(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -449,6 +535,130 @@ func handleCallChunkGet(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// handleCallWS обрабатывает WebSocket соединение для мгновенной доставки чанков
+func handleCallWS(w http.ResponseWriter, r *http.Request) {
+	roomID := r.URL.Query().Get("room")
+	peerID := r.URL.Query().Get("peer")
+
+	if roomID == "" || peerID == "" {
+		http.Error(w, "room and peer are required", http.StatusBadRequest)
+		return
+	}
+
+	room := callStore.getRoom(roomID)
+	if room == nil {
+		http.Error(w, "Room not found", http.StatusNotFound)
+		return
+	}
+
+	// Upgrade to WebSocket
+	conn, err := wsUpgrader.Upgrade(w, r, nil)
+	if err != nil {
+		log.Errorf("WS upgrade error: %v", err)
+		return
+	}
+	defer conn.Close()
+
+	// Создаём wsConn с мьютексом для безопасной записи
+	wsc := &wsConn{conn: conn}
+
+	// Сохраняем соединение
+	room.wsMu.Lock()
+	if old, ok := room.wsConns[peerID]; ok {
+		old.conn.Close()
+	}
+	room.wsConns[peerID] = wsc
+	room.wsMu.Unlock()
+	defer room.removeWS(peerID)
+
+	// Обновляем время активности
+	room.mu.Lock()
+	room.LastPollTime[peerID] = time.Now()
+	room.mu.Unlock()
+
+	log.Debugf("WS connected: room=%s peer=%s", roomID, peerID)
+
+	// Определяем remote peer
+	remotePeer := getRemotePeer(room, peerID)
+
+	// Отправляем последние чанки (ограничено wsHistoryLimit) при подключении
+	lastIdx := room.getLastIndex(remotePeer)
+	if lastIdx >= 0 {
+		chunks := room.getChunksAfter(remotePeer, -1)
+		// Ограничиваем историю до последних wsHistoryLimit чанков
+		start := 0
+		if len(chunks) > wsHistoryLimit {
+			start = len(chunks) - wsHistoryLimit
+		}
+		history := chunks[start:]
+		wsc.mu.Lock()
+		for _, chunk := range history {
+			if err := conn.WriteMessage(websocket.BinaryMessage, chunk.Data); err != nil {
+				wsc.mu.Unlock()
+				log.Debugf("WS send history error: %v", err)
+				return
+			}
+		}
+		wsc.mu.Unlock()
+		log.Debugf("WS sent %d/%d history chunks to %s", len(history), len(chunks), peerID)
+	}
+
+	// Ping goroutine для поддержания WS alive
+	done := make(chan struct{})
+	go func() {
+		ticker := time.NewTicker(15 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				wsc.mu.Lock()
+				err := conn.WriteMessage(websocket.PingMessage, nil)
+				wsc.mu.Unlock()
+				if err != nil {
+					return
+				}
+			case <-done:
+				return
+			}
+		}
+	}()
+	defer close(done)
+
+	conn.SetPingHandler(func(appData string) error {
+		wsc.mu.Lock()
+		defer wsc.mu.Unlock()
+		return conn.WriteMessage(websocket.PongMessage, nil)
+	})
+
+	// Читаем входящие чанки и перенаправляем их remote peer
+	for {
+		msgType, data, err := conn.ReadMessage()
+		if err != nil {
+			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseNormalClosure) {
+				log.Debugf("WS read error room=%s peer=%s: %v", roomID, peerID, err)
+			}
+			break
+		}
+
+		// Обновляем время активности
+		room.mu.Lock()
+		room.LastPollTime[peerID] = time.Now()
+		room.mu.Unlock()
+
+		if msgType == websocket.BinaryMessage && len(data) > 0 {
+			// Сохраняем чанк в памяти (для reconnect/history)
+			room.addChunk(peerID, data)
+
+			// Мгновенно перенаправляем remote peer через WS
+			if remotePeer != "" {
+				room.forwardChunkToWS(remotePeer, data)
+			}
+		}
+	}
+
+	log.Debugf("WS disconnected: room=%s peer=%s", roomID, peerID)
+}
+
 // handleCallAlive обрабатывает GET /api/call/alive — проверка активности пира
 func handleCallAlive(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
@@ -475,7 +685,12 @@ func handleCallAlive(w http.ResponseWriter, r *http.Request) {
 	lastPoll, exists := room.LastPollTime[peerID]
 	room.mu.Unlock()
 
-	alive := exists && time.Since(lastPoll) < peerTimeout
+	// Проверяем и WS соединение и HTTP poll время
+	wsc := room.getWS(peerID)
+	wsAlive := wsc != nil && wsc.conn != nil
+	httpAlive := exists && time.Since(lastPoll) < peerTimeout
+
+	alive := wsAlive || httpAlive
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{"alive": alive})
@@ -492,6 +707,23 @@ func handleCallEnd(w http.ResponseWriter, r *http.Request) {
 	if roomID == "" {
 		http.Error(w, "Room ID is required", http.StatusBadRequest)
 		return
+	}
+
+	// Закрываем все WS соединения перед удалением комнаты
+	room := callStore.getRoom(roomID)
+	if room != nil {
+		room.wsMu.Lock()
+		for _, wsc := range room.wsConns {
+			if wsc != nil {
+				wsc.mu.Lock()
+				wsc.conn.WriteMessage(websocket.CloseMessage,
+					websocket.FormatCloseMessage(websocket.CloseNormalClosure, "call ended"))
+				wsc.conn.Close()
+				wsc.mu.Unlock()
+			}
+		}
+		room.wsConns = make(map[string]*wsConn)
+		room.wsMu.Unlock()
 	}
 
 	callStore.deleteRoom(roomID)
@@ -513,6 +745,8 @@ func handleCallAPI(w http.ResponseWriter, r *http.Request) {
 		handleCallWait(w, r)
 	case strings.HasSuffix(path, "/join"):
 		handleCallJoin(w, r)
+	case strings.HasSuffix(path, "/ws"):
+		handleCallWS(w, r)
 	case strings.HasSuffix(path, "/chunk") && r.Method == http.MethodPost:
 		handleCallChunkPost(w, r)
 	case strings.HasSuffix(path, "/chunk") && r.Method == http.MethodGet:
