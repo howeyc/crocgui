@@ -67,6 +67,37 @@
         .ctrl-btn.fullscreen.off { background: #e94560; }
         .ctrl-btn.screen { background: #4ecca3; }
         .ctrl-btn.screen.off { background: #e94560; }
+        .audio-controls {
+            position: absolute;
+            top: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: none;
+            gap: 4px;
+            z-index: 15;
+        }
+        .audio-controls.show {
+            display: flex;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        @media (hover: hover) {
+            .video-container:hover > .audio-controls.show,
+            .audio-controls.show.has-off {
+                opacity: 1;
+            }
+        }
+        @media (hover: none), (max-width: 600px) {
+            .audio-controls.show {
+                opacity: 1;
+            }
+        }
+        .ctrl-btn.ec { background: #4ecca3; }
+        .ctrl-btn.ec.off { background: #e94560; }
+        .ctrl-btn.ns { background: #4ecca3; }
+        .ctrl-btn.ns.off { background: #e94560; }
+        .ctrl-btn.agc { background: #4ecca3; }
+        .ctrl-btn.agc.off { background: #e94560; }
         .pip-container {
             position: absolute;
             width: 240px;
@@ -183,6 +214,11 @@
                 <button class="ctrl-btn fullscreen off" id="fullscreenBtn" title="Fullscreen">⬚</button>
                 <button class="ctrl-btn screen" id="remoteScreenBtn" title="Remote Video">💻</button>
             </div>
+            <div class="audio-controls" id="audioControls">
+                <button class="ctrl-btn ec" id="ecBtn" title="Echo Cancellation">EC</button>
+                <button class="ctrl-btn ns" id="nsBtn" title="Noise Suppression">NS</button>
+                <button class="ctrl-btn agc" id="agcBtn" title="Auto Gain Control">AGC</button>
+            </div>
             <div class="waiting-overlay hidden" id="waitingOverlay">
                 <div class="waiting-spinner"></div>
                 <div class="waiting-text" id="waitingText">Waiting for peer...</div>
@@ -201,7 +237,6 @@
     <script>
         // ============= Конфигурация =============
         var CHUNK_INTERVAL_MS = 100;   // Интервал отправки чанков MediaRecorder (мс)
-        var HTTP_POLL_MS = 200;        // Интервал HTTP-опроса (fallback)
         var MAX_BUFFER_SECONDS = 30;   // Максимальный буфер MSE (большой = нет агрессивного trim)
         var ALIVE_CHECK_MS = 3000;     // Интервал проверки активности пира
         var WS_RECONNECT_MS = 2000;    // Интервал переподключения WebSocket
@@ -218,6 +253,9 @@
         var remoteMuteBtn = document.getElementById('remoteMuteBtn');
         var remoteScreenBtn = document.getElementById('remoteScreenBtn');
         var fullscreenBtn = document.getElementById('fullscreenBtn');
+        var ecBtn = document.getElementById('ecBtn');
+        var nsBtn = document.getElementById('nsBtn');
+        var agcBtn = document.getElementById('agcBtn');
 
         var _chatUserId = localStorage.getItem('chatUserId') || 'user_' + Math.random().toString(36).substr(2, 9);
         localStorage.setItem('chatUserId', _chatUserId);
@@ -241,8 +279,6 @@
         var ws = null;
         var wsConnected = false;
         var wsReconnectTimer = null;
-        var useHTTPFallback = false;
-        var httpPollInterval = null;
 
         // MSE состояние
         var mediaSource = null;
@@ -263,7 +299,12 @@
         var diagLastLogTime = 0;
 
         var remoteAudioOn = true;
+        // Показываем EC/NS/AGC т.к. 🔊 включён
+        document.getElementById('audioControls').classList.add('show');
         var remoteVideoOn = true;
+        var ecEnabled = true;
+        var nsEnabled = true;
+        var agcEnabled = true;
 
         // PiP
         var pipCorners = ['pip-br', 'pip-bl', 'pip-tl', 'pip-tr'];
@@ -305,6 +346,7 @@
             remoteVideo.muted = !remoteAudioOn;
             remoteMuteBtn.classList.toggle('off', !remoteAudioOn);
             remoteMuteBtn.textContent = '🔈';
+            document.getElementById('audioControls').classList.toggle('show', remoteAudioOn);
             updateRemoteControlsVisibility();
         });
         remoteScreenBtn.addEventListener('click', function(e) {
@@ -319,7 +361,41 @@
             var rc = document.getElementById('remoteControls');
             if (remoteMuteBtn.classList.contains('off') || remoteScreenBtn.classList.contains('off')) rc.classList.add('has-off');
             else rc.classList.remove('has-off');
+            var ac = document.getElementById('audioControls');
+            if (ecBtn.classList.contains('off') || nsBtn.classList.contains('off') || agcBtn.classList.contains('off')) ac.classList.add('has-off');
+            else ac.classList.remove('has-off');
         }
+
+        // Audio constraints toggles (EC/NS/AGC)
+        function toggleAudioConstraint(prop, btn, enabled) {
+            if (!localStream) return enabled;
+            var tracks = localStream.getAudioTracks();
+            if (tracks.length === 0) return enabled;
+            var newVal = !enabled;
+            try {
+                var constraints = {};
+                constraints[prop] = newVal;
+                tracks[0].applyConstraints({ advanced: [constraints] });
+                btn.classList.toggle('off', !newVal);
+                updateRemoteControlsVisibility();
+                return newVal;
+            } catch (e) {
+                diagLog(prop + ' toggle failed: ' + e.message);
+                return enabled;
+            }
+        }
+        ecBtn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            ecEnabled = toggleAudioConstraint('echoCancellation', ecBtn, ecEnabled);
+        });
+        nsBtn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            nsEnabled = toggleAudioConstraint('noiseSuppression', nsBtn, nsEnabled);
+        });
+        agcBtn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            agcEnabled = toggleAudioConstraint('autoGainControl', agcBtn, agcEnabled);
+        });
 
         if (!roomID) {
             showError('No room ID specified. URL: /videocall.html?room=ROOM_ID');
@@ -353,14 +429,13 @@
             var rate = remoteVideo.playbackRate.toFixed(2);
             var paused = remoteVideo.paused ? ' PAUSED' : '';
             var waiting = remoteVideo.readyState < 3 ? ' WAITING' : '';
-            var transport = wsConnected ? 'WS' : (useHTTPFallback ? 'HTTP' : 'none');
-            diagLog('STAT sent:' + diagSentChunks + '(' + (diagSentBytes / 1024).toFixed(0) + 'KB) ' +
-                'recv:' + diagRecvChunks + '(' + (diagRecvBytes / 1024).toFixed(0) + 'KB) ' +
-                'appends:' + diagMSEAppends + ' errs:' + diagMSEErrors + ' ' +
-                'q:' + mseQueue.length + ' sb:' + sbState + ' buf:' + bufInfo +
-                ' ct:' + ct + ' rate:' + rate + ' [' + transport + ']' + paused + waiting);
+            var transport = wsConnected ? 'WS' : 'reconnecting';
+            diagLog('STAT sent:' + (diagSentBytes / 1024).toFixed(0) + 'KB' +
+                ' recv:' + (diagRecvBytes / 1024).toFixed(0) + 'KB' +
+                ' appends:' + diagMSEAppends + ' errs:' + diagMSEErrors +
+                ' buf:' + bufInfo + ' ct:' + ct + ' [' + transport + ']' + paused + waiting);
         }
-        setInterval(function() { diagStats(); }, 10000);
+        setInterval(function() { diagStats(); }, 30000);
 
         // ============= Экстренный seek (только при >8с отставания) =============
         setInterval(function() {
@@ -391,13 +466,12 @@
 
         // ============= Кодеки =============
         var ALL_CODECS = [
+            // H.264 — аппаратное кодирование (приоритет, WebM контейнер)
+            'video/webm;codecs="h264,opus"',               // Chrome/Edge/Android: H.264 HW + Opus
+            // VP8/VP9 — программное кодирование (fallback)
             'video/webm;codecs="vp8,opus"',
             'video/webm;codecs="vp9,opus"',
-            'video/webm;codecs="vp8"',
-            'video/webm;codecs="vp9"',
-            'video/webm',
-            'video/mp4;codecs="avc1.42E01E,mp4a.40.2"',
-            'video/mp4'
+            'video/webm'
         ];
 
         function detectSupportedCodecs() {
@@ -432,16 +506,21 @@
 
                 localStream = await navigator.mediaDevices.getUserMedia({
                     video: { width: { ideal: W }, height: { ideal: H }, facingMode: 'user' },
-                    audio: true
+                    audio: {
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        autoGainControl: true
+                    }
                 });
                 localVideo.srcObject = localStream;
 
                 var myCodecs = detectSupportedCodecs();
+                diagLog('CODECS supported: ' + myCodecs.join(' | '));
 
                 var createResult = await tryCreateRoom(myCodecs, W, H);
                 isCreator = createResult.created;
 
-                diagLog('INIT peer=' + (isCreator ? 'host' : 'guest') + ' codec=' + (negotiatedCodec || 'pending') + ' cam=' + W + 'x' + H);
+                diagLog('INIT peer=' + (isCreator ? 'host' : 'guest') + ' cam=' + W + 'x' + H);
 
                 if (isCreator) {
                     myPeerID = 'host';
@@ -525,7 +604,7 @@
             }
         }
 
-        // Отправка чанка: WebSocket приоритет, HTTP fallback
+        // Отправка чанка через WebSocket
         async function sendChunk(buffer) {
             diagSentChunks++;
             diagSentBytes += buffer.byteLength;
@@ -533,34 +612,9 @@
             if (wsConnected && ws && ws.readyState === WebSocket.OPEN) {
                 try {
                     ws.send(buffer);
-                    return;
                 } catch (e) {
-                    console.warn('WS send error, falling back to HTTP:', e);
+                    console.warn('WS send error:', e);
                 }
-            }
-
-            // HTTP fallback
-            try {
-                await fetch('/api/call/chunk?room=' + encodeURIComponent(roomID) + '&peer=' + myPeerID, {
-                    method: 'POST',
-                    body: buffer
-                });
-            } catch (e) {
-                console.error('Send chunk error:', e);
-            }
-        }
-
-        async function getChunksHTTP(afterIndex) {
-            try {
-                var resp = await fetch('/api/call/chunk?room=' + encodeURIComponent(roomID) +
-                    '&peer=' + encodeURIComponent(remotePeerID) +
-                    '&self=' + encodeURIComponent(myPeerID) +
-                    '&after=' + afterIndex);
-                if (!resp.ok) return [];
-                var buf = await resp.arrayBuffer();
-                return parseChunksBinary(buf);
-            } catch (e) {
-                return [];
             }
         }
 
@@ -574,24 +628,6 @@
             } catch (e) {
                 return false;
             }
-        }
-
-        function parseChunksBinary(buf) {
-            var chunks = [];
-            var view = new DataView(buf);
-            var offset = 0;
-            if (buf.byteLength < 4) return chunks;
-            var count = view.getUint32(offset); offset += 4;
-            for (var i = 0; i < count; i++) {
-                if (offset + 8 > buf.byteLength) break;
-                var index = view.getUint32(offset); offset += 4;
-                var size = view.getUint32(offset); offset += 4;
-                if (offset + size > buf.byteLength) break;
-                var data = buf.slice(offset, offset + size);
-                offset += size;
-                chunks.push({ index: index, data: data });
-            }
-            return chunks;
         }
 
         async function endCall() {
@@ -636,19 +672,12 @@
                 ws.binaryType = 'arraybuffer';
             } catch (e) {
                 diagLog('WS create error: ' + e.message);
-                startHTTPFallback();
                 return;
             }
 
             ws.onopen = function() {
                 wsConnected = true;
-                useHTTPFallback = false;
                 diagLog('WS connected');
-                // Останавливаем HTTP polling если он был
-                if (httpPollInterval) {
-                    clearInterval(httpPollInterval);
-                    httpPollInterval = null;
-                }
             };
 
             ws.onmessage = function(event) {
@@ -665,9 +694,6 @@
                     wsReconnectTimer = setTimeout(function() {
                         connectWS();
                     }, WS_RECONNECT_MS);
-
-                    // Запускаем HTTP fallback пока WS переподключается
-                    if (!httpPollInterval) startHTTPFallback();
                 }
             };
 
@@ -704,41 +730,12 @@
             wsConnected = false;
         }
 
-        // ============= HTTP Fallback Polling =============
-        function startHTTPFallback() {
-            if (httpPollInterval) return;
-            useHTTPFallback = true;
-            diagLog('HTTP fallback started');
-            httpPollInterval = setInterval(function() {
-                if (!isActive || wsConnected) return;
-                getChunksHTTP(lastReceivedIndex).then(function(chunks) {
-                    if (chunks && chunks.length > 0) {
-                        handleRemoteChunksHTTP(chunks);
-                    }
-                });
-            }, HTTP_POLL_MS);
-        }
-
-        function handleRemoteChunksHTTP(chunks) {
-            if (!chunks || chunks.length === 0) return;
-            for (var i = 0; i < chunks.length; i++) {
-                var chunk = chunks[i];
-                if (chunk.index > lastReceivedIndex) {
-                    lastReceivedIndex = chunk.index;
-                    mseQueue.push(chunk.data);
-                    diagRecvChunks++;
-                    diagRecvBytes += chunk.data.byteLength;
-                }
-            }
-            if (mseReady) processMSEQueue();
-        }
-
         // ============= Звонок =============
         function startCall() {
             isActive = true;
             setupMSE();
             setupMediaRecorder();
-            connectWS(); // WebSocket транспорт (с HTTP fallback)
+            connectWS();
             startAliveCheck();
         }
 
@@ -910,11 +907,6 @@
             isActive = false;
 
             disconnectWS();
-
-            if (httpPollInterval) {
-                clearInterval(httpPollInterval);
-                httpPollInterval = null;
-            }
 
             if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
             if (aliveInterval) { clearInterval(aliveInterval); aliveInterval = null; }

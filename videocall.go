@@ -3,10 +3,8 @@ package main
 
 import (
 	_ "embed"
-	"encoding/binary"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"strings"
 	"sync"
@@ -410,49 +408,6 @@ func handleCallJoin(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// handleCallChunkPost обрабатывает POST /api/call/chunk — отправка WebM-чанка (HTTP fallback)
-func handleCallChunkPost(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	roomID := r.URL.Query().Get("room")
-	peerID := r.URL.Query().Get("peer")
-
-	if roomID == "" || peerID == "" {
-		http.Error(w, "room and peer are required", http.StatusBadRequest)
-		return
-	}
-
-	room := callStore.getRoom(roomID)
-	if room == nil {
-		http.Error(w, "Room not found", http.StatusNotFound)
-		return
-	}
-
-	// Ограничиваем размер чанка
-	r.Body = http.MaxBytesReader(w, r.Body, maxChunkSize)
-	data, err := io.ReadAll(r.Body)
-	if err != nil {
-		http.Error(w, "Failed to read chunk", http.StatusBadRequest)
-		return
-	}
-
-	idx := room.addChunk(peerID, data)
-
-	// Определяем remote peer и перенаправляем чанк через WS
-	remotePeer := getRemotePeer(room, peerID)
-	if remotePeer != "" {
-		room.forwardChunkToWS(remotePeer, data)
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"index": idx,
-	})
-}
-
 // getRemotePeer возвращает ID другого пира в комнате
 func getRemotePeer(room *VideoCallRoom, myPeerID string) string {
 	room.mu.Lock()
@@ -467,72 +422,6 @@ func getRemotePeer(room *VideoCallRoom, myPeerID string) string {
 		return "guest"
 	}
 	return "host"
-}
-
-// handleCallChunkGet обрабатывает GET /api/call/chunk — получение WebM-чанков (HTTP fallback)
-func handleCallChunkGet(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	roomID := r.URL.Query().Get("room")
-	peerID := r.URL.Query().Get("peer")    // Чьи чанки хотим получить
-	afterStr := r.URL.Query().Get("after") // После какого индекса
-
-	if roomID == "" || peerID == "" {
-		http.Error(w, "room and peer are required", http.StatusBadRequest)
-		return
-	}
-
-	selfPeerID := r.URL.Query().Get("self") // Кто запрашивает (для alive check)
-
-	var afterIndex int64 = -1
-	if afterStr != "" {
-		fmt.Sscanf(afterStr, "%d", &afterIndex)
-	}
-
-	room := callStore.getRoom(roomID)
-	if room == nil {
-		http.Error(w, "Room not found", http.StatusNotFound)
-		return
-	}
-
-	// Записываем время опроса от инициатора запроса (для проверки активности пира)
-	if selfPeerID != "" {
-		room.mu.Lock()
-		room.LastPollTime[selfPeerID] = time.Now()
-		room.mu.Unlock()
-	}
-
-	// Пытаемся получить чанки сразу
-	chunks := room.getChunksAfter(peerID, afterIndex)
-	if len(chunks) > 0 {
-		writeChunksBinary(w, chunks)
-		return
-	}
-
-	// Long poll: ждём до 10 секунд
-	deadline := time.After(10 * time.Second)
-	ticker := time.NewTicker(100 * time.Millisecond)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ticker.C:
-			chunks = room.getChunksAfter(peerID, afterIndex)
-			if len(chunks) > 0 {
-				writeChunksBinary(w, chunks)
-				return
-			}
-		case <-deadline:
-			// Пустой ответ — 0 чанков
-			writeChunksBinary(w, nil)
-			return
-		case <-r.Context().Done():
-			return
-		}
-	}
 }
 
 // handleCallWS обрабатывает WebSocket соединение для мгновенной доставки чанков
@@ -747,34 +636,12 @@ func handleCallAPI(w http.ResponseWriter, r *http.Request) {
 		handleCallJoin(w, r)
 	case strings.HasSuffix(path, "/ws"):
 		handleCallWS(w, r)
-	case strings.HasSuffix(path, "/chunk") && r.Method == http.MethodPost:
-		handleCallChunkPost(w, r)
-	case strings.HasSuffix(path, "/chunk") && r.Method == http.MethodGet:
-		handleCallChunkGet(w, r)
 	case strings.HasSuffix(path, "/alive"):
 		handleCallAlive(w, r)
 	case strings.HasSuffix(path, "/room"):
 		handleCallEnd(w, r)
 	default:
 		http.NotFound(w, r)
-	}
-}
-
-// writeChunksBinary записывает чанки в бинарном формате:
-// [4 байта: count (uint32 BE)]
-// для каждого чанка:
-//
-//	[4 байта: index (uint32 BE)]
-//	[4 байта: size (uint32 BE)]
-//	[N байт: data (raw binary)]
-func writeChunksBinary(w http.ResponseWriter, chunks []VideoChunk) {
-	w.Header().Set("Content-Type", "application/octet-stream")
-	count := uint32(len(chunks))
-	binary.Write(w, binary.BigEndian, count)
-	for _, chunk := range chunks {
-		binary.Write(w, binary.BigEndian, uint32(chunk.Index))
-		binary.Write(w, binary.BigEndian, uint32(len(chunk.Data)))
-		w.Write(chunk.Data)
 	}
 }
 
