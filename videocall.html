@@ -244,6 +244,11 @@
         var remoteScreenBtn = document.getElementById('remoteScreenBtn');
         var fullscreenBtn = document.getElementById('fullscreenBtn');
 
+
+        // ============= Общий ID пользователя для чата =============
+        var _chatUserId = localStorage.getItem('chatUserId') || 'user_' + Math.random().toString(36).substr(2, 9);
+        localStorage.setItem('chatUserId', _chatUserId);
+
         // ============= Состояние =============
         var params = new URLSearchParams(window.location.search);
         var roomID = params.get('room') || '';
@@ -361,19 +366,17 @@
         }
 
         // ============= Диагностическое логирование (раскомментировать для отладки) =============
-        function diagLog(msg) {}
-        /*
+    //    function diagLog(msg) {}
         function diagLog(msg) {
-            console.log('[DIAG] ' + msg);
+            // console.log('[DIAG] ' + msg);
             try {
                 fetch('/api/messages', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ text: '🔧[' + myPeerID + '] ' + msg, sender: 'vc_' + roomID })
+                    body: JSON.stringify({ text: '🔧 ' + msg, sender: _chatUserId })
                 });
             } catch (e) {}
-        }
-        */
+        } 
 
         function diagStats() {
             if (!isActive) return;
