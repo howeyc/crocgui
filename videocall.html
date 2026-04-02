@@ -60,8 +60,8 @@
         .controls-panel {
             position: absolute;
             top: 8px;
-            display: grid;
-            grid-template-columns: 1fr;
+            display: flex;
+            flex-direction: column;
             gap: 4px;
             z-index: 15;
             transition: right 0.3s ease, left 0.3s ease;
@@ -73,6 +73,12 @@
             gap: 4px;
             align-items: center;
             width: 100%;
+        }
+        /* ====== ГЛАВНОЕ ПРАВИЛО: все кнопки в ряду занимают одинаковую ширину ====== */
+        .controls-row .ctrl-btn {
+            flex: 1;
+            min-width: 0;
+            width: auto !important;  /* переопределяем фиксированную ширину */
         }
         .pip-container {
             position: absolute;
