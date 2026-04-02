@@ -38,66 +38,41 @@
             height: 100%;
             object-fit: contain;
             background: #000;
+            transition: transform 0.2s ease;
         }
-        .remote-controls {
+        .video-container video.fit-1to1 {
+            width: auto;
+            height: auto;
+            max-width: none;
+            max-height: none;
+            object-fit: none;
+            transform: none;
+        }
+        .video-container video.fit-half {
+            max-width: none;
+            max-height: none;
+            object-fit: contain;
+        }
+        .video-container video.fit-2x {
+            transform: scale(2);
+        }
+        /* Панель управления — 3 ряда, всегда видна */
+        .controls-panel {
             position: absolute;
             top: 8px;
-            left: 50%;
-            transform: translateX(-50%);
             display: flex;
+            flex-direction: column;
             gap: 4px;
             z-index: 15;
-            opacity: 0;
-            transition: opacity 0.3s;
+            transition: right 0.3s ease, left 0.3s ease;
         }
-        @media (hover: hover) {
-            .video-container:hover > .remote-controls,
-            .remote-controls.has-off {
-                opacity: 1;
-            }
-        }
-        @media (hover: none), (max-width: 600px) {
-            .remote-controls {
-                opacity: 1;
-            }
-        }
-        .ctrl-btn.speaker { background: #4ecca3; }
-        .ctrl-btn.speaker.off { background: #e94560; }
-        .ctrl-btn.fullscreen { background: #4ecca3; }
-        .ctrl-btn.fullscreen.off { background: #e94560; }
-        .ctrl-btn.screen { background: #4ecca3; }
-        .ctrl-btn.screen.off { background: #e94560; }
-        .audio-controls {
-            position: absolute;
-            top: 40px;
-            left: 50%;
-            transform: translateX(-50%);
-            display: none;
-            gap: 4px;
-            z-index: 15;
-        }
-        .audio-controls.show {
+        .controls-panel.pos-right { right: 8px; left: auto; }
+        .controls-panel.pos-left { left: 8px; right: auto; }
+        .controls-row {
             display: flex;
-            opacity: 0;
-            transition: opacity 0.3s;
+            gap: 4px;
+            align-items: center;
         }
-        @media (hover: hover) {
-            .video-container:hover > .audio-controls.show,
-            .audio-controls.show.has-off {
-                opacity: 1;
-            }
-        }
-        @media (hover: none), (max-width: 600px) {
-            .audio-controls.show {
-                opacity: 1;
-            }
-        }
-        .ctrl-btn.ec { background: #4ecca3; }
-        .ctrl-btn.ec.off { background: #e94560; }
-        .ctrl-btn.ns { background: #4ecca3; }
-        .ctrl-btn.ns.off { background: #e94560; }
-        .ctrl-btn.agc { background: #4ecca3; }
-        .ctrl-btn.agc.off { background: #e94560; }
         .pip-container {
             position: absolute;
             width: 240px;
@@ -109,10 +84,8 @@
             border: 1px solid rgba(255,255,255,0.3);
             z-index: 20;
             cursor: pointer;
-            transition: top 0.3s ease, bottom 0.3s ease, left 0.3s ease, right 0.3s ease;
+            transition: top 0.3s ease, left 0.3s ease, right 0.3s ease;
         }
-        .pip-container.pip-br { bottom: 12px; right: 12px; top: auto; left: auto; }
-        .pip-container.pip-bl { bottom: 12px; left: 12px; top: auto; right: auto; }
         .pip-container.pip-tl { top: 12px; left: 12px; bottom: auto; right: auto; }
         .pip-container.pip-tr { top: 12px; right: 12px; bottom: auto; left: auto; }
         .pip-container video {
@@ -155,14 +128,10 @@
         }
         @media (hover: hover) {
             .pip-container:hover .pip-controls,
-            .pip-controls.has-off {
-                opacity: 1;
-            }
+            .pip-controls.has-off { opacity: 1; }
         }
         @media (hover: none), (max-width: 600px) {
-            .pip-controls {
-                opacity: 1;
-            }
+            .pip-controls { opacity: 1; }
         }
         .ctrl-btn {
             height: 28px;
@@ -177,15 +146,33 @@
             justify-content: center;
             transition: all 0.2s;
             color: white;
+            background: #4ecca3;
         }
         .ctrl-btn:hover { transform: scale(1.05); }
         .ctrl-btn:active { transform: scale(0.95); }
+        .ctrl-btn.off { background: #e94560; }
         .ctrl-btn.mic { background: #4ecca3; }
         .ctrl-btn.mic.off { background: #e94560; }
         .ctrl-btn.cam { background: #4ecca3; }
         .ctrl-btn.cam.off { background: #e94560; }
-        .ctrl-btn.hangup { background: #4ecca3; }
-        .ctrl-btn.hangup:hover { background: #3db892; }
+        .ctrl-btn.hangup { background: #e94560; }
+        .ctrl-btn.hangup:hover { background: #c33; }
+        .ctrl-btn.fit {
+            width: auto;
+            padding: 0 8px;
+            font-size: 0.65em;
+            font-family: monospace;
+            white-space: nowrap;
+        }
+        .ctrl-btn.codec {
+            width: auto;
+            padding: 0 6px;
+            font-size: 0.6em;
+            font-family: monospace;
+            white-space: nowrap;
+        }
+        .ctrl-btn.mpx { background: #555; font-size: 1em; }
+        .ctrl-btn.mpx.active { background: #4ecca3; }
         .error-banner {
             background: #e94560;
             color: white;
@@ -201,6 +188,7 @@
         @media (max-width: 600px) {
             .pip-container { width: 30%; height: auto; aspect-ratio: 4/3; min-width: 80px; }
             .ctrl-btn { height: 36px; width: 36px; font-size: 1em; }
+            .ctrl-btn.fit, .ctrl-btn.codec { font-size: 0.75em; }
         }
     </style>
 </head>
@@ -209,15 +197,33 @@
     <div class="videos">
         <div class="video-container main-video">
             <video id="remoteVideo" autoplay playsinline></video>
-            <div class="remote-controls" id="remoteControls">
-                <button class="ctrl-btn speaker" id="remoteMuteBtn" title="Remote Audio">🔈</button>
-                <button class="ctrl-btn fullscreen off" id="fullscreenBtn" title="Fullscreen">⬚</button>
-                <button class="ctrl-btn screen" id="remoteScreenBtn" title="Remote Video">💻</button>
-            </div>
-            <div class="audio-controls" id="audioControls">
-                <button class="ctrl-btn ec" id="ecBtn" title="Echo Cancellation">EC</button>
-                <button class="ctrl-btn ns" id="nsBtn" title="Noise Suppression">NS</button>
-                <button class="ctrl-btn agc" id="agcBtn" title="Auto Gain Control">AGC</button>
+            <!-- Панель из 3 рядов -->
+            <div class="controls-panel pos-right" id="controlsPanel">
+                <!-- Ряд 1: Fit, ⬚, ❌ -->
+                <div class="controls-row">
+                    <button class="ctrl-btn fit" id="fitBtn" title="Fit Mode">Fit</button>
+                    <button class="ctrl-btn fullscreen off" id="fullscreenBtn" title="Fullscreen">⬚</button>
+                    <button class="ctrl-btn hangup" id="hangupBtn" title="Hangup">❌</button>
+                </div>
+                <!-- Ряд 2: 💻 VP8 H264 + мегапиксельный множитель для запроса пиру -->
+                <div class="controls-row">
+                    <button class="ctrl-btn screen" id="remoteScreenBtn" title="Remote Video">💻</button>
+                    <button class="ctrl-btn codec" id="vp8Btn" title="VP8">VP8</button>
+                    <button class="ctrl-btn codec" id="h264Btn" title="H.264">H264</button>
+                    <button class="ctrl-btn codec mpx" id="mpx32Btn" title="1.5x megapixels">³⁄₂</button>
+                    <button class="ctrl-btn codec mpx active" id="mpx1Btn" title="Full resolution">1</button>
+                    <button class="ctrl-btn codec mpx" id="mpx13Btn" title="1/3 megapixels">⅓</button>
+                    <button class="ctrl-btn codec mpx" id="mpx15Btn" title="1/5 megapixels">⅕</button>
+                </div>
+                <!-- Ряд 3: 🔈 Opus AAC EC NS AGC -->
+                <div class="controls-row">
+                    <button class="ctrl-btn speaker" id="remoteMuteBtn" title="Remote Audio">🔈</button>
+                    <button class="ctrl-btn codec" id="opusBtn" title="Opus">Opus</button>
+                    <button class="ctrl-btn codec" id="aacBtn" title="AAC">AAC</button>
+                    <button class="ctrl-btn codec" id="ecBtn" title="Echo Cancellation">EC</button>
+                    <button class="ctrl-btn codec" id="nsBtn" title="Noise Suppression">NS</button>
+                    <button class="ctrl-btn codec" id="agcBtn" title="Auto Gain Control">AGC</button>
+                </div>
             </div>
             <div class="waiting-overlay hidden" id="waitingOverlay">
                 <div class="waiting-spinner"></div>
@@ -227,7 +233,6 @@
                 <video id="localVideo" autoplay muted playsinline></video>
                 <div class="pip-controls" id="pipControls">
                     <button class="ctrl-btn mic" id="micBtn" title="Mic">🎤</button>
-                    <button class="ctrl-btn hangup" id="hangupBtn" title="Close">❌</button>
                     <button class="ctrl-btn cam" id="camBtn" title="Cam">📷</button>
                 </div>
             </div>
@@ -236,10 +241,10 @@
 
     <script>
         // ============= Конфигурация =============
-        var CHUNK_INTERVAL_MS = 100;   // Интервал отправки чанков MediaRecorder (мс)
-        var MAX_BUFFER_SECONDS = 30;   // Максимальный буфер MSE (большой = нет агрессивного trim)
-        var ALIVE_CHECK_MS = 3000;     // Интервал проверки активности пира
-        var WS_RECONNECT_MS = 2000;    // Интервал переподключения WebSocket
+        var CHUNK_INTERVAL_MS = 100;
+        var MAX_BUFFER_SECONDS = 30;
+        var ALIVE_CHECK_MS = 3000;
+        var WS_RECONNECT_MS = 2000;
 
         // ============= Элементы UI =============
         var localVideo = document.getElementById('localVideo');
@@ -253,6 +258,15 @@
         var remoteMuteBtn = document.getElementById('remoteMuteBtn');
         var remoteScreenBtn = document.getElementById('remoteScreenBtn');
         var fullscreenBtn = document.getElementById('fullscreenBtn');
+        var fitBtn = document.getElementById('fitBtn');
+        var vp8Btn = document.getElementById('vp8Btn');
+        var h264Btn = document.getElementById('h264Btn');
+        var opusBtn = document.getElementById('opusBtn');
+        var aacBtn = document.getElementById('aacBtn');
+        var mpx32Btn = document.getElementById('mpx32Btn');
+        var mpx1Btn = document.getElementById('mpx1Btn');
+        var mpx13Btn = document.getElementById('mpx13Btn');
+        var mpx15Btn = document.getElementById('mpx15Btn');
         var ecBtn = document.getElementById('ecBtn');
         var nsBtn = document.getElementById('nsBtn');
         var agcBtn = document.getElementById('agcBtn');
@@ -260,7 +274,88 @@
         var _chatUserId = localStorage.getItem('chatUserId') || 'user_' + Math.random().toString(36).substr(2, 9);
         localStorage.setItem('chatUserId', _chatUserId);
 
-        // ============= Состояние =============
+        // ============= Сохраняемое состояние кнопок =============
+        function loadButtonStates() {
+            try {
+                var s = JSON.parse(localStorage.getItem('vc_btnStates') || '{}');
+                return {
+                    remoteVideoOn: s.remoteVideoOn !== undefined ? s.remoteVideoOn : true,
+                    remoteAudioOn: s.remoteAudioOn !== undefined ? s.remoteAudioOn : true,
+                    vp8Enabled: s.vp8Enabled !== undefined ? s.vp8Enabled : true,
+                    h264Enabled: s.h264Enabled !== undefined ? s.h264Enabled : true,
+                    opusEnabled: s.opusEnabled !== undefined ? s.opusEnabled : true,
+                    aacEnabled: s.aacEnabled !== undefined ? s.aacEnabled : true,
+                    ecEnabled: s.ecEnabled !== undefined ? s.ecEnabled : true,
+                    nsEnabled: s.nsEnabled !== undefined ? s.nsEnabled : true,
+                    agcEnabled: s.agcEnabled !== undefined ? s.agcEnabled : true,
+                    mpx: s.mpx !== undefined ? s.mpx : 1, // 1, 0.5, 1/3, 0.25
+                    pipCorner: s.pipCorner || 0
+                };
+            } catch(e) {
+                return {
+                    remoteVideoOn: true, remoteAudioOn: true,
+                    vp8Enabled: true, h264Enabled: true,
+                    opusEnabled: true, aacEnabled: true,
+                    ecEnabled: true, nsEnabled: true, agcEnabled: true,
+                    mpx: 1, pipCorner: 0
+                };
+            }
+        }
+        var btnStates = loadButtonStates();
+        var audioEnabled = true;
+        var videoEnabled = true;
+
+        // Применяем состояния к кнопкам
+        function applyButtonStates() {
+            remoteScreenBtn.classList.toggle('off', !btnStates.remoteVideoOn);
+            remoteVideo.style.visibility = btnStates.remoteVideoOn ? 'visible' : 'hidden';
+            remoteMuteBtn.classList.toggle('off', !btnStates.remoteAudioOn);
+            remoteVideo.muted = !btnStates.remoteAudioOn;
+            vp8Btn.classList.toggle('off', !btnStates.vp8Enabled);
+            h264Btn.classList.toggle('off', !btnStates.h264Enabled);
+            opusBtn.classList.toggle('off', !btnStates.opusEnabled);
+            aacBtn.classList.toggle('off', !btnStates.aacEnabled);
+            ecBtn.classList.toggle('off', !btnStates.ecEnabled);
+            nsBtn.classList.toggle('off', !btnStates.nsEnabled);
+            agcBtn.classList.toggle('off', !btnStates.agcEnabled);
+            // Megapixel radio buttons
+            var mpxBtns = [mpx32Btn, mpx1Btn, mpx13Btn, mpx15Btn];
+            var mpxValues = [1.5, 1, 1/3, 0.2];
+            for (var i = 0; i < mpxValues.length; i++) {
+                mpxBtns[i].classList.toggle('active', Math.abs(btnStates.mpx - mpxValues[i]) < 0.01);
+            }
+        }
+
+        // ============= Мегапиксельный множитель для запроса пиру =============
+        var mpxBtns = [mpx32Btn, mpx1Btn, mpx13Btn, mpx15Btn];
+        var mpxValues = [1.5, 1, 1/3, 0.2];
+        function setMpx(val) {
+            btnStates.mpx = val;
+            for (var i = 0; i < mpxValues.length; i++) {
+                mpxBtns[i].classList.toggle('active', Math.abs(val - mpxValues[i]) < 0.01);
+            }
+            updateFitBtnLabel();
+            saveCallState();
+        }
+        mpx32Btn.addEventListener('click', function(e) { e.stopPropagation(); setMpx(1.5); });
+        mpx1Btn.addEventListener('click', function(e) { e.stopPropagation(); setMpx(1); });
+        mpx13Btn.addEventListener('click', function(e) { e.stopPropagation(); setMpx(1/3); });
+        mpx15Btn.addEventListener('click', function(e) { e.stopPropagation(); setMpx(0.2); });
+
+        // Масштабирование разрешения по абсолютным мегапикселям
+        // mpx=1 → 1MP (~720p), mpx=1.5 → 1.5MP, mpx=1/3 → 0.33MP, mpx=1/5 → 0.2MP
+        function applyMpx(aspectW, aspectH, mpx) {
+            var targetPixels = mpx * 1000000;
+            var aspectRatio = aspectW / aspectH;
+            var h = Math.round(Math.sqrt(targetPixels / aspectRatio));
+            var w = Math.round(h * aspectRatio);
+            // Чётные размеры для кодеков
+            if (w % 2 !== 0) w++;
+            if (h % 2 !== 0) h++;
+            return { w: w, h: h };
+        }
+
+        // ============= Состояние звонка =============
         var params = new URLSearchParams(window.location.search);
         var roomID = params.get('room') || '';
         var isActive = false;
@@ -268,19 +363,15 @@
         var mediaRecorder = null;
         var aliveInterval = null;
         var isCreator = false;
-        var audioEnabled = true;
-        var videoEnabled = true;
 
         var myPeerID = 'host';
         var remotePeerID = 'guest';
         var lastReceivedIndex = -1;
 
-        // WebSocket состояние
         var ws = null;
         var wsConnected = false;
         var wsReconnectTimer = null;
 
-        // MSE состояние
         var mediaSource = null;
         var sourceBuffer = null;
         var mseQueue = [];
@@ -289,7 +380,6 @@
         var trimScheduled = false;
         var firstAppendDone = false;
 
-        // Диагностика
         var diagSentChunks = 0;
         var diagSentBytes = 0;
         var diagRecvChunks = 0;
@@ -297,25 +387,86 @@
         var diagMSEAppends = 0;
         var diagMSEErrors = 0;
         var diagLastLogTime = 0;
+        var MSE_CRITICAL_THRESHOLD = 5;
+        var mseCriticalTriggered = false;
 
-        var remoteAudioOn = true;
-        // Показываем EC/NS/AGC т.к. 🔊 включён
-        document.getElementById('audioControls').classList.add('show');
-        var remoteVideoOn = true;
-        var ecEnabled = true;
-        var nsEnabled = true;
-        var agcEnabled = true;
+        // Remote video fit modes: 0=fit, 1=1:1, 2=1:2, 3=2:1
+        var remoteFitMode = parseInt(localStorage.getItem('vc_fitMode')) || 0;
+        var remoteFitModes = ['', 'fit-1to1', 'fit-half', 'fit-2x'];
+        var remoteFitLabels = ['Fit', '1:1', '1:2', '2:1'];
+        var remoteNativeW = 0;
+        var remoteNativeH = 0;
 
-        // PiP
-        var pipCorners = ['pip-br', 'pip-bl', 'pip-tl', 'pip-tr'];
-        var pipCorner = 2;
+        function updateFitBtnLabel() {
+            var w = remoteNativeW, h = remoteNativeH;
+            var label = remoteFitLabels[remoteFitMode];
+            if (w > 0 && h > 0) {
+                var r = applyMpx(w, h, btnStates.mpx);
+                label += ' ' + r.w + '×' + r.h;
+            }
+            fitBtn.textContent = label;
+        }
+        function applyRemoteFitMode() {
+            remoteVideo.classList.remove('fit-1to1', 'fit-half', 'fit-2x');
+            remoteVideo.style.width = '';
+            remoteVideo.style.height = '';
+            if (remoteFitMode === 0 || remoteNativeW === 0) {
+                updateFitBtnLabel();
+                return;
+            }
+            if (remoteFitModes[remoteFitMode]) {
+                remoteVideo.classList.add(remoteFitModes[remoteFitMode]);
+            }
+            if (remoteFitMode === 1) {
+                remoteVideo.style.width = remoteNativeW + 'px';
+                remoteVideo.style.height = remoteNativeH + 'px';
+            } else if (remoteFitMode === 2) {
+                remoteVideo.style.width = Math.round(remoteNativeW / 2) + 'px';
+                remoteVideo.style.height = Math.round(remoteNativeH / 2) + 'px';
+            }
+            updateFitBtnLabel();
+        }
+        remoteVideo.addEventListener('loadedmetadata', function() {
+            remoteNativeW = remoteVideo.videoWidth || 0;
+            remoteNativeH = remoteVideo.videoHeight || 0;
+            if (remoteNativeW > 0 && remoteNativeH > 0) {
+                localStorage.setItem('vc_peerW', remoteNativeW);
+                localStorage.setItem('vc_peerH', remoteNativeH);
+            }
+            applyRemoteFitMode();
+        });
+        fitBtn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            remoteFitMode = (remoteFitMode + 1) % remoteFitModes.length;
+            applyRemoteFitMode();
+            saveCallState();
+        });
+
+        // PiP — только сверху
+        var pipCorners = ['pip-tl', 'pip-tr'];
+        var pipCorner = btnStates.pipCorner || 0;
         var pipContainer = document.getElementById('pipContainer');
+        // Применяем сохранённую позицию PiP
+        pipCorners.forEach(function(c) { pipContainer.classList.remove(c); });
+        pipContainer.classList.add(pipCorners[pipCorner]);
+
+        function updateControlsPosition() {
+            var panel = document.getElementById('controlsPanel');
+            // pip слева → контролы справа, pip справа → контролы слева
+            var pos = pipCorners[pipCorner] === 'pip-tl' ? 'pos-right' : 'pos-left';
+            panel.classList.remove('pos-right', 'pos-left');
+            panel.classList.add(pos);
+        }
         pipContainer.addEventListener('click', function(e) {
             if (e.target.closest('.pip-controls')) return;
             pipCorner = (pipCorner + 1) % pipCorners.length;
+            btnStates.pipCorner = pipCorner;
             pipCorners.forEach(function(c) { pipContainer.classList.remove(c); });
             pipContainer.classList.add(pipCorners[pipCorner]);
+            updateControlsPosition();
         });
+        updateControlsPosition();
+        applyButtonStates();
 
         // Fullscreen
         function enterFullscreen() {
@@ -339,63 +490,83 @@
         document.addEventListener('fullscreenchange', syncFullscreenBtn);
         document.addEventListener('webkitfullscreenchange', syncFullscreenBtn);
 
-        // Remote controls
+        // Кнопки управления
         remoteMuteBtn.addEventListener('click', function(e) {
             e.stopPropagation();
-            remoteAudioOn = !remoteAudioOn;
-            remoteVideo.muted = !remoteAudioOn;
-            remoteMuteBtn.classList.toggle('off', !remoteAudioOn);
-            remoteMuteBtn.textContent = '🔈';
-            document.getElementById('audioControls').classList.toggle('show', remoteAudioOn);
-            updateRemoteControlsVisibility();
+            btnStates.remoteAudioOn = !btnStates.remoteAudioOn;
+            remoteVideo.muted = !btnStates.remoteAudioOn;
+            remoteMuteBtn.classList.toggle('off', !btnStates.remoteAudioOn);
+            saveCallState();
         });
         remoteScreenBtn.addEventListener('click', function(e) {
             e.stopPropagation();
-            remoteVideoOn = !remoteVideoOn;
-            remoteVideo.style.visibility = remoteVideoOn ? 'visible' : 'hidden';
-            remoteScreenBtn.classList.toggle('off', !remoteVideoOn);
-            remoteScreenBtn.textContent = '💻';
-            updateRemoteControlsVisibility();
+            btnStates.remoteVideoOn = !btnStates.remoteVideoOn;
+            remoteVideo.style.visibility = btnStates.remoteVideoOn ? 'visible' : 'hidden';
+            remoteScreenBtn.classList.toggle('off', !btnStates.remoteVideoOn);
+            saveCallState();
         });
-        function updateRemoteControlsVisibility() {
-            var rc = document.getElementById('remoteControls');
-            if (remoteMuteBtn.classList.contains('off') || remoteScreenBtn.classList.contains('off')) rc.classList.add('has-off');
-            else rc.classList.remove('has-off');
-            var ac = document.getElementById('audioControls');
-            if (ecBtn.classList.contains('off') || nsBtn.classList.contains('off') || agcBtn.classList.contains('off')) ac.classList.add('has-off');
-            else ac.classList.remove('has-off');
-        }
-
-        // Audio constraints toggles (EC/NS/AGC)
-        function toggleAudioConstraint(prop, btn, enabled) {
-            if (!localStream) return enabled;
-            var tracks = localStream.getAudioTracks();
-            if (tracks.length === 0) return enabled;
-            var newVal = !enabled;
-            try {
-                var constraints = {};
-                constraints[prop] = newVal;
-                tracks[0].applyConstraints({ advanced: [constraints] });
-                btn.classList.toggle('off', !newVal);
-                updateRemoteControlsVisibility();
-                return newVal;
-            } catch (e) {
-                diagLog(prop + ' toggle failed: ' + e.message);
-                return enabled;
-            }
-        }
+        vp8Btn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            btnStates.vp8Enabled = !btnStates.vp8Enabled;
+            vp8Btn.classList.toggle('off', !btnStates.vp8Enabled);
+            saveCallState();
+        });
+        h264Btn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            btnStates.h264Enabled = !btnStates.h264Enabled;
+            h264Btn.classList.toggle('off', !btnStates.h264Enabled);
+            saveCallState();
+        });
+        opusBtn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            btnStates.opusEnabled = !btnStates.opusEnabled;
+            opusBtn.classList.toggle('off', !btnStates.opusEnabled);
+            saveCallState();
+        });
+        aacBtn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            btnStates.aacEnabled = !btnStates.aacEnabled;
+            aacBtn.classList.toggle('off', !btnStates.aacEnabled);
+            saveCallState();
+        });
         ecBtn.addEventListener('click', function(e) {
             e.stopPropagation();
-            ecEnabled = toggleAudioConstraint('echoCancellation', ecBtn, ecEnabled);
+            btnStates.ecEnabled = !btnStates.ecEnabled;
+            if (localStream) {
+                var tracks = localStream.getAudioTracks();
+                if (tracks.length > 0) {
+                    try { tracks[0].applyConstraints({ advanced: [{ echoCancellation: btnStates.ecEnabled }] }); } catch(e) {}
+                }
+            }
+            ecBtn.classList.toggle('off', !btnStates.ecEnabled);
+            saveCallState();
         });
         nsBtn.addEventListener('click', function(e) {
             e.stopPropagation();
-            nsEnabled = toggleAudioConstraint('noiseSuppression', nsBtn, nsEnabled);
+            btnStates.nsEnabled = !btnStates.nsEnabled;
+            if (localStream) {
+                var tracks = localStream.getAudioTracks();
+                if (tracks.length > 0) {
+                    try { tracks[0].applyConstraints({ advanced: [{ noiseSuppression: btnStates.nsEnabled }] }); } catch(e) {}
+                }
+            }
+            nsBtn.classList.toggle('off', !btnStates.nsEnabled);
+            saveCallState();
         });
         agcBtn.addEventListener('click', function(e) {
             e.stopPropagation();
-            agcEnabled = toggleAudioConstraint('autoGainControl', agcBtn, agcEnabled);
+            btnStates.agcEnabled = !btnStates.agcEnabled;
+            if (localStream) {
+                var tracks = localStream.getAudioTracks();
+                if (tracks.length > 0) {
+                    try { tracks[0].applyConstraints({ advanced: [{ autoGainControl: btnStates.agcEnabled }] }); } catch(e) {}
+                }
+            }
+            agcBtn.classList.toggle('off', !btnStates.agcEnabled);
+            saveCallState();
         });
+
+        hangupBtn.addEventListener('click', function() { hangup(); });
 
         if (!roomID) {
             showError('No room ID specified. URL: /videocall.html?room=ROOM_ID');
@@ -424,20 +595,17 @@
                     bufInfo = (e - s).toFixed(1) + 's [' + s.toFixed(1) + '-' + e.toFixed(1) + ']';
                 }
             } catch (e) {}
-            var sbState = sourceBuffer ? (sourceBuffer.updating ? 'updating' : 'ready') : 'null';
             var ct = remoteVideo.currentTime.toFixed(1);
-            var rate = remoteVideo.playbackRate.toFixed(2);
             var paused = remoteVideo.paused ? ' PAUSED' : '';
             var waiting = remoteVideo.readyState < 3 ? ' WAITING' : '';
-            var transport = wsConnected ? 'WS' : 'reconnecting';
             diagLog('STAT sent:' + (diagSentBytes / 1024).toFixed(0) + 'KB' +
                 ' recv:' + (diagRecvBytes / 1024).toFixed(0) + 'KB' +
                 ' appends:' + diagMSEAppends + ' errs:' + diagMSEErrors +
-                ' buf:' + bufInfo + ' ct:' + ct + ' [' + transport + ']' + paused + waiting);
+                ' buf:' + bufInfo + ' ct:' + ct + paused + waiting);
         }
         setInterval(function() { diagStats(); }, 30000);
 
-        // ============= Экстренный seek (только при >8с отставания) =============
+        // ============= Экстренный seek =============
         setInterval(function() {
             if (!isActive || !mseReady) return;
             try {
@@ -446,16 +614,12 @@
                     var bufStart = remoteVideo.buffered.start(0);
                     var ct = remoteVideo.currentTime;
                     var behind = bufEnd - ct;
-
-                    // Экстренный seek: только если отставание > 8 секунд
                     if (behind > 8) {
                         var target = bufEnd - 1;
                         diagLog('SEEK ct=' + ct.toFixed(1) + ' -> ' + target.toFixed(1) + ' behind=' + behind.toFixed(1) + 's EMERGENCY');
                         remoteVideo.currentTime = target;
                         if (remoteVideo.paused) remoteVideo.play().catch(function(){});
                     }
-
-                    // Если currentTime вне буфера — прыгнуть
                     if (ct < bufStart - 0.5) {
                         remoteVideo.currentTime = bufStart + 0.1;
                         if (remoteVideo.paused) remoteVideo.play().catch(function(){});
@@ -464,62 +628,116 @@
             } catch (e) {}
         }, 2000);
 
-        // ============= Кодеки =============
-        var ALL_CODECS = [
-            // H.264 — аппаратное кодирование (приоритет, WebM контейнер)
-            'video/webm;codecs="h264,opus"',               // Chrome/Edge/Android: H.264 HW + Opus
-            // VP8/VP9 — программное кодирование (fallback)
-            'video/webm;codecs="vp8,opus"',
-            'video/webm;codecs="vp9,opus"',
-            'video/webm'
-        ];
-
-        function detectSupportedCodecs() {
-            var supported = [];
-            for (var i = 0; i < ALL_CODECS.length; i++) {
-                var c = ALL_CODECS[i];
-                if (MediaSource.isTypeSupported(c) &&
-                    (typeof MediaRecorder === 'undefined' || MediaRecorder.isTypeSupported(c))) {
-                    supported.push(c);
+        // ============= Кодеки — строим из зелёных кнопок =============
+        function buildCodecListFromButtons() {
+            var list = [];
+            if (btnStates.h264Enabled) {
+                if (btnStates.aacEnabled) {
+                    list.push('video/mp4;codecs="avc1.42E01E,mp4a.40.2"'); // H.264 Baseline + AAC
+                }
+                if (btnStates.opusEnabled) {
+                    list.push('video/mp4;codecs="avc1.42E01E,opus"'); // H.264 Baseline + Opus
+                }
+                if (!btnStates.aacEnabled && !btnStates.opusEnabled) {
+                    list.push('video/mp4');
                 }
             }
-            if (supported.length === 0) supported.push('video/webm;codecs="vp8,opus"');
+            if (btnStates.vp8Enabled) {
+                if (btnStates.opusEnabled) {
+                    list.push('video/webm;codecs="vp8,opus"');
+                } else {
+                    list.push('video/webm');
+                }
+            }
+            if (list.length === 0) list.push('video/webm');
+            return list;
+        }
+
+        function isCodecSupported(mimeType) {
+            if (!MediaSource.isTypeSupported(mimeType)) return false;
+            if (typeof MediaRecorder === 'undefined') return true;
+            if (MediaRecorder.isTypeSupported(mimeType)) return true;
+            var container = mimeType.split(';')[0];
+            if (container !== mimeType && MediaRecorder.isTypeSupported(container)) return true;
+            return false;
+        }
+
+        function detectSupportedCodecs() {
+            var candidates = buildCodecListFromButtons();
+            var supported = [];
+            var seen = {};
+            for (var i = 0; i < candidates.length; i++) {
+                var c = candidates[i];
+                if (isCodecSupported(c) && !seen[c]) {
+                    seen[c] = true;
+                    supported.push(c);
+                }
+                var container = c.split(';')[0];
+                if (container !== c && !seen[container] && isCodecSupported(container)) {
+                    seen[container] = true;
+                    supported.push(container);
+                }
+            }
+            if (supported.length === 0) supported.push('video/webm');
             return supported;
         }
 
         function detectCodec() {
-            var codecs = ALL_CODECS.slice();
-            for (var i = 0; i < codecs.length; i++) {
-                if (MediaSource.isTypeSupported(codecs[i]) &&
-                    (typeof MediaRecorder === 'undefined' || MediaRecorder.isTypeSupported(codecs[i]))) {
-                    return codecs[i];
-                }
+            var candidates = buildCodecListFromButtons();
+            for (var i = 0; i < candidates.length; i++) {
+                if (isCodecSupported(candidates[i])) return candidates[i];
             }
-            return 'video/webm;codecs="vp8,opus"';
+            return 'video/webm';
+        }
+
+        function codecDisplayName(codec) {
+            if (!codec) return 'Unknown';
+            var video = '', audio = '';
+            if (codec.indexOf('avc1.42E01E') !== -1) video = 'H.264 Baseline';
+            else if (codec.indexOf('avc1.4D401E') !== -1) video = 'H.264 Main';
+            else if (codec.indexOf('avc1.64001F') !== -1) video = 'H.264 High';
+            else if (codec.indexOf('vp8') !== -1) video = 'VP8';
+            else if (codec.indexOf('mp4') !== -1) video = 'MP4';
+            else if (codec.indexOf('webm') !== -1) video = 'WebM';
+            if (codec.indexOf('opus') !== -1) audio = 'Opus';
+            else if (codec.indexOf('mp4a.40.2') !== -1) audio = 'AAC';
+            var name = video || codec;
+            if (audio) name += ' + ' + audio;
+            return name;
         }
 
         // ============= Инициализация =============
         async function init() {
             try {
+                var savedPeerW = parseInt(localStorage.getItem('vc_peerW')) || 0;
+                var savedPeerH = parseInt(localStorage.getItem('vc_peerH')) || 0;
                 var W = Math.min(Math.floor(window.innerWidth * 0.8), 1280);
                 var H = Math.min(Math.floor(W * 3 / 4), 720);
+                if (savedPeerW > 0 && savedPeerH > 0) {
+                    W = Math.min(W, savedPeerW);
+                    H = Math.min(H, savedPeerH);
+                    diagLog('MEM peer=' + savedPeerW + 'x' + savedPeerH + ' fit=' + remoteFitLabels[remoteFitMode]);
+                }
 
                 localStream = await navigator.mediaDevices.getUserMedia({
                     video: { width: { ideal: W }, height: { ideal: H }, facingMode: 'user' },
                     audio: {
-                        echoCancellation: true,
-                        noiseSuppression: true,
-                        autoGainControl: true
+                        echoCancellation: btnStates.ecEnabled,
+                        noiseSuppression: btnStates.nsEnabled,
+                        autoGainControl: btnStates.agcEnabled
                     }
                 });
                 localVideo.srcObject = localStream;
 
+                // Запрос к пиру: ТОЛЬКО MP кнопки, Fit НЕ влияет
+                var mpxResult = applyMpx(W, H, btnStates.mpx);
+                var dw = mpxResult.w;
+                var dh = mpxResult.h;
                 var myCodecs = detectSupportedCodecs();
-                diagLog('CODECS supported: ' + myCodecs.join(' | '));
+                diagLog('CODECS supported: ' + myCodecs.map(codecDisplayName).join(' | '));
 
-                var createResult = await tryCreateRoom(myCodecs, W, H);
+                var createResult = await tryCreateRoom(myCodecs, W, H, dw, dh);
                 isCreator = createResult.created;
-
                 diagLog('INIT peer=' + (isCreator ? 'host' : 'guest') + ' cam=' + W + 'x' + H);
 
                 if (isCreator) {
@@ -528,31 +746,33 @@
                     waitingOverlay.classList.remove('hidden');
                     waitingText.textContent = 'Waiting for peer to join...';
                     var joined = await waitForPeer();
-                    if (!joined) {
-                        showError('Peer did not join within 30 seconds');
-                        return;
-                    }
+                    if (!joined) { showError('Peer did not join within 30 seconds'); return; }
                     if (joined.codec) {
                         negotiatedCodec = joined.codec;
-                        diagLog('CODEC negotiated=' + negotiatedCodec);
+                        diagLog('CODEC negotiated=' + codecDisplayName(negotiatedCodec));
                     }
-                    if (joined.width && joined.height) {
+                    if (joined.desiredW && joined.desiredH) {
+                        diagLog('PEER wants ' + joined.desiredW + 'x' + joined.desiredH + ' from me');
+                        await applyDesiredResolution(joined.desiredW, joined.desiredH);
+                    } else if (joined.width && joined.height) {
                         await applyMinResolution(W, H, joined.width, joined.height);
                     }
                     waitingOverlay.classList.add('hidden');
                 } else {
                     myPeerID = 'guest';
                     remotePeerID = 'host';
-                    var joinResult = await joinRoom(myCodecs, W, H);
+                    var joinResult = await joinRoom(myCodecs, W, H, dw, dh);
                     if (joinResult && joinResult.codec) {
                         negotiatedCodec = joinResult.codec;
-                        diagLog('CODEC negotiated=' + negotiatedCodec);
+                        diagLog('CODEC negotiated=' + codecDisplayName(negotiatedCodec));
                     }
-                    if (joinResult && joinResult.width && joinResult.height) {
+                    if (joinResult && joinResult.desiredW && joinResult.desiredH) {
+                        diagLog('PEER wants ' + joinResult.desiredW + 'x' + joinResult.desiredH + ' from me');
+                        await applyDesiredResolution(joinResult.desiredW, joinResult.desiredH);
+                    } else if (joinResult && joinResult.width && joinResult.height) {
                         await applyMinResolution(W, H, joinResult.width, joinResult.height);
                     }
                 }
-
                 startCall();
             } catch (err) {
                 console.error('Init error:', err);
@@ -563,19 +783,20 @@
         }
 
         // ============= API =============
-        async function tryCreateRoom(codecs, width, height) {
+        async function tryCreateRoom(codecs, width, height, desiredW, desiredH) {
             try {
                 var resp = await fetch('/api/call/create', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ room: roomID, codecs: codecs, width: width, height: height })
+                    body: JSON.stringify({
+                        room: roomID, codecs: codecs, width: width, height: height,
+                        desiredW: desiredW || 0, desiredH: desiredH || 0
+                    })
                 });
                 if (!resp.ok) return { created: false };
                 var data = await resp.json();
                 return { created: data.status === 'created' };
-            } catch (e) {
-                return { created: false };
-            }
+            } catch (e) { return { created: false }; }
         }
 
         async function waitForPeer() {
@@ -585,36 +806,29 @@
                 var data = await resp.json();
                 if (data.status === 'joined') return data;
                 return false;
-            } catch (e) {
-                return false;
-            }
+            } catch (e) { return false; }
         }
 
-        async function joinRoom(codecs, width, height) {
+        async function joinRoom(codecs, width, height, desiredW, desiredH) {
             try {
                 var resp = await fetch('/api/call/join', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ room: roomID, codecs: codecs, width: width, height: height })
+                    body: JSON.stringify({
+                        room: roomID, codecs: codecs, width: width, height: height,
+                        desiredW: desiredW || 0, desiredH: desiredH || 0
+                    })
                 });
                 if (!resp.ok) return null;
                 return await resp.json();
-            } catch (e) {
-                return null;
-            }
+            } catch (e) { return null; }
         }
 
-        // Отправка чанка через WebSocket
         async function sendChunk(buffer) {
             diagSentChunks++;
             diagSentBytes += buffer.byteLength;
-
             if (wsConnected && ws && ws.readyState === WebSocket.OPEN) {
-                try {
-                    ws.send(buffer);
-                } catch (e) {
-                    console.warn('WS send error:', e);
-                }
+                try { ws.send(buffer); } catch (e) {}
             }
         }
 
@@ -625,106 +839,77 @@
                 if (!resp.ok) return false;
                 var data = await resp.json();
                 return data.alive === true;
-            } catch (e) {
-                return false;
-            }
+            } catch (e) { return false; }
         }
 
         async function endCall() {
-            try {
-                await fetch('/api/call/room?room=' + encodeURIComponent(roomID), { method: 'DELETE' });
-            } catch (e) {}
+            try { await fetch('/api/call/room?room=' + encodeURIComponent(roomID), { method: 'DELETE' }); } catch (e) {}
         }
 
-        // ============= Адаптивное разрешение =============
+        // ============= Разрешение =============
+        async function applyDesiredResolution(dw, dh) {
+            if (dw <= 0 || dh <= 0) return;
+            var videoTracks = localStream.getVideoTracks();
+            if (videoTracks.length === 0) return;
+            try {
+                await videoTracks[0].applyConstraints({ width: { ideal: dw }, height: { ideal: dh } });
+                var s = videoTracks[0].getSettings();
+                diagLog('RES applied peer desire ' + s.width + 'x' + s.height);
+            } catch (e) { diagLog('RES desire failed: ' + e.message); }
+        }
+
+        var RES_TOLERANCE = 32;
         async function applyMinResolution(myW, myH, peerW, peerH) {
             var newW = Math.min(myW, peerW);
             var newH = Math.min(myH, peerH);
-            diagLog('RES min(' + myW + 'x' + myH + ', ' + peerW + 'x' + peerH + ') = ' + newW + 'x' + newH);
+            if (myW - newW <= RES_TOLERANCE && myH - newH <= RES_TOLERANCE) return;
             if (newW < myW || newH < myH) {
-                var videoTracks = localStream.getVideoTracks();
-                if (videoTracks.length > 0) {
+                var vt = localStream.getVideoTracks();
+                if (vt.length > 0) {
                     try {
-                        await videoTracks[0].applyConstraints({ width: { ideal: newW }, height: { ideal: newH } });
-                        var settings = videoTracks[0].getSettings();
-                        diagLog('RES applied ' + settings.width + 'x' + settings.height);
-                    } catch (e) {
-                        diagLog('RES apply failed: ' + e.message);
-                    }
+                        await vt[0].applyConstraints({ width: { ideal: newW }, height: { ideal: newH } });
+                        var s = vt[0].getSettings();
+                        diagLog('RES applied ' + s.width + 'x' + s.height);
+                    } catch (e) { diagLog('RES apply failed: ' + e.message); }
                 }
             }
         }
 
-        // ============= WebSocket Transport =============
+        // ============= WebSocket =============
         function connectWS() {
-            if (wsReconnectTimer) {
-                clearTimeout(wsReconnectTimer);
-                wsReconnectTimer = null;
-            }
+            if (wsReconnectTimer) { clearTimeout(wsReconnectTimer); wsReconnectTimer = null; }
             if (!isActive) return;
-
             var proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
             var wsURL = proto + '//' + location.host + '/api/call/ws?room=' + encodeURIComponent(roomID) + '&peer=' + encodeURIComponent(myPeerID);
-
             diagLog('WS connecting...');
-            try {
-                ws = new WebSocket(wsURL);
-                ws.binaryType = 'arraybuffer';
-            } catch (e) {
-                diagLog('WS create error: ' + e.message);
-                return;
-            }
-
-            ws.onopen = function() {
-                wsConnected = true;
-                diagLog('WS connected');
-            };
-
+            try { ws = new WebSocket(wsURL); ws.binaryType = 'arraybuffer'; }
+            catch (e) { diagLog('WS create error: ' + e.message); return; }
+            ws.onopen = function() { wsConnected = true; diagLog('WS connected'); };
             ws.onmessage = function(event) {
-                if (event.data instanceof ArrayBuffer) {
-                    handleIncomingChunk(event.data);
-                }
+                if (event.data instanceof ArrayBuffer) handleIncomingChunk(event.data);
             };
-
             ws.onclose = function(event) {
                 wsConnected = false;
                 diagLog('WS closed code=' + event.code);
-                if (isActive) {
-                    // Переподключение через 2 секунды
-                    wsReconnectTimer = setTimeout(function() {
-                        connectWS();
-                    }, WS_RECONNECT_MS);
-                }
+                if (isActive) { wsReconnectTimer = setTimeout(function() { connectWS(); }, WS_RECONNECT_MS); }
             };
-
-            ws.onerror = function(err) {
-                console.warn('WS error');
-                // onclose будет вызван после onerror
-            };
+            ws.onerror = function() {};
         }
 
         function handleIncomingChunk(data) {
             diagRecvChunks++;
             diagRecvBytes += data.byteLength;
             lastReceivedIndex++;
+            if (mseCriticalTriggered) return;
             mseQueue.push(data);
-            if (mseReady) {
-                processMSEQueue();
-            }
+            if (mseReady) processMSEQueue();
         }
 
         function disconnectWS() {
-            if (wsReconnectTimer) {
-                clearTimeout(wsReconnectTimer);
-                wsReconnectTimer = null;
-            }
+            if (wsReconnectTimer) { clearTimeout(wsReconnectTimer); wsReconnectTimer = null; }
             if (ws) {
-                ws.onclose = null;
-                ws.onerror = null;
-                ws.onmessage = null;
-                if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
-                    ws.close();
-                }
+                ws.onclose = null; ws.onerror = null; ws.onmessage = null;
+                if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) ws.close();
                 ws = null;
             }
             wsConnected = false;
@@ -744,35 +929,39 @@
             var codec = negotiatedCodec || detectCodec();
             mediaSource = new MediaSource();
             remoteVideo.src = URL.createObjectURL(mediaSource);
-
             mediaSource.addEventListener('sourceopen', function() {
                 try {
                     sourceBuffer = mediaSource.addSourceBuffer(codec);
                     sourceBuffer.mode = 'sequence';
-
-                    sourceBuffer.addEventListener('updateend', function() {
-                        onMSEUpdateEnd();
-                    });
-                    sourceBuffer.addEventListener('error', function(e) {
+                    sourceBuffer.addEventListener('updateend', function() { onMSEUpdateEnd(); });
+                    sourceBuffer.addEventListener('error', function() {
                         diagMSEErrors++;
-                        diagLog('MSE ERROR sb error');
+                        diagLog('MSE ERROR sb error #' + diagMSEErrors);
+                        checkMSECritical();
                     });
-
                     mseReady = true;
                     if (mseQueue.length > 0) processMSEQueue();
-                } catch (e) {
-                    showError('MSE codec not supported: ' + codec);
-                }
+                } catch (e) { showError('MSE codec not supported: ' + codec); }
             });
         }
 
         function onMSEUpdateEnd() {
+            if (firstAppendDone) {
+                try {
+                    if (remoteVideo.buffered && remoteVideo.buffered.length > 0) {
+                        var bufEnd = remoteVideo.buffered.end(remoteVideo.buffered.length - 1);
+                        var behind = bufEnd - remoteVideo.currentTime;
+                        if (behind > 2.0) {
+                            var target = bufEnd - 0.5;
+                            remoteVideo.currentTime = target;
+                            diagLog('PLAY catchup ct=' + target.toFixed(1) + ' behind=' + behind.toFixed(1) + 's');
+                        }
+                    }
+                } catch(e) {}
+            }
             if (!trimScheduled) {
                 trimScheduled = true;
-                setTimeout(function() {
-                    trimBuffer();
-                    trimScheduled = false;
-                }, 500); // чаще чем было (1000)
+                setTimeout(function() { trimBuffer(); trimScheduled = false; }, 500);
             }
             processMSEQueue();
         }
@@ -780,34 +969,20 @@
         function processMSEQueue() {
             if (!mseReady || !sourceBuffer || sourceBuffer.updating) return;
             if (mseQueue.length === 0) return;
-
             var chunkData = mseQueue.shift();
             try {
                 sourceBuffer.appendBuffer(new Uint8Array(chunkData));
                 diagMSEAppends++;
-
                 if (!firstAppendDone) {
                     firstAppendDone = true;
-                    remoteVideo.play().then(function() {
-                        // На первом play — прыгнуть к live edge
-                        try {
-                            if (remoteVideo.buffered && remoteVideo.buffered.length > 0) {
-                                var bufEnd = remoteVideo.buffered.end(remoteVideo.buffered.length - 1);
-                                var target = Math.max(bufEnd - 0.3, remoteVideo.buffered.start(0) + 0.1);
-                                if (target > remoteVideo.currentTime + 0.5) {
-                                    remoteVideo.currentTime = target;
-                                }
-                            }
-                        } catch(e) {}
-                        diagLog('PLAY started ct=' + remoteVideo.currentTime.toFixed(1));
-                    }).catch(function(e) {
-                        diagLog('PLAY failed: ' + e.message);
-                    });
+                    remoteVideo.play().catch(function(e) { diagLog('PLAY failed: ' + e.message); });
+                    diagLog('PLAY starting...');
                 }
             } catch (e) {
                 diagMSEErrors++;
                 diagLog('MSE ERR append ' + chunkData.byteLength + 'B: ' + e.message);
-                processMSEQueue();
+                checkMSECritical();
+                if (!mseCriticalTriggered) processMSEQueue();
             }
         }
 
@@ -819,105 +994,108 @@
                 var bufferEnd = buffered.end(buffered.length - 1);
                 var bufferStart = buffered.start(0);
                 var bufferDuration = bufferEnd - bufferStart;
-
                 if (bufferDuration > MAX_BUFFER_SECONDS) {
                     var removeEnd = bufferEnd - MAX_BUFFER_SECONDS;
                     if (removeEnd > bufferStart + 0.5) {
-                        if (remoteVideo.currentTime < removeEnd) {
-                            remoteVideo.currentTime = removeEnd + 0.1;
-                        }
+                        if (remoteVideo.currentTime < removeEnd) remoteVideo.currentTime = removeEnd + 0.1;
                         sourceBuffer.remove(bufferStart, removeEnd);
                     }
                 }
             } catch (e) {}
         }
 
+        function checkMSECritical() {
+            if (mseCriticalTriggered) return;
+            if (diagMSEErrors >= MSE_CRITICAL_THRESHOLD) {
+                mseCriticalTriggered = true;
+                diagLog('MSE CRITICAL — hiding remote video');
+                mseQueue = [];
+                if (btnStates.remoteVideoOn) remoteScreenBtn.click();
+            }
+        }
+
         // ============= MediaRecorder =============
         function setupMediaRecorder() {
-            var codec = negotiatedCodec || detectCodec();
-            try {
-                mediaRecorder = new MediaRecorder(localStream, {
-                    mimeType: codec,
-                    videoBitsPerSecond: 300000
-                });
-            } catch (e) {
-                try {
-                    mediaRecorder = new MediaRecorder(localStream, {
-                        videoBitsPerSecond: 300000
-                    });
-                } catch (e2) {
-                    showError('MediaRecorder not supported: ' + e2.message);
-                    return;
-                }
-            }
+            var videoTrack = localStream.getVideoTracks()[0];
+            var settings = videoTrack ? videoTrack.getSettings() : {};
+            var w = settings.width || 640;
+            var h = settings.height || 480;
 
+            var codec = negotiatedCodec || detectCodec();
+            diagLog('REC codec=' + codecDisplayName(codec) + ' res=' + w + 'x' + h);
+
+            try {
+                mediaRecorder = new MediaRecorder(localStream, { mimeType: codec });
+            } catch (e) {
+                diagLog('REC with codec failed: ' + e.message + ', trying without');
+                try { mediaRecorder = new MediaRecorder(localStream, {}); }
+                catch (e2) { showError('MediaRecorder not supported: ' + e2.message); return; }
+            }
             mediaRecorder.ondataavailable = function(e) {
                 if (e.data && e.data.size > 0 && isActive) {
-                    e.data.arrayBuffer().then(function(buffer) {
-                        sendChunk(buffer);
-                    });
+                    e.data.arrayBuffer().then(function(buffer) { sendChunk(buffer); });
                 }
             };
+            var recErrorCount = 0;
             mediaRecorder.onerror = function(e) {
-                console.error('MediaRecorder error:', e.error);
+                recErrorCount++;
+                diagLog('REC error #' + recErrorCount + ': ' + (e.error ? e.error.message : 'unknown'));
+                if (recErrorCount >= 3 && videoEnabled) camBtn.click();
             };
             mediaRecorder.start(CHUNK_INTERVAL_MS);
         }
 
-        // ============= Проверка активности пира =============
+        // ============= Проверка активности =============
         function startAliveCheck() {
             aliveInterval = setInterval(function() {
                 if (!isActive) return;
-                checkPeerAlive().then(function(alive) {
-                    if (!alive && isActive) {
-                        hangup();
-                    }
-                });
+                checkPeerAlive().then(function(alive) { if (!alive && isActive) hangup(); });
             }, ALIVE_CHECK_MS);
         }
 
-        // ============= Управление =============
+        // ============= PiP кнопки =============
         micBtn.addEventListener('click', function() {
             if (!localStream) return;
             audioEnabled = !audioEnabled;
             localStream.getAudioTracks().forEach(function(t) { t.enabled = audioEnabled; });
             micBtn.classList.toggle('off', !audioEnabled);
-            micBtn.textContent = '🎤';
-            updateControlsVisibility();
+            updatePipControlsVisibility();
         });
-
         camBtn.addEventListener('click', function() {
             if (!localStream) return;
             videoEnabled = !videoEnabled;
             localStream.getVideoTracks().forEach(function(t) { t.enabled = videoEnabled; });
             camBtn.classList.toggle('off', !videoEnabled);
-            camBtn.textContent = videoEnabled ? '📷' : '📷';
-            updateControlsVisibility();
+            updatePipControlsVisibility();
         });
-
-        hangupBtn.addEventListener('click', function() { hangup(); });
-
-        function updateControlsVisibility() {
+        function updatePipControlsVisibility() {
             var pc = document.getElementById('pipControls');
             if (micBtn.classList.contains('off') || camBtn.classList.contains('off')) pc.classList.add('has-off');
             else pc.classList.remove('has-off');
         }
 
+        // ============= Сохранение состояния =============
+        function saveCallState() {
+            if (remoteNativeW > 0 && remoteNativeH > 0) {
+                localStorage.setItem('vc_peerW', remoteNativeW);
+                localStorage.setItem('vc_peerH', remoteNativeH);
+            }
+            localStorage.setItem('vc_fitMode', remoteFitMode);
+            localStorage.setItem('vc_btnStates', JSON.stringify(btnStates));
+        }
+
         function hangup() {
             isActive = false;
-
+            saveCallState();
             disconnectWS();
-
             if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
             if (aliveInterval) { clearInterval(aliveInterval); aliveInterval = null; }
             if (localStream) localStream.getTracks().forEach(function(t) { t.stop(); });
-
             mseReady = false;
             mseQueue = [];
             if (mediaSource && mediaSource.readyState === 'open') {
                 try { mediaSource.endOfStream(); } catch (e) {}
             }
-
             endCall();
             setTimeout(function() { window.close(); }, 1500);
         }
@@ -929,6 +1107,7 @@
 
         window.addEventListener('beforeunload', function() {
             isActive = false;
+            saveCallState();
             disconnectWS();
             if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
             if (localStream) localStream.getTracks().forEach(function(t) { t.stop(); });

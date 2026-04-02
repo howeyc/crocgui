@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -48,6 +50,12 @@ type VideoCallRoom struct {
 	CreatorHeight int
 	GuestWidth    int
 	GuestHeight   int
+
+	// Желаемое разрешение от пира (какой размер видео пир хочет получать)
+	CreatorDesiredW int
+	CreatorDesiredH int
+	GuestDesiredW   int
+	GuestDesiredH   int
 
 	// WebSocket соединения для мгновенной доставки чанков
 	wsConns map[string]*wsConn // peerID -> ws connection (с мьютексом на запись)
@@ -249,10 +257,12 @@ func handleCallCreate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		Room   string   `json:"room"`
-		Codecs []string `json:"codecs"`
-		Width  int      `json:"width"`
-		Height int      `json:"height"`
+		Room     string   `json:"room"`
+		Codecs   []string `json:"codecs"`
+		Width    int      `json:"width"`
+		Height   int      `json:"height"`
+		DesiredW int      `json:"desiredW"`
+		DesiredH int      `json:"desiredH"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request", http.StatusBadRequest)
@@ -279,6 +289,8 @@ func handleCallCreate(w http.ResponseWriter, r *http.Request) {
 	room.CreatorCodecs = req.Codecs
 	room.CreatorWidth = req.Width
 	room.CreatorHeight = req.Height
+	room.CreatorDesiredW = req.DesiredW
+	room.CreatorDesiredH = req.DesiredH
 	room.mu.Unlock()
 
 	w.Header().Set("Content-Type", "application/json")
@@ -315,14 +327,18 @@ func handleCallWait(w http.ResponseWriter, r *http.Request) {
 		codec := room.NegotiatedCodec
 		gw := room.GuestWidth
 		gh := room.GuestHeight
+		gdw := room.GuestDesiredW
+		gdh := room.GuestDesiredH
 		room.mu.Unlock()
 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
-			"status": "joined",
-			"codec":  codec,
-			"width":  gw,
-			"height": gh,
+			"status":   "joined",
+			"codec":    codec,
+			"width":    gw,
+			"height":   gh,
+			"desiredW": gdw,
+			"desiredH": gdh,
 		})
 	case <-time.After(30 * time.Second):
 		w.Header().Set("Content-Type", "application/json")
@@ -342,10 +358,12 @@ func handleCallJoin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		Room   string   `json:"room"`
-		Codecs []string `json:"codecs"`
-		Width  int      `json:"width"`
-		Height int      `json:"height"`
+		Room     string   `json:"room"`
+		Codecs   []string `json:"codecs"`
+		Width    int      `json:"width"`
+		Height   int      `json:"height"`
+		DesiredW int      `json:"desiredW"`
+		DesiredH int      `json:"desiredH"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request", http.StatusBadRequest)
@@ -392,19 +410,25 @@ func handleCallJoin(w http.ResponseWriter, r *http.Request) {
 	room.mu.Lock()
 	room.GuestWidth = req.Width
 	room.GuestHeight = req.Height
+	room.GuestDesiredW = req.DesiredW
+	room.GuestDesiredH = req.DesiredH
 	cw := room.CreatorWidth
 	ch := room.CreatorHeight
+	cdw := room.CreatorDesiredW
+	cdh := room.CreatorDesiredH
 	room.mu.Unlock()
 
 	log.Debugf("Resolution: creator=%dx%d guest=%dx%d", cw, ch, req.Width, req.Height)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"status": "joined",
-		"room":   room.ID,
-		"codec":  negotiatedCodec,
-		"width":  cw,
-		"height": ch,
+		"status":   "joined",
+		"room":     room.ID,
+		"codec":    negotiatedCodec,
+		"width":    cw,
+		"height":   ch,
+		"desiredW": cdw,
+		"desiredH": cdh,
 	})
 }
 
@@ -648,5 +672,12 @@ func handleCallAPI(w http.ResponseWriter, r *http.Request) {
 // serveVideoCallHTML отдаёт страницу видеоконференции
 func serveVideoCallHTML(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	// Для отладки: если videocall.html есть рядом с бинарником — читаем из файла
+	if exe, err := os.Executable(); err == nil {
+		if data, err := os.ReadFile(filepath.Join(filepath.Dir(exe), "videocall.html")); err == nil {
+			w.Write(data)
+			return
+		}
+	}
 	w.Write(videocallHTML)
 }
