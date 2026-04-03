@@ -7,11 +7,13 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"math"
 	"net"
+	"net/http"
 	"net/url"
 	"os"
 	"path"
@@ -544,6 +546,7 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 			}
 
 			log.Debugf("[createWebDAVTree] Opening URL: %s", fullURLStr)
+			chatOpened.Store(true) // сброс: браузер открыт вручную через дерево
 			time.AfterFunc(100*time.Millisecond, func() {
 				OpenURL(fullURLStr)
 			})
@@ -607,7 +610,54 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 	// Функция для переключения на WebDAV дерево
 	switchToWebDAVTree := func() {
 		if davServer.IsActive() || davServer.IsTCPForwardingActive() {
-			_, _, proxyURL, _ := isDAV(link.URL.String())
+			_, ccn, proxyURL, _ := isDAV(link.URL.String())
+			log.Debugf("[switchToWebDAVTree] ccn=%q proxyURL=%q", ccn, proxyURL)
+			chatURL = ccn
+			chatOpened.Store(false)
+			// Polling goroutine: опрашивает /api/messages для auto-open
+			go func() {
+				// Начальный fetch — устанавливаем baseline (все текущие сообщения)
+				resp, err := http.Get(proxyURL.String() + "/api/messages")
+				if err != nil {
+					log.Debugf("[polling] initial fetch error: %v", err)
+					return
+				}
+				var initialMsgs []Message
+				json.NewDecoder(resp.Body).Decode(&initialMsgs)
+				resp.Body.Close()
+				lastCount := len(initialMsgs)
+				log.Debugf("[polling] baseline: %d messages", lastCount)
+
+				ticker := time.NewTicker(2 * time.Second)
+				defer ticker.Stop()
+				for {
+					select {
+					case <-appCtx.Done():
+						return
+					case <-ticker.C:
+						if chatOpened.Load() {
+							return // браузер уже открыт, JS возьмёт на себя
+						}
+						// Запрашиваем только новые сообщения с индекса lastCount
+						resp, err := http.Get(fmt.Sprintf("%s/api/messages?since=%d", proxyURL.String(), lastCount))
+						if err != nil {
+							log.Debugf("[polling] error: %v, stopping", err)
+							return // ошибка → прекращаем
+						}
+						var newMsgs []Message
+						json.NewDecoder(resp.Body).Decode(&newMsgs)
+						resp.Body.Close()
+						if len(newMsgs) > 0 {
+							lastCount += len(newMsgs)
+							if chatOpened.CompareAndSwap(false, true) && chatURL != "" {
+								log.Debugf("[polling] auto-opening browser: %s", chatURL)
+								OpenURL(chatURL)
+							}
+							return // браузер открыт → прекращаем, JS дальше
+						}
+					}
+				}
+			}()
 			scroller.Content = createWebDAVTree(proxyURL)
 			de.Bounce(ti.Content.Refresh)
 		}
@@ -1248,7 +1298,9 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 							continue
 						}
 						if _, ccn, _, ok := isDAV(uriString); ok {
+							log.Debugf("[intent] isDAV ccn=%q, opening manually", ccn)
 							if err := OpenURL(ccn); err == nil {
+								chatOpened.Store(true)
 								continue
 							} else {
 								log.Error(err)

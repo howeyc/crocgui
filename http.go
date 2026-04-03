@@ -11,9 +11,13 @@ import (
 	"path/filepath"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
+
+	log "github.com/schollz/logger"
 )
 
 // Message представляет сообщение в чате
@@ -33,6 +37,12 @@ type ChatStorage struct {
 var chatStore = &ChatStorage{
 	messages: make([]Message, 0),
 }
+
+// chatOpened — флаг: браузер чата уже открыт (auto или вручную)
+var chatOpened atomic.Bool
+
+// chatURL — URL для открытия чата (устанавливается в switchToWebDAVTree)
+var chatURL string
 
 // addMessage добавляет новое сообщение в хранилище
 func (cs *ChatStorage) addMessage(text, sender string) Message {
@@ -70,7 +80,9 @@ func isLocalRequest(r *http.Request) bool {
 	return slices.Contains(localIPs, host) || host == "::1"
 }
 
-// handleGetMessages обрабатывает GET запрос для получения всех сообщений
+// handleGetMessages обрабатывает GET запрос для получения сообщений
+// GET /api/messages          — все сообщения
+// GET /api/messages?since=N  — сообщения начиная с индекса N
 func handleGetMessages(w http.ResponseWriter, r *http.Request) {
 	if !isLocalRequest(r) {
 		http.Error(w, "Forbidden", http.StatusForbidden)
@@ -82,6 +94,18 @@ func handleGetMessages(w http.ResponseWriter, r *http.Request) {
 	}
 
 	messages := chatStore.getMessages()
+
+	// Проверяем параметр ?since=N
+	if sinceStr := r.URL.Query().Get("since"); sinceStr != "" {
+		if since, err := strconv.Atoi(sinceStr); err == nil && since >= 0 {
+			if since > len(messages) {
+				messages = []Message{}
+			} else {
+				messages = messages[since:]
+			}
+		}
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(messages)
 }
@@ -117,6 +141,7 @@ func handleSendMessage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	msg := chatStore.addMessage(req.Text, req.Sender)
+	log.Debugf("[handleSendMessage] text=%q sender=%q chatOpened=%v chatURL=%q", req.Text, req.Sender, chatOpened.Load(), chatURL)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(msg)
 }
@@ -581,19 +606,18 @@ func (h *WebDAVWithDirectoryListing) serveDirectoryListing(w http.ResponseWriter
 			chatMessages.scrollTop = chatMessages.scrollHeight;
 		}
 
-		// Загрузка сообщений
+		// Загрузка только новых сообщений
 		async function loadMessages() {
 			try {
-				const response = await fetch('/api/messages');
+				const response = await fetch('/api/messages?since=' + lastMessageCount);
 				if (!response.ok) return;
 
 				const messages = await response.json();
 
-				// Отображаем только новые сообщения
-				if (messages.length > lastMessageCount) {
-					const newMessages = messages.slice(lastMessageCount);
-					newMessages.forEach(displayMessage);
-					lastMessageCount = messages.length;
+				// Отображаем новые сообщения
+				if (messages.length > 0) {
+					messages.forEach(displayMessage);
+					lastMessageCount += messages.length;
 				}
 			} catch (error) {
 				console.error('Error loading messages:', error);
