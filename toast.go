@@ -189,6 +189,8 @@ func (t *Toast) Show() {
 					}
 				})
 			}
+		case <-appCtx.Done():
+			return
 		}
 	}()
 }

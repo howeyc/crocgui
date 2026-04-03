@@ -4,10 +4,12 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"path"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -58,8 +60,22 @@ func (cs *ChatStorage) getMessages() []Message {
 	return result
 }
 
+// isLocalRequest проверяет, что запрос пришёл с локального IP адреса
+func isLocalRequest(r *http.Request) bool {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		host = r.RemoteAddr
+	}
+	localIPs := hostSelectOptions(LOCAL)
+	return slices.Contains(localIPs, host) || host == "::1"
+}
+
 // handleGetMessages обрабатывает GET запрос для получения всех сообщений
 func handleGetMessages(w http.ResponseWriter, r *http.Request) {
+	if !isLocalRequest(r) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -72,6 +88,10 @@ func handleGetMessages(w http.ResponseWriter, r *http.Request) {
 
 // handleSendMessage обрабатывает POST запрос для отправки сообщения
 func handleSendMessage(w http.ResponseWriter, r *http.Request) {
+	if !isLocalRequest(r) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -486,7 +506,11 @@ func (h *WebDAVWithDirectoryListing) serveDirectoryListing(w http.ResponseWriter
 		html.WriteString(`			</tbody>
 		</table>
 	</div>
+`)
 
+		// Показываем чат только для локальных IP
+		if isLocalRequest(r) {
+			html.WriteString(`
 	<!-- Панель чата -->
 	<div class="chat-container">
 		<div class="chat-messages" id="chatMessages"></div>
@@ -641,7 +665,10 @@ func (h *WebDAVWithDirectoryListing) serveDirectoryListing(w http.ResponseWriter
 			});
 		});
 	</script>
-</body>
+`)
+		}
+
+		html.WriteString(`</body>
 </html>`)
 
 		// Отправляем HTML клиенту

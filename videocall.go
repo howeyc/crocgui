@@ -79,7 +79,7 @@ var wsUpgrader = websocket.Upgrader{
 	ReadBufferSize:  1 << 20, // 1 MB
 	WriteBufferSize: 1 << 20, // 1 MB
 	CheckOrigin: func(r *http.Request) bool {
-		return true // Разрешаем все origins для локального использования
+		return isLocalRequest(r)
 	},
 }
 
@@ -521,6 +521,7 @@ func handleCallWS(w http.ResponseWriter, r *http.Request) {
 	go func() {
 		ticker := time.NewTicker(15 * time.Second)
 		defer ticker.Stop()
+		defer conn.Close()
 		for {
 			select {
 			case <-ticker.C:
@@ -531,6 +532,8 @@ func handleCallWS(w http.ResponseWriter, r *http.Request) {
 					return
 				}
 			case <-done:
+				return
+			case <-appCtx.Done():
 				return
 			}
 		}
@@ -649,6 +652,10 @@ func handleCallEnd(w http.ResponseWriter, r *http.Request) {
 
 // handleCallAPI маршрутизирует запросы API видеозвонков
 func handleCallAPI(w http.ResponseWriter, r *http.Request) {
+	if !isLocalRequest(r) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
 	path := r.URL.Path
 
 	switch {
@@ -671,6 +678,10 @@ func handleCallAPI(w http.ResponseWriter, r *http.Request) {
 
 // serveVideoCallHTML отдаёт страницу видеоконференции
 func serveVideoCallHTML(w http.ResponseWriter, r *http.Request) {
+	if !isLocalRequest(r) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	// Для отладки: если videocall.html есть рядом с бинарником — читаем из файла
 	if exe, err := os.Executable(); err == nil {
