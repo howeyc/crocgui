@@ -621,7 +621,7 @@
                     var bufStart = remoteVideo.buffered.start(0);
                     var ct = remoteVideo.currentTime;
                     var behind = bufEnd - ct;
-                    if (behind > 8) {
+                    if (behind > 3) {
                         var target = bufEnd - 1;
                         diagLog('SEEK ct=' + ct.toFixed(1) + ' -> ' + target.toFixed(1) + ' behind=' + behind.toFixed(1) + 's EMERGENCY');
                         remoteVideo.currentTime = target;

@@ -90,7 +90,7 @@ type wsConn struct {
 }
 
 const (
-	maxChunksPerPeer = 300             // ~30 секунд при 10 чанков/сек
+	maxChunksPerPeer = 100             // ~10 секунд при 10 чанков/сек
 	maxChunkSize     = 1 << 20         // 1 MB максимальный размер чанка
 	peerTimeout      = 5 * time.Second // Таймаут отсутствия GET от пира
 	wsHistoryLimit   = 20              // Максимум чанков истории при WS подключении
