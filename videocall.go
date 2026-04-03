@@ -320,7 +320,7 @@ func handleCallWait(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Ждём до 30 секунд пока подключится второй участник
+	// Ждём пока подключится второй участник (бесконечно, пока клиент не уйдёт или приложение не завершится)
 	select {
 	case <-room.WaitingChan:
 		room.mu.Lock()
@@ -340,12 +340,9 @@ func handleCallWait(w http.ResponseWriter, r *http.Request) {
 			"desiredW": gdw,
 			"desiredH": gdh,
 		})
-	case <-time.After(30 * time.Second):
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"status": "timeout",
-		})
 	case <-r.Context().Done():
+		return
+	case <-appCtx.Done():
 		return
 	}
 }

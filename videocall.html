@@ -56,7 +56,7 @@
         .video-container video.fit-2x {
             transform: scale(2);
         }
-        /* Панель управления — 3 ряда, всегда видна */
+        /* Панель управления — 3 ряда, скрыта по умолчанию */
         .controls-panel {
             position: absolute;
             top: 8px;
@@ -64,7 +64,8 @@
             flex-direction: column;
             gap: 4px;
             z-index: 15;
-            transition: right 0.3s ease, left 0.3s ease;
+            opacity: 0;
+            transition: opacity 0.3s ease, right 0.3s ease, left 0.3s ease;
         }
         .controls-panel.pos-right { right: 8px; left: auto; }
         .controls-panel.pos-left { left: 8px; right: auto; }
@@ -90,7 +91,6 @@
             box-shadow: 0 4px 16px rgba(0,0,0,0.5);
             border: 1px solid rgba(255,255,255,0.3);
             z-index: 20;
-            cursor: pointer;
             transition: top 0.3s ease, left 0.3s ease, right 0.3s ease;
         }
         .pip-container.pip-tl { top: 12px; left: 12px; bottom: auto; right: auto; }
@@ -133,13 +133,18 @@
             opacity: 0;
             transition: opacity 0.3s;
         }
-        @media (hover: hover) {
-            .pip-container:hover .pip-controls,
-            .pip-controls.has-off { opacity: 1; }
+        /* Показ кнопок через классы (десктоп + мобильные) */
+        body.show-main-controls .controls-panel { opacity: 1; }
+        body.show-pip-controls .pip-controls { opacity: 1; }
+        /* Скрытие курсора на десктопе */
+        body.hide-cursor, body.hide-cursor * { cursor: none !important; }
+        /* Кнопки перемещения PiP (в первом ряду controls-panel) */
+        .ctrl-btn.pip-move {
+            background: rgba(100, 100, 100, 0.8);
+            display: none;
         }
-        @media (hover: none), (max-width: 600px) {
-            .pip-controls { opacity: 1; }
-        }
+        .ctrl-btn.pip-move:hover { background: rgba(130, 130, 130, 0.9); }
+        .ctrl-btn.pip-move.visible { display: flex; }
         .ctrl-btn {
             height: 28px;
             width: 28px;
@@ -206,9 +211,11 @@
             <div class="controls-panel pos-right" id="controlsPanel">
                 <!-- Ряд 1: Fit, ⬚, ❌ -->
                 <div class="controls-row">
+                    <button class="ctrl-btn pip-move pip-move-left" id="pipMoveLeft" title="Move PiP left">◀</button>
                     <button class="ctrl-btn fit" id="fitBtn" title="Fit Mode">Fit</button>
                     <button class="ctrl-btn fullscreen off" id="fullscreenBtn" title="Fullscreen">⬚</button>
                     <button class="ctrl-btn hangup" id="hangupBtn" title="Hangup">❌</button>
+                    <button class="ctrl-btn pip-move pip-move-right" id="pipMoveRight" title="Move PiP right">▶</button>
                 </div>
                 <!-- Ряд 2: 💻 VP8 H264 + мегапиксельный множитель для запроса пиру -->
                 <div class="controls-row">
@@ -451,6 +458,8 @@
         var pipCorners = ['pip-tl', 'pip-tr'];
         var pipCorner = btnStates.pipCorner || 0;
         var pipContainer = document.getElementById('pipContainer');
+        var pipMoveLeft = document.getElementById('pipMoveLeft');
+        var pipMoveRight = document.getElementById('pipMoveRight');
         // Применяем сохранённую позицию PiP
         pipCorners.forEach(function(c) { pipContainer.classList.remove(c); });
         pipContainer.classList.add(pipCorners[pipCorner]);
@@ -461,17 +470,74 @@
             var pos = pipCorners[pipCorner] === 'pip-tl' ? 'pos-right' : 'pos-left';
             panel.classList.remove('pos-right', 'pos-left');
             panel.classList.add(pos);
+            // Показываем только одну move-кнопку в зависимости от позиции PiP
+            pipMoveLeft.classList.toggle('visible', pipCorners[pipCorner] === 'pip-tr'); // PiP справа → кнопка ◀
+            pipMoveRight.classList.toggle('visible', pipCorners[pipCorner] === 'pip-tl'); // PiP слева → кнопка ▶
         }
+        // Один таймер для всех кнопок
+        var isDesktop = window.matchMedia('(hover: hover)').matches;
+        var controlsTimer = null;
+        function showAllControls() {
+            document.body.classList.remove('hide-cursor');
+            document.body.classList.add('show-main-controls');
+            document.body.classList.add('show-pip-controls');
+            resetControlsTimer();
+        }
+        function resetControlsTimer() {
+            if (controlsTimer) clearTimeout(controlsTimer);
+            controlsTimer = setTimeout(function() {
+                if (isDesktop) document.body.classList.add('hide-cursor');
+                document.body.classList.remove('show-main-controls');
+                document.body.classList.remove('show-pip-controls');
+                controlsTimer = null;
+            }, 5000);
+        }
+        // Клик по PiP — показать все кнопки на 5 сек
         pipContainer.addEventListener('click', function(e) {
             if (e.target.closest('.pip-controls')) return;
-            pipCorner = (pipCorner + 1) % pipCorners.length;
+            showAllControls();
+        });
+        // Клик по основному видео — показать все кнопки на 5 сек
+        document.querySelector('.video-container.main-video').addEventListener('click', function(e) {
+            if (e.target.closest('.controls-panel') || e.target.closest('.pip-container')) return;
+            showAllControls();
+        });
+        // Клик по кнопкам сбрасывает таймер (capture phase — до stopPropagation)
+        document.getElementById('pipControls').addEventListener('click', function() {
+            showAllControls();
+        }, true);
+        document.getElementById('controlsPanel').addEventListener('click', function() {
+            showAllControls();
+        }, true);
+        // Кнопки перемещения PiP
+        function movePip(dir) {
+            if (dir === 'left') pipCorner = 0;
+            else pipCorner = 1;
             btnStates.pipCorner = pipCorner;
             pipCorners.forEach(function(c) { pipContainer.classList.remove(c); });
             pipContainer.classList.add(pipCorners[pipCorner]);
             updateControlsPosition();
+            saveCallState();
+        }
+        pipMoveLeft.addEventListener('click', function(e) {
+            e.stopPropagation();
+            movePip('left');
+            showAllControls();
+        });
+        pipMoveRight.addEventListener('click', function(e) {
+            e.stopPropagation();
+            movePip('right');
+            showAllControls();
         });
         updateControlsPosition();
         applyButtonStates();
+
+        // Десктоп: показ кнопок и курсора при движении мыши
+        if (isDesktop) {
+            document.addEventListener('mousemove', showAllControls);
+            // Начальный показ
+            showAllControls();
+        }
 
         // Fullscreen
         function enterFullscreen() {
@@ -752,8 +818,13 @@
                     remotePeerID = 'guest';
                     waitingOverlay.classList.remove('hidden');
                     waitingText.textContent = 'Waiting for peer to join...';
-                    var joined = await waitForPeer();
-                    if (!joined) { showError('Peer did not join within 30 seconds'); return; }
+                    var joined = null;
+                    while (!joined) {
+                        try {
+                            joined = await waitForPeer();
+                        } catch(e) {}
+                        if (!joined) await new Promise(function(r) { setTimeout(r, 2000); });
+                    }
                     if (joined.codec) {
                         negotiatedCodec = joined.codec;
                         diagLog('CODEC negotiated=' + codecDisplayName(negotiatedCodec));
@@ -1066,20 +1137,13 @@
             audioEnabled = !audioEnabled;
             localStream.getAudioTracks().forEach(function(t) { t.enabled = audioEnabled; });
             micBtn.classList.toggle('off', !audioEnabled);
-            updatePipControlsVisibility();
         });
         camBtn.addEventListener('click', function() {
             if (!localStream) return;
             videoEnabled = !videoEnabled;
             localStream.getVideoTracks().forEach(function(t) { t.enabled = videoEnabled; });
             camBtn.classList.toggle('off', !videoEnabled);
-            updatePipControlsVisibility();
         });
-        function updatePipControlsVisibility() {
-            var pc = document.getElementById('pipControls');
-            if (micBtn.classList.contains('off') || camBtn.classList.contains('off')) pc.classList.add('has-off');
-            else pc.classList.remove('has-off');
-        }
 
         // ============= Сохранение состояния =============
         function saveCallState() {
