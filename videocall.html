@@ -255,7 +255,6 @@
         // ============= Конфигурация =============
         var CHUNK_INTERVAL_MS = 100;
         var MAX_BUFFER_SECONDS = 10;
-        var ALIVE_CHECK_MS = 3000;
         var WS_RECONNECT_MS = 2000;
 
         // ============= Элементы UI =============
@@ -373,7 +372,6 @@
         var isActive = false;
         var localStream = null;
         var mediaRecorder = null;
-        var aliveInterval = null;
         var isCreator = false;
 
         var myPeerID = 'host';
@@ -653,7 +651,7 @@
                 fetch('/api/messages', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ text: '🔧 ' + msg, sender: _chatUserId })
+                    body: JSON.stringify({ text: msg, sender: _chatUserId })
                 });
             } catch (e) {}
         }
@@ -910,16 +908,6 @@
             }
         }
 
-        async function checkPeerAlive() {
-            try {
-                var resp = await fetch('/api/call/alive?room=' + encodeURIComponent(roomID) +
-                    '&peer=' + encodeURIComponent(remotePeerID));
-                if (!resp.ok) return false;
-                var data = await resp.json();
-                return data.alive === true;
-            } catch (e) { return false; }
-        }
-
         async function endCall() {
             try { await fetch('/api/call/room?room=' + encodeURIComponent(roomID), { method: 'DELETE' }); } catch (e) {}
         }
@@ -964,7 +952,12 @@
             catch (e) { diagLog('WS create error: ' + e.message); return; }
             ws.onopen = function() { wsConnected = true; diagLog('WS connected'); };
             ws.onmessage = function(event) {
-                if (event.data instanceof ArrayBuffer) handleIncomingChunk(event.data);
+                if (event.data instanceof ArrayBuffer) {
+                    handleIncomingChunk(event.data);
+                } else if (typeof event.data === 'string' && event.data === 'peer_left') {
+                    diagLog('PEER left via WS');
+                    hangup();
+                }
             };
             ws.onclose = function(event) {
                 wsConnected = false;
@@ -999,7 +992,6 @@
             setupMSE();
             setupMediaRecorder();
             connectWS();
-            startAliveCheck();
         }
 
         // ============= MSE =============
@@ -1123,14 +1115,6 @@
             mediaRecorder.start(CHUNK_INTERVAL_MS);
         }
 
-        // ============= Проверка активности =============
-        function startAliveCheck() {
-            aliveInterval = setInterval(function() {
-                if (!isActive) return;
-                checkPeerAlive().then(function(alive) { if (!alive && isActive) hangup(); });
-            }, ALIVE_CHECK_MS);
-        }
-
         // ============= PiP кнопки =============
         micBtn.addEventListener('click', function() {
             if (!localStream) return;
@@ -1160,7 +1144,6 @@
             saveCallState();
             disconnectWS();
             if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
-            if (aliveInterval) { clearInterval(aliveInterval); aliveInterval = null; }
             if (localStream) localStream.getTracks().forEach(function(t) { t.stop(); });
             mseReady = false;
             mseQueue = [];

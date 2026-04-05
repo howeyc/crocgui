@@ -18,7 +18,166 @@ import (
 	"time"
 
 	log "github.com/schollz/logger"
+
+	"github.com/gorilla/websocket"
 )
+
+// chatWSUpgrader — WebSocket upgrader для чата
+var chatWSUpgrader = websocket.Upgrader{
+	ReadBufferSize:  1024,
+	WriteBufferSize: 1024,
+	CheckOrigin: func(r *http.Request) bool {
+		return isLocalRequest(r)
+	},
+}
+
+// chatWSClient представляет подключённого клиента чата
+type chatWSClient struct {
+	conn *websocket.Conn
+	mu   sync.Mutex
+}
+
+// chatWSClients хранит всех подключённых клиентов чата
+var chatWSClients struct {
+	clients map[*chatWSClient]struct{}
+	mu      sync.RWMutex
+}
+
+func init() {
+	chatWSClients.clients = make(map[*chatWSClient]struct{})
+}
+
+// broadcastChatMessage отправляет JSON-сообщение всем подключённым клиентам чата
+func broadcastChatMessage(msg Message) {
+	data, err := json.Marshal(msg)
+	if err != nil {
+		log.Errorf("broadcastChatMessage marshal error: %v", err)
+		return
+	}
+	chatWSClients.mu.RLock()
+	defer chatWSClients.mu.RUnlock()
+	for client := range chatWSClients.clients {
+		client.mu.Lock()
+		if err := client.conn.WriteMessage(websocket.TextMessage, data); err != nil {
+			log.Debugf("chat WS broadcast error: %v", err)
+		}
+		client.mu.Unlock()
+	}
+}
+
+// handleChatWS обрабатывает WebSocket соединение для чата
+func handleChatWS(w http.ResponseWriter, r *http.Request) {
+	if !isLocalRequest(r) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+
+	conn, err := chatWSUpgrader.Upgrade(w, r, nil)
+	if err != nil {
+		log.Errorf("chat WS upgrade error: %v", err)
+		return
+	}
+
+	client := &chatWSClient{conn: conn}
+
+	// Регистрируем клиента
+	chatWSClients.mu.Lock()
+	chatWSClients.clients[client] = struct{}{}
+	chatWSClients.mu.Unlock()
+
+	defer func() {
+		chatWSClients.mu.Lock()
+		delete(chatWSClients.clients, client)
+		chatWSClients.mu.Unlock()
+		conn.Close()
+	}()
+
+	// Отправляем историю сообщений при подключении
+	messages := chatStore.getMessages()
+	if len(messages) > 0 {
+		data, err := json.Marshal(messages)
+		if err == nil {
+			client.mu.Lock()
+			conn.WriteMessage(websocket.TextMessage, data)
+			client.mu.Unlock()
+		}
+	}
+
+	// Ping goroutine
+	done := make(chan struct{})
+	go func() {
+		ticker := time.NewTicker(15 * time.Second)
+		defer ticker.Stop()
+		defer conn.Close()
+		for {
+			select {
+			case <-ticker.C:
+				client.mu.Lock()
+				err := conn.WriteMessage(websocket.PingMessage, nil)
+				client.mu.Unlock()
+				if err != nil {
+					return
+				}
+			case <-done:
+				return
+			case <-appCtx.Done():
+				return
+			}
+		}
+	}()
+	defer close(done)
+
+	conn.SetPingHandler(func(appData string) error {
+		client.mu.Lock()
+		defer client.mu.Unlock()
+		return conn.WriteMessage(websocket.PongMessage, nil)
+	})
+
+	// Graceful shutdown: отправляем CloseMessage при appCtx.Done()
+	readDone := make(chan struct{})
+	go func() {
+		select {
+		case <-appCtx.Done():
+			client.mu.Lock()
+			conn.WriteMessage(websocket.CloseMessage,
+				websocket.FormatCloseMessage(websocket.CloseNormalClosure, "server shutdown"))
+			client.mu.Unlock()
+		case <-readDone:
+		}
+	}()
+
+	// Читаем входящие сообщения
+	for {
+		msgType, data, err := conn.ReadMessage()
+		if err != nil {
+			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseNormalClosure) {
+				log.Debugf("chat WS read error: %v", err)
+			}
+			break
+		}
+
+		if msgType == websocket.TextMessage && len(data) > 0 {
+			var req struct {
+				Text   string `json:"text"`
+				Sender string `json:"sender"`
+			}
+			if err := json.Unmarshal(data, &req); err != nil {
+				continue
+			}
+			if req.Text == "" {
+				continue
+			}
+			if req.Sender == "" {
+				req.Sender = "Anonymous"
+			}
+
+			msg := chatStore.addMessage(req.Text, req.Sender)
+			// Рассылаем всем подключённым клиентам
+			broadcastChatMessage(msg)
+		}
+	}
+	close(readDone)
+}
 
 // Message представляет сообщение в чате
 type Message struct {
@@ -135,15 +294,13 @@ func handleSendMessage(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Text is required", http.StatusBadRequest)
 		return
 	}
+	w.WriteHeader(http.StatusOK)
 
 	if req.Sender == "" {
 		req.Sender = "Anonymous"
 	}
 
-	msg := chatStore.addMessage(req.Text, req.Sender)
-	log.Debugf("[handleSendMessage] text=%q sender=%q chatOpened=%v chatURL=%q", req.Text, req.Sender, chatOpened.Load(), chatURL)
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(msg)
+	log.Debugf("%s@%s chatOpened=%v chatURL=%q", req.Text, req.Sender, chatOpened.Load(), chatURL)
 }
 
 func (h *WebDAVWithDirectoryListing) serveDirectoryListing(w http.ResponseWriter, r *http.Request) {
@@ -555,8 +712,6 @@ func (h *WebDAVWithDirectoryListing) serveDirectoryListing(w http.ResponseWriter
 		const chatInput = document.getElementById('chatInput');
 		const chatSendBtn = document.getElementById('chatSendBtn');
 
-		let lastMessageCount = 0;
-
 		// Форматирование времени
 		function formatTime(timestamp) {
 			const date = new Date(timestamp);
@@ -606,50 +761,65 @@ func (h *WebDAVWithDirectoryListing) serveDirectoryListing(w http.ResponseWriter
 			chatMessages.scrollTop = chatMessages.scrollHeight;
 		}
 
-		// Загрузка только новых сообщений
-		async function loadMessages() {
-			try {
-				const response = await fetch('/api/messages?since=' + lastMessageCount);
-				if (!response.ok) return;
+		// --- WebSocket ---
+		let chatWS = null;
+		let chatWSReconnectTimer = null;
+		const chatWSReconnectDelay = 2000;
 
-				const messages = await response.json();
-
-				// Отображаем новые сообщения
-				if (messages.length > 0) {
-					messages.forEach(displayMessage);
-					lastMessageCount += messages.length;
-				}
-			} catch (error) {
-				console.error('Error loading messages:', error);
-			}
+		function chatWSUrl() {
+			var proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+			return proto + '//' + location.host + '/api/chat/ws';
 		}
 
-		// Отправка сообщения
-		async function sendMessage() {
+		function connectChatWS() {
+			if (chatWS && chatWS.readyState <= 1) return; // уже подключён
+
+			chatWS = new WebSocket(chatWSUrl());
+
+			chatWS.onopen = function() {
+				console.log('Chat WS connected');
+			};
+
+			chatWS.onmessage = function(event) {
+				try {
+					var data = JSON.parse(event.data);
+					if (Array.isArray(data)) {
+						// История сообщений при подключении
+						chatMessages.innerHTML = '';
+						data.forEach(displayMessage);
+					} else {
+						// Одно новое сообщение (broadcast)
+						displayMessage(data);
+					}
+				} catch(e) {
+					console.error('Chat WS parse error:', e);
+				}
+			};
+
+			chatWS.onclose = function() {
+				console.log('Chat WS closed, reconnecting...');
+				scheduleChatWSReconnect();
+			};
+
+			chatWS.onerror = function(err) {
+				console.error('Chat WS error:', err);
+				chatWS.close();
+			};
+		}
+
+		function scheduleChatWSReconnect() {
+			if (chatWSReconnectTimer) clearTimeout(chatWSReconnectTimer);
+			chatWSReconnectTimer = setTimeout(connectChatWS, chatWSReconnectDelay);
+		}
+
+		// Отправка сообщения через WebSocket
+		function sendMessage() {
 			const text = chatInput.value.trim();
 			if (!text) return;
 
-			try {
-				const response = await fetch('/api/messages', {
-					method: 'POST',
-					headers: {
-						'Content-Type': 'application/json',
-					},
-					body: JSON.stringify({
-						text: text,
-						sender: currentUserId
-					})
-				});
-
-				if (!response.ok) {
-					console.error('Failed to send message');
-					return;
-				}
-
+			if (chatWS && chatWS.readyState === WebSocket.OPEN) {
+				chatWS.send(JSON.stringify({ text: text, sender: currentUserId }));
 				chatInput.value = '';
-				await loadMessages();
-			} catch (error) {
-				console.error('Error sending message:', error);
 			}
 		}
 
@@ -663,30 +833,18 @@ func (h *WebDAVWithDirectoryListing) serveDirectoryListing(w http.ResponseWriter
 			}
 		});
 
-		// Периодическая загрузка сообщений (каждые 2 секунды)
-		setInterval(loadMessages, 2000);
+		// Подключаем WebSocket
+		connectChatWS();
 
-		// Начальная загрузка
-		loadMessages();
-
-		// Видеозвонок
+		// Видеозвонок — через WebSocket
 		const chatCallBtn = document.getElementById('chatCallBtn');
 		chatCallBtn.addEventListener('click', function() {
 			const roomId = 'call_' + Math.random().toString(36).substr(2, 8);
-			// Отправляем относительную ссылку в чат
 			const callUrl = '/videocall.html?room=' + roomId;
-			fetch('/api/messages', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({
-						text: '📞 ' + callUrl,
-						sender: currentUserId
-					})
-			}).then(function() {
-				// Открываем видеозвонок в новой вкладке
+			if (chatWS && chatWS.readyState === WebSocket.OPEN) {
+				chatWS.send(JSON.stringify({ text: '📞 ' + callUrl, sender: currentUserId }));
 				window.open(callUrl, '_blank');
-				loadMessages();
-			});
+			}
 		});
 	</script>
 `)

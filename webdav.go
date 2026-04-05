@@ -262,6 +262,10 @@ func (s *WebDAVServer) createLocalHandler(root string) http.Handler {
 // handlerRouter направляет запросы к текущему активному handler'у
 func (s *WebDAVServer) handlerRouter(w http.ResponseWriter, r *http.Request) {
 	// Обработка API чата
+	if r.URL.Path == "/api/chat/ws" {
+		handleChatWS(w, r)
+		return
+	}
 	if r.URL.Path == "/api/messages" {
 		if r.Method == http.MethodGet {
 			handleGetMessages(w, r)

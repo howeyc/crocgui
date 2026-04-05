@@ -35,9 +35,6 @@ type VideoCallRoom struct {
 	ChunkIdx  map[string]int64
 	ChunkLock map[string]*sync.Mutex
 
-	// Время последнего GET-запроса чанков от каждого пира
-	LastPollTime map[string]time.Time
-
 	// Для уведомления о входящем звонке
 	WaitingChan chan struct{} // закрывается когда второй участник подключился
 
@@ -90,10 +87,9 @@ type wsConn struct {
 }
 
 const (
-	maxChunksPerPeer = 100             // ~10 секунд при 10 чанков/сек
-	maxChunkSize     = 1 << 20         // 1 MB максимальный размер чанка
-	peerTimeout      = 5 * time.Second // Таймаут отсутствия GET от пира
-	wsHistoryLimit   = 20              // Максимум чанков истории при WS подключении
+	maxChunksPerPeer = 100     // ~10 секунд при 10 чанков/сек
+	maxChunkSize     = 1 << 20 // 1 MB максимальный размер чанка
+	wsHistoryLimit   = 20      // Максимум чанков истории при WS подключении
 )
 
 // createRoom создаёт новую комнату видеозвонка или возвращает ошибку если комната уже существует
@@ -106,14 +102,13 @@ func (vs *VideoCallStorage) createRoom(roomID string) (*VideoCallRoom, error) {
 	}
 
 	room := &VideoCallRoom{
-		ID:           roomID,
-		CreatedAt:    time.Now(),
-		Chunks:       make(map[string][]VideoChunk),
-		ChunkIdx:     make(map[string]int64),
-		ChunkLock:    make(map[string]*sync.Mutex),
-		LastPollTime: make(map[string]time.Time),
-		WaitingChan:  make(chan struct{}),
-		wsConns:      make(map[string]*wsConn),
+		ID:          roomID,
+		CreatedAt:   time.Now(),
+		Chunks:      make(map[string][]VideoChunk),
+		ChunkIdx:    make(map[string]int64),
+		ChunkLock:   make(map[string]*sync.Mutex),
+		WaitingChan: make(chan struct{}),
+		wsConns:     make(map[string]*wsConn),
 	}
 	vs.rooms[roomID] = room
 	return room, nil
@@ -246,6 +241,23 @@ func (r *VideoCallRoom) forwardChunkToWS(peerID string, data []byte) {
 	defer wsc.mu.Unlock()
 	if err := wsc.conn.WriteMessage(websocket.BinaryMessage, data); err != nil {
 		log.Debugf("WS forward error to %s: %v", peerID, err)
+	}
+}
+
+// forwardTextToWS отправляет текстовое сообщение пиру через WebSocket (thread-safe)
+func (r *VideoCallRoom) forwardTextToWS(peerID string, msg string) {
+	r.wsMu.Lock()
+	wsc := r.wsConns[peerID]
+	r.wsMu.Unlock()
+
+	if wsc == nil {
+		return
+	}
+
+	wsc.mu.Lock()
+	defer wsc.mu.Unlock()
+	if err := wsc.conn.WriteMessage(websocket.TextMessage, []byte(msg)); err != nil {
+		log.Debugf("WS text forward error to %s: %v", peerID, err)
 	}
 }
 
@@ -481,11 +493,6 @@ func handleCallWS(w http.ResponseWriter, r *http.Request) {
 	room.wsMu.Unlock()
 	defer room.removeWS(peerID)
 
-	// Обновляем время активности
-	room.mu.Lock()
-	room.LastPollTime[peerID] = time.Now()
-	room.mu.Unlock()
-
 	log.Debugf("WS connected: room=%s peer=%s", roomID, peerID)
 
 	// Определяем remote peer
@@ -553,11 +560,6 @@ func handleCallWS(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 
-		// Обновляем время активности
-		room.mu.Lock()
-		room.LastPollTime[peerID] = time.Now()
-		room.mu.Unlock()
-
 		if msgType == websocket.BinaryMessage && len(data) > 0 {
 			// Сохраняем чанк в памяти (для reconnect/history)
 			room.addChunk(peerID, data)
@@ -569,44 +571,12 @@ func handleCallWS(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Отправляем remote peer уведомление об отключении
+	if remotePeer != "" {
+		room.forwardTextToWS(remotePeer, "peer_left")
+	}
+
 	log.Debugf("WS disconnected: room=%s peer=%s", roomID, peerID)
-}
-
-// handleCallAlive обрабатывает GET /api/call/alive — проверка активности пира
-func handleCallAlive(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	roomID := r.URL.Query().Get("room")
-	peerID := r.URL.Query().Get("peer") // Чью активность проверяем
-
-	if roomID == "" || peerID == "" {
-		http.Error(w, "room and peer are required", http.StatusBadRequest)
-		return
-	}
-
-	room := callStore.getRoom(roomID)
-	if room == nil {
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{"alive": false})
-		return
-	}
-
-	room.mu.Lock()
-	lastPoll, exists := room.LastPollTime[peerID]
-	room.mu.Unlock()
-
-	// Проверяем и WS соединение и HTTP poll время
-	wsc := room.getWS(peerID)
-	wsAlive := wsc != nil && wsc.conn != nil
-	httpAlive := exists && time.Since(lastPoll) < peerTimeout
-
-	alive := wsAlive || httpAlive
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{"alive": alive})
 }
 
 // handleCallEnd обрабатывает DELETE /api/call/room — завершение звонка
@@ -664,8 +634,6 @@ func handleCallAPI(w http.ResponseWriter, r *http.Request) {
 		handleCallJoin(w, r)
 	case strings.HasSuffix(path, "/ws"):
 		handleCallWS(w, r)
-	case strings.HasSuffix(path, "/alive"):
-		handleCallAlive(w, r)
 	case strings.HasSuffix(path, "/room"):
 		handleCallEnd(w, r)
 	default:
