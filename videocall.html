@@ -365,6 +365,8 @@
 
         function sendSettings() {
             if (!wsConnected || !ws || ws.readyState !== WebSocket.OPEN) return;
+            var vt = localStream ? localStream.getVideoTracks()[0] : null;
+            var vs = vt ? vt.getSettings() : {};
             ws.send(JSON.stringify({
                 cmd: 'settings',
                 audio: S.audio,
@@ -378,7 +380,11 @@
                 ec: S.ec,
                 ns: S.ns,
                 agc: S.agc,
-                mpx: S.mpx
+                mpx: S.mpx,
+                recordCodecs: detectAllRecordCodecs(),
+                playCodecs: detectSupportedCodecs(),
+                width: vs.width || 0,
+                height: vs.height || 0
             }));
         }
 
@@ -425,6 +431,8 @@
         var wsConnected = false;
         var wsReconnectTimer = null;
         var peerSettings = null; // настройки пира (полученные через WS)
+        var peerSettingsResolve = null; // для ожидания первых настроек пира
+        var recorderStarted = false;
 
         var mediaSource = null;
         var sourceBuffer = null;
@@ -870,14 +878,10 @@
                 });
                 localVideo.srcObject = localStream;
 
-                var mpxResult = applyMpx(W, H, S.mpx);
-                var dw = mpxResult.w;
-                var dh = mpxResult.h;
                 var myCodecs = detectSupportedCodecs();
-                var myRecordCodecs = detectAllRecordCodecs();
                 diagLog('CODECS supported: ' + myCodecs.map(codecDisplayName).join(' | '));
 
-                var createResult = await tryCreateRoom(myCodecs, myRecordCodecs, W, H, dw, dh);
+                var createResult = await tryCreateRoom();
                 isCreator = createResult.created;
                 diagLog('INIT peer=' + (isCreator ? 'host' : 'guest') + ' cam=' + W + 'x' + H);
 
@@ -893,47 +897,11 @@
                         } catch(e) {}
                         if (!joined) await new Promise(function(r) { setTimeout(r, 2000); });
                     }
-                    if (joined.recordCodec) {
-                        recordCodec = joined.recordCodec;
-                        diagLog('CODEC record=' + codecDisplayName(recordCodec));
-                    }
-                    if (joined.incomingCodec) {
-                        incomingCodec = joined.incomingCodec;
-                        diagLog('CODEC incoming=' + codecDisplayName(incomingCodec));
-                    } else if (joined.codec) {
-                        incomingCodec = joined.codec;
-                    }
-                    negotiatedCodec = recordCodec || incomingCodec || joined.codec || '';
-                    if (joined.desiredW && joined.desiredH) {
-                        diagLog('PEER wants ' + joined.desiredW + 'x' + joined.desiredH + ' from me');
-                        await applyDesiredResolution(joined.desiredW, joined.desiredH);
-                    } else if (joined.width && joined.height) {
-                        await applyMinResolution(W, H, joined.width, joined.height);
-                    }
                     waitingOverlay.classList.add('hidden');
                 } else {
                     myPeerID = 'guest';
                     remotePeerID = 'host';
-                    var joinResult = await joinRoom(myCodecs, myRecordCodecs, W, H, dw, dh);
-                    if (joinResult) {
-                        if (joinResult.recordCodec) {
-                            recordCodec = joinResult.recordCodec;
-                            diagLog('CODEC record=' + codecDisplayName(recordCodec));
-                        }
-                        if (joinResult.incomingCodec) {
-                            incomingCodec = joinResult.incomingCodec;
-                            diagLog('CODEC incoming=' + codecDisplayName(incomingCodec));
-                        } else if (joinResult.codec) {
-                            incomingCodec = joinResult.codec;
-                        }
-                        negotiatedCodec = recordCodec || incomingCodec || joinResult.codec || '';
-                    }
-                    if (joinResult && joinResult.desiredW && joinResult.desiredH) {
-                        diagLog('PEER wants ' + joinResult.desiredW + 'x' + joinResult.desiredH + ' from me');
-                        await applyDesiredResolution(joinResult.desiredW, joinResult.desiredH);
-                    } else if (joinResult && joinResult.width && joinResult.height) {
-                        await applyMinResolution(W, H, joinResult.width, joinResult.height);
-                    }
+                    await joinRoom();
                 }
                 await startCall();
             } catch (err) {
@@ -945,16 +913,12 @@
         }
 
         // ============= API =============
-        async function tryCreateRoom(codecs, recordCodecs, width, height, desiredW, desiredH) {
+        async function tryCreateRoom() {
             try {
                 var resp = await fetch('/api/call/create', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        room: roomID, codecs: codecs, playCodecs: codecs, recordCodecs: recordCodecs,
-                        width: width, height: height,
-                        desiredW: desiredW || 0, desiredH: desiredH || 0
-                    })
+                    body: JSON.stringify({ room: roomID })
                 });
                 if (!resp.ok) return { created: false };
                 var data = await resp.json();
@@ -972,16 +936,12 @@
             } catch (e) { return false; }
         }
 
-        async function joinRoom(codecs, recordCodecs, width, height, desiredW, desiredH) {
+        async function joinRoom() {
             try {
                 var resp = await fetch('/api/call/join', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        room: roomID, codecs: codecs, playCodecs: codecs, recordCodecs: recordCodecs,
-                        width: width, height: height,
-                        desiredW: desiredW || 0, desiredH: desiredH || 0
-                    })
+                    body: JSON.stringify({ room: roomID })
                 });
                 if (!resp.ok) return null;
                 return await resp.json();
@@ -1029,27 +989,147 @@
             }
         }
 
+        // ============= Camera capabilities + findBestResolution =============
+        // Возвращает { minW, maxW, stepW, minH, maxH, stepH } или null
+        function getCameraCapabilities() {
+            var vt = localStream ? localStream.getVideoTracks()[0] : null;
+            if (!vt) return null;
+            // Попытка getCapabilities() (Chrome, Edge, Android WebView)
+            if (typeof vt.getCapabilities === 'function') {
+                try {
+                    var caps = vt.getCapabilities();
+                    if (caps && caps.width && caps.height &&
+                        typeof caps.width.min === 'number' && typeof caps.width.max === 'number' &&
+                        typeof caps.height.min === 'number' && typeof caps.height.max === 'number') {
+                        return {
+                            minW: caps.width.min, maxW: caps.width.max, stepW: caps.width.step || 1,
+                            minH: caps.height.min, maxH: caps.height.max, stepH: caps.height.step || 1
+                        };
+                    }
+                } catch(e) {}
+            }
+            return null;
+        }
+
+        // Находит максимальное нативное разрешение <= mpx мегапикселей
+        // Бинарный поиск (дихотомия) по getCapabilities, fallback на applyMpx
+        function findBestResolution(mpx) {
+            var caps = getCameraCapabilities();
+            var vt = localStream ? localStream.getVideoTracks()[0] : null;
+            if (!vt) return null;
+
+            if (caps) {
+                var aspect = caps.maxW / caps.maxH;
+                var maxPixels = mpx * 1000000;
+                var lo = caps.minW, hi = caps.maxW;
+                var bestW = caps.minW, bestH = caps.minH;
+
+                // Проверяем функцию: w*h при данном w (с учётом аспекта и step)
+                function pixelsAt(w) {
+                    var h = Math.round(w / aspect / caps.stepH) * caps.stepH;
+                    if (h < caps.minH) h = caps.minH;
+                    if (h > caps.maxH) h = caps.maxH;
+                    return { w: w, h: h, px: w * h };
+                }
+
+                // Если даже minW превышает лимит — возвращаем минимум
+                var minRes = pixelsAt(caps.minW);
+                if (minRes.px > maxPixels) return { w: minRes.w, h: minRes.h };
+
+                // Бинарный поиск: f(w) монотонно возрастает → ищем max w где w*h <= maxPixels
+                while (hi - lo >= caps.stepW) {
+                    var mid = Math.round((lo + hi) / 2 / caps.stepW) * caps.stepW;
+                    if (mid < lo) mid = lo;
+                    if (mid > hi) mid = hi;
+                    if (mid === lo && lo + caps.stepW <= hi) mid = lo + caps.stepW;
+                    var res = pixelsAt(mid);
+                    if (res.px <= maxPixels) {
+                        bestW = res.w; bestH = res.h;
+                        lo = mid + caps.stepW;
+                    } else {
+                        hi = mid - caps.stepW;
+                    }
+                }
+                // Чётность для кодирования
+                if (bestW % 2 !== 0) bestW = Math.max(caps.minW, bestW - caps.stepW);
+                if (bestH % 2 !== 0) bestH = Math.max(caps.minH, bestH - caps.stepH);
+                return { w: bestW, h: bestH };
+            }
+
+            // Fallback: getSettings() → applyMpx
+            var s = vt.getSettings();
+            var aspectW = s.width || window.innerWidth;
+            var aspectH = s.height || window.innerHeight;
+            var r = applyMpx(aspectW, aspectH, mpx);
+            return r;
+        }
+
+        // ============= Negotiate codec на клиенте =============
+        function negotiateCodecClient(myRecordCodecs, peerPlayCodecs) {
+            for (var i = 0; i < myRecordCodecs.length; i++) {
+                for (var j = 0; j < peerPlayCodecs.length; j++) {
+                    if (myRecordCodecs[i] === peerPlayCodecs[j]) return myRecordCodecs[i];
+                }
+            }
+            return '';
+        }
+
         // ============= Обработка настроек пира =============
-        function handlePeerSettings(msg) {
+        function handlePeerSettings(msg, initial) {
             var prev = peerSettings;
             peerSettings = msg;
             if (!isActive || !localStream) return;
 
-            // Пир хочет мой аудио/видео?
+            // Negotiate codec если у пира есть recordCodecs/playCodecs
+            if (msg.recordCodecs && msg.playCodecs) {
+                var myPlayCodecs = detectSupportedCodecs();
+                var myRecordCodecs = detectAllRecordCodecs();
+                var newRecordCodec = negotiateCodecClient(myRecordCodecs, msg.playCodecs);
+                var newIncomingCodec = negotiateCodecClient(msg.recordCodecs, myPlayCodecs);
+                if (newRecordCodec) {
+                    recordCodec = newRecordCodec;
+                    diagLog('NEGOTIATE record=' + codecDisplayName(recordCodec));
+                }
+                if (newIncomingCodec) {
+                    incomingCodec = newIncomingCodec;
+                    diagLog('NEGOTIATE incoming=' + codecDisplayName(incomingCodec));
+                }
+                if (recordCodec) negotiatedCodec = recordCodec;
+            }
+
+            // Пир хочет определённое разрешение от меня (через mpx)
+            if (msg.mpx > 0) {
+                var best = findBestResolution(msg.mpx);
+                if (best && best.w > 0 && best.h > 0) {
+                    diagLog('PEER wants ' + msg.mpx + 'mpx → best=' + best.w + 'x' + best.h);
+                    applyDesiredResolution(best.w, best.h);
+                }
+            }
+
+            // При начальном получении настроек — не трогаем рекордер, startCall сам запустит
+            if (initial) return;
+
+            // Дальнейшие изменения — рестарт рекордера при необходимости
+            var codecChanged = false;
+            // Проверяем изменился ли кодек
+            if (msg.recordCodecs && msg.playCodecs) {
+                var myRec = detectAllRecordCodecs();
+                var newRec = negotiateCodecClient(myRec, msg.playCodecs);
+                if (newRec !== recordCodec) codecChanged = true;
+            }
+
             var peerWantsMyAudio = msg.wantAudio !== false;
             var peerWantsMyVideo = msg.wantVideo !== false;
-            // Есть ли мне что отправлять?
             var canSend = (S.audio && peerWantsMyAudio) || (S.video && peerWantsMyVideo);
 
             if (!canSend) {
-                // Нечего отправлять — останавливаем рекордер
                 if (mediaRecorder && mediaRecorder.state !== 'inactive') {
                     diagLog('REC stop: peer doesnt need my streams');
                     mediaRecorder.stop();
+                    recorderStarted = false;
                 }
-            } else {
-                // Есть что отправлять — перезапускаем рекордер (новый init segment)
-                diagLog('REC restart: peer settings changed');
+            } else if (codecChanged) {
+                diagLog('REC restart: codec changed');
                 restartMediaRecorder();
             }
         }
@@ -1095,7 +1175,14 @@
                             var msg = JSON.parse(event.data);
                             if (msg.cmd === 'settings') {
                                 diagLog('PEER settings: a=' + msg.audio + ' v=' + msg.video + ' wa=' + msg.wantAudio + ' wv=' + msg.wantVideo);
-                                handlePeerSettings(msg);
+                                var initial = !peerSettings && peerSettingsResolve;
+                                handlePeerSettings(msg, initial);
+                                // Резолвим ожидание первых настроек
+                                if (peerSettingsResolve) {
+                                    var resolve = peerSettingsResolve;
+                                    peerSettingsResolve = null;
+                                    resolve(peerSettings);
+                                }
                             }
                         } catch(e) {}
                     }
@@ -1131,9 +1218,14 @@
         // ============= Звонок =============
         async function startCall() {
             isActive = true;
-            // 1. Сначала подключаем WS
+            // 1. Готовимся принять настройки пира ДО подключения WS (чтобы не пропустить)
+            if (!peerSettings) {
+                peerSettingsResolve = null;
+                var settingsPromise = new Promise(function(resolve) { peerSettingsResolve = resolve; });
+            }
+            // 2. Подключаем WS
             connectWS();
-            // 2. Ждём пока WS подключится (до 10 секунд)
+            // 3. Ждём пока WS подключится (до 10 секунд)
             var waitStart = Date.now();
             while (!wsConnected && isActive && (Date.now() - waitStart < 10000)) {
                 await new Promise(function(r) { setTimeout(r, 100); });
@@ -1141,11 +1233,28 @@
             if (!wsConnected) {
                 diagLog('WS connect timeout');
                 showError('WebSocket connection failed');
+                peerSettingsResolve = null;
                 return;
             }
-            // 3. WS готов — создаём MSE для приёма
+            // 4. Ждём настройки пира (до 5 секунд) — чтобы знать кодек и разрешение до старта
+            if (!peerSettings) {
+                diagLog('Waiting for peer settings...');
+                var timeoutPromise = new Promise(function(resolve) { setTimeout(function() { resolve(null); }, 5000); });
+                var firstSettings = await Promise.race([settingsPromise, timeoutPromise]);
+                peerSettingsResolve = null;
+                if (firstSettings) {
+                    diagLog('Got peer settings, codec=' + codecDisplayName(recordCodec) + ' incoming=' + codecDisplayName(incomingCodec));
+                } else {
+                    diagLog('Peer settings timeout, using defaults');
+                }
+            } else {
+                diagLog('Peer settings already received, codec=' + codecDisplayName(recordCodec) + ' incoming=' + codecDisplayName(incomingCodec));
+            }
+            if (!isActive) return;
+            // 5. Создаём MSE с известным incomingCodec
             setupMSE();
-            // 4. Запускаем запись
+            // 6. Запускаем запись с известным recordCodec и разрешением
+            recorderStarted = true;
             setupMediaRecorder();
         }
 
@@ -1179,8 +1288,8 @@
                     if (remoteVideo.buffered && remoteVideo.buffered.length > 0) {
                         var bufEnd = remoteVideo.buffered.end(remoteVideo.buffered.length - 1);
                         var behind = bufEnd - remoteVideo.currentTime;
-                        if (behind > 2.0) {
-                            var target = bufEnd - 0.5;
+                        if (behind > 3.0) {
+                            var target = bufEnd - 1.5;
                             remoteVideo.currentTime = target;
                             diagLog('PLAY catchup ct=' + target.toFixed(1) + ' behind=' + behind.toFixed(1) + 's');
                         }
