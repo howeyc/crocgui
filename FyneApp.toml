@@ -5,7 +5,7 @@ Icon = "Icon.png"
 Name = "crocgui"
 ID = "com.github.howeyc.crocgui"
 Version = "1.11.51"
-Build = 1796
+Build = 1801
 
 [Source]
 Repo = "https://github.com/abakum/crocgui"

@@ -285,68 +285,113 @@
         var _chatUserId = localStorage.getItem('chatUserId') || 'user_' + Math.random().toString(36).substr(2, 9);
         localStorage.setItem('chatUserId', _chatUserId);
 
-        // ============= Сохраняемое состояние кнопок =============
-        function loadButtonStates() {
-            try {
-                var s = JSON.parse(localStorage.getItem('vc_btnStates') || '{}');
-                return {
-                    remoteVideoOn: s.remoteVideoOn !== undefined ? s.remoteVideoOn : true,
-                    remoteAudioOn: s.remoteAudioOn !== undefined ? s.remoteAudioOn : true,
-                    vp8Enabled: s.vp8Enabled !== undefined ? s.vp8Enabled : true,
-                    h264Enabled: s.h264Enabled !== undefined ? s.h264Enabled : false,
-                    opusEnabled: s.opusEnabled !== undefined ? s.opusEnabled : true,
-                    aacEnabled: s.aacEnabled !== undefined ? s.aacEnabled : false,
-                    ecEnabled: s.ecEnabled !== undefined ? s.ecEnabled : true,
-                    nsEnabled: s.nsEnabled !== undefined ? s.nsEnabled : true,
-                    agcEnabled: s.agcEnabled !== undefined ? s.agcEnabled : true,
-                    mpx: s.mpx !== undefined ? s.mpx : 0.1, // 0.1, 1, 1/3, 0.2
-                    pipCorner: s.pipCorner || 0
-                };
-            } catch(e) {
-                return {
-                    remoteVideoOn: true, remoteAudioOn: true,
-                    vp8Enabled: true, h264Enabled: false,
-                    opusEnabled: true, aacEnabled: false,
-                    ecEnabled: true, nsEnabled: true, agcEnabled: true,
-                    mpx: 0.1, pipCorner: 0
-                };
-            }
-        }
-        var btnStates = loadButtonStates();
-        var audioEnabled = true;
-        var videoEnabled = true;
+        // ============= Единый объект настроек =============
+        var S = {
+            audio: true,          // мой микрофон
+            video: true,          // моя камера
+            wantAudio: true,      // хочу аудио от пира
+            wantVideo: true,      // хочу видео от пира
+            vp8: true,
+            h264: false,
+            opus: true,
+            aac: false,
+            ec: true,
+            ns: true,
+            agc: true,
+            mpx: 0.1,
+            pipCorner: 0         // только локально, не отправляется пиру
+        };
 
-        // Применяем состояния к кнопкам
-        function applyButtonStates() {
-            remoteScreenBtn.classList.toggle('off', !btnStates.remoteVideoOn);
-            remoteVideo.style.visibility = btnStates.remoteVideoOn ? 'visible' : 'hidden';
-            remoteMuteBtn.classList.toggle('off', !btnStates.remoteAudioOn);
-            remoteVideo.muted = !btnStates.remoteAudioOn;
-            vp8Btn.classList.toggle('off', !btnStates.vp8Enabled);
-            h264Btn.classList.toggle('off', !btnStates.h264Enabled);
-            opusBtn.classList.toggle('off', !btnStates.opusEnabled);
-            aacBtn.classList.toggle('off', !btnStates.aacEnabled);
-            ecBtn.classList.toggle('off', !btnStates.ecEnabled);
-            nsBtn.classList.toggle('off', !btnStates.nsEnabled);
-            agcBtn.classList.toggle('off', !btnStates.agcEnabled);
+        function loadSettings() {
+            try {
+                var s = JSON.parse(localStorage.getItem('vc2') || '{}');
+                if (s.audio !== undefined) S.audio = s.audio;
+                if (s.video !== undefined) S.video = s.video;
+                if (s.wantAudio !== undefined) S.wantAudio = s.wantAudio;
+                if (s.wantVideo !== undefined) S.wantVideo = s.wantVideo;
+                if (s.vp8 !== undefined) S.vp8 = s.vp8;
+                if (s.h264 !== undefined) S.h264 = s.h264;
+                if (s.opus !== undefined) S.opus = s.opus;
+                if (s.aac !== undefined) S.aac = s.aac;
+                if (s.ec !== undefined) S.ec = s.ec;
+                if (s.ns !== undefined) S.ns = s.ns;
+                if (s.agc !== undefined) S.agc = s.agc;
+                if (s.mpx !== undefined) S.mpx = s.mpx;
+                if (s.pipCorner !== undefined) S.pipCorner = s.pipCorner;
+            } catch(e) {}
+        }
+
+        function saveSettings() {
+            localStorage.setItem('vc2', JSON.stringify(S));
+        }
+
+        function applySettings() {
+            // Sender кнопки
+            micBtn.classList.toggle('off', !S.audio);
+            camBtn.classList.toggle('off', !S.video);
+            // Receiver кнопки
+            remoteScreenBtn.classList.toggle('off', !S.wantVideo);
+            remoteVideo.style.visibility = S.wantVideo ? 'visible' : 'hidden';
+            remoteMuteBtn.classList.toggle('off', !S.wantAudio);
+            remoteVideo.muted = !S.wantAudio;
+            // Кодеки
+            vp8Btn.classList.toggle('off', !S.vp8);
+            h264Btn.classList.toggle('off', !S.h264);
+            opusBtn.classList.toggle('off', !S.opus);
+            aacBtn.classList.toggle('off', !S.aac);
+            // Аудио фильтры
+            ecBtn.classList.toggle('off', !S.ec);
+            nsBtn.classList.toggle('off', !S.ns);
+            agcBtn.classList.toggle('off', !S.agc);
             // Megapixel radio buttons
             var mpxBtns = [mpx110Btn, mpx1Btn, mpx13Btn, mpx15Btn];
             var mpxValues = [0.1, 1, 1/3, 0.2];
             for (var i = 0; i < mpxValues.length; i++) {
-                mpxBtns[i].classList.toggle('active', Math.abs(btnStates.mpx - mpxValues[i]) < 0.01);
+                mpxBtns[i].classList.toggle('active', Math.abs(S.mpx - mpxValues[i]) < 0.01);
+            }
+            // Применяем audio/video track enabled
+            if (localStream) {
+                localStream.getAudioTracks().forEach(function(t) { t.enabled = S.audio; });
+                localStream.getVideoTracks().forEach(function(t) { t.enabled = S.video; });
+            }
+            // Применяем аудио фильтры
+            if (localStream) {
+                var tracks = localStream.getAudioTracks();
+                if (tracks.length > 0) {
+                    try { tracks[0].applyConstraints({ advanced: [{ echoCancellation: S.ec, noiseSuppression: S.ns, autoGainControl: S.agc }] }); } catch(e) {}
+                }
             }
         }
+
+        function sendSettings() {
+            if (!wsConnected || !ws || ws.readyState !== WebSocket.OPEN) return;
+            ws.send(JSON.stringify({
+                cmd: 'settings',
+                audio: S.audio,
+                video: S.video,
+                wantAudio: S.wantAudio,
+                wantVideo: S.wantVideo,
+                vp8: S.vp8,
+                h264: S.h264,
+                opus: S.opus,
+                aac: S.aac,
+                ec: S.ec,
+                ns: S.ns,
+                agc: S.agc,
+                mpx: S.mpx
+            }));
+        }
+
+        loadSettings();
 
         // ============= Мегапиксельный множитель для запроса пиру =============
         var mpxBtns = [mpx110Btn, mpx1Btn, mpx13Btn, mpx15Btn];
         var mpxValues = [0.1, 1, 1/3, 0.2];
         function setMpx(val) {
-            btnStates.mpx = val;
-            for (var i = 0; i < mpxValues.length; i++) {
-                mpxBtns[i].classList.toggle('active', Math.abs(val - mpxValues[i]) < 0.01);
-            }
-            updateFitBtnLabel();
-            saveCallState();
+            S.mpx = val;
+            applySettings();
+            saveSettings();
+            sendSettings();
         }
         mpx110Btn.addEventListener('click', function(e) { e.stopPropagation(); setMpx(0.1); });
         mpx1Btn.addEventListener('click', function(e) { e.stopPropagation(); setMpx(1); });
@@ -354,13 +399,11 @@
         mpx15Btn.addEventListener('click', function(e) { e.stopPropagation(); setMpx(0.2); });
 
         // Масштабирование разрешения по абсолютным мегапикселям
-        // mpx=0.1 → 0.1MP, mpx=1 → 1MP (~720p), mpx=1/3 → 0.33MP, mpx=1/5 → 0.2MP
         function applyMpx(aspectW, aspectH, mpx) {
             var targetPixels = mpx * 1000000;
             var aspectRatio = aspectW / aspectH;
             var h = Math.round(Math.sqrt(targetPixels / aspectRatio));
             var w = Math.round(h * aspectRatio);
-            // Чётные размеры для кодеков
             if (w % 2 !== 0) w++;
             if (h % 2 !== 0) h++;
             return { w: w, h: h };
@@ -381,12 +424,15 @@
         var ws = null;
         var wsConnected = false;
         var wsReconnectTimer = null;
+        var peerSettings = null; // настройки пира (полученные через WS)
 
         var mediaSource = null;
         var sourceBuffer = null;
         var mseQueue = [];
         var mseReady = false;
         var negotiatedCodec = '';
+        var recordCodec = '';    // чем мы записываем (MediaRecorder)
+        var incomingCodec = '';  // какой кодек будет у входящего потока (MSE)
         var trimScheduled = false;
         var firstAppendDone = false;
 
@@ -397,8 +443,13 @@
         var diagMSEAppends = 0;
         var diagMSEErrors = 0;
         var diagLastLogTime = 0;
-        var MSE_CRITICAL_THRESHOLD = 5;
+        var MSE_CRITICAL_THRESHOLD = 10;
+        var MSE_CRITICAL_WINDOW_MS = 1000;
+        var mseErrorTimestamps = [];
         var mseCriticalTriggered = false;
+        var mseRestartCount = 0;
+        var MSE_MAX_RESTARTS = 3;
+        var mseSetupTimer = null;
 
         // Remote video fit modes: 0=fit, 1=1:1, 2=1:2, 3=2:1
         var remoteFitMode = parseInt(localStorage.getItem('vc_fitMode')) || 0;
@@ -411,7 +462,7 @@
             var w = remoteNativeW, h = remoteNativeH;
             var label = remoteFitLabels[remoteFitMode];
             if (w > 0 && h > 0) {
-                var r = applyMpx(w, h, btnStates.mpx);
+                var r = applyMpx(w, h, S.mpx);
                 label += ' ' + r.w + '×' + r.h;
             }
             fitBtn.textContent = label;
@@ -454,7 +505,7 @@
 
         // PiP — только сверху
         var pipCorners = ['pip-tl', 'pip-tr'];
-        var pipCorner = btnStates.pipCorner || 0;
+        var pipCorner = S.pipCorner || 0;
         var pipContainer = document.getElementById('pipContainer');
         var pipMoveLeft = document.getElementById('pipMoveLeft');
         var pipMoveRight = document.getElementById('pipMoveRight');
@@ -464,13 +515,11 @@
 
         function updateControlsPosition() {
             var panel = document.getElementById('controlsPanel');
-            // pip слева → контролы справа, pip справа → контролы слева
             var pos = pipCorners[pipCorner] === 'pip-tl' ? 'pos-right' : 'pos-left';
             panel.classList.remove('pos-right', 'pos-left');
             panel.classList.add(pos);
-            // Показываем только одну move-кнопку в зависимости от позиции PiP
-            pipMoveLeft.classList.toggle('visible', pipCorners[pipCorner] === 'pip-tr'); // PiP справа → кнопка ◀
-            pipMoveRight.classList.toggle('visible', pipCorners[pipCorner] === 'pip-tl'); // PiP слева → кнопка ▶
+            pipMoveLeft.classList.toggle('visible', pipCorners[pipCorner] === 'pip-tr');
+            pipMoveRight.classList.toggle('visible', pipCorners[pipCorner] === 'pip-tl');
         }
         // Один таймер для всех кнопок
         var isDesktop = window.matchMedia('(hover: hover)').matches;
@@ -490,17 +539,14 @@
                 controlsTimer = null;
             }, 5000);
         }
-        // Клик по PiP — показать все кнопки на 5 сек
         pipContainer.addEventListener('click', function(e) {
             if (e.target.closest('.pip-controls')) return;
             showAllControls();
         });
-        // Клик по основному видео — показать все кнопки на 5 сек
         document.querySelector('.video-container.main-video').addEventListener('click', function(e) {
             if (e.target.closest('.controls-panel') || e.target.closest('.pip-container')) return;
             showAllControls();
         });
-        // Клик по кнопкам сбрасывает таймер (capture phase — до stopPropagation)
         document.getElementById('pipControls').addEventListener('click', function() {
             showAllControls();
         }, true);
@@ -511,11 +557,11 @@
         function movePip(dir) {
             if (dir === 'left') pipCorner = 0;
             else pipCorner = 1;
-            btnStates.pipCorner = pipCorner;
+            S.pipCorner = pipCorner;
             pipCorners.forEach(function(c) { pipContainer.classList.remove(c); });
             pipContainer.classList.add(pipCorners[pipCorner]);
             updateControlsPosition();
-            saveCallState();
+            saveSettings();
         }
         pipMoveLeft.addEventListener('click', function(e) {
             e.stopPropagation();
@@ -528,12 +574,11 @@
             showAllControls();
         });
         updateControlsPosition();
-        applyButtonStates();
+        applySettings();
 
         // Десктоп: показ кнопок и курсора при движении мыши
         if (isDesktop) {
             document.addEventListener('mousemove', showAllControls);
-            // Начальный показ
             showAllControls();
         }
 
@@ -559,80 +604,74 @@
         document.addEventListener('fullscreenchange', syncFullscreenBtn);
         document.addEventListener('webkitfullscreenchange', syncFullscreenBtn);
 
-        // Кнопки управления
+        // ============= Кнопки управления =============
+        // micBtn — toggle мой микрофон
+        micBtn.addEventListener('click', function() {
+            if (!localStream) return;
+            S.audio = !S.audio;
+            applySettings(); saveSettings(); sendSettings();
+        });
+        // camBtn — toggle моя камера
+        camBtn.addEventListener('click', function() {
+            if (!localStream) return;
+            S.video = !S.video;
+            applySettings(); saveSettings(); sendSettings();
+        });
+        // remoteMuteBtn — toggle хочу ли я аудио от пира
         remoteMuteBtn.addEventListener('click', function(e) {
             e.stopPropagation();
-            btnStates.remoteAudioOn = !btnStates.remoteAudioOn;
-            remoteVideo.muted = !btnStates.remoteAudioOn;
-            remoteMuteBtn.classList.toggle('off', !btnStates.remoteAudioOn);
-            saveCallState();
+            S.wantAudio = !S.wantAudio;
+            applySettings(); saveSettings(); sendSettings();
         });
+        // remoteScreenBtn — toggle хочу ли я видео от пира
         remoteScreenBtn.addEventListener('click', function(e) {
             e.stopPropagation();
-            btnStates.remoteVideoOn = !btnStates.remoteVideoOn;
-            remoteVideo.style.visibility = btnStates.remoteVideoOn ? 'visible' : 'hidden';
-            remoteScreenBtn.classList.toggle('off', !btnStates.remoteVideoOn);
-            saveCallState();
+            S.wantVideo = !S.wantVideo;
+            if (S.wantVideo && mseCriticalTriggered) {
+                diagLog('MSE manual restart via remoteScreenBtn');
+                mseCriticalTriggered = false;
+                mseErrorTimestamps = [];
+                mseRestartCount = 0;
+                restartMSE();
+            }
+            applySettings(); saveSettings(); sendSettings();
         });
+        // Кодеки
         vp8Btn.addEventListener('click', function(e) {
             e.stopPropagation();
-            btnStates.vp8Enabled = !btnStates.vp8Enabled;
-            vp8Btn.classList.toggle('off', !btnStates.vp8Enabled);
-            saveCallState();
+            S.vp8 = !S.vp8;
+            applySettings(); saveSettings(); sendSettings();
         });
         h264Btn.addEventListener('click', function(e) {
             e.stopPropagation();
-            btnStates.h264Enabled = !btnStates.h264Enabled;
-            h264Btn.classList.toggle('off', !btnStates.h264Enabled);
-            saveCallState();
+            S.h264 = !S.h264;
+            applySettings(); saveSettings(); sendSettings();
         });
         opusBtn.addEventListener('click', function(e) {
             e.stopPropagation();
-            btnStates.opusEnabled = !btnStates.opusEnabled;
-            opusBtn.classList.toggle('off', !btnStates.opusEnabled);
-            saveCallState();
+            S.opus = !S.opus;
+            applySettings(); saveSettings(); sendSettings();
         });
         aacBtn.addEventListener('click', function(e) {
             e.stopPropagation();
-            btnStates.aacEnabled = !btnStates.aacEnabled;
-            aacBtn.classList.toggle('off', !btnStates.aacEnabled);
-            saveCallState();
+            S.aac = !S.aac;
+            applySettings(); saveSettings(); sendSettings();
         });
+        // Аудио фильтры
         ecBtn.addEventListener('click', function(e) {
             e.stopPropagation();
-            btnStates.ecEnabled = !btnStates.ecEnabled;
-            if (localStream) {
-                var tracks = localStream.getAudioTracks();
-                if (tracks.length > 0) {
-                    try { tracks[0].applyConstraints({ advanced: [{ echoCancellation: btnStates.ecEnabled }] }); } catch(e) {}
-                }
-            }
-            ecBtn.classList.toggle('off', !btnStates.ecEnabled);
-            saveCallState();
+            S.ec = !S.ec;
+            applySettings(); saveSettings(); sendSettings();
         });
         nsBtn.addEventListener('click', function(e) {
             e.stopPropagation();
-            btnStates.nsEnabled = !btnStates.nsEnabled;
-            if (localStream) {
-                var tracks = localStream.getAudioTracks();
-                if (tracks.length > 0) {
-                    try { tracks[0].applyConstraints({ advanced: [{ noiseSuppression: btnStates.nsEnabled }] }); } catch(e) {}
-                }
-            }
-            nsBtn.classList.toggle('off', !btnStates.nsEnabled);
-            saveCallState();
+            S.ns = !S.ns;
+            applySettings(); saveSettings(); sendSettings();
         });
         agcBtn.addEventListener('click', function(e) {
             e.stopPropagation();
-            btnStates.agcEnabled = !btnStates.agcEnabled;
-            if (localStream) {
-                var tracks = localStream.getAudioTracks();
-                if (tracks.length > 0) {
-                    try { tracks[0].applyConstraints({ advanced: [{ autoGainControl: btnStates.agcEnabled }] }); } catch(e) {}
-                }
-            }
-            agcBtn.classList.toggle('off', !btnStates.agcEnabled);
-            saveCallState();
+            S.agc = !S.agc;
+            applySettings(); saveSettings(); sendSettings();
         });
 
         hangupBtn.addEventListener('click', function() { hangup(); });
@@ -702,24 +741,27 @@
         // ============= Кодеки — строим из зелёных кнопок =============
         function buildCodecListFromButtons() {
             var list = [];
-            if (btnStates.h264Enabled) {
-                if (btnStates.aacEnabled) {
-                    list.push('video/mp4;codecs="avc1.42E01E,mp4a.40.2"'); // H.264 Baseline + AAC
+            if (S.h264) {
+                if (S.aac) {
+                    list.push('video/mp4;codecs="avc1.42E01E,mp4a.40.2"');
                 }
-                if (btnStates.opusEnabled) {
-                    list.push('video/mp4;codecs="avc1.42E01E,opus"'); // H.264 Baseline + Opus
+                if (S.opus) {
+                    list.push('video/mp4;codecs="avc1.42E01E,opus"');
                 }
-                if (!btnStates.aacEnabled && !btnStates.opusEnabled) {
+                if (!S.aac && !S.opus) {
                     list.push('video/mp4');
                 }
             }
-            if (btnStates.vp8Enabled) {
-                if (btnStates.opusEnabled) {
+            if (S.vp8) {
+                if (S.opus) {
                     list.push('video/webm;codecs="vp8,opus"');
                 } else {
                     list.push('video/webm');
                 }
             }
+            // Audio-only codecs
+            if (S.opus) list.push('audio/webm;codecs="opus"');
+            if (S.aac) list.push('audio/mp4;codecs="mp4a.40.2"');
             if (list.length === 0) list.push('video/webm');
             return list;
         }
@@ -753,6 +795,33 @@
             return supported;
         }
 
+        // Все кодеки которые MediaRecorder может записывать (для отправки пиру)
+        function detectAllRecordCodecs() {
+            var allCandidates = [
+                'video/webm;codecs="vp8,opus"',
+                'video/webm;codecs="vp8"',
+                'video/webm',
+                'video/mp4;codecs="avc1.42E01E,opus"',
+                'video/mp4;codecs="avc1.42E01E,mp4a.40.2"',
+                'video/mp4',
+                'audio/webm;codecs="opus"',
+                'audio/webm',
+                'audio/mp4;codecs="mp4a.40.2"',
+                'audio/mp4'
+            ];
+            var supported = [];
+            var seen = {};
+            for (var i = 0; i < allCandidates.length; i++) {
+                var c = allCandidates[i];
+                if (typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(c) && !seen[c]) {
+                    seen[c] = true;
+                    supported.push(c);
+                }
+            }
+            if (supported.length === 0) supported.push('video/webm');
+            return supported;
+        }
+
         function detectCodec() {
             var candidates = buildCodecListFromButtons();
             for (var i = 0; i < candidates.length; i++) {
@@ -768,10 +837,11 @@
             else if (codec.indexOf('avc1.4D401E') !== -1) video = 'H.264 Main';
             else if (codec.indexOf('avc1.64001F') !== -1) video = 'H.264 High';
             else if (codec.indexOf('vp8') !== -1) video = 'VP8';
-            else if (codec.indexOf('mp4') !== -1) video = 'MP4';
-            else if (codec.indexOf('webm') !== -1) video = 'WebM';
             if (codec.indexOf('opus') !== -1) audio = 'Opus';
             else if (codec.indexOf('mp4a.40.2') !== -1) audio = 'AAC';
+            if (!video && codec.indexOf('audio/') === 0) return audio || codec;
+            if (!video && codec.indexOf('mp4') !== -1) video = 'MP4';
+            if (!video && codec.indexOf('webm') !== -1) video = 'WebM';
             var name = video || codec;
             if (audio) name += ' + ' + audio;
             return name;
@@ -793,21 +863,21 @@
                 localStream = await navigator.mediaDevices.getUserMedia({
                     video: { width: { ideal: W }, height: { ideal: H }, facingMode: 'user' },
                     audio: {
-                        echoCancellation: btnStates.ecEnabled,
-                        noiseSuppression: btnStates.nsEnabled,
-                        autoGainControl: btnStates.agcEnabled
+                        echoCancellation: S.ec,
+                        noiseSuppression: S.ns,
+                        autoGainControl: S.agc
                     }
                 });
                 localVideo.srcObject = localStream;
 
-                // Запрос к пиру: ТОЛЬКО MP кнопки, Fit НЕ влияет
-                var mpxResult = applyMpx(W, H, btnStates.mpx);
+                var mpxResult = applyMpx(W, H, S.mpx);
                 var dw = mpxResult.w;
                 var dh = mpxResult.h;
                 var myCodecs = detectSupportedCodecs();
+                var myRecordCodecs = detectAllRecordCodecs();
                 diagLog('CODECS supported: ' + myCodecs.map(codecDisplayName).join(' | '));
 
-                var createResult = await tryCreateRoom(myCodecs, W, H, dw, dh);
+                var createResult = await tryCreateRoom(myCodecs, myRecordCodecs, W, H, dw, dh);
                 isCreator = createResult.created;
                 diagLog('INIT peer=' + (isCreator ? 'host' : 'guest') + ' cam=' + W + 'x' + H);
 
@@ -823,10 +893,17 @@
                         } catch(e) {}
                         if (!joined) await new Promise(function(r) { setTimeout(r, 2000); });
                     }
-                    if (joined.codec) {
-                        negotiatedCodec = joined.codec;
-                        diagLog('CODEC negotiated=' + codecDisplayName(negotiatedCodec));
+                    if (joined.recordCodec) {
+                        recordCodec = joined.recordCodec;
+                        diagLog('CODEC record=' + codecDisplayName(recordCodec));
                     }
+                    if (joined.incomingCodec) {
+                        incomingCodec = joined.incomingCodec;
+                        diagLog('CODEC incoming=' + codecDisplayName(incomingCodec));
+                    } else if (joined.codec) {
+                        incomingCodec = joined.codec;
+                    }
+                    negotiatedCodec = recordCodec || incomingCodec || joined.codec || '';
                     if (joined.desiredW && joined.desiredH) {
                         diagLog('PEER wants ' + joined.desiredW + 'x' + joined.desiredH + ' from me');
                         await applyDesiredResolution(joined.desiredW, joined.desiredH);
@@ -837,10 +914,19 @@
                 } else {
                     myPeerID = 'guest';
                     remotePeerID = 'host';
-                    var joinResult = await joinRoom(myCodecs, W, H, dw, dh);
-                    if (joinResult && joinResult.codec) {
-                        negotiatedCodec = joinResult.codec;
-                        diagLog('CODEC negotiated=' + codecDisplayName(negotiatedCodec));
+                    var joinResult = await joinRoom(myCodecs, myRecordCodecs, W, H, dw, dh);
+                    if (joinResult) {
+                        if (joinResult.recordCodec) {
+                            recordCodec = joinResult.recordCodec;
+                            diagLog('CODEC record=' + codecDisplayName(recordCodec));
+                        }
+                        if (joinResult.incomingCodec) {
+                            incomingCodec = joinResult.incomingCodec;
+                            diagLog('CODEC incoming=' + codecDisplayName(incomingCodec));
+                        } else if (joinResult.codec) {
+                            incomingCodec = joinResult.codec;
+                        }
+                        negotiatedCodec = recordCodec || incomingCodec || joinResult.codec || '';
                     }
                     if (joinResult && joinResult.desiredW && joinResult.desiredH) {
                         diagLog('PEER wants ' + joinResult.desiredW + 'x' + joinResult.desiredH + ' from me');
@@ -849,7 +935,7 @@
                         await applyMinResolution(W, H, joinResult.width, joinResult.height);
                     }
                 }
-                startCall();
+                await startCall();
             } catch (err) {
                 console.error('Init error:', err);
                 if (err.name === 'NotAllowedError') showError('Camera and microphone access denied.');
@@ -859,13 +945,14 @@
         }
 
         // ============= API =============
-        async function tryCreateRoom(codecs, width, height, desiredW, desiredH) {
+        async function tryCreateRoom(codecs, recordCodecs, width, height, desiredW, desiredH) {
             try {
                 var resp = await fetch('/api/call/create', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        room: roomID, codecs: codecs, width: width, height: height,
+                        room: roomID, codecs: codecs, playCodecs: codecs, recordCodecs: recordCodecs,
+                        width: width, height: height,
                         desiredW: desiredW || 0, desiredH: desiredH || 0
                     })
                 });
@@ -885,13 +972,14 @@
             } catch (e) { return false; }
         }
 
-        async function joinRoom(codecs, width, height, desiredW, desiredH) {
+        async function joinRoom(codecs, recordCodecs, width, height, desiredW, desiredH) {
             try {
                 var resp = await fetch('/api/call/join', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        room: roomID, codecs: codecs, width: width, height: height,
+                        room: roomID, codecs: codecs, playCodecs: codecs, recordCodecs: recordCodecs,
+                        width: width, height: height,
                         desiredW: desiredW || 0, desiredH: desiredH || 0
                     })
                 });
@@ -941,6 +1029,41 @@
             }
         }
 
+        // ============= Обработка настроек пира =============
+        function handlePeerSettings(msg) {
+            var prev = peerSettings;
+            peerSettings = msg;
+            if (!isActive || !localStream) return;
+
+            // Пир хочет мой аудио/видео?
+            var peerWantsMyAudio = msg.wantAudio !== false;
+            var peerWantsMyVideo = msg.wantVideo !== false;
+            // Есть ли мне что отправлять?
+            var canSend = (S.audio && peerWantsMyAudio) || (S.video && peerWantsMyVideo);
+
+            if (!canSend) {
+                // Нечего отправлять — останавливаем рекордер
+                if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                    diagLog('REC stop: peer doesnt need my streams');
+                    mediaRecorder.stop();
+                }
+            } else {
+                // Есть что отправлять — перезапускаем рекордер (новый init segment)
+                diagLog('REC restart: peer settings changed');
+                restartMediaRecorder();
+            }
+        }
+
+        function restartMediaRecorder() {
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                mediaRecorder.stop();
+            }
+            // Небольшая задержка чтобы stop завершился
+            setTimeout(function() {
+                if (isActive) setupMediaRecorder();
+            }, 100);
+        }
+
         // ============= WebSocket =============
         function connectWS() {
             if (wsReconnectTimer) { clearTimeout(wsReconnectTimer); wsReconnectTimer = null; }
@@ -950,13 +1073,32 @@
             diagLog('WS connecting...');
             try { ws = new WebSocket(wsURL); ws.binaryType = 'arraybuffer'; }
             catch (e) { diagLog('WS create error: ' + e.message); return; }
-            ws.onopen = function() { wsConnected = true; diagLog('WS connected'); };
+            ws.onopen = function() {
+                wsConnected = true;
+                diagLog('WS connected');
+                // Отправляем свои настройки пиру при подключении
+                sendSettings();
+            };
             ws.onmessage = function(event) {
                 if (event.data instanceof ArrayBuffer) {
                     handleIncomingChunk(event.data);
-                } else if (typeof event.data === 'string' && event.data === 'peer_left') {
-                    diagLog('PEER left via WS');
-                    hangup();
+                } else if (typeof event.data === 'string') {
+                    if (event.data === 'peer_left') {
+                        diagLog('PEER left via WS');
+                        hangup();
+                    } else if (event.data === 'restart_recorder') {
+                        diagLog('REC restart requested by peer (MSE restart)');
+                        restartMediaRecorder();
+                    } else {
+                        // JSON settings от пира
+                        try {
+                            var msg = JSON.parse(event.data);
+                            if (msg.cmd === 'settings') {
+                                diagLog('PEER settings: a=' + msg.audio + ' v=' + msg.video + ' wa=' + msg.wantAudio + ' wv=' + msg.wantVideo);
+                                handlePeerSettings(msg);
+                            }
+                        } catch(e) {}
+                    }
                 }
             };
             ws.onclose = function(event) {
@@ -987,16 +1129,29 @@
         }
 
         // ============= Звонок =============
-        function startCall() {
+        async function startCall() {
             isActive = true;
-            setupMSE();
-            setupMediaRecorder();
+            // 1. Сначала подключаем WS
             connectWS();
+            // 2. Ждём пока WS подключится (до 10 секунд)
+            var waitStart = Date.now();
+            while (!wsConnected && isActive && (Date.now() - waitStart < 10000)) {
+                await new Promise(function(r) { setTimeout(r, 100); });
+            }
+            if (!wsConnected) {
+                diagLog('WS connect timeout');
+                showError('WebSocket connection failed');
+                return;
+            }
+            // 3. WS готов — создаём MSE для приёма
+            setupMSE();
+            // 4. Запускаем запись
+            setupMediaRecorder();
         }
 
         // ============= MSE =============
         function setupMSE() {
-            var codec = negotiatedCodec || detectCodec();
+            var codec = incomingCodec || negotiatedCodec || detectCodec();
             mediaSource = new MediaSource();
             remoteVideo.src = URL.createObjectURL(mediaSource);
             mediaSource.addEventListener('sourceopen', function() {
@@ -1006,10 +1161,13 @@
                     sourceBuffer.addEventListener('updateend', function() { onMSEUpdateEnd(); });
                     sourceBuffer.addEventListener('error', function() {
                         diagMSEErrors++;
-                        diagLog('MSE ERROR sb error #' + diagMSEErrors);
+                        mseErrorTimestamps.push(Date.now());
                         checkMSECritical();
                     });
                     mseReady = true;
+                    if (mseRestartCount < MSE_MAX_RESTARTS) {
+                        mseCriticalTriggered = false;
+                    }
                     if (mseQueue.length > 0) processMSEQueue();
                 } catch (e) { showError('MSE codec not supported: ' + codec); }
             });
@@ -1050,9 +1208,16 @@
                 }
             } catch (e) {
                 diagMSEErrors++;
-                diagLog('MSE ERR append ' + chunkData.byteLength + 'B: ' + e.message);
+                mseErrorTimestamps.push(Date.now());
+                if (e.message && e.message.indexOf('removed from the parent') !== -1) {
+                    diagLog('MSE ERR sourceBuffer removed — immediate restart');
+                    mseCriticalTriggered = true;
+                    mseQueue = [];
+                    restartMSE();
+                    return;
+                }
                 checkMSECritical();
-                if (!mseCriticalTriggered) processMSEQueue();
+                if (mseReady && !mseCriticalTriggered) processMSEQueue();
             }
         }
 
@@ -1076,23 +1241,80 @@
 
         function checkMSECritical() {
             if (mseCriticalTriggered) return;
-            if (diagMSEErrors >= MSE_CRITICAL_THRESHOLD) {
-                mseCriticalTriggered = true;
-                diagLog('MSE CRITICAL — hiding remote video');
-                mseQueue = [];
-                if (btnStates.remoteVideoOn) remoteScreenBtn.click();
+            var now = Date.now();
+            while (mseErrorTimestamps.length > 0 && now - mseErrorTimestamps[0] > MSE_CRITICAL_WINDOW_MS) {
+                mseErrorTimestamps.shift();
             }
+            if (mseErrorTimestamps.length >= MSE_CRITICAL_THRESHOLD) {
+                mseCriticalTriggered = true;
+                mseQueue = [];
+                diagLog('MSE CRITICAL (' + mseErrorTimestamps.length + ' errors in ' + (MSE_CRITICAL_WINDOW_MS / 1000) + 's) — restarting...');
+                restartMSE();
+            }
+        }
+
+        function restartMSE() {
+            if (mseRestartCount >= MSE_MAX_RESTARTS) {
+                diagLog('MSE RESTART limit reached (' + MSE_MAX_RESTARTS + ')');
+                if (mseSetupTimer) { clearTimeout(mseSetupTimer); mseSetupTimer = null; }
+                showError('Video playback error. Try restarting the call or press \uD83D\uDCBB to retry.');
+                return;
+            }
+            mseRestartCount++;
+            diagLog('MSE RESTART attempt #' + mseRestartCount);
+
+            // Просим пир перезапустить запись (новый init segment)
+            if (wsConnected && ws && ws.readyState === WebSocket.OPEN) {
+                try { ws.send('restart_recorder'); } catch(e) {}
+            }
+
+            // Очистка старого MSE
+            mseReady = false;
+            firstAppendDone = false;
+            mseErrorTimestamps = [];
+            mseQueue = [];
+
+            if (mediaSource) {
+                try { mediaSource.endOfStream(); } catch(e) {}
+            }
+            try { URL.revokeObjectURL(remoteVideo.src); } catch(e) {}
+            remoteVideo.removeAttribute('src');
+            remoteVideo.load();
+            sourceBuffer = null;
+            mediaSource = null;
+
+            // Пересоздаём с задержкой 500мс
+            mseSetupTimer = setTimeout(function() {
+                mseSetupTimer = null;
+                if (!isActive) return;
+                setupMSE();
+            }, 500);
         }
 
         // ============= MediaRecorder =============
         function setupMediaRecorder() {
+            if (!localStream) return;
             var videoTrack = localStream.getVideoTracks()[0];
             var settings = videoTrack ? videoTrack.getSettings() : {};
-            var w = settings.width || 640;
-            var h = settings.height || 480;
+            var w = settings.width || 320;
+            var h = settings.height || 240;
 
-            var codec = negotiatedCodec || detectCodec();
-            diagLog('REC codec=' + codecDisplayName(codec) + ' res=' + w + 'x' + h);
+            // При выключенном видео — выбираем audio-only кодек
+            var codec;
+            if (!S.video && S.audio) {
+                var audioCodecs = ['audio/webm;codecs="opus"', 'audio/mp4;codecs="mp4a.40.2"', 'audio/webm'];
+                codec = 'audio/webm;codecs="opus"';
+                for (var i = 0; i < audioCodecs.length; i++) {
+                    if (typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(audioCodecs[i])) {
+                        codec = audioCodecs[i];
+                        break;
+                    }
+                }
+                diagLog('REC audio-only codec=' + codecDisplayName(codec));
+            } else {
+                codec = recordCodec || negotiatedCodec || detectCodec();
+                diagLog('REC codec=' + codecDisplayName(codec) + ' res=' + w + 'x' + h);
+            }
 
             try {
                 mediaRecorder = new MediaRecorder(localStream, { mimeType: codec });
@@ -1110,24 +1332,10 @@
             mediaRecorder.onerror = function(e) {
                 recErrorCount++;
                 diagLog('REC error #' + recErrorCount + ': ' + (e.error ? e.error.message : 'unknown'));
-                if (recErrorCount >= 3 && videoEnabled) camBtn.click();
+                if (recErrorCount >= 3 && S.video) camBtn.click();
             };
             mediaRecorder.start(CHUNK_INTERVAL_MS);
         }
-
-        // ============= PiP кнопки =============
-        micBtn.addEventListener('click', function() {
-            if (!localStream) return;
-            audioEnabled = !audioEnabled;
-            localStream.getAudioTracks().forEach(function(t) { t.enabled = audioEnabled; });
-            micBtn.classList.toggle('off', !audioEnabled);
-        });
-        camBtn.addEventListener('click', function() {
-            if (!localStream) return;
-            videoEnabled = !videoEnabled;
-            localStream.getVideoTracks().forEach(function(t) { t.enabled = videoEnabled; });
-            camBtn.classList.toggle('off', !videoEnabled);
-        });
 
         // ============= Сохранение состояния =============
         function saveCallState() {
@@ -1136,7 +1344,7 @@
                 localStorage.setItem('vc_peerH', remoteNativeH);
             }
             localStorage.setItem('vc_fitMode', remoteFitMode);
-            localStorage.setItem('vc_btnStates', JSON.stringify(btnStates));
+            saveSettings();
         }
 
         function hangup() {

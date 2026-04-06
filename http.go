@@ -300,7 +300,7 @@ func handleSendMessage(w http.ResponseWriter, r *http.Request) {
 		req.Sender = "Anonymous"
 	}
 
-	log.Debugf("%s@%s chatOpened=%v chatURL=%q", req.Text, req.Sender, chatOpened.Load(), chatURL)
+	log.Debugf("%s>%s", req.Sender, req.Text)
 }
 
 func (h *WebDAVWithDirectoryListing) serveDirectoryListing(w http.ResponseWriter, r *http.Request) {

@@ -40,7 +40,15 @@ type VideoCallRoom struct {
 
 	// Согласование кодеков
 	CreatorCodecs   []string
-	NegotiatedCodec string
+	NegotiatedCodec string // backward compat
+
+	// Раздельные кодеки для записи и воспроизведения
+	CreatorPlayCodecs   []string
+	CreatorRecordCodecs []string
+	GuestPlayCodecs     []string
+	GuestRecordCodecs   []string
+	CreatorRecordCodec  string // чем creator записывает
+	GuestRecordCodec    string // чем guest записывает
 
 	// Разрешение для адаптивного качества
 	CreatorWidth  int
@@ -269,12 +277,14 @@ func handleCallCreate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		Room     string   `json:"room"`
-		Codecs   []string `json:"codecs"`
-		Width    int      `json:"width"`
-		Height   int      `json:"height"`
-		DesiredW int      `json:"desiredW"`
-		DesiredH int      `json:"desiredH"`
+		Room         string   `json:"room"`
+		Codecs       []string `json:"codecs"`
+		PlayCodecs   []string `json:"playCodecs"`
+		RecordCodecs []string `json:"recordCodecs"`
+		Width        int      `json:"width"`
+		Height       int      `json:"height"`
+		DesiredW     int      `json:"desiredW"`
+		DesiredH     int      `json:"desiredH"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request", http.StatusBadRequest)
@@ -299,6 +309,14 @@ func handleCallCreate(w http.ResponseWriter, r *http.Request) {
 	// Сохраняем кодеки и разрешение создателя
 	room.mu.Lock()
 	room.CreatorCodecs = req.Codecs
+	room.CreatorPlayCodecs = req.PlayCodecs
+	if len(room.CreatorPlayCodecs) == 0 {
+		room.CreatorPlayCodecs = req.Codecs // backward compat
+	}
+	room.CreatorRecordCodecs = req.RecordCodecs
+	if len(room.CreatorRecordCodecs) == 0 {
+		room.CreatorRecordCodecs = req.Codecs // backward compat
+	}
 	room.CreatorWidth = req.Width
 	room.CreatorHeight = req.Height
 	room.CreatorDesiredW = req.DesiredW
@@ -337,6 +355,8 @@ func handleCallWait(w http.ResponseWriter, r *http.Request) {
 	case <-room.WaitingChan:
 		room.mu.Lock()
 		codec := room.NegotiatedCodec
+		recordCodec := room.CreatorRecordCodec
+		incomingCodec := room.GuestRecordCodec
 		gw := room.GuestWidth
 		gh := room.GuestHeight
 		gdw := room.GuestDesiredW
@@ -345,12 +365,14 @@ func handleCallWait(w http.ResponseWriter, r *http.Request) {
 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
-			"status":   "joined",
-			"codec":    codec,
-			"width":    gw,
-			"height":   gh,
-			"desiredW": gdw,
-			"desiredH": gdh,
+			"status":        "joined",
+			"codec":         codec, // backward compat
+			"recordCodec":   recordCodec,
+			"incomingCodec": incomingCodec,
+			"width":         gw,
+			"height":        gh,
+			"desiredW":      gdw,
+			"desiredH":      gdh,
 		})
 	case <-r.Context().Done():
 		return
@@ -367,12 +389,14 @@ func handleCallJoin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		Room     string   `json:"room"`
-		Codecs   []string `json:"codecs"`
-		Width    int      `json:"width"`
-		Height   int      `json:"height"`
-		DesiredW int      `json:"desiredW"`
-		DesiredH int      `json:"desiredH"`
+		Room         string   `json:"room"`
+		Codecs       []string `json:"codecs"`       // backward compat
+		PlayCodecs   []string `json:"playCodecs"`   // что может воспроизводить
+		RecordCodecs []string `json:"recordCodecs"` // чем может записывать
+		Width        int      `json:"width"`
+		Height       int      `json:"height"`
+		DesiredW     int      `json:"desiredW"`
+		DesiredH     int      `json:"desiredH"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request", http.StatusBadRequest)
@@ -389,7 +413,17 @@ func handleCallJoin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Согласовываем кодек: находим первый кодек создателя, который поддерживает гость
+	// Подготавливаем списки кодеков гостя (с fallback на старое поле)
+	guestPlayCodecs := req.PlayCodecs
+	if len(guestPlayCodecs) == 0 {
+		guestPlayCodecs = req.Codecs
+	}
+	guestRecordCodecs := req.RecordCodecs
+	if len(guestRecordCodecs) == 0 {
+		guestRecordCodecs = req.Codecs
+	}
+
+	// Согласовываем кодеки: recordCodecs[A] ∩ playCodecs[B]
 	room.mu.Lock()
 	negotiatedCodec := ""
 	if len(room.CreatorCodecs) > 0 && len(req.Codecs) > 0 {
@@ -408,9 +442,20 @@ func handleCallJoin(w http.ResponseWriter, r *http.Request) {
 	if negotiatedCodec != "" {
 		room.NegotiatedCodec = negotiatedCodec
 	}
+
+	// Новый negotiation: раздельно для каждого направления
+	creatorRecordCodec := negotiateCodec(room.CreatorRecordCodecs, guestPlayCodecs)
+	guestRecordCodec := negotiateCodec(guestRecordCodecs, room.CreatorPlayCodecs)
+	room.CreatorRecordCodec = creatorRecordCodec
+	room.GuestRecordCodec = guestRecordCodec
+	room.GuestPlayCodecs = guestPlayCodecs
+	room.GuestRecordCodecs = guestRecordCodecs
+
 	room.mu.Unlock()
 
-	log.Debugf("Codec negotiation: creator=%v guest=%v negotiated=%s", room.CreatorCodecs, req.Codecs, negotiatedCodec)
+	log.Debugf("Codec negotiation: creator_rec=%v guest_play=%v → creator=%s | guest_rec=%v creator_play=%v → guest=%s",
+		room.CreatorRecordCodecs, guestPlayCodecs, creatorRecordCodec,
+		guestRecordCodecs, room.CreatorPlayCodecs, guestRecordCodec)
 
 	// Уведомляем инициатора
 	room.notifyPeerJoined()
@@ -431,14 +476,28 @@ func handleCallJoin(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"status":   "joined",
-		"room":     room.ID,
-		"codec":    negotiatedCodec,
-		"width":    cw,
-		"height":   ch,
-		"desiredW": cdw,
-		"desiredH": cdh,
+		"status":        "joined",
+		"room":          room.ID,
+		"codec":         negotiatedCodec, // backward compat
+		"recordCodec":   guestRecordCodec,
+		"incomingCodec": creatorRecordCodec,
+		"width":         cw,
+		"height":        ch,
+		"desiredW":      cdw,
+		"desiredH":      cdh,
 	})
+}
+
+// negotiateCodec находит первый кодек из recordCodecs, который есть в peerPlayCodecs
+func negotiateCodec(recordCodecs, peerPlayCodecs []string) string {
+	for _, rc := range recordCodecs {
+		for _, pc := range peerPlayCodecs {
+			if rc == pc {
+				return rc
+			}
+		}
+	}
+	return ""
 }
 
 // getRemotePeer возвращает ID другого пира в комнате
@@ -567,6 +626,11 @@ func handleCallWS(w http.ResponseWriter, r *http.Request) {
 			// Мгновенно перенаправляем remote peer через WS
 			if remotePeer != "" {
 				room.forwardChunkToWS(remotePeer, data)
+			}
+		} else if msgType == websocket.TextMessage && len(data) > 0 {
+			// Текстовые сообщения (settings, restart_recorder) — перенаправляем remote peer
+			if remotePeer != "" {
+				room.forwardTextToWS(remotePeer, string(data))
 			}
 		}
 	}
