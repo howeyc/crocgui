@@ -1166,7 +1166,47 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 	}) // mainButton
 	cosED = append(cosED, mainButton)
 
+	clipboardFallback := func() {
+		log.Debugf("clipboardFallback: scannerIsBrowser=%v, treeButton=VisibilityOff=%v, entry.Text=%q, clipboardBeforeScan=%q",
+			scannerIsBrowser,
+			treeButton.Icon == theme.VisibilityOffIcon(),
+			entry.Text,
+			clipboardBeforeScan)
+		if !scannerIsBrowser ||
+			treeButton.Icon != theme.VisibilityOffIcon() {
+			scannerIsBrowser = false
+			log.Debug("clipboardFallback: skip (not browser scanner or WebDAV not active)")
+			return
+		}
+		clipboardText := a.Clipboard().Content()
+		scannerIsBrowser = false
+		log.Debugf("clipboardFallback: clipboardBefore=%q clipboardNow=%q", clipboardBeforeScan, clipboardText)
+		if clipboardText == clipboardBeforeScan ||
+			!strings.HasPrefix(clipboardText, IO) {
+			log.Debug("clipboardFallback: clipboard unchanged or not IO prefix")
+			return
+		}
+		if st, ne, as, a6, ps, pd, s5, ct, err := fromURI(clipboardText); err == nil {
+			log.Debugf("clipboardFallback: parsed URI st=%q ne=%q as=%q", st, ne, as)
+			entry.SetText(st)
+			a.Preferences().SetString("new-relay", ne)
+			a.Preferences().SetString("relay-address", as)
+			a.Preferences().SetString("relay6", a6)
+			a.Preferences().SetString("relay-ports", ps)
+			a.Preferences().SetString("relay-password", pd)
+			a.Preferences().SetString("socks5", s5)
+			a.Preferences().SetString("connect", ct)
+		} else {
+			log.Debugf("clipboardFallback: fromURI error: %v", err)
+		}
+	}
+
 	if isAndroid {
+		var (
+			intentWg sync.WaitGroup
+		)
+		intentCtx, intentCancel := context.WithCancel(appCtx)
+
 		oH := ""
 		mH := ""
 		// Если получили файл или текст то исключаем из Недавних
@@ -1201,16 +1241,31 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 			log.Debug("EnteredForeground " + wHandle(w))
 			notFinish = false
 			// excludeRecents = false
-			close(uriFromIntent)
-			uriFromIntent = make(chan string, 100)
 
-			close(textFromIntent)
-			textFromIntent = make(chan string, 100)
+			// 1. Сигнал остановки через контекст (моментально)
+			intentCancel()
+
+			// 2. Ждём завершения старой горутины
+			intentWg.Wait()
+
+			// 3. Очищаем мусор из каналов (теперь безопасно — горутина мертва)
+			drainChannel(uriFromIntent)
+			drainChannel(textFromIntent)
+
+			// 4. Новый контекст для новой горутины
+			intentCtx, intentCancel = context.WithCancel(appCtx)
+
+			intentWg.Add(1)
 			go func() {
+				defer intentWg.Done()
+
 				tt := time.NewTicker(time.Millisecond * 777)
 				defer tt.Stop()
 				for {
 					select {
+					case <-intentCtx.Done():
+						log.Debug("intent goroutine stopped")
+						return
 					case <-tt.C:
 						// В Андроид 9 если нажать Хоум или кнопку Недавние
 						// то ни один из хуков lifecycle не сработает.
@@ -1229,9 +1284,6 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 							}
 							oH = nH
 						}
-					case <-appCtx.Done():
-						log.Debug("done")
-						return
 					case text := <-textFromIntent:
 						if text == "" {
 							// Ошибка обработки Намерения или Главная или из Недавних
@@ -1272,15 +1324,11 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 					case uriString := <-uriFromIntent:
 						if uriString == "" {
 							log.Debug("doneProcessIntent")
-							return
-						}
-						excludeRecents = true
-						if entry.Disabled() {
-							log.Debug("Sending")
-							log.Debug("doneProcessIntent")
+							// clipboardFallback()
 							return
 						}
 
+						// deepLink https://abakum.github.io/croc#
 						if st, ne, as, a6, ps, pd, s5, ct, err := fromURI(uriString); err == nil {
 							switch st {
 							case "App info":
@@ -1295,16 +1343,24 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 							a.Preferences().SetString("relay-password", pd)
 							a.Preferences().SetString("socks5", s5)
 							a.Preferences().SetString("connect", ct)
-							continue
+							return
 						}
+						// deepLink davX: webdavX:
 						if _, ccn, _, ok := isDAV(uriString); ok {
 							log.Debugf("[intent] isDAV ccn=%q, opening manually", ccn)
 							if err := OpenURL(ccn); err == nil {
 								chatOpened.Store(true)
-								continue
 							} else {
 								log.Error(err)
 							}
+							return
+						}
+
+						excludeRecents = true
+						if entry.Disabled() {
+							log.Debug("Sending")
+							log.Debug("doneProcessIntent")
+							return
 						}
 						u, err := storage.ParseURI(uriString)
 						if err != nil {
@@ -1426,6 +1482,13 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 				}
 			}()
 			processIntent()
+			// Если сканер был браузером, processIntent может не послать
+			// ничего в uriFromIntent (MAIN intent → goto cleanup).
+			// Проверяем буфер обмена через секунду как fallback.
+			if scannerIsBrowser {
+				log.Debug("scannerIsBrowser: scheduling clipboardFallback in 1s")
+				time.AfterFunc(time.Second, clipboardFallback)
+			}
 			mH = wHandle(w)
 			// log.Debug("mainH " + mH)
 			// fyne.Do(func() {
@@ -2416,6 +2479,16 @@ func wHandle(w fyne.Window) string {
 func isWSL() bool {
 	// WSL_DISTRO_NAME устанавливается в WSL и содержит имя дистрибутива
 	return os.Getenv("WSL_DISTRO_NAME") != ""
+}
+
+func drainChannel(ch chan string) {
+	for {
+		select {
+		case <-ch:
+		default:
+			return
+		}
+	}
 }
 
 func defWeb(sch string, s bool, h, p, path string) (host string, u url.URL) {

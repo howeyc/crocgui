@@ -467,9 +467,13 @@ func (qr *QR) scanner() {
 	sel := qr.app.Preferences().String("scanner")
 	key := strings.ToLower(strings.Fields(sel)[0])
 
+	scannerIsBrowser = false
+	clipboardBeforeScan = qr.app.Clipboard().Content()
+
 	for _, i := range intents {
+		isB := slices.Contains(i.Categories, CATEGORY_BROWSABLE)
 		i.Flags = NON_BROWSER
-		if slices.Contains(i.Categories, CATEGORY_BROWSABLE) {
+		if isB {
 			i.Flags = BROWSER
 			i.Scheme = HTTPS
 			i.Data = SCAN
@@ -487,6 +491,9 @@ func (qr *QR) scanner() {
 
 		log.Debugf("%s", s)
 		if err := OpenURL(s); err == nil {
+			if isB {
+				scannerIsBrowser = true
+			}
 			log.Debugf("find^^^")
 			return
 		}
@@ -907,7 +914,12 @@ func idActions(id string, actions ...string) {
 	notFinish = false
 }
 
-var qr *QR
+var (
+	qr *QR
+
+	scannerIsBrowser    bool
+	clipboardBeforeScan string
+)
 
 // QR управляет всей секцией QR в настройках
 type QR struct {
