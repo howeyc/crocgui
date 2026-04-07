@@ -87,18 +87,37 @@
             height: 180px;
             background: #000;
             border-radius: 8px;
-            overflow: hidden;
+            overflow: visible;
             box-shadow: 0 4px 16px rgba(0,0,0,0.5);
             border: 1px solid rgba(255,255,255,0.3);
             z-index: 20;
             transition: top 0.3s ease, left 0.3s ease, right 0.3s ease;
         }
-        .pip-container.pip-tl { top: 12px; left: 12px; bottom: auto; right: auto; }
-        .pip-container.pip-tr { top: 12px; right: 12px; bottom: auto; left: auto; }
+        .pip-container.pip-tl { top: 16px; left: 12px; bottom: auto; right: auto; }
+        .pip-container.pip-tr { top: 16px; right: 12px; bottom: auto; left: auto; }
         .pip-container video {
             width: 100%;
             height: 100%;
             object-fit: cover;
+            border-radius: 8px;
+        }
+        .pip-container .pip-controls {
+            position: absolute;
+            bottom: 0; left: 0; right: 0;
+            overflow: hidden;
+            border-radius: 0 0 8px 8px;
+        }
+        .pip-container .res-label {
+            top: auto;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+        #pipResLabel {
+            top: 1px;
+            bottom: auto;
+        }
+        #remoteResLabel {
+            bottom: calc(100% + 2px);
         }
         .waiting-overlay {
             position: absolute;
@@ -122,8 +141,6 @@
         @keyframes spin { to { transform: rotate(360deg); } }
         .waiting-text { color: #aaa; font-size: 1em; }
         .pip-controls {
-            position: absolute;
-            bottom: 0; left: 0; right: 0;
             display: flex;
             justify-content: space-between;
             gap: 4px;
@@ -183,6 +200,8 @@
         .ctrl-btn:hover { transform: scale(1.05); }
         .ctrl-btn:active { transform: scale(0.95); }
         .ctrl-btn.off { background: #e94560; }
+        .ctrl-btn.screen { padding: 0 6px; }
+        .ctrl-btn.speaker { padding: 0 4px; }
         .ctrl-btn.mic { background: #4ecca3; }
         .ctrl-btn.mic.off { background: #e94560; }
         .ctrl-btn.cam { background: #4ecca3; }
@@ -193,9 +212,11 @@
         .ctrl-btn.fullscreen.off { background: #555; }
         .ctrl-btn.fit {
             width: auto;
-            padding: 0 8px;
+            padding: 0 4px;
             white-space: nowrap;
         }
+        .ctrl-btn.fit.active { background: #4ecca3; }
+        .ctrl-btn.fit:not(.active) { background: #555; }
         .ctrl-btn.codec {
             width: auto;
             padding: 0 6px;
@@ -227,25 +248,27 @@
         <div class="video-container main-video">
             <video id="remoteVideo" autoplay playsinline></video>
             <!-- Панель из 3 рядов -->
-            <div class="res-label" id="remoteResLabel"></div>
             <div class="controls-panel pos-right" id="controlsPanel">
                 <!-- Ряд 1: Fit, ⬚, ❌ -->
                 <div class="controls-row">
-                    <button class="ctrl-btn pip-move pip-move-left" id="pipMoveLeft" title="Move PiP left">◀</button>
-                    <button class="ctrl-btn fit" id="fitBtn" title="Fit Mode">Fit</button>
+                    <button class="ctrl-btn pip-move pip-move-left" id="pipMoveLeft" title="Move left">◀</button>
+                    <button class="ctrl-btn fit" id="fitHalfBtn" title="Half Size">/2</button>
+                    <button class="ctrl-btn fit" id="fit1to1Btn" title="1:1">1</button>
+                    <button class="ctrl-btn fit" id="fit2xBtn" title="2x Zoom">×2</button>
+                    <button class="ctrl-btn fit active" id="fitContainBtn" title="Fit">🡘</button>
                     <button class="ctrl-btn fullscreen off" id="fullscreenBtn" title="Fullscreen">⬚</button>
                     <button class="ctrl-btn hangup" id="hangupBtn" title="Hangup">❌</button>
-                    <button class="ctrl-btn pip-move pip-move-right" id="pipMoveRight" title="Move PiP right">▶</button>
+                    <button class="ctrl-btn pip-move pip-move-right" id="pipMoveRight" title="Move right">▶</button>
                 </div>
                 <!-- Ряд 2: 💻 VP8 H264 + мегапиксельный множитель для запроса пиру -->
                 <div class="controls-row">
                     <button class="ctrl-btn screen" id="remoteScreenBtn" title="Remote Video">💻</button>
                     <button class="ctrl-btn codec" id="vp8Btn" title="VP8">VP8</button>
-                    <button class="ctrl-btn codec" id="h264Btn" title="H.264">H264</button>
-                    <button class="ctrl-btn codec mpx" id="mpx1Btn" title="1 megapixels">1</button>
-                    <button class="ctrl-btn codec mpx" id="mpx13Btn" title="1/3 megapixels">¹⁄₃</button>
-                    <button class="ctrl-btn codec mpx" id="mpx15Btn" title="1/5 megapixels">¹⁄₅</button>
-                    <button class="ctrl-btn codec mpx active" id="mpx110Btn" title="1/10 megapixels">¹⁄₁₀</button>
+                    <button class="ctrl-btn codec" id="h264Btn" title="H.264">AVC</button>
+                    <button class="ctrl-btn codec mpx" id="mpx12Btn" title="0.5 megapixels">.5</button>
+                    <button class="ctrl-btn codec mpx" id="mpx15Btn" title="0.2 megapixels">.2</button>
+                    <button class="ctrl-btn codec mpx active" id="mpx110Btn" title="0.1 megapixels">.1</button>
+                    <button class="ctrl-btn codec mpx" id="mpx120Btn" title="0.05 megapixels">.05</button>
                 </div>
                 <!-- Ряд 3: 🔈 Opus AAC EC NS AGC -->
                 <div class="controls-row">
@@ -262,8 +285,9 @@
                 <div class="waiting-text" id="waitingText">Waiting for peer...</div>
             </div>
             <div class="pip-container pip-tl" id="pipContainer">
-                <video id="localVideo" autoplay muted playsinline></video>
+                <div class="res-label" id="remoteResLabel"></div>
                 <div class="res-label" id="pipResLabel"></div>
+                <video id="localVideo" autoplay muted playsinline></video>
                 <div class="pip-controls" id="pipControls">
                     <button class="ctrl-btn mic" id="micBtn" title="Mic">🎤</button>
                     <button class="ctrl-btn cam" id="camBtn" title="Cam">📷</button>
@@ -290,15 +314,18 @@
         var remoteMuteBtn = document.getElementById('remoteMuteBtn');
         var remoteScreenBtn = document.getElementById('remoteScreenBtn');
         var fullscreenBtn = document.getElementById('fullscreenBtn');
-        var fitBtn = document.getElementById('fitBtn');
+        var fitHalfBtn = document.getElementById('fitHalfBtn');
+        var fit1to1Btn = document.getElementById('fit1to1Btn');
+        var fit2xBtn = document.getElementById('fit2xBtn');
+        var fitContainBtn = document.getElementById('fitContainBtn');
         var vp8Btn = document.getElementById('vp8Btn');
         var h264Btn = document.getElementById('h264Btn');
         var opusBtn = document.getElementById('opusBtn');
         var aacBtn = document.getElementById('aacBtn');
-        var mpx110Btn = document.getElementById('mpx110Btn');
-        var mpx1Btn = document.getElementById('mpx1Btn');
-        var mpx13Btn = document.getElementById('mpx13Btn');
+        var mpx12Btn = document.getElementById('mpx12Btn');
         var mpx15Btn = document.getElementById('mpx15Btn');
+        var mpx110Btn = document.getElementById('mpx110Btn');
+        var mpx120Btn = document.getElementById('mpx120Btn');
         var ecBtn = document.getElementById('ecBtn');
         var nsBtn = document.getElementById('nsBtn');
         var agcBtn = document.getElementById('agcBtn');
@@ -365,8 +392,8 @@
             nsBtn.classList.toggle('off', !S.ns);
             agcBtn.classList.toggle('off', !S.agc);
             // Megapixel radio buttons
-            var mpxBtns = [mpx110Btn, mpx1Btn, mpx13Btn, mpx15Btn];
-            var mpxValues = [0.1, 1, 1/3, 0.2];
+            var mpxBtns = [mpx12Btn, mpx15Btn, mpx110Btn, mpx120Btn];
+            var mpxValues = [0.5, 0.2, 0.1, 0.05];
             for (var i = 0; i < mpxValues.length; i++) {
                 mpxBtns[i].classList.toggle('active', Math.abs(S.mpx - mpxValues[i]) < 0.01);
             }
@@ -413,18 +440,18 @@
         loadSettings();
 
         // ============= Мегапиксельный множитель для запроса пиру =============
-        var mpxBtns = [mpx110Btn, mpx1Btn, mpx13Btn, mpx15Btn];
-        var mpxValues = [0.1, 1, 1/3, 0.2];
+        var mpxBtns = [mpx12Btn, mpx15Btn, mpx110Btn, mpx120Btn];
+        var mpxValues = [0.5, 0.2, 0.1, 0.05];
         function setMpx(val) {
             S.mpx = val;
             applySettings();
             saveSettings();
             sendSettings();
         }
-        mpx110Btn.addEventListener('click', function(e) { e.stopPropagation(); setMpx(0.1); });
-        mpx1Btn.addEventListener('click', function(e) { e.stopPropagation(); setMpx(1); });
-        mpx13Btn.addEventListener('click', function(e) { e.stopPropagation(); setMpx(1/3); });
+        mpx12Btn.addEventListener('click', function(e) { e.stopPropagation(); setMpx(0.5); });
         mpx15Btn.addEventListener('click', function(e) { e.stopPropagation(); setMpx(0.2); });
+        mpx110Btn.addEventListener('click', function(e) { e.stopPropagation(); setMpx(0.1); });
+        mpx120Btn.addEventListener('click', function(e) { e.stopPropagation(); setMpx(0.05); });
 
         // Масштабирование разрешения по абсолютным мегапикселям
         function applyMpx(aspectW, aspectH, mpx) {
@@ -490,8 +517,11 @@
         var remoteNativeW = 0;
         var remoteNativeH = 0;
 
-        function updateFitBtnLabel() {
-            fitBtn.textContent = remoteFitLabels[remoteFitMode];
+        function updateFitBtnHighlight() {
+            fitHalfBtn.classList.toggle('active', remoteFitMode === 2);
+            fit1to1Btn.classList.toggle('active', remoteFitMode === 1);
+            fit2xBtn.classList.toggle('active', remoteFitMode === 3);
+            fitContainBtn.classList.toggle('active', remoteFitMode === 0);
         }
 
         function getMinFrameRate() {
@@ -552,7 +582,7 @@
             remoteVideo.style.width = '';
             remoteVideo.style.height = '';
             if (remoteFitMode === 0 || remoteNativeW === 0) {
-                updateFitBtnLabel();
+                updateFitBtnHighlight();
                 return;
             }
             if (remoteFitModes[remoteFitMode]) {
@@ -565,7 +595,7 @@
                 remoteVideo.style.width = Math.round(remoteNativeW / 2) + 'px';
                 remoteVideo.style.height = Math.round(remoteNativeH / 2) + 'px';
             }
-            updateFitBtnLabel();
+            updateFitBtnHighlight();
         }
         function onRemoteVideoResize() {
             var w = remoteVideo.videoWidth || 0;
@@ -581,12 +611,15 @@
         }
         remoteVideo.addEventListener('loadedmetadata', onRemoteVideoResize);
         remoteVideo.addEventListener('resize', onRemoteVideoResize);
-        fitBtn.addEventListener('click', function(e) {
-            e.stopPropagation();
-            remoteFitMode = (remoteFitMode + 1) % remoteFitModes.length;
+        function setFitMode(mode) {
+            remoteFitMode = mode;
             applyRemoteFitMode();
             saveCallState();
-        });
+        }
+        fitHalfBtn.addEventListener('click', function(e) { e.stopPropagation(); setFitMode(2); });
+        fit1to1Btn.addEventListener('click', function(e) { e.stopPropagation(); setFitMode(1); });
+        fit2xBtn.addEventListener('click', function(e) { e.stopPropagation(); setFitMode(3); });
+        fitContainBtn.addEventListener('click', function(e) { e.stopPropagation(); setFitMode(0); });
 
         // PiP — только сверху
         var pipCorners = ['pip-tl', 'pip-tr'];
@@ -603,8 +636,8 @@
             var pos = pipCorners[pipCorner] === 'pip-tl' ? 'pos-right' : 'pos-left';
             panel.classList.remove('pos-right', 'pos-left');
             panel.classList.add(pos);
-            pipMoveLeft.classList.toggle('visible', pipCorners[pipCorner] === 'pip-tr');
-            pipMoveRight.classList.toggle('visible', pipCorners[pipCorner] === 'pip-tl');
+            pipMoveLeft.classList.toggle('visible', pipCorners[pipCorner] === 'pip-tl');
+            pipMoveRight.classList.toggle('visible', pipCorners[pipCorner] === 'pip-tr');
         }
         // Один таймер для всех кнопок
         var isDesktop = window.matchMedia('(hover: hover)').matches;
@@ -640,8 +673,8 @@
         }, true);
         // Кнопки перемещения PiP
         function movePip(dir) {
-            if (dir === 'left') pipCorner = 0;
-            else pipCorner = 1;
+            if (dir === 'left') pipCorner = 1;
+            else pipCorner = 0;
             S.pipCorner = pipCorner;
             pipCorners.forEach(function(c) { pipContainer.classList.remove(c); });
             pipContainer.classList.add(pipCorners[pipCorner]);
