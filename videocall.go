@@ -42,6 +42,11 @@ type VideoCallRoom struct {
 	wsConns map[string]*wsConn // peerID -> ws connection (с мьютексом на запись)
 	wsMu    sync.Mutex
 
+	// Peer settings (peerID → JSON-decoded settings map)
+	peerSettings   map[string]map[string]interface{}
+	peerSettingsCh map[string]chan struct{} // peerID → сигнал "settings получены"
+	peerSettingsMu sync.Mutex
+
 	mu sync.Mutex
 }
 
@@ -86,13 +91,15 @@ func (vs *VideoCallStorage) createRoom(roomID string) (*VideoCallRoom, error) {
 	}
 
 	room := &VideoCallRoom{
-		ID:          roomID,
-		CreatedAt:   time.Now(),
-		Chunks:      make(map[string][]VideoChunk),
-		ChunkIdx:    make(map[string]int64),
-		ChunkLock:   make(map[string]*sync.Mutex),
-		WaitingChan: make(chan struct{}),
-		wsConns:     make(map[string]*wsConn),
+		ID:             roomID,
+		CreatedAt:      time.Now(),
+		Chunks:         make(map[string][]VideoChunk),
+		ChunkIdx:       make(map[string]int64),
+		ChunkLock:      make(map[string]*sync.Mutex),
+		WaitingChan:    make(chan struct{}),
+		wsConns:        make(map[string]*wsConn),
+		peerSettings:   make(map[string]map[string]interface{}),
+		peerSettingsCh: make(map[string]chan struct{}),
 	}
 	vs.rooms[roomID] = room
 	return room, nil
@@ -184,6 +191,54 @@ func (r *VideoCallRoom) notifyPeerJoined() {
 	default:
 		close(r.WaitingChan)
 	}
+}
+
+// storePeerSettings сохраняет настройки пира и сигналит ожидающим
+func (r *VideoCallRoom) storePeerSettings(peerID string, settings map[string]interface{}) {
+	r.peerSettingsMu.Lock()
+	defer r.peerSettingsMu.Unlock()
+	r.peerSettings[peerID] = settings
+	ch, ok := r.peerSettingsCh[peerID]
+	if !ok {
+		ch = make(chan struct{}, 1)
+		r.peerSettingsCh[peerID] = ch
+	}
+	select {
+	case ch <- struct{}{}:
+	default:
+	}
+}
+
+// waitForPeerSettings ждёт настройки от пира с таймаутом
+func (r *VideoCallRoom) waitForPeerSettings(peerID string, timeout time.Duration) map[string]interface{} {
+	r.peerSettingsMu.Lock()
+	if s, ok := r.peerSettings[peerID]; ok {
+		r.peerSettingsMu.Unlock()
+		return s
+	}
+	ch, ok := r.peerSettingsCh[peerID]
+	if !ok {
+		ch = make(chan struct{}, 1)
+		r.peerSettingsCh[peerID] = ch
+	}
+	r.peerSettingsMu.Unlock()
+
+	select {
+	case <-ch:
+		r.peerSettingsMu.Lock()
+		defer r.peerSettingsMu.Unlock()
+		return r.peerSettings[peerID]
+	case <-time.After(timeout):
+		log.Debugf("waitForPeerSettings timeout for %s", peerID)
+		return nil
+	}
+}
+
+// getPeerSettings возвращает сохранённые настройки пира (без ожидания)
+func (r *VideoCallRoom) getPeerSettings(peerID string) map[string]interface{} {
+	r.peerSettingsMu.Lock()
+	defer r.peerSettingsMu.Unlock()
+	return r.peerSettings[peerID]
 }
 
 // setWS сохраняет WebSocket соединение пира
@@ -403,6 +458,18 @@ func handleCallWS(w http.ResponseWriter, r *http.Request) {
 
 	log.Debugf("WS connected: room=%s peer=%s", roomID, peerID)
 
+	// На десктопе: запускаем Go sender (захват камеры/микрофона через mediadevices)
+	// Запускаем в горутине — он дождётся settings пира перед захватом медиа
+	if isGoSenderAvailable && !goSenderActive {
+		goSenderPeerID = peerID // запоминаем чей браузер дропаем (до старта)
+		go func() {
+			if err := startGoSender(roomID, peerID, room); err != nil {
+				log.Debugf("GoSender start failed: %v", err)
+				goSenderPeerID = ""
+			}
+		}()
+	}
+
 	// Определяем remote peer
 	remotePeer := getRemotePeer(room, peerID)
 
@@ -469,6 +536,10 @@ func handleCallWS(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if msgType == websocket.BinaryMessage && len(data) > 0 {
+			// На десктопе Go sender сам захватывает и отправляет — дропаем дубли ТОЛЬКО от локального браузера
+			if goSenderActive && peerID == goSenderPeerID {
+				continue
+			}
 			// Сохраняем чанк в памяти (для reconnect/history)
 			room.addChunk(peerID, data)
 
@@ -477,11 +548,33 @@ func handleCallWS(w http.ResponseWriter, r *http.Request) {
 				room.forwardChunkToWS(remotePeer, data)
 			}
 		} else if msgType == websocket.TextMessage && len(data) > 0 {
+			// Перехватываем settings JSON для Go sender
+			var msg map[string]interface{}
+			json.Unmarshal(data, &msg)
+			if msg != nil && msg["cmd"] == "settings" {
+				room.storePeerSettings(peerID, msg)
+			}
 			// Текстовые сообщения (settings, restart_recorder) — перенаправляем remote peer
 			if remotePeer != "" {
 				room.forwardTextToWS(remotePeer, string(data))
 			}
+			// На десктопе: Go sender обрабатывает команды от REMOTE peer
+			// peerID здесь — кто отправил. Если это НЕ локальный пир (goSenderPeerID),
+			// значит это remote peer → команды предназначены для Go sender
+			if goSenderActive && peerID != goSenderPeerID {
+				dataStr := string(data)
+				if dataStr == "restart_recorder" {
+					handleRestartRecorderForGoSender()
+				} else if msg != nil && msg["cmd"] == "settings" {
+					handlePeerSettingsForGoSender(msg)
+				}
+			}
 		}
+	}
+
+	// Останавливаем Go sender при отключении
+	if goSenderActive {
+		stopGoSender()
 	}
 
 	// Отправляем remote peer уведомление об отключении

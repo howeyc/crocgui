@@ -78,6 +78,12 @@ jobs:
           cd "${{ github.workspace }}\workspace\tools\cmd\fyne"
           go install
 
+      - name: Install libvpx via vcpkg
+        run: |
+          vcpkg install libvpx:x64-windows
+          echo "CGO_CFLAGS=-I$env:VCPKG_INSTALLATION_ROOT\installed\x64-windows\include" >> $env:GITHUB_ENV
+          echo "CGO_LDFLAGS=-L$env:VCPKG_INSTALLATION_ROOT\installed\x64-windows\lib -lvpx" >> $env:GITHUB_ENV
+
       - name: Decode and place P12 Certificate
         shell: pwsh
         run: |
@@ -173,7 +179,7 @@ jobs:
       - name: Install Linux dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgl1-mesa-dev xorg-dev libxkbcommon-dev
+          sudo apt-get install -y libgl1-mesa-dev xorg-dev libxkbcommon-dev libvpx-dev
 
       # Step 6: Install Fyne CLI
       - name: Install Fyne CLI
@@ -272,12 +278,16 @@ jobs:
           go-version: '1.24'
           cache-dependency-path: ${{ github.workspace }}/workspace/crocgui/go.sum
 
-      # Step 5: Install Fyne CLI
+      # Step 5: Install libvpx
+      - name: Install libvpx
+        run: brew install libvpx
+
+      # Step 6: Install Fyne CLI
       - name: Install Fyne CLI
         run: |
           go install fyne.io/tools/cmd/fyne@latest
 
-      # Step 6: Build the application for macOS amd64 (Intel)
+      # Step 7: Build the application for macOS amd64 (Intel)
       - name: Build for macOS amd64 (Intel)
         run: |
           cd $GITHUB_WORKSPACE/workspace/crocgui
@@ -360,12 +370,16 @@ jobs:
           go-version: '1.24'
           cache-dependency-path: ${{ github.workspace }}/workspace/crocgui/go.sum
 
-      # Step 5: Install Fyne CLI
+      # Step 5: Install libvpx
+      - name: Install libvpx
+        run: brew install libvpx
+
+      # Step 6: Install Fyne CLI
       - name: Install Fyne CLI
         run: |
           go install fyne.io/tools/cmd/fyne@latest
 
-      # Step 6: Build the application for macOS arm64 (Apple Silicon)
+      # Step 7: Build the application for macOS arm64 (Apple Silicon)
       - name: Build for macOS arm64 (Apple Silicon)
         run: |
           cd $GITHUB_WORKSPACE/workspace/crocgui
