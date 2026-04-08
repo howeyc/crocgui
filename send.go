@@ -1166,41 +1166,6 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 	}) // mainButton
 	cosED = append(cosED, mainButton)
 
-	clipboardFallback := func() {
-		log.Debugf("clipboardFallback: scannerIsBrowser=%v, treeButton=VisibilityOff=%v, entry.Text=%q, clipboardBeforeScan=%q",
-			scannerIsBrowser,
-			treeButton.Icon == theme.VisibilityOffIcon(),
-			entry.Text,
-			clipboardBeforeScan)
-		if !scannerIsBrowser ||
-			treeButton.Icon != theme.VisibilityOffIcon() {
-			scannerIsBrowser = false
-			log.Debug("clipboardFallback: skip (not browser scanner or WebDAV not active)")
-			return
-		}
-		clipboardText := a.Clipboard().Content()
-		scannerIsBrowser = false
-		log.Debugf("clipboardFallback: clipboardBefore=%q clipboardNow=%q", clipboardBeforeScan, clipboardText)
-		if clipboardText == clipboardBeforeScan ||
-			!strings.HasPrefix(clipboardText, IO) {
-			log.Debug("clipboardFallback: clipboard unchanged or not IO prefix")
-			return
-		}
-		if st, ne, as, a6, ps, pd, s5, ct, err := fromURI(clipboardText); err == nil {
-			log.Debugf("clipboardFallback: parsed URI st=%q ne=%q as=%q", st, ne, as)
-			entry.SetText(st)
-			a.Preferences().SetString("new-relay", ne)
-			a.Preferences().SetString("relay-address", as)
-			a.Preferences().SetString("relay6", a6)
-			a.Preferences().SetString("relay-ports", ps)
-			a.Preferences().SetString("relay-password", pd)
-			a.Preferences().SetString("socks5", s5)
-			a.Preferences().SetString("connect", ct)
-		} else {
-			log.Debugf("clipboardFallback: fromURI error: %v", err)
-		}
-	}
-
 	if isAndroid {
 		var (
 			intentWg sync.WaitGroup
@@ -1324,7 +1289,6 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 					case uriString := <-uriFromIntent:
 						if uriString == "" {
 							log.Debug("doneProcessIntent")
-							// clipboardFallback()
 							return
 						}
 
@@ -1481,13 +1445,18 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 					}
 				}
 			}()
-			processIntent()
-			// Если сканер был браузером, processIntent может не послать
-			// ничего в uriFromIntent (MAIN intent → goto cleanup).
-			// Проверяем буфер обмена через секунду как fallback.
 			if scannerIsBrowser {
-				log.Debug("scannerIsBrowser: scheduling clipboardFallback in 1s")
-				time.AfterFunc(time.Second, clipboardFallback)
+				clipboardText := a.Clipboard().Content()
+				if clipboardText != clipboardBeforeScan && strings.HasPrefix(clipboardText, IO) {
+					// Браузерный сканер — шлём буфер обмена в канал
+					log.Debugf("scannerIsBrowser: sending clipboard to uriFromIntent: %q", clipboardText)
+					uriFromIntent <- clipboardText
+				} else {
+					processIntent()
+				}
+				scannerIsBrowser = false
+			} else {
+				processIntent()
 			}
 			mH = wHandle(w)
 			// log.Debug("mainH " + mH)
