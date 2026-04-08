@@ -81,8 +81,10 @@ jobs:
       - name: Install libvpx via vcpkg
         run: |
           vcpkg install libvpx:x64-windows
-          echo "CGO_CFLAGS=-I$env:VCPKG_INSTALLATION_ROOT\installed\x64-windows\include" >> $env:GITHUB_ENV
-          echo "CGO_LDFLAGS=-L$env:VCPKG_INSTALLATION_ROOT\installed\x64-windows\lib -lvpx" >> $env:GITHUB_ENV
+          $vcpkgRoot = "$env:VCPKG_INSTALLATION_ROOT\installed\x64-windows"
+          echo "CGO_CFLAGS=-I$vcpkgRoot\include" >> $env:GITHUB_ENV
+          echo "CGO_LDFLAGS=-L$vcpkgRoot\lib -lvpx" >> $env:GITHUB_ENV
+          echo "PKG_CONFIG_PATH=$vcpkgRoot\lib\pkgconfig" >> $env:GITHUB_ENV
 
       - name: Decode and place P12 Certificate
         shell: pwsh
