@@ -83,7 +83,7 @@ jobs:
           vcpkg install libvpx:x64-mingw-static
           $vcpkgRoot = "$env:VCPKG_INSTALLATION_ROOT\installed\x64-mingw-static"
           echo "CGO_CFLAGS=-I$vcpkgRoot\include" >> $env:GITHUB_ENV
-          echo "CGO_LDFLAGS=-L$vcpkgRoot\lib -lvpx" >> $env:GITHUB_ENV
+          echo "CGO_LDFLAGS=-L$vcpkgRoot\lib -lvpx -static-libgcc -static-libstdc++" >> $env:GITHUB_ENV
           echo "PKG_CONFIG_PATH=$vcpkgRoot\lib\pkgconfig" >> $env:GITHUB_ENV
 
       - name: Decode and place P12 Certificate
