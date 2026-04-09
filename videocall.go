@@ -460,12 +460,10 @@ func handleCallWS(w http.ResponseWriter, r *http.Request) {
 
 	// На десктопе: запускаем Go sender (захват камеры/микрофона через mediadevices)
 	// Запускаем в горутине — он дождётся settings пира перед захватом медиа
-	if isGoSenderAvailable && !goSenderActive {
-		goSenderPeerID = peerID // запоминаем чей браузер дропаем (до старта)
+	if !davServer.IsTCPForwardingActive() && !isMobile && !goSenderActive {
 		go func() {
 			if err := startGoSender(roomID, peerID, room); err != nil {
 				log.Debugf("GoSender start failed: %v", err)
-				goSenderPeerID = ""
 			}
 		}()
 	}
@@ -536,10 +534,6 @@ func handleCallWS(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if msgType == websocket.BinaryMessage && len(data) > 0 {
-			// На десктопе Go sender сам захватывает и отправляет — дропаем дубли ТОЛЬКО от локального браузера
-			if goSenderActive && peerID == goSenderPeerID {
-				continue
-			}
 			// Сохраняем чанк в памяти (для reconnect/history)
 			room.addChunk(peerID, data)
 
@@ -548,6 +542,7 @@ func handleCallWS(w http.ResponseWriter, r *http.Request) {
 				room.forwardChunkToWS(remotePeer, data)
 			}
 		} else if msgType == websocket.TextMessage && len(data) > 0 {
+			dataStr := string(data)
 			// Перехватываем settings JSON для Go sender
 			var msg map[string]interface{}
 			json.Unmarshal(data, &msg)
@@ -556,13 +551,20 @@ func handleCallWS(w http.ResponseWriter, r *http.Request) {
 			}
 			// Текстовые сообщения (settings, restart_recorder) — перенаправляем remote peer
 			if remotePeer != "" {
-				room.forwardTextToWS(remotePeer, string(data))
+				room.forwardTextToWS(remotePeer, dataStr)
+			}
+			// Команды от локального пира для Go sender (start_sender / stop_sender)
+			if dataStr == "start_sender" && !davServer.IsTCPForwardingActive() && !isMobile && !goSenderActive {
+				go func() {
+					if err := startGoSender(roomID, peerID, room); err != nil {
+						log.Debugf("GoSender start via cmd failed: %v", err)
+					}
+				}()
+			} else if dataStr == "stop_sender" && goSenderActive {
+				stopGoSender()
 			}
 			// На десктопе: Go sender обрабатывает команды от REMOTE peer
-			// peerID здесь — кто отправил. Если это НЕ локальный пир (goSenderPeerID),
-			// значит это remote peer → команды предназначены для Go sender
-			if goSenderActive && peerID != goSenderPeerID {
-				dataStr := string(data)
+			if goSenderActive {
 				if dataStr == "restart_recorder" {
 					handleRestartRecorderForGoSender()
 				} else if msg != nil && msg["cmd"] == "settings" {
@@ -570,11 +572,6 @@ func handleCallWS(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		}
-	}
-
-	// Останавливаем Go sender при отключении
-	if goSenderActive {
-		stopGoSender()
 	}
 
 	// Отправляем remote peer уведомление об отключении

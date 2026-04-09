@@ -840,7 +840,7 @@ func (h *WebDAVWithDirectoryListing) serveDirectoryListing(w http.ResponseWriter
 		const chatCallBtn = document.getElementById('chatCallBtn');
 		chatCallBtn.addEventListener('click', function() {
 			const roomId = 'call_' + Math.random().toString(36).substr(2, 8);
-			const callUrl = '/videocall.html?room=' + roomId;
+			const callUrl = '/videocall.html?room=' + roomId + (window.location.hash === '#1' ? '#1' : '');
 			if (chatWS && chatWS.readyState === WebSocket.OPEN) {
 				chatWS.send(JSON.stringify({ text: '📞 ' + callUrl, sender: currentUserId }));
 				window.open(callUrl, '_blank');

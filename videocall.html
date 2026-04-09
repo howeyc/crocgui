@@ -206,6 +206,8 @@
         .ctrl-btn.mic.off { background: #e94560; }
         .ctrl-btn.cam { background: #4ecca3; }
         .ctrl-btn.cam.off { background: #e94560; }
+        .ctrl-btn.go-sender { background: #4ecca3; }
+        .ctrl-btn.go-sender.off { background: #e94560; }
         .ctrl-btn.hangup { background: #555; }
         .ctrl-btn.hangup:hover { background: #666; }
         .ctrl-btn.fullscreen { background: #4ecca3; }
@@ -291,6 +293,7 @@
                 <div class="pip-controls" id="pipControls">
                     <button class="ctrl-btn mic" id="micBtn" title="Mic">🎤</button>
                     <button class="ctrl-btn cam" id="camBtn" title="Cam">📷</button>
+                    <button class="ctrl-btn go-sender" id="goSenderBtn" title="Toggle Go/Browser sender" style="display:none">⏸️</button>
                 </div>
             </div>
         </div>
@@ -329,9 +332,13 @@
         var ecBtn = document.getElementById('ecBtn');
         var nsBtn = document.getElementById('nsBtn');
         var agcBtn = document.getElementById('agcBtn');
+        var goSenderBtn = document.getElementById('goSenderBtn');
 
         var _chatUserId = localStorage.getItem('chatUserId') || 'user_' + Math.random().toString(36).substr(2, 9);
         localStorage.setItem('chatUserId', _chatUserId);
+
+        // ============= Определяем режим Go Sender (десктоп без прокси) =============
+        var goSender = (window.location.hash === '#1');
 
         // ============= Единый объект настроек =============
         var S = {
@@ -347,7 +354,8 @@
             ns: true,
             agc: true,
             mpx: 0.1,
-            pipCorner: 0         // только локально, не отправляется пиру
+            pipCorner: 0,        // только локально, не отправляется пиру
+            goSender: goSender   // Go захватывает медиа вместо браузера
         };
 
         function loadSettings() {
@@ -366,6 +374,7 @@
                 if (s.agc !== undefined) S.agc = s.agc;
                 if (s.mpx !== undefined) S.mpx = s.mpx;
                 if (s.pipCorner !== undefined) S.pipCorner = s.pipCorner;
+                if (s.goSender !== undefined && goSender) S.goSender = s.goSender;
             } catch(e) {}
         }
 
@@ -402,6 +411,10 @@
                 localStream.getAudioTracks().forEach(function(t) { t.enabled = S.audio; });
                 localStream.getVideoTracks().forEach(function(t) { t.enabled = S.video; });
             }
+            // Go sender button
+            goSenderBtn.style.display = goSender ? '' : 'none';
+            goSenderBtn.classList.toggle('off', !S.goSender);
+            goSenderBtn.textContent = S.goSender ? '\u23F8\uFE0F' : '\uD83D\uDD34';
             // Применяем аудио фильтры
             if (localStream) {
                 var tracks = localStream.getAudioTracks();
@@ -433,7 +446,8 @@
                 playCodecs: detectSupportedCodecs(),
                 width: vs.width || 0,
                 height: vs.height || 0,
-                frameRate: vs.frameRate || getMinFrameRate() || 0
+                frameRate: vs.frameRate || getMinFrameRate() || 0,
+                goSender: S.goSender
             }));
         }
 
@@ -807,6 +821,32 @@
             S.agc = !S.agc;
             applySettings(); saveSettings(); sendSettings();
         });
+        // goSenderBtn — toggle Go sender vs browser sender
+        goSenderBtn.addEventListener('click', function() {
+            S.goSender = !S.goSender;
+            applySettings(); saveSettings(); sendSettings();
+            if (S.goSender) {
+                // Go sender ON: stop browser MediaRecorder, tell Go to start
+                diagLog('GOSENDER ON — stopping browser recorder');
+                if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                    mediaRecorder.stop();
+                    recorderStarted = false;
+                }
+                if (wsConnected && ws && ws.readyState === WebSocket.OPEN) {
+                    try { ws.send('start_sender'); } catch(e) {}
+                }
+            } else {
+                // Go sender OFF: tell Go to stop, start browser MediaRecorder
+                diagLog('GOSENDER OFF — starting browser recorder');
+                if (wsConnected && ws && ws.readyState === WebSocket.OPEN) {
+                    try { ws.send('stop_sender'); } catch(e) {}
+                }
+                if (isActive && localStream) {
+                    recorderStarted = true;
+                    setupMediaRecorder();
+                }
+            }
+        });
 
         hangupBtn.addEventListener('click', function() { hangup(); });
 
@@ -1117,6 +1157,7 @@
         }
 
         async function sendChunk(buffer) {
+            if (S.goSender) return; // Go sender active — browser doesn't send
             diagSentChunks++;
             diagSentBytes += buffer.byteLength;
             if (wsConnected && ws && ws.readyState === WebSocket.OPEN) {
@@ -1466,9 +1507,13 @@
             if (!isActive) return;
             // 5. Создаём MSE с известным incomingCodec
             setupMSE();
-            // 6. Запускаем запись с известным recordCodec и разрешением
-            recorderStarted = true;
-            setupMediaRecorder();
+            // 6. Запускаем запись с известным recordCodec и разрешением (если browser sender)
+            if (!S.goSender) {
+                recorderStarted = true;
+                setupMediaRecorder();
+            } else {
+                diagLog('REC skip — Go sender active');
+            }
         }
 
         // ============= MSE =============
@@ -1701,7 +1746,7 @@
             saveCallState();
             disconnectWS();
             if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
-            if (localStream) localStream.getTracks().forEach(function(t) { t.stop(); });
+            if (localStream && !S.goSender) localStream.getTracks().forEach(function(t) { t.stop(); });
             endCall();
         });
     </script>

@@ -74,6 +74,7 @@ jobs:
           path: workspace/tools
 
       - name: Install Fyne CLI
+        if: github.event.inputs.build_type != 'snapshot'
         run: |
           cd "${{ github.workspace }}\workspace\tools\cmd\fyne"
           go install
@@ -87,6 +88,7 @@ jobs:
           echo "PKG_CONFIG_PATH=$vcpkgRoot\lib\pkgconfig" >> $env:GITHUB_ENV
 
       - name: Decode and place P12 Certificate
+        if: github.event.inputs.build_type != 'snapshot'
         shell: pwsh
         run: |
           $certPath = "${{ github.workspace }}\workspace\crocgui\croc.p12"
@@ -103,7 +105,21 @@ jobs:
               exit 1
           }
 
+      - name: Build Windows console exe (snapshot)
+        if: github.event.inputs.build_type == 'snapshot'
+        shell: pwsh
+        run: |
+          cd "${{ github.workspace }}\workspace\crocgui"
+          $env:CGO_ENABLED = "1"
+          $env:GOARCH = "amd64"
+          go build -o crocgui.exe .
+          Write-Host "Built crocgui.exe (console mode, no -H windowsgui)"
+          if (-not (Test-Path "crocgui.exe")) {
+            throw "ERROR: crocgui.exe was not created!"
+          }
+
       - name: Build Windows AppX package
+        if: github.event.inputs.build_type != 'snapshot'
         shell: pwsh
         run: |
           cd "${{ github.workspace }}\workspace\crocgui"
@@ -130,7 +146,18 @@ jobs:
             throw "ERROR: crocgui.appx was not created!"
           }
 
-      - name: Upload windows artifact
+      - name: Upload windows artifact (snapshot)
+        if: github.event.inputs.build_type == 'snapshot'
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-build
+          path: |
+            ${{ github.workspace }}/workspace/crocgui/crocgui.exe
+          retention-days: 7
+          if-no-files-found: error
+
+      - name: Upload windows artifact (release)
+        if: github.event.inputs.build_type != 'snapshot'
         uses: actions/upload-artifact@v4
         with:
           name: windows-build

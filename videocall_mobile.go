@@ -5,12 +5,6 @@ package main
 // goSenderActive is always false on mobile
 var goSenderActive bool
 
-// goSenderPeerID is unused on mobile
-var goSenderPeerID string
-
-// isGoSenderAvailable — на мобильных браузер сам отправляет медиа
-const isGoSenderAvailable = false
-
 // startGoSender is a no-op on mobile
 func startGoSender(roomID, peerID string, room *VideoCallRoom) error {
 	return nil

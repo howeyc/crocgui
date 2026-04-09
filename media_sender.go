@@ -15,11 +15,7 @@ import (
 
 var (
 	goSenderActive bool
-	goSenderPeerID string // peer ID локального пира (браузер которого дропаем)
 )
-
-// isGoSenderAvailable — на десктопе Go сам захватывает медиа через mediadevices
-const isGoSenderAvailable = true
 
 // localStream — аналог JS: var localStream = null
 var localStream mediadevices.MediaStream
@@ -38,7 +34,6 @@ var (
 	goRecordCodec      string                 // negotiated record codec (аналог JS recordCodec)
 	goLastHandledMpx   float64                // debounce по mpx (аналог JS lastHandledMpx)
 )
-
 
 func detectSupportedCodecs() []string {
 	// На десктопе через mediadevices поддерживаем VP8+Opus
@@ -84,7 +79,6 @@ func detectCodec() string {
 
 // ========== sendChunk — аналог JS sendChunk(buffer) ==========
 
-
 var sendChunkFn func(data []byte)
 
 // ========== setupMediaRecorder — аналог JS setupMediaRecorder() ==========
@@ -120,7 +114,6 @@ func restartMediaRecorder() {
 
 // ========== handlePeerSettingsForGoSender / handleRestartRecorderForGoSender ==========
 // Аналоги JS handlePeerSettings() — обработка команд от remote peer для Go sender
-
 
 func toStringSlice(v interface{}) []string {
 	switch s := v.(type) {
@@ -353,7 +346,6 @@ func startGoSender(roomID, peerID string, room *VideoCallRoom) error {
 	codec := detectCodec()
 
 	// Аналог JS: setupMediaRecorder()
-	goSenderPeerID = peerID
 	goSenderActive = true
 	err = setupMediaRecorder(stream, codec, W, H, sendChunkFn)
 	if err != nil {
@@ -384,4 +376,3 @@ func stopGoSender() {
 	}
 	sendChunkFn = nil
 }
-
