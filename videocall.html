@@ -104,8 +104,27 @@
         .pip-container .pip-controls {
             position: absolute;
             bottom: 0; left: 0; right: 0;
-            overflow: hidden;
+            overflow: visible;
             border-radius: 0 0 8px 8px;
+        }
+        /* Go Sender кнопка — верхний правый угол PiP */
+        .pip-container .go-sender-wrap {
+            position: absolute;
+            top: 4px;
+            right: 4px;
+            z-index: 26;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        body.show-pip-controls .pip-container .go-sender-wrap { opacity: 1; }
+        .pip-container .go-sender-wrap .ctrl-btn.go-sender {
+            background: rgba(100, 100, 100, 0.85);
+        }
+        .pip-container .go-sender-wrap .ctrl-btn.go-sender:hover {
+            background: rgba(130, 130, 130, 0.95);
+        }
+        .pip-container .go-sender-wrap .ctrl-btn.go-sender.off {
+            background: rgba(100, 100, 100, 0.85);
         }
         .pip-container .res-label {
             top: auto;
@@ -289,11 +308,13 @@
             <div class="pip-container pip-tl" id="pipContainer">
                 <div class="res-label" id="remoteResLabel"></div>
                 <div class="res-label" id="pipResLabel"></div>
+                <div class="go-sender-wrap">
+                    <button class="ctrl-btn go-sender" id="goSenderBtn" title="Toggle Go/Browser sender" style="display:none">⏸️</button>
+                </div>
                 <video id="localVideo" autoplay muted playsinline></video>
                 <div class="pip-controls" id="pipControls">
                     <button class="ctrl-btn mic" id="micBtn" title="Mic">🎤</button>
                     <button class="ctrl-btn cam" id="camBtn" title="Cam">📷</button>
-                    <button class="ctrl-btn go-sender" id="goSenderBtn" title="Toggle Go/Browser sender" style="display:none">⏸️</button>
                 </div>
             </div>
         </div>
@@ -338,7 +359,8 @@
         localStorage.setItem('chatUserId', _chatUserId);
 
         // ============= Определяем режим Go Sender (десктоп без прокси) =============
-        var goSender = (window.location.hash === '#1');
+        var isDesktop = window.matchMedia('(hover: hover)').matches;
+        var goSender = (window.location.hash === '#1') && isDesktop;
 
         // ============= Единый объект настроек =============
         var S = {
@@ -654,7 +676,6 @@
             pipMoveRight.classList.toggle('visible', pipCorners[pipCorner] === 'pip-tr');
         }
         // Один таймер для всех кнопок
-        var isDesktop = window.matchMedia('(hover: hover)').matches;
         var controlsTimer = null;
         function showAllControls() {
             document.body.classList.remove('hide-cursor');
