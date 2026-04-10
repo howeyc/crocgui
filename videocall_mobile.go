@@ -18,3 +18,7 @@ func handlePeerSettingsForGoSender(msg map[string]interface{}) {}
 
 // handleRestartRecorderForGoSender is a no-op on mobile
 func handleRestartRecorderForGoSender() {}
+
+// handleLocalPeerSettingsForGoSender is a no-op on mobile
+func handleLocalPeerSettingsForGoSender(msg map[string]interface{}, roomID, peerID string, room *VideoCallRoom) {
+}

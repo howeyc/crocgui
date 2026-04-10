@@ -358,6 +358,11 @@
         var _chatUserId = localStorage.getItem('chatUserId') || 'user_' + Math.random().toString(36).substr(2, 9);
         localStorage.setItem('chatUserId', _chatUserId);
 
+        // Сохраняем hash в sessionStorage при загрузке видеозвонка
+        if (window.location.hash) {
+            sessionStorage.setItem('webdav_hash', window.location.hash);
+        }
+
         // ============= Определяем режим Go Sender (десктоп без прокси) =============
         var isDesktop = window.matchMedia('(hover: hover)').matches;
         var goSender = (window.location.hash === '#1') && isDesktop;
@@ -427,11 +432,6 @@
             var mpxValues = [0.5, 0.2, 0.1, 0.05];
             for (var i = 0; i < mpxValues.length; i++) {
                 mpxBtns[i].classList.toggle('active', Math.abs(S.mpx - mpxValues[i]) < 0.01);
-            }
-            // Применяем audio/video track enabled
-            if (localStream) {
-                localStream.getAudioTracks().forEach(function(t) { t.enabled = S.audio; });
-                localStream.getVideoTracks().forEach(function(t) { t.enabled = S.video; });
             }
             // Go sender button
             goSenderBtn.style.display = goSender ? '' : 'none';
@@ -758,30 +758,77 @@
         document.addEventListener('webkitfullscreenchange', syncFullscreenBtn);
 
         // ============= Кнопки управления =============
-        // micBtn — toggle мой микрофон
-        micBtn.addEventListener('click', function() {
+        // micBtn — toggle мой микрофон (реальный release/acquire)
+        micBtn.addEventListener('click', async function() {
             if (!localStream) return;
-            var wasSending = recorderStarted && mediaRecorder && mediaRecorder.state !== 'inactive';
-            var hadOnlyMic = S.audio && !S.video;
             S.audio = !S.audio;
+            if (S.audio) {
+                // Включаем: заново получаем аудио поток
+                try {
+                    var newStream = await navigator.mediaDevices.getUserMedia({
+                        video: false,
+                        audio: { echoCancellation: S.ec, noiseSuppression: S.ns, autoGainControl: S.agc }
+                    });
+                    newStream.getAudioTracks().forEach(function(t) { localStream.addTrack(t); });
+                    diagLog('MIC re-acquired');
+                } catch(e) {
+                    diagLog('MIC re-acquire failed: ' + e.message);
+                    S.audio = false;
+                }
+            } else {
+                // Выключаем: освобождаем микрофон
+                localStream.getAudioTracks().forEach(function(t) { t.stop(); localStream.removeTrack(t); });
+                diagLog('MIC released');
+            }
             applySettings(); saveSettings(); sendSettings();
-            // Рестарт при переходе audio-only → ничего или ничего → audio-only
-            if (wasSending && !S.audio && !S.video) {
-                diagLog('REC restart: my audio off (all off)');
-                restartMediaRecorder();
-            } else if (!S.video && hadOnlyMic !== S.audio && recorderStarted) {
-                diagLog('REC restart: mic toggle while audio-only');
+            if (!S.audio && !S.video) {
+                // Всё выключено — стоп рекордер
+                if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                    mediaRecorder.stop(); recorderStarted = false;
+                }
+            } else if (recorderStarted || S.audio) {
                 restartMediaRecorder();
             }
         });
-        // camBtn — toggle моя камера
-        camBtn.addEventListener('click', function() {
+        // camBtn — toggle моя камера (реальный release/acquire с задержкой)
+        camBtn.addEventListener('click', async function() {
             if (!localStream) return;
             S.video = !S.video;
+            if (S.video) {
+                // Включаем: заново получаем видео поток
+                try {
+                    var savedPeerW = parseInt(localStorage.getItem('vc_peerW')) || 640;
+                    var savedPeerH = parseInt(localStorage.getItem('vc_peerH')) || 480;
+                    var newStream = await navigator.mediaDevices.getUserMedia({
+                        video: addFrameRateConstraint({ width: { ideal: savedPeerW }, height: { ideal: savedPeerH }, facingMode: 'user' }),
+                        audio: false
+                    });
+                    newStream.getVideoTracks().forEach(function(t) { localStream.addTrack(t); });
+                    localVideo.srcObject = localStream;
+                    diagLog('CAM re-acquired');
+                } catch(e) {
+                    diagLog('CAM re-acquire failed: ' + e.message);
+                    S.video = false;
+                }
+            } else {
+                // Шаг 1: Чёрные кадры (enabled=false) чтобы у пира не зависла картинка
+                localStream.getVideoTracks().forEach(function(t) { t.enabled = false; });
+                applySettings(); saveSettings(); sendSettings();
+                diagLog('CAM black frames');
+                // Шаг 2: Через 2 секунды — реальный release камеры
+                var tracksToRelease = localStream.getVideoTracks().slice();
+                setTimeout(function() {
+                    tracksToRelease.forEach(function(t) { t.stop(); localStream.removeTrack(t); });
+                    diagLog('CAM released (delayed)');
+                }, 2000);
+            }
             applySettings(); saveSettings(); sendSettings();
-            // Смена видео↔аудио-только требует restart (разный mimeType)
-            if (recorderStarted) {
-                diagLog('REC restart: my video toggle (v=' + S.video + ')');
+            if (!S.audio && !S.video) {
+                // Всё выключено — стоп рекордер
+                if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                    mediaRecorder.stop(); recorderStarted = false;
+                }
+            } else if (recorderStarted || S.video) {
                 restartMediaRecorder();
             }
             updateResLabels();
@@ -843,26 +890,21 @@
             applySettings(); saveSettings(); sendSettings();
         });
         // goSenderBtn — toggle Go sender vs browser sender
+        // Go сам определит нужно ли стартовать по изменению goSender в settings
         goSenderBtn.addEventListener('click', function() {
             S.goSender = !S.goSender;
             applySettings(); saveSettings(); sendSettings();
             if (S.goSender) {
-                // Go sender ON: stop browser MediaRecorder, tell Go to start
+                // Go sender ON: stop browser MediaRecorder
                 diagLog('GOSENDER ON — stopping browser recorder');
                 if (mediaRecorder && mediaRecorder.state !== 'inactive') {
                     mediaRecorder.stop();
                     recorderStarted = false;
                 }
-                if (wsConnected && ws && ws.readyState === WebSocket.OPEN) {
-                    try { ws.send('start_sender'); } catch(e) {}
-                }
             } else {
-                // Go sender OFF: tell Go to stop, start browser MediaRecorder
+                // Go sender OFF: start browser MediaRecorder
                 diagLog('GOSENDER OFF — starting browser recorder');
-                if (wsConnected && ws && ws.readyState === WebSocket.OPEN) {
-                    try { ws.send('stop_sender'); } catch(e) {}
-                }
-                if (isActive && localStream) {
+                if (isActive && localStream && (S.audio || S.video)) {
                     recorderStarted = true;
                     setupMediaRecorder();
                 }

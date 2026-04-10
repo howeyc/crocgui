@@ -358,6 +358,184 @@ func startGoSender(roomID, peerID string, room *VideoCallRoom) error {
 }
 
 // stopGoSender — аналог JS hangup() + mediaRecorder.stop()
+// goLocalPeerSettings — предыдущие настройки локального пира для Go sender
+var goLocalPeerSettings map[string]interface{}
+
+// handleLocalPeerSettingsForGoSender обрабатывает настройки от ЛОКАЛЬНОГО пира
+// Сравнивает предыдущие и новые значения audio/video/goSender и выполняет действия:
+// - goSender false→true: запуск Go sender
+// - goSender true→false: остановка Go sender
+// - video/audio changed: остановка/запуск соответствующих capture devices
+func handleLocalPeerSettingsForGoSender(msg map[string]interface{}, roomID, peerID string, room *VideoCallRoom) {
+	prev := goLocalPeerSettings
+	goLocalPeerSettings = msg
+
+	// Извлекаем текущие значения
+	goSender := false
+	audio := true
+	video := true
+	if v, ok := msg["goSender"].(bool); ok {
+		goSender = v
+	}
+	if v, ok := msg["audio"].(bool); ok {
+		audio = v
+	}
+	if v, ok := msg["video"].(bool); ok {
+		video = v
+	}
+
+	// Извлекаем предыдущие значения
+	prevGoSender := false
+	prevAudio := true
+	prevVideo := true
+	if prev != nil {
+		if v, ok := prev["goSender"].(bool); ok {
+			prevGoSender = v
+		}
+		if v, ok := prev["audio"].(bool); ok {
+			prevAudio = v
+		}
+		if v, ok := prev["video"].(bool); ok {
+			prevVideo = v
+		}
+	}
+
+	log.Debugf("GoSender local settings: goSender=%v->%v audio=%v->%v video=%v->%v active=%v",
+		prevGoSender, goSender, prevAudio, audio, prevVideo, video, goSenderActive)
+
+	// === 1. goSender toggle ===
+	if goSender && !prevGoSender && !goSenderActive {
+		// Go sender ON: запуск
+		go func() {
+			if err := startGoSender(roomID, peerID, room); err != nil {
+				log.Debugf("GoSender start via settings failed: %v", err)
+			}
+		}()
+		return
+	}
+	if !goSender && prevGoSender && goSenderActive {
+		// Go sender OFF: полная остановка
+		stopGoSender()
+		return
+	}
+
+	// Если Go sender не активен — больше ничего не делаем
+	if !goSenderActive {
+		return
+	}
+
+	// === 2. Video toggle ===
+	if prevVideo && !video {
+		// Видео выключено: рестарт recorder (audio-only) сразу, release камеры с задержкой 2 сек
+		log.Debugf("GoSender: video OFF — scheduling camera release (2s delay)")
+		// Рестарт recorder сразу (audio-only если audio включен)
+		if !audio {
+			// Всё выключено — стоп рекордер
+			if mediaRecorderInst != nil && mediaRecorderInst.state() != "inactive" {
+				mediaRecorderInst.stop()
+				recorderStarted = false
+			}
+		} else {
+			restartMediaRecorder()
+		}
+		// Release камеры с задержкой 2 сек (чтоб у пира не завис последний кадр)
+		go func() {
+			time.Sleep(2 * time.Second)
+			if localStream != nil {
+				for _, t := range localStream.GetVideoTracks() {
+					t.Close()
+				}
+				log.Debugf("GoSender: camera released (delayed)")
+			}
+		}()
+	} else if !prevVideo && video {
+		// Видео включено: переоткрыть камеру
+		log.Debugf("GoSender: video ON — re-acquiring camera")
+		go restartGoSenderTrack("video", audio, video)
+	}
+
+	// === 3. Audio toggle ===
+	if prevAudio && !audio {
+		// Аудио выключено: закрыть audio tracks
+		log.Debugf("GoSender: audio OFF — releasing microphone")
+		if localStream != nil {
+			for _, t := range localStream.GetAudioTracks() {
+				t.Close()
+			}
+		}
+		if !video {
+			// Всё выключено — стоп рекордер
+			if mediaRecorderInst != nil && mediaRecorderInst.state() != "inactive" {
+				mediaRecorderInst.stop()
+				recorderStarted = false
+			}
+		} else {
+			restartMediaRecorder()
+		}
+	} else if !prevAudio && audio {
+		// Аудио включено: переоткрыть микрофон
+		log.Debugf("GoSender: audio ON — re-acquiring microphone")
+		go restartGoSenderTrack("audio", audio, video)
+	}
+}
+
+// restartGoSenderTrack переоткрывает указанный track (video или audio)
+// и перезапускает media recorder
+func restartGoSenderTrack(trackType string, wantAudio, wantVideo bool) {
+	if localStream == nil {
+		return
+	}
+
+	// Останавливаем recorder
+	if mediaRecorderInst != nil {
+		mediaRecorderInst.stop()
+		recorderStarted = false
+	}
+
+	// Закрываем все треки и освобождаем stream
+	for _, t := range localStream.GetTracks() {
+		t.Close()
+	}
+	localStream = nil
+
+	// Заново получаем медиа
+	if !wantAudio && !wantVideo {
+		return
+	}
+
+	// Определяем разрешение
+	var W, H int
+	if wantVideo {
+		mpx := 0.1
+		if goPeerSettings != nil {
+			if m, ok := goPeerSettings["mpx"].(float64); ok && m > 0 {
+				mpx = m
+			}
+		}
+		if bestW, bestH, ok := findBestResolution(mpx); ok {
+			W, H = bestW, bestH
+		} else {
+			W, H = applyMpx(4, 3, mpx)
+			W, H = queryBestCameraResolution(W, H)
+		}
+	}
+
+	stream, err := getUserMedia(W, H)
+	if err != nil {
+		log.Debugf("GoSender: getUserMedia restart failed: %v", err)
+		goSenderActive = false
+		return
+	}
+	localStream = stream
+
+	// Запускаем recorder
+	codec := goRecordCodec
+	if codec == "" {
+		codec = detectCodec()
+	}
+	setupMediaRecorder(stream, codec, W, H, sendChunkFn)
+}
+
 func stopGoSender() {
 	// Аналог JS: if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop()
 	if mediaRecorderInst != nil {

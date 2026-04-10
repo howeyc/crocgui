@@ -545,14 +545,13 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 				fullURLStr = uid
 			}
 
+			if davServer.IsActive() {
+				fullURLStr += "#1"
+			}
 			log.Debugf("[createWebDAVTree] Opening URL: %s", fullURLStr)
 			chatOpened.Store(true) // сброс: браузер открыт вручную через дерево
 			time.AfterFunc(100*time.Millisecond, func() {
-				hash := "#1"
-				if davServer.IsTCPForwardingActive() {
-					hash = ""
-				}
-				OpenURL(fullURLStr + hash)
+				OpenURL(fullURLStr)
 			})
 			ft.Unselect(uid)
 		}
@@ -654,12 +653,12 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 						if len(newMsgs) > 0 {
 							lastCount += len(newMsgs)
 							if chatOpened.CompareAndSwap(false, true) && chatURL != "" {
-								log.Debugf("[polling] auto-opening browser: %s", chatURL)
-								hash := "#1"
-								if davServer.IsTCPForwardingActive() {
-									hash = ""
+								if davServer.IsActive() {
+									chatURL += "#1"
 								}
-								OpenURL(chatURL + hash)
+
+								log.Debugf("[polling] auto-opening browser: %s", chatURL)
+								OpenURL(chatURL)
 							}
 							return // браузер открыт → прекращаем, JS дальше
 						}
@@ -1319,12 +1318,12 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 						}
 						// deepLink davX: webdavX:
 						if _, ccn, _, ok := isDAV(uriString); ok {
-							log.Debugf("[intent] isDAV ccn=%q, opening manually", ccn)
-							hash := "#1"
-							if davServer.IsTCPForwardingActive() {
-								hash = ""
+							if davServer.IsActive() {
+								ccn += "#1"
 							}
-							if err := OpenURL(ccn + hash); err == nil {
+
+							log.Debugf("[intent] isDAV ccn=%q, opening manually", ccn)
+							if err := OpenURL(ccn); err == nil {
 								chatOpened.Store(true)
 							} else {
 								log.Error(err)

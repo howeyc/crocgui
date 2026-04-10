@@ -460,7 +460,7 @@ func handleCallWS(w http.ResponseWriter, r *http.Request) {
 
 	// На десктопе: запускаем Go sender (захват камеры/микрофона через mediadevices)
 	// Запускаем в горутине — он дождётся settings пира перед захватом медиа
-	if !davServer.IsTCPForwardingActive() && !isMobile && !goSenderActive {
+	if !isMobile && !goSenderActive {
 		go func() {
 			if err := startGoSender(roomID, peerID, room); err != nil {
 				log.Debugf("GoSender start failed: %v", err)
@@ -553,23 +553,22 @@ func handleCallWS(w http.ResponseWriter, r *http.Request) {
 			if remotePeer != "" {
 				room.forwardTextToWS(remotePeer, dataStr)
 			}
-			// Команды от локального пира для Go sender (start_sender / stop_sender)
-			if dataStr == "start_sender" && !davServer.IsTCPForwardingActive() && !isMobile && !goSenderActive {
-				go func() {
-					if err := startGoSender(roomID, peerID, room); err != nil {
-						log.Debugf("GoSender start via cmd failed: %v", err)
+			// На десктопе: различаем локального пира (direct #1, goSender=true)
+			// от удалённого пира (через прокси, goSender=false)
+			if !isMobile && msg != nil && msg["cmd"] == "settings" {
+				if isLocal, _ := msg["goSender"].(bool); isLocal {
+					// Настройки от ЛОКАЛЬНОГО браузера (direct #1)
+					handleLocalPeerSettingsForGoSender(msg, roomID, peerID, room)
+				} else {
+					// Настройки от УДАЛЁННОГО пира (через прокси)
+					if goSenderActive {
+						handlePeerSettingsForGoSender(msg)
 					}
-				}()
-			} else if dataStr == "stop_sender" && goSenderActive {
-				stopGoSender()
-			}
-			// На десктопе: Go sender обрабатывает команды от REMOTE peer
-			if goSenderActive {
-				if dataStr == "restart_recorder" {
-					handleRestartRecorderForGoSender()
-				} else if msg != nil && msg["cmd"] == "settings" {
-					handlePeerSettingsForGoSender(msg)
 				}
+			}
+			// restart_recorder всегда от remote peer
+			if goSenderActive && dataStr == "restart_recorder" {
+				handleRestartRecorderForGoSender()
 			}
 		}
 	}
