@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/at-wat/ebml-go/mkvcore"
@@ -14,11 +15,9 @@ import (
 	log "github.com/schollz/logger"
 )
 
-
 // ========== Константы-аналоги JS ==========
 
-var CHUNK_INTERVAL_MS = 100 // как в JS: mediaRecorder.start(CHUNK_INTERVAL_MS)
-
+const CHUNK_INTERVAL_MS = 100 // как в JS: mediaRecorder.start(CHUNK_INTERVAL_MS)
 
 type syncedBuffer struct {
 	mu   sync.Mutex
@@ -52,16 +51,16 @@ type frameData struct {
 
 // ========== mediaRecorder — аналог JS MediaRecorder ==========
 
-
 // mediaRecorder — Go-аналог JS new MediaRecorder(localStream, {mimeType: codec})
 type mediaRecorder struct {
+	mu      sync.Mutex               // Fix 3: protects stream/encV/encA/W/H mutations
 	stream  mediadevices.MediaStream // аналог JS localStream
 	encV    mediadevices.EncodedReadCloser
 	encA    mediadevices.EncodedReadCloser
 	done    chan struct{}
-	active  bool
+	active  atomic.Bool
 	W, H    int
-	codec   string
+	codec   string            // Fix 4: stored for logging/future use; actual codec is hardcoded as VP8+Opus in track entries
 	onChunk func(data []byte) // аналог JS ondataavailable
 	buf     *syncedBuffer
 }
@@ -100,7 +99,6 @@ func newMediaRecorder(stream mediadevices.MediaStream, codec string, W, H int, o
 		encV:    encV,
 		encA:    encA,
 		done:    make(chan struct{}),
-		active:  false,
 		W:       W,
 		H:       H,
 		codec:   codec,
@@ -111,10 +109,10 @@ func newMediaRecorder(stream mediadevices.MediaStream, codec string, W, H int, o
 
 // start — аналог JS: mediaRecorder.start(CHUNK_INTERVAL_MS)
 func (mr *mediaRecorder) start(intervalMs int) {
-	if mr.active {
+	if mr.active.Load() {
 		return
 	}
-	mr.active = true
+	mr.active.Store(true)
 
 	// Горутина чтения видео
 	var totalVideoSamples uint64
@@ -201,6 +199,15 @@ func (mr *mediaRecorder) start(intervalMs int) {
 	)
 	if err != nil {
 		log.Debugf("MediaRecorder block sorter error: %v", err)
+		close(mr.done)
+		mr.active.Store(false)
+		// Fix 1b: close encoders — read goroutines already launched above
+		if mr.encV != nil {
+			mr.encV.Close()
+		}
+		if mr.encA != nil {
+			mr.encA.Close()
+		}
 		return
 	}
 
@@ -210,6 +217,15 @@ func (mr *mediaRecorder) start(intervalMs int) {
 	)
 	if err != nil {
 		log.Debugf("MediaRecorder WebM writer error: %v", err)
+		close(mr.done)
+		mr.active.Store(false)
+		// Fix 1b: close encoders — read goroutines already launched above
+		if mr.encV != nil {
+			mr.encV.Close()
+		}
+		if mr.encA != nil {
+			mr.encA.Close()
+		}
 		return
 	}
 	videoWriter := ws[0]
@@ -223,10 +239,6 @@ func (mr *mediaRecorder) start(intervalMs int) {
 
 	// Главная горутина: WebM муксинг + отправка media segments
 	go func() {
-		defer func() {
-			mr.active = false
-		}()
-
 		ticker := time.NewTicker(time.Duration(intervalMs) * time.Millisecond)
 		defer ticker.Stop()
 
@@ -242,10 +254,15 @@ func (mr *mediaRecorder) start(intervalMs int) {
 					select {
 					case f, ok := <-videoCh:
 						if !ok {
+							mr.stop() // Fix: clean shutdown on unexpected channel close
 							return
 						}
 						ts := f.timestampMS
-						videoWriter.Write(true, ts, f.data)
+						if _, err := videoWriter.Write(true, ts, f.data); err != nil {
+							log.Debugf("MediaRecorder video write error: %v", err)
+							mr.stop() // Fix: clean shutdown on write error
+							return
+						}
 					default:
 						break readVideo
 					}
@@ -257,10 +274,15 @@ func (mr *mediaRecorder) start(intervalMs int) {
 					select {
 					case f, ok := <-audioCh:
 						if !ok {
+							mr.stop() // Fix: clean shutdown on unexpected channel close
 							return
 						}
 						ts := f.timestampMS
-						audioWriter.Write(true, ts, f.data)
+						if _, err := audioWriter.Write(true, ts, f.data); err != nil {
+							log.Debugf("MediaRecorder audio write error: %v", err)
+							mr.stop() // Fix: clean shutdown on write error
+							return
+						}
 					default:
 						break readAudio
 					}
@@ -278,10 +300,10 @@ func (mr *mediaRecorder) start(intervalMs int) {
 
 // stop — аналог JS: mediaRecorder.stop()
 func (mr *mediaRecorder) stop() {
-	if !mr.active {
+	if !mr.active.Load() {
 		return
 	}
-	mr.active = false
+	mr.active.Store(false)
 	select {
 	case <-mr.done:
 		// already closed
@@ -300,10 +322,119 @@ func (mr *mediaRecorder) stop() {
 
 // state — аналог JS: mediaRecorder.state
 func (mr *mediaRecorder) state() string {
-	if mr == nil || !mr.active {
+	if mr == nil || !mr.active.Load() {
 		return "inactive"
 	}
 	return "recording"
+}
+
+// ========== Динамическое разрешение — аналог JS applyDesiredResolution ==========
+
+// applyDesiredResolution — аналог JS applyDesiredResolution(dw, dh)
+// Пересоздаёт stream с новым разрешением (pion не поддерживает hot-swap constraints)
+func (mr *mediaRecorder) applyDesiredResolution(newW, newH int) error {
+	mr.mu.Lock()
+	defer mr.mu.Unlock()
+
+	if newW == mr.W && newH == mr.H {
+		return nil // разрешение не изменилось
+	}
+
+	wasActive := mr.active.Load()
+
+	// 1. Останавливаем текущий рекордер
+	if wasActive {
+		mr.stop()
+	}
+
+	// 2. Создаём новый stream с новым разрешением ДО закрытия старого (Fix 2: rollback safety)
+	newStream, err := getUserMedia(newW, newH)
+	if err != nil {
+		return fmt.Errorf("getUserMedia %dx%d: %w", newW, newH, err)
+	}
+
+	// 3. Находим новые tracks
+	var videoTrack, audioTrack mediadevices.Track
+	for _, t := range newStream.GetTracks() {
+		switch t.Kind().String() {
+		case "video":
+			videoTrack = t
+		case "audio":
+			audioTrack = t
+		}
+	}
+	if videoTrack == nil {
+		for _, t := range newStream.GetTracks() {
+			t.Close()
+		}
+		return fmt.Errorf("no video track in new stream")
+	}
+	if audioTrack == nil {
+		for _, t := range newStream.GetTracks() {
+			t.Close()
+		}
+		return fmt.Errorf("no audio track in new stream")
+	}
+
+	// 4. Новые энкодеры
+	encV, err := videoTrack.NewEncodedReader("video/vp8")
+	if err != nil {
+		for _, t := range newStream.GetTracks() {
+			t.Close()
+		}
+		return fmt.Errorf("NewEncodedReader video: %w", err)
+	}
+
+	encA, err := audioTrack.NewEncodedReader("audio/opus")
+	if err != nil {
+		encV.Close()
+		for _, t := range newStream.GetTracks() {
+			t.Close()
+		}
+		return fmt.Errorf("NewEncodedReader audio: %w", err)
+	}
+
+	// 5. Закрываем старые tracks (только после успешного создания нового stream)
+	if mr.stream != nil {
+		for _, t := range mr.stream.GetTracks() {
+			t.Close()
+		}
+	}
+
+	// 6. Обновляем поля
+	mr.stream = newStream
+	mr.encV = encV
+	mr.encA = encA
+	mr.W = newW
+	mr.H = newH
+
+	// 7. Перезапускаем если был активен
+	if wasActive {
+		mr.done = make(chan struct{})
+		mr.start(CHUNK_INTERVAL_MS)
+	}
+
+	log.Debugf("MediaRecorder resolution changed to %dx%d", newW, newH)
+	return nil
+}
+
+// applyPeerMpx — аналог JS handlePeerSettings: находит лучшее разрешение по mpx пира
+// Note: does NOT lock mr.mu — delegates to applyDesiredResolution which holds the lock
+func (mr *mediaRecorder) applyPeerMpx(mpx float64) error {
+	if mpx <= 0 {
+		return nil
+	}
+
+	bestW, bestH, ok := findBestResolution(mpx)
+	if ok && bestW > 0 && bestH > 0 {
+		log.Debugf("PEER wants %.2fmpx → best=%dx%d", mpx, bestW, bestH)
+		return mr.applyDesiredResolution(bestW, bestH)
+	}
+
+	// Fallback: applyMpx от текущего аспекта
+	w, h := applyMpx(mr.W, mr.H, mpx)
+	log.Debugf("PEER wants %.2fmpx → fallback=%dx%d", mpx, w, h)
+	return mr.applyDesiredResolution(w, h)
 }
 
 // ========== Camera capabilities — аналоги JS getCameraCapabilities / findBestResolution / applyMpx ==========

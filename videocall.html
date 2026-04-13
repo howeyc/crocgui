@@ -540,10 +540,9 @@
         var MSE_CRITICAL_WINDOW_MS = 1000;
         var mseErrorTimestamps = [];
         var mseCriticalTriggered = false;
-        var mseRestartCount = 0;
-        var MSE_MAX_RESTARTS = 3;
         var mseSetupTimer = null;
         var mseRestarting = false;
+        var mseWaitingForInit = false;
         var lastHandledMpx = -1; // debounce: последний обработанный mpx пира
 
         // Remote video fit modes: 0=fit, 1=1:1, 2=1:2, 3=2:1
@@ -790,7 +789,7 @@
                 restartMediaRecorder();
             }
         });
-        // camBtn — toggle моя камера (реальный release/acquire с задержкой)
+        // camBtn — toggle моя камера
         camBtn.addEventListener('click', async function() {
             if (!localStream) return;
             S.video = !S.video;
@@ -811,16 +810,9 @@
                     S.video = false;
                 }
             } else {
-                // Шаг 1: Чёрные кадры (enabled=false) чтобы у пира не зависла картинка
-                localStream.getVideoTracks().forEach(function(t) { t.enabled = false; });
-                applySettings(); saveSettings(); sendSettings();
-                diagLog('CAM black frames');
-                // Шаг 2: Через 2 секунды — реальный release камеры
-                var tracksToRelease = localStream.getVideoTracks().slice();
-                setTimeout(function() {
-                    tracksToRelease.forEach(function(t) { t.stop(); localStream.removeTrack(t); });
-                    diagLog('CAM released (delayed)');
-                }, 2000);
+                // Выключаем: освобождаем камеру
+                localStream.getVideoTracks().forEach(function(t) { t.stop(); localStream.removeTrack(t); });
+                diagLog('CAM released');
             }
             applySettings(); saveSettings(); sendSettings();
             if (!S.audio && !S.video) {
@@ -843,13 +835,6 @@
         remoteScreenBtn.addEventListener('click', function(e) {
             e.stopPropagation();
             S.wantVideo = !S.wantVideo;
-            if (S.wantVideo && mseCriticalTriggered) {
-                diagLog('MSE manual restart via remoteScreenBtn');
-                mseCriticalTriggered = false;
-                mseErrorTimestamps = [];
-                mseRestartCount = 0;
-                restartMSE();
-            }
             applySettings(); saveSettings(); sendSettings();
         });
         // Кодеки
@@ -1415,9 +1400,45 @@
                 }
             }
 
-            if ((incomingCodecChanged) && mseReady && !mseRestarting) {
-                diagLog('MSE restart: incoming codec changed');
-                mseRestartCount = 0;
+            // Проверяем изменилось ли состояние видео пира (камера вкл/выкл)
+            var peerVideoChanged = false;
+            if (prev) {
+                var prevPeerVideo = prev.video !== false;
+                var curPeerVideo = msg.video !== false;
+                if (prevPeerVideo !== curPeerVideo) {
+                    peerVideoChanged = true;
+                    diagLog('MSE restart: peer video changed ' + prevPeerVideo + ' → ' + curPeerVideo);
+                    // Обновляем incomingCodec под новый формат потока
+                    if (!curPeerVideo) {
+                        // Камера пира выключена — будет audio-only поток
+                        var audioCodecs = ['audio/webm;codecs="opus"', 'audio/mp4;codecs="mp4a.40.2"', 'audio/webm'];
+                        for (var ai = 0; ai < audioCodecs.length; ai++) {
+                            if (MediaSource.isTypeSupported(audioCodecs[ai])) {
+                                incomingCodec = audioCodecs[ai];
+                                break;
+                            }
+                        }
+                        diagLog('MSE incoming codec set to audio-only: ' + codecDisplayName(incomingCodec));
+                    } else {
+                        // Камера пира включена — пересчитываем через negotiation
+                        if (msg.recordCodecs) {
+                            var myPlay = detectSupportedCodecs();
+                            var newInc = negotiateCodecClient(msg.recordCodecs, myPlay);
+                            if (newInc) incomingCodec = newInc;
+                        }
+                        diagLog('MSE incoming codec set to video: ' + codecDisplayName(incomingCodec));
+                    }
+                }
+            }
+
+            if ((incomingCodecChanged || peerVideoChanged) && (mseReady || mseRestarting)) {
+                if (mseRestarting) {
+                    diagLog('MSE restart: cancelling previous restart for codec/video change');
+                    if (mseSetupTimer) { clearTimeout(mseSetupTimer); mseSetupTimer = null; }
+                    mseRestarting = false;
+                    mseWaitingForInit = false;
+                }
+                diagLog('MSE restart: codec=' + incomingCodecChanged + ' peerVideo=' + peerVideoChanged);
                 restartMSE();
             }
 
@@ -1483,9 +1504,6 @@
                     if (event.data === 'peer_left') {
                         diagLog('PEER left via WS');
                         hangup();
-                    } else if (event.data === 'restart_recorder') {
-                        diagLog('REC restart requested by peer (MSE restart)');
-                        restartMediaRecorder();
                     } else {
                         // JSON settings от пира
                         try {
@@ -1518,6 +1536,19 @@
             diagRecvBytes += data.byteLength;
             lastReceivedIndex++;
             if (mseCriticalTriggered) return;
+
+            // During MSE restart: discard stale chunks until init segment arrives
+            if (mseWaitingForInit) {
+                if (!isInitSegment(data)) {
+                    diagLog('MSE discard stale chunk (' + data.byteLength + ' bytes)');
+                    return;
+                }
+                diagLog('MSE init segment arrived (' + data.byteLength + ' bytes) — creating MSE');
+                mseWaitingForInit = false;
+                if (mseSetupTimer) { clearTimeout(mseSetupTimer); mseSetupTimer = null; }
+                setupMSE();
+            }
+
             mseQueue.push(data);
             if (mseReady) processMSEQueue();
         }
@@ -1580,6 +1611,17 @@
         }
 
         // ============= MSE =============
+        function isInitSegment(data) {
+            if (!data || data.byteLength < 8) return false;
+            var v = new Uint8Array(data);
+            // WebM/Matroska: EBML header 0x1A 0x45 0xDF 0xA3
+            if (v[0] === 0x1A && v[1] === 0x45 && v[2] === 0xDF && v[3] === 0xA3) return true;
+            // MP4/ISOBMFF: ftyp box — bytes 4-7 = 'ftyp' (0x66 0x74 0x79 0x70)
+            if (v[4] === 0x66 && v[5] === 0x74 && v[6] === 0x79 && v[7] === 0x70) return true;
+            return false;
+        }
+
+
         function setupMSE() {
             var codec = incomingCodec || negotiatedCodec || detectCodec();
             mediaSource = new MediaSource();
@@ -1595,9 +1637,8 @@
                         checkMSECritical();
                     });
                     mseReady = true;
-                    if (mseRestartCount < MSE_MAX_RESTARTS) {
-                        mseCriticalTriggered = false;
-                    }
+                    mseRestarting = false;
+                    mseCriticalTriggered = false;
                     if (mseQueue.length > 0) processMSEQueue();
                 } catch (e) { showError('MSE codec not supported: ' + codec); }
             });
@@ -1640,10 +1681,12 @@
                 diagMSEErrors++;
                 mseErrorTimestamps.push(Date.now());
                 if (e.message && e.message.indexOf('removed from the parent') !== -1) {
-                    diagLog('MSE ERR sourceBuffer removed — immediate restart');
-                    mseCriticalTriggered = true;
-                    mseQueue = [];
-                    restartMSE();
+                    diagLog('MSE ERR sourceBuffer removed — hanging up');
+                    if (!mseCriticalTriggered) {
+                        mseCriticalTriggered = true;
+                        mseQueue = [];
+                        hangup();
+                    }
                     return;
                 }
                 checkMSECritical();
@@ -1678,33 +1721,23 @@
             if (mseErrorTimestamps.length >= MSE_CRITICAL_THRESHOLD) {
                 mseCriticalTriggered = true;
                 mseQueue = [];
-                diagLog('MSE CRITICAL (' + mseErrorTimestamps.length + ' errors in ' + (MSE_CRITICAL_WINDOW_MS / 1000) + 's) — restarting...');
-                restartMSE();
+                diagLog('MSE CRITICAL (' + mseErrorTimestamps.length + ' errors in ' + (MSE_CRITICAL_WINDOW_MS / 1000) + 's) — hanging up');
+                hangup();
             }
         }
 
         function restartMSE() {
             if (mseRestarting) return; // уже в процессе рестарта
-            if (mseRestartCount >= MSE_MAX_RESTARTS) {
-                diagLog('MSE RESTART limit reached (' + MSE_MAX_RESTARTS + ')');
-                if (mseSetupTimer) { clearTimeout(mseSetupTimer); mseSetupTimer = null; }
-                showError('Video playback error. Try restarting the call or press \uD83D\uDCBB to retry.');
-                return;
-            }
-            mseRestartCount++;
             mseRestarting = true;
-            diagLog('MSE RESTART attempt #' + mseRestartCount);
-
-            // Просим пир перезапустить запись (новый init segment)
-            if (wsConnected && ws && ws.readyState === WebSocket.OPEN) {
-                try { ws.send('restart_recorder'); } catch(e) {}
-            }
+            diagLog('MSE RESTART (planned — codec/video change)');
 
             // Очистка старого MSE
             mseReady = false;
             firstAppendDone = false;
+            mseCriticalTriggered = false;
             mseErrorTimestamps = [];
             mseQueue = [];
+            mseWaitingForInit = true;
 
             if (mediaSource) {
                 try { mediaSource.endOfStream(); } catch(e) {}
@@ -1715,14 +1748,17 @@
             sourceBuffer = null;
             mediaSource = null;
 
-            // Пересоздаём с задержкой 500мс
+            // Страховочный таймаут: если init segment не пришёл за 3 секунды —
+            // создать MSE с известным кодеком (как при начале звонка)
             mseSetupTimer = setTimeout(function() {
                 mseSetupTimer = null;
-                if (!isActive) { mseRestarting = false; return; }
-                setupMSE();
-                // Снимаем блокировку через 2 секунды после setup (чтобы sourceBuffer успел открыться и получить данные)
-                setTimeout(function() { mseRestarting = false; }, 2000);
-            }, 500);
+                if (!isActive) { mseRestarting = false; mseWaitingForInit = false; return; }
+                if (mseWaitingForInit) {
+                    mseWaitingForInit = false;
+                    diagLog('MSE timeout — creating MSE with known codec');
+                    setupMSE();
+                }
+            }, 3000);
         }
 
         // ============= MediaRecorder =============

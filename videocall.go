@@ -460,7 +460,7 @@ func handleCallWS(w http.ResponseWriter, r *http.Request) {
 
 	// На десктопе: запускаем Go sender (захват камеры/микрофона через mediadevices)
 	// Запускаем в горутине — он дождётся settings пира перед захватом медиа
-	if !isMobile && !goSenderActive {
+	if !(isMobile || asMobile) && !goSenderActive {
 		go func() {
 			if err := startGoSender(roomID, peerID, room); err != nil {
 				log.Debugf("GoSender start failed: %v", err)
@@ -555,7 +555,7 @@ func handleCallWS(w http.ResponseWriter, r *http.Request) {
 			}
 			// На десктопе: различаем локального пира (direct #1, goSender=true)
 			// от удалённого пира (через прокси, goSender=false)
-			if !isMobile && msg != nil && msg["cmd"] == "settings" {
+			if !(isMobile || asMobile) && msg != nil && msg["cmd"] == "settings" {
 				if isLocal, _ := msg["goSender"].(bool); isLocal {
 					// Настройки от ЛОКАЛЬНОГО браузера (direct #1)
 					handleLocalPeerSettingsForGoSender(msg, roomID, peerID, room)
