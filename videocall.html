@@ -272,33 +272,33 @@
             <div class="controls-panel pos-right" id="controlsPanel">
                 <!-- Ряд 1: Fit, ⬚, ❌ -->
                 <div class="controls-row">
-                    <button class="ctrl-btn pip-move pip-move-left" id="pipMoveLeft" title="Move left">◀</button>
-                    <button class="ctrl-btn fit" id="fitHalfBtn" title="Half Size">/2</button>
-                    <button class="ctrl-btn fit" id="fit1to1Btn" title="1:1">1</button>
-                    <button class="ctrl-btn fit" id="fit2xBtn" title="2x Zoom">×2</button>
-                    <button class="ctrl-btn fit active" id="fitContainBtn" title="Fit">💡</button>
-                    <button class="ctrl-btn fullscreen off" id="fullscreenBtn" title="Fullscreen">☐</button>
-                    <button class="ctrl-btn hangup" id="hangupBtn" title="Hangup">❌</button>
-                    <button class="ctrl-btn pip-move pip-move-right" id="pipMoveRight" title="Move right">▶</button>
+                    <button type="button" class="ctrl-btn pip-move pip-move-left" id="pipMoveLeft" title="Move left">◀</button>
+                    <button type="button" class="ctrl-btn fit" id="fitHalfBtn" title="Half Size">/2</button>
+                    <button type="button" class="ctrl-btn fit" id="fit1to1Btn" title="1:1">1</button>
+                    <button type="button" class="ctrl-btn fit" id="fit2xBtn" title="2x Zoom">×2</button>
+                    <button type="button" class="ctrl-btn fit active" id="fitContainBtn" title="Fit">💡</button>
+                    <button type="button" class="ctrl-btn fullscreen off" id="fullscreenBtn" title="Fullscreen">☐</button>
+                    <button type="button" class="ctrl-btn hangup" id="hangupBtn" title="Hangup">❌</button>
+                    <button type="button" class="ctrl-btn pip-move pip-move-right" id="pipMoveRight" title="Move right">▶</button>
                 </div>
                 <!-- Ряд 2: 💻 VP8 H264 + мегапиксельный множитель для запроса пиру -->
                 <div class="controls-row">
-                    <button class="ctrl-btn screen" id="remoteScreenBtn" title="Remote Video">💻</button>
-                    <button class="ctrl-btn codec" id="vp8Btn" title="VP8">VP8</button>
-                    <button class="ctrl-btn codec" id="h264Btn" title="H.264">AVC</button>
-                    <button class="ctrl-btn codec mpx" id="mpx12Btn" title="0.5 megapixels">.5</button>
-                    <button class="ctrl-btn codec mpx" id="mpx15Btn" title="0.2 megapixels">.2</button>
-                    <button class="ctrl-btn codec mpx active" id="mpx110Btn" title="0.1 megapixels">.1</button>
-                    <button class="ctrl-btn codec mpx" id="mpx120Btn" title="0.05 megapixels">.05</button>
+                    <button type="button" class="ctrl-btn screen" id="remoteScreenBtn" title="Remote Video">💻</button>
+                    <button type="button" class="ctrl-btn codec" id="vp8Btn" title="VP8">VP8</button>
+                    <button type="button" class="ctrl-btn codec" id="h264Btn" title="H.264">AVC</button>
+                    <button type="button" class="ctrl-btn codec mpx" id="mpx12Btn" title="0.5 megapixels">.5</button>
+                    <button type="button" class="ctrl-btn codec mpx" id="mpx15Btn" title="0.2 megapixels">.2</button>
+                    <button type="button" class="ctrl-btn codec mpx active" id="mpx110Btn" title="0.1 megapixels">.1</button>
+                    <button type="button" class="ctrl-btn codec mpx" id="mpx120Btn" title="0.05 megapixels">.05</button>
                 </div>
                 <!-- Ряд 3: 🔈 Opus AAC EC NS AGC -->
                 <div class="controls-row">
-                    <button class="ctrl-btn speaker" id="remoteMuteBtn" title="Remote Audio">🔈</button>
-                    <button class="ctrl-btn codec" id="opusBtn" title="Opus">Opus</button>
-                    <button class="ctrl-btn codec" id="aacBtn" title="AAC">AAC</button>
-                    <button class="ctrl-btn codec" id="ecBtn" title="Echo Cancellation">EC</button>
-                    <button class="ctrl-btn codec" id="nsBtn" title="Noise Suppression">NS</button>
-                    <button class="ctrl-btn codec" id="agcBtn" title="Auto Gain Control">AGC</button>
+                    <button type="button" class="ctrl-btn speaker" id="remoteMuteBtn" title="Remote Audio">🔈</button>
+                    <button type="button" class="ctrl-btn codec" id="opusBtn" title="Opus">Opus</button>
+                    <button type="button" class="ctrl-btn codec" id="aacBtn" title="AAC">AAC</button>
+                    <button type="button" class="ctrl-btn codec" id="ecBtn" title="Echo Cancellation">EC</button>
+                    <button type="button" class="ctrl-btn codec" id="nsBtn" title="Noise Suppression">NS</button>
+                    <button type="button" class="ctrl-btn codec" id="agcBtn" title="Auto Gain Control">AGC</button>
                 </div>
             </div>
             <div class="waiting-overlay hidden" id="waitingOverlay">
@@ -309,12 +309,12 @@
                 <div class="res-label" id="remoteResLabel"></div>
                 <div class="res-label" id="pipResLabel"></div>
                 <div class="go-sender-wrap">
-                    <button class="ctrl-btn go-sender" id="goSenderBtn" title="Toggle Go/Browser sender" style="display:none">⏸️</button>
+                    <button type="button" class="ctrl-btn go-sender" id="goSenderBtn" title="Toggle Go/Browser sender" style="display:none">⏸️</button>
                 </div>
                 <video id="localVideo" autoplay muted playsinline></video>
                 <div class="pip-controls" id="pipControls">
-                    <button class="ctrl-btn mic" id="micBtn" title="Mic">🎤</button>
-                    <button class="ctrl-btn cam" id="camBtn" title="Cam">📷</button>
+                    <button type="button" class="ctrl-btn mic" id="micBtn" title="Mic">🎤</button>
+                    <button type="button" class="ctrl-btn cam" id="camBtn" title="Cam">📷</button>
                 </div>
             </div>
         </div>
@@ -355,6 +355,16 @@
         var agcBtn = document.getElementById('agcBtn');
         var goSenderBtn = document.getElementById('goSenderBtn');
 
+        function getBrowserTag() {
+            var ua = navigator.userAgent;
+            var m = ua.match(/Chrome\/(\d+)/);
+            if (m) return 'Chrome_' + m[1];
+            m = ua.match(/Firefox\/(\d+)/);
+            if (m) return 'Firefox_' + m[1];
+            m = ua.match(/Safari\/(\d+)/);
+            if (m) return 'Safari_' + m[1];
+            return 'Unknown';
+        }
         var _chatUserId = localStorage.getItem('chatUserId') || 'user_' + Math.random().toString(36).substr(2, 9);
         localStorage.setItem('chatUserId', _chatUserId);
 
@@ -406,7 +416,7 @@
         }
 
         function saveSettings() {
-            localStorage.setItem('vc2', JSON.stringify(S));
+            try { localStorage.setItem('vc2', JSON.stringify(S)); } catch(e) {}
         }
 
         function applySettings() {
@@ -450,6 +460,10 @@
             if (!wsConnected || !ws || ws.readyState !== WebSocket.OPEN) return;
             var vt = localStream ? localStream.getVideoTracks()[0] : null;
             var vs = vt ? vt.getSettings() : {};
+            // Измеряем MSE-контейнер — окно, в котором пир будет показывать наше видео
+            var mainContainer = document.querySelector('.video-container.main-video');
+            var dw = mainContainer ? mainContainer.clientWidth : 0;
+            var dh = mainContainer ? mainContainer.clientHeight : 0;
             ws.send(JSON.stringify({
                 cmd: 'settings',
                 audio: S.audio,
@@ -469,7 +483,9 @@
                 width: vs.width || 0,
                 height: vs.height || 0,
                 frameRate: vs.frameRate || getMinFrameRate() || 0,
-                goSender: S.goSender
+                goSender: S.goSender,
+                displayW: dw,
+                displayH: dh
             }));
         }
 
@@ -521,6 +537,7 @@
 
         var mediaSource = null;
         var sourceBuffer = null;
+        var MAX_MSE_QUEUE = 50;
         var mseQueue = [];
         var mseReady = false;
         var negotiatedCodec = '';
@@ -544,9 +561,11 @@
         var mseRestarting = false;
         var mseWaitingForInit = false;
         var lastHandledMpx = -1; // debounce: последний обработанный mpx пира
+        var peerDisplayW = 0; // ширина MSE-окна пира (для аспект-соотношения)
+        var peerDisplayH = 0; // высота MSE-окна пира (для аспект-соотношения)
 
         // Remote video fit modes: 0=fit, 1=1:1, 2=1:2, 3=2:1
-        var remoteFitMode = parseInt(localStorage.getItem('vc_fitMode')) || 0;
+        var remoteFitMode = Math.max(0, Math.min(3, parseInt(localStorage.getItem('vc_fitMode')) || 0));
         var remoteFitModes = ['', 'fit-1to1', 'fit-half', 'fit-2x'];
         var remoteFitLabels = ['Fit', '1:1', '1:2', '2:1'];
         var remoteNativeW = 0;
@@ -728,6 +747,19 @@
         updateControlsPosition();
         applySettings();
 
+        // ResizeObserver на MSE-контейнере: при ресайзе переотправляем settings пиру
+        // чтобы пир мог пересчитать аспект-соотношение для камеры
+        var resizeDebounceTimer = null;
+        var mainVideoContainer = document.querySelector('.video-container.main-video');
+        if (mainVideoContainer && typeof ResizeObserver !== 'undefined') {
+            new ResizeObserver(function() {
+                if (resizeDebounceTimer) clearTimeout(resizeDebounceTimer);
+                resizeDebounceTimer = setTimeout(function() {
+                    sendSettings();
+                }, 500);
+            }).observe(mainVideoContainer);
+        }
+
         // Десктоп: показ кнопок и курсора при движении мыши
         if (isDesktop) {
             document.addEventListener('mousemove', showAllControls);
@@ -758,12 +790,16 @@
 
         // ============= Кнопки управления =============
         // micBtn — toggle мой микрофон (реальный release/acquire)
+        var micToggling = false;
         micBtn.addEventListener('click', async function() {
-            if (!localStream) return;
+            if (!localStream || micToggling) return;
+            micToggling = true;
             S.audio = !S.audio;
             if (S.audio) {
                 // Включаем: заново получаем аудио поток
                 try {
+                    // Удаляем старые audio tracks на всякий случай
+                    localStream.getAudioTracks().forEach(function(t) { t.stop(); localStream.removeTrack(t); });
                     var newStream = await navigator.mediaDevices.getUserMedia({
                         video: false,
                         audio: { echoCancellation: S.ec, noiseSuppression: S.ns, autoGainControl: S.agc }
@@ -788,23 +824,33 @@
             } else if (recorderStarted || S.audio) {
                 restartMediaRecorder();
             }
+            micToggling = false;
         });
         // camBtn — toggle моя камера
+        var camToggling = false;
         camBtn.addEventListener('click', async function() {
-            if (!localStream) return;
+            if (!localStream || camToggling) return;
+            camToggling = true;
             S.video = !S.video;
             if (S.video) {
-                // Включаем: заново получаем видео поток
+                // Включаем: заново получаем видео поток с аспектом пира + mpx
                 try {
-                    var savedPeerW = parseInt(localStorage.getItem('vc_peerW')) || 640;
-                    var savedPeerH = parseInt(localStorage.getItem('vc_peerH')) || 480;
+                    // Удаляем старые video tracks на всякий случай
+                    localStream.getVideoTracks().forEach(function(t) { t.stop(); localStream.removeTrack(t); });
+                    var camAspect = 4 / 3;
+                    var camCaps = getCameraCapabilities();
+                    if (camCaps) camAspect = camCaps.maxW / camCaps.maxH;
+                    if (peerDisplayW > 0 && peerDisplayH > 0) {
+                        camAspect = peerDisplayW / peerDisplayH;
+                    }
+                    var camR = applyMpx(camAspect >= 1 ? camAspect : 1, camAspect >= 1 ? 1 : camAspect, S.mpx);
                     var newStream = await navigator.mediaDevices.getUserMedia({
-                        video: addFrameRateConstraint({ width: { ideal: savedPeerW }, height: { ideal: savedPeerH }, facingMode: 'user' }),
+                        video: addFrameRateConstraint({ width: { ideal: camR.w }, height: { ideal: camR.h }, aspectRatio: { ideal: camAspect }, facingMode: 'user' }),
                         audio: false
                     });
                     newStream.getVideoTracks().forEach(function(t) { localStream.addTrack(t); });
                     localVideo.srcObject = localStream;
-                    diagLog('CAM re-acquired');
+                    diagLog('CAM re-acquired with aspect ' + camAspect.toFixed(2) + ' res=' + camR.w + 'x' + camR.h);
                 } catch(e) {
                     diagLog('CAM re-acquire failed: ' + e.message);
                     S.video = false;
@@ -824,6 +870,7 @@
                 restartMediaRecorder();
             }
             updateResLabels();
+            camToggling = false;
         });
         // remoteMuteBtn — toggle хочу ли я аудио от пира
         remoteMuteBtn.addEventListener('click', function(e) {
@@ -958,6 +1005,10 @@
                     }
                 }
             } catch (e) {}
+            // Безусловный play() — страховка после MSE restart на мобильных
+            if (remoteVideo.paused && firstAppendDone) {
+                remoteVideo.play().catch(function(){});
+            }
         }, 2000);
 
         // ============= Кодеки — строим из зелёных кнопок =============
@@ -1072,15 +1123,10 @@
         // ============= Инициализация =============
         async function init() {
             try {
-                var savedPeerW = parseInt(localStorage.getItem('vc_peerW')) || 0;
-                var savedPeerH = parseInt(localStorage.getItem('vc_peerH')) || 0;
-                var W = Math.min(Math.floor(window.innerWidth * 0.8), 1280);
-                var H = Math.min(Math.floor(W * 3 / 4), 720);
-                if (savedPeerW > 0 && savedPeerH > 0) {
-                    W = Math.min(W, savedPeerW);
-                    H = Math.min(H, savedPeerH);
-                    diagLog('MEM peer=' + savedPeerW + 'x' + savedPeerH + ' fit=' + remoteFitLabels[remoteFitMode]);
-                }
+                // Фаза 1: getUserMedia с фолбэк-аспектом 4:3 и mpx
+                var initR = applyMpx(4, 3, S.mpx);
+                var W = initR.w;
+                var H = initR.h;
 
                 localStream = await navigator.mediaDevices.getUserMedia({
                     video: addFrameRateConstraint({ width: { ideal: W }, height: { ideal: H }, facingMode: 'user' }),
@@ -1092,45 +1138,42 @@
                 });
                 localVideo.srcObject = localStream;
 
-                // Логируем capabilities камеры
+                // Фаза 2: уточняем разрешение по нативному аспекту камеры + mpx
                 var camCaps = getCameraCapabilities();
-                if (camCaps) {
-                    diagLog('CAM caps: ' + camCaps.minW + '-' + camCaps.maxW + 'x' + camCaps.minH + '-' + camCaps.maxH + ' step=' + camCaps.stepW + 'x' + camCaps.stepH);
-                } else {
-                    diagLog('CAM caps: NOT AVAILABLE (getCapabilities unsupported)');
-                }
                 var vtInit = localStream.getVideoTracks()[0];
                 if (vtInit) {
                     var vsInit = vtInit.getSettings();
                     diagLog('CAM init settings: ' + vsInit.width + 'x' + vsInit.height + ' fps=' + (vsInit.frameRate || 'n/a'));
+
+                    // Определяем нативный аспект камеры
+                    var initAspect = 4 / 3;
+                    if (camCaps && camCaps.maxW > 0 && camCaps.maxH > 0) {
+                        initAspect = camCaps.maxW / camCaps.maxH;
+                        diagLog('CAM caps: ' + camCaps.minW + '-' + camCaps.maxW + 'x' + camCaps.minH + '-' + camCaps.maxH + ' step=' + camCaps.stepW + 'x' + camCaps.stepH + ' aspect=' + initAspect.toFixed(2));
+                    } else if (vsInit.width && vsInit.height) {
+                        initAspect = vsInit.width / vsInit.height;
+                        diagLog('CAM caps: NOT AVAILABLE, using settings aspect=' + initAspect.toFixed(2));
+                    } else {
+                        diagLog('CAM caps: NOT AVAILABLE, using fallback aspect=' + initAspect.toFixed(2));
+                    }
+
+                    // Пересчитываем разрешение по нативному аспекту + mpx
+                    var initR2 = applyMpx(initAspect >= 1 ? initAspect : 1, initAspect >= 1 ? 1 : initAspect, S.mpx);
+                    W = initR2.w;
+                    H = initR2.h;
+
+                    // Применяем уточнённое разрешение
+                    try {
+                        await vtInit.applyConstraints(addFrameRateConstraint({ width: { ideal: W }, height: { ideal: H }, aspectRatio: { ideal: initAspect } }));
+                        vsInit = vtInit.getSettings();
+                        diagLog('CAM init aspect=' + initAspect.toFixed(2) + ' res=' + vsInit.width + 'x' + vsInit.height);
+                    } catch(e) { diagLog('CAM aspect apply failed: ' + e.message); }
+
                     if (typeof vtInit.getCapabilities === 'function') {
                         try {
                             var fullCaps = vtInit.getCapabilities();
                             diagLog('CAM full capabilities: ' + JSON.stringify(fullCaps));
                         } catch(e) { diagLog('CAM getCapabilities error: ' + e.message); }
-                    }
-                }
-
-                // Уточняем разрешение до максимума камеры (если capabilities доступны)
-                if (camCaps && camCaps.maxW > 0 && camCaps.maxH > 0) {
-                    var maxW = camCaps.maxW;
-                    var maxH = camCaps.maxH;
-                    // Ограничиваем savedPeer если есть
-                    if (savedPeerW > 0 && savedPeerH > 0) {
-                        maxW = Math.min(maxW, savedPeerW);
-                        maxH = Math.min(maxH, savedPeerH);
-                    }
-                    // Ограничиваем разумным максимумом
-                    maxW = Math.min(maxW, 1280);
-                    maxH = Math.min(maxH, 720);
-                    var curS = vtInit ? vtInit.getSettings() : {};
-                    if (curS.width < maxW - 32 || curS.height < maxH - 32) {
-                        diagLog('CAM upgrade: ' + curS.width + 'x' + curS.height + ' -> ' + maxW + 'x' + maxH);
-                        try {
-                            await vtInit.applyConstraints(addFrameRateConstraint({ width: { ideal: maxW }, height: { ideal: maxH } }));
-                            var ns = vtInit.getSettings();
-                            diagLog('CAM upgraded to: ' + ns.width + 'x' + ns.height + ' fps=' + (ns.frameRate || 'n/a'));
-                        } catch(e) { diagLog('CAM upgrade failed: ' + e.message); }
                     }
                 }
 
@@ -1144,6 +1187,8 @@
                 if (isCreator) {
                     myPeerID = 'host';
                     remotePeerID = 'guest';
+                    _chatUserId = myPeerID + '_' + getBrowserTag();
+                    localStorage.setItem('chatUserId', _chatUserId);
                     waitingOverlay.classList.remove('hidden');
                     waitingText.textContent = 'Waiting for peer to join...';
                     var joined = null;
@@ -1157,6 +1202,8 @@
                 } else {
                     myPeerID = 'guest';
                     remotePeerID = 'host';
+                    _chatUserId = myPeerID + '_' + getBrowserTag();
+                    localStorage.setItem('chatUserId', _chatUserId);
                     await joinRoom();
                 }
                 await startCall();
@@ -1223,7 +1270,12 @@
             var videoTracks = localStream.getVideoTracks();
             if (videoTracks.length === 0) return;
             try {
-                await videoTracks[0].applyConstraints(addFrameRateConstraint({ width: { ideal: dw }, height: { ideal: dh } }));
+                var constraints = addFrameRateConstraint({ width: { ideal: dw }, height: { ideal: dh } });
+                // aspectRatio помогает мобильным камерам понять нужную ориентацию
+                if (dw > 0 && dh > 0) {
+                    constraints.aspectRatio = { ideal: dw / dh };
+                }
+                await videoTracks[0].applyConstraints(constraints);
                 var s = videoTracks[0].getSettings();
                 diagLog('RES applied peer desire ' + s.width + 'x' + s.height);
                 updateResLabels();
@@ -1271,13 +1323,20 @@
 
         // Находит максимальное нативное разрешение <= mpx мегапикселей
         // Бинарный поиск (дихотомия) по getCapabilities, fallback на applyMpx
-        function findBestResolution(mpx) {
+        // dispW, dispH — размеры окна пира (MSE-контейнера), используются для аспект-соотношения
+        function findBestResolution(mpx, dispW, dispH) {
             var caps = getCameraCapabilities();
             var vt = localStream ? localStream.getVideoTracks()[0] : null;
             if (!vt) return null;
 
             if (caps) {
-                var aspect = caps.maxW / caps.maxH;
+                // Аспект пира имеет приоритет; фолбэк — аспект камеры
+                var aspect;
+                if (dispW > 0 && dispH > 0) {
+                    aspect = dispW / dispH;
+                } else {
+                    aspect = caps.maxW / caps.maxH;
+                }
                 var maxPixels = mpx * 1000000;
                 var lo = caps.minW, hi = caps.maxW;
                 var bestW = caps.minW, bestH = caps.minH;
@@ -1311,13 +1370,33 @@
                 // Чётность для кодирования
                 if (bestW % 2 !== 0) bestW = Math.max(caps.minW, bestW - caps.stepW);
                 if (bestH % 2 !== 0) bestH = Math.max(caps.minH, bestH - caps.stepH);
+                // Защита от инверсии аспекта при clamp
+                if (aspect > 1 && bestW <= bestH) {
+                    var tmp = bestW; bestW = bestH; bestH = tmp;
+                    if (bestW % 2 !== 0) bestW = Math.max(caps.minW, bestW - caps.stepW);
+                    if (bestH % 2 !== 0) bestH = Math.max(caps.minH, bestH - caps.stepH);
+                } else if (aspect < 1 && bestH <= bestW) {
+                    var tmp = bestW; bestW = bestH; bestH = tmp;
+                    if (bestW % 2 !== 0) bestW = Math.max(caps.minW, bestW - caps.stepW);
+                    if (bestH % 2 !== 0) bestH = Math.max(caps.minH, bestH - caps.stepH);
+                }
                 return { w: bestW, h: bestH };
             }
 
             // Fallback: getSettings() → applyMpx
+            // Цепочка: аспект пира → аспект камеры → хардкод 4:3
             var s = vt.getSettings();
-            var aspectW = s.width || window.innerWidth;
-            var aspectH = s.height || window.innerHeight;
+            var aspectW, aspectH;
+            if (dispW > 0 && dispH > 0) {
+                aspectW = dispW;
+                aspectH = dispH;
+            } else if (s.width > 0 && s.height > 0) {
+                aspectW = s.width;
+                aspectH = s.height;
+            } else {
+                aspectW = 4;
+                aspectH = 3;
+            }
             var r = applyMpx(aspectW, aspectH, mpx);
             return r;
         }
@@ -1338,6 +1417,21 @@
             peerSettings = msg;
             if (!isActive || !localStream) return;
 
+            // Извлекаем размеры MSE-окна пира для аспект-соотношения
+            var newPeerDisplayW = 0, newPeerDisplayH = 0;
+            if (msg.displayW > 0) newPeerDisplayW = Math.round(msg.displayW);
+            if (msg.displayH > 0) newPeerDisplayH = Math.round(msg.displayH);
+
+            var displayChanged = false;
+            if (newPeerDisplayW > 0 && newPeerDisplayH > 0) {
+                if (peerDisplayW !== newPeerDisplayW || peerDisplayH !== newPeerDisplayH) {
+                    displayChanged = true;
+                    diagLog('PEER display changed: ' + peerDisplayW + 'x' + peerDisplayH + ' → ' + newPeerDisplayW + 'x' + newPeerDisplayH);
+                }
+                peerDisplayW = newPeerDisplayW;
+                peerDisplayH = newPeerDisplayH;
+            }
+
             // Negotiate codec если у пира есть recordCodecs/playCodecs
             if (msg.recordCodecs && msg.playCodecs) {
                 var myPlayCodecs = detectSupportedCodecs();
@@ -1357,9 +1451,9 @@
 
             // Пир хочет определённое разрешение от меня (через mpx)
             if (msg.mpx > 0) {
-                var best = findBestResolution(msg.mpx);
+                var best = findBestResolution(msg.mpx, peerDisplayW, peerDisplayH);
                 if (best && best.w > 0 && best.h > 0) {
-                    diagLog('PEER wants ' + msg.mpx + 'mpx → best=' + best.w + 'x' + best.h);
+                    diagLog('PEER wants ' + msg.mpx + 'mpx → best=' + best.w + 'x' + best.h + ' (display=' + peerDisplayW + 'x' + peerDisplayH + ')');
                     applyDesiredResolution(best.w, best.h);
                 }
             }
@@ -1388,27 +1482,22 @@
                 resolutionChanged = true;
             }
 
-            // Проверяем изменился ли входящий кодек → рестарт MSE
-            var incomingCodecChanged = false;
+            // Обновляем incomingCodec из настроек пира (fallback — основной источник кодека — инит-сегмент)
             if (msg.recordCodecs && msg.playCodecs) {
                 var myPlay = detectSupportedCodecs();
                 var newInc = negotiateCodecClient(msg.recordCodecs, myPlay);
                 if (newInc && newInc !== incomingCodec) {
-                    incomingCodecChanged = true;
-                    diagLog('MSE restart: incoming codec changed ' + codecDisplayName(incomingCodec) + ' → ' + codecDisplayName(newInc));
+                    diagLog('incoming codec updated: ' + codecDisplayName(incomingCodec) + ' → ' + codecDisplayName(newInc));
                     incomingCodec = newInc;
                 }
             }
 
-            // Проверяем изменилось ли состояние видео пира (камера вкл/выкл)
-            var peerVideoChanged = false;
+            // Обновляем incomingCodec при изменении состояния видео пира (камера вкл/выкл)
             if (prev) {
                 var prevPeerVideo = prev.video !== false;
                 var curPeerVideo = msg.video !== false;
                 if (prevPeerVideo !== curPeerVideo) {
-                    peerVideoChanged = true;
-                    diagLog('MSE restart: peer video changed ' + prevPeerVideo + ' → ' + curPeerVideo);
-                    // Обновляем incomingCodec под новый формат потока
+                    diagLog('peer video changed: ' + prevPeerVideo + ' → ' + curPeerVideo);
                     if (!curPeerVideo) {
                         // Камера пира выключена — будет audio-only поток
                         var audioCodecs = ['audio/webm;codecs="opus"', 'audio/mp4;codecs="mp4a.40.2"', 'audio/webm'];
@@ -1418,7 +1507,7 @@
                                 break;
                             }
                         }
-                        diagLog('MSE incoming codec set to audio-only: ' + codecDisplayName(incomingCodec));
+                        diagLog('incoming codec set to audio-only: ' + codecDisplayName(incomingCodec));
                     } else {
                         // Камера пира включена — пересчитываем через negotiation
                         if (msg.recordCodecs) {
@@ -1426,21 +1515,14 @@
                             var newInc = negotiateCodecClient(msg.recordCodecs, myPlay);
                             if (newInc) incomingCodec = newInc;
                         }
-                        diagLog('MSE incoming codec set to video: ' + codecDisplayName(incomingCodec));
+                        diagLog('incoming codec set to video: ' + codecDisplayName(incomingCodec));
                     }
                 }
             }
 
-            if ((incomingCodecChanged || peerVideoChanged) && (mseReady || mseRestarting)) {
-                if (mseRestarting) {
-                    diagLog('MSE restart: cancelling previous restart for codec/video change');
-                    if (mseSetupTimer) { clearTimeout(mseSetupTimer); mseSetupTimer = null; }
-                    mseRestarting = false;
-                    mseWaitingForInit = false;
-                }
-                diagLog('MSE restart: codec=' + incomingCodecChanged + ' peerVideo=' + peerVideoChanged);
-                restartMSE();
-            }
+            // MSE restart is now triggered by init segment detection in handleIncomingChunk,
+            // not by settings changes. Codec is detected from the init segment bytes.
+            // incomingCodec is still updated above as a fallback for setupMSE().
 
             // Проверяем изменился ли состав источников/приёмников
             var compositionChanged = false;
@@ -1464,10 +1546,10 @@
                     mediaRecorder.stop();
                     recorderStarted = false;
                 }
-            } else if (codecChanged || resolutionChanged || compositionChanged || wasStopped) {
+            } else if (codecChanged || resolutionChanged || compositionChanged || wasStopped || displayChanged) {
                 if (resolutionChanged) lastHandledMpx = msg.mpx;
                 diagLog('REC restart: codec=' + codecChanged + ' res=' + resolutionChanged +
-                    ' comp=' + compositionChanged + ' stopped=' + wasStopped);
+                    ' comp=' + compositionChanged + ' stopped=' + wasStopped + ' display=' + displayChanged);
                 restartMediaRecorder();
             }
         }
@@ -1537,6 +1619,20 @@
             lastReceivedIndex++;
             if (mseCriticalTriggered) return;
 
+            // If init segment arrives — detect codec and restart MSE if needed
+            if (isInitSegment(data)) {
+                var detectedCodec = detectCodecFromInitSegment(data);
+                if (detectedCodec) {
+                    diagLog('MSE init segment codec detected: ' + codecDisplayName(detectedCodec));
+                    incomingCodec = detectedCodec;
+                }
+                if (mseReady && !mseRestarting) {
+                    diagLog('MSE unexpected init segment (' + data.byteLength + ' bytes) — restarting MSE');
+                    restartMSE();
+                    // restartMSE() sets mseWaitingForInit=true — fall through to waiting path below
+                }
+            }
+
             // During MSE restart: discard stale chunks until init segment arrives
             if (mseWaitingForInit) {
                 if (!isInitSegment(data)) {
@@ -1550,6 +1646,11 @@
             }
 
             mseQueue.push(data);
+            // Защита от переполнения очереди — сбрасываем старые чанки
+            if (mseQueue.length > MAX_MSE_QUEUE) {
+                diagLog('MSE queue overflow (' + mseQueue.length + '), dropping oldest');
+                while (mseQueue.length > MAX_MSE_QUEUE / 2) mseQueue.shift();
+            }
             if (mseReady) processMSEQueue();
         }
 
@@ -1621,9 +1722,73 @@
             return false;
         }
 
+        // Detect codec from init segment bytes — used to set incomingCodec before creating MSE
+        function detectCodecFromInitSegment(data) {
+            if (!data || data.byteLength < 8) return null;
+            var v = new Uint8Array(data);
+
+            // WebM/Matroska: EBML header 0x1A 0x45 0xDF 0xA3
+            // Scan for CodecID element values: V_VP8, V_VP9, A_OPUS, A_VORBIS
+            if (v[0] === 0x1A && v[1] === 0x45 && v[2] === 0xDF && v[3] === 0xA3) {
+                var hasVP8 = false, hasVP9 = false, hasOpus = false, hasVorbis = false;
+                for (var i = 0; i < v.length - 7; i++) {
+                    // V_VP8: 0x56 0x5F 0x56 0x50 0x38
+                    if (!hasVP8 && v[i] === 0x56 && v[i+1] === 0x5F && v[i+2] === 0x56 && v[i+3] === 0x50 && v[i+4] === 0x38) hasVP8 = true;
+                    // V_VP9: 0x56 0x5F 0x56 0x50 0x39
+                    if (!hasVP9 && v[i] === 0x56 && v[i+1] === 0x5F && v[i+2] === 0x56 && v[i+3] === 0x50 && v[i+4] === 0x39) hasVP9 = true;
+                    // A_OPUS: 0x41 0x5F 0x4F 0x50 0x55 0x53
+                    if (!hasOpus && v[i] === 0x41 && v[i+1] === 0x5F && v[i+2] === 0x4F && v[i+3] === 0x50 && v[i+4] === 0x55 && v[i+5] === 0x53) hasOpus = true;
+                    // A_VORBIS: 0x41 0x5F 0x56 0x4F 0x52 0x42 0x49 0x53
+                    if (!hasVorbis && v[i] === 0x41 && v[i+1] === 0x5F && v[i+2] === 0x56 && v[i+3] === 0x4F && v[i+4] === 0x52 && v[i+5] === 0x42 && v[i+6] === 0x49 && v[i+7] === 0x53) hasVorbis = true;
+                    if ((hasVP8 || hasVP9) && (hasOpus || hasVorbis)) break;
+                }
+                // VP8+Opus is the primary combo in this project; VP9+Opus as fallback
+                if (hasVP8 && hasOpus) return 'video/webm;codecs="vp8,opus"';
+                if (hasVP9 && hasOpus) return 'video/webm;codecs="vp9,opus"';
+                if (hasVP8 && hasVorbis) return 'video/webm;codecs="vp8,vorbis"';
+                if (hasVP9 && hasVorbis) return 'video/webm;codecs="vp9,vorbis"';
+                if (hasVP8) return 'video/webm;codecs="vp8"';
+                if (hasVP9) return 'video/webm;codecs="vp9"';
+                if (hasOpus) return 'audio/webm;codecs="opus"';
+                if (hasVorbis) return 'audio/webm;codecs="vorbis"';
+                return 'video/webm';
+            }
+
+            // MP4/ISOBMFF: ftyp box at bytes 4-7
+            if (v[4] === 0x66 && v[5] === 0x74 && v[6] === 0x79 && v[7] === 0x70) {
+                var videoCodec = null, audioCodec = null;
+                for (var i = 0; i < v.length - 3; i++) {
+                    // vp08 (VP8 in MP4)
+                    if (!videoCodec && v[i] === 0x76 && v[i+1] === 0x70 && v[i+2] === 0x30 && v[i+3] === 0x38) videoCodec = 'vp08';
+                    // vp09 (VP9 in MP4)
+                    if (!videoCodec && v[i] === 0x76 && v[i+1] === 0x70 && v[i+2] === 0x30 && v[i+3] === 0x39) videoCodec = 'vp09';
+                    // avc1 (H.264)
+                    if (!videoCodec && v[i] === 0x61 && v[i+1] === 0x76 && v[i+2] === 0x63 && v[i+3] === 0x31) videoCodec = 'avc1';
+                    // hvc1 / hev1 (H.265/HEVC)
+                    if (!videoCodec && v[i] === 0x68 && v[i+1] === 0x76 && v[i+2] === 0x63 && v[i+3] === 0x31) videoCodec = 'hvc1';
+                    if (!videoCodec && v[i] === 0x68 && v[i+1] === 0x65 && v[i+2] === 0x76 && v[i+3] === 0x31) videoCodec = 'hev1';
+                    // mp4a (AAC)
+                    if (!audioCodec && v[i] === 0x6D && v[i+1] === 0x70 && v[i+2] === 0x34 && v[i+3] === 0x61) audioCodec = 'mp4a.40.2';
+                    // Opus in MP4
+                    if (!audioCodec && v[i] === 0x4F && v[i+1] === 0x70 && v[i+2] === 0x75 && v[i+3] === 0x73) audioCodec = 'opus';
+                    // fLaC in MP4
+                    if (!audioCodec && v[i] === 0x66 && v[i+1] === 0x4C && v[i+2] === 0x61 && v[i+3] === 0x43) audioCodec = 'flac';
+                    if (videoCodec && audioCodec) break;
+                }
+                if (videoCodec && audioCodec) return 'video/mp4;codecs="' + videoCodec + ',' + audioCodec + '"';
+                if (videoCodec) return 'video/mp4;codecs="' + videoCodec + '"';
+                if (audioCodec) return 'audio/mp4;codecs="' + audioCodec + '"';
+                return 'video/mp4';
+            }
+
+            return null;
+        }
+
 
         function setupMSE() {
             var codec = incomingCodec || negotiatedCodec || detectCodec();
+            diagLog('MSE setup codec=' + codecDisplayName(codec) + ' muted=' + remoteVideo.muted + ' wantAudio=' + S.wantAudio);
+            try { if (remoteVideo.src && remoteVideo.src.startsWith('blob:')) URL.revokeObjectURL(remoteVideo.src); } catch(e) {}
             mediaSource = new MediaSource();
             remoteVideo.src = URL.createObjectURL(mediaSource);
             mediaSource.addEventListener('sourceopen', function() {
@@ -1666,6 +1831,7 @@
         }
 
         function processMSEQueue() {
+            if (!isActive) return;
             if (!mseReady || !sourceBuffer || sourceBuffer.updating) return;
             if (mseQueue.length === 0) return;
             var chunkData = mseQueue.shift();
@@ -1674,8 +1840,10 @@
                 diagMSEAppends++;
                 if (!firstAppendDone) {
                     firstAppendDone = true;
-                    remoteVideo.play().catch(function(e) { diagLog('PLAY failed: ' + e.message); });
-                    diagLog('PLAY starting...');
+                    diagLog('PLAY first append muted=' + remoteVideo.muted + ' volume=' + remoteVideo.volume + ' codec=' + codecDisplayName(incomingCodec));
+                    remoteVideo.play().then(function() {
+                        diagLog('PLAY OK paused=' + remoteVideo.paused);
+                    }).catch(function(e) { diagLog('PLAY failed: ' + e.message); });
                 }
             } catch (e) {
                 diagMSEErrors++;
@@ -1739,8 +1907,10 @@
             mseQueue = [];
             mseWaitingForInit = true;
 
-            if (mediaSource) {
-                try { mediaSource.endOfStream(); } catch(e) {}
+            if (mediaSource && mediaSource.readyState === 'open') {
+                try {
+                    if (sourceBuffer && !sourceBuffer.updating) mediaSource.endOfStream();
+                } catch(e) {}
             }
             try { URL.revokeObjectURL(remoteVideo.src); } catch(e) {}
             remoteVideo.removeAttribute('src');
@@ -1764,6 +1934,8 @@
         // ============= MediaRecorder =============
         function setupMediaRecorder() {
             if (!localStream) return;
+            var activeTracks = localStream.getTracks().filter(function(t) { return t.readyState === 'live'; });
+            if (activeTracks.length === 0) { diagLog('REC skipped — no live tracks'); return; }
             var videoTrack = localStream.getVideoTracks()[0];
             var settings = videoTrack ? videoTrack.getSettings() : {};
             var w = settings.width || 320;
@@ -1812,25 +1984,38 @@
 
         // ============= Сохранение состояния =============
         function saveCallState() {
-            if (remoteNativeW > 0 && remoteNativeH > 0) {
-                localStorage.setItem('vc_peerW', remoteNativeW);
-                localStorage.setItem('vc_peerH', remoteNativeH);
-            }
-            localStorage.setItem('vc_fitMode', remoteFitMode);
-            saveSettings();
+            try {
+                if (remoteNativeW > 0 && remoteNativeH > 0) {
+                    localStorage.setItem('vc_peerW', remoteNativeW);
+                    localStorage.setItem('vc_peerH', remoteNativeH);
+                }
+                localStorage.setItem('vc_fitMode', remoteFitMode);
+                saveSettings();
+            } catch(e) {}
         }
 
-        function hangup() {
+        function cleanupCall() {
             isActive = false;
-            saveCallState();
-            disconnectWS();
-            if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
-            if (localStream) localStream.getTracks().forEach(function(t) { t.stop(); });
             mseReady = false;
             mseQueue = [];
+            mseCriticalTriggered = false;
+            mseRestarting = false;
+            mseWaitingForInit = false;
+            // Очистка таймеров
+            if (controlsTimer) { clearTimeout(controlsTimer); controlsTimer = null; }
+            if (resizeDebounceTimer) { clearTimeout(resizeDebounceTimer); resizeDebounceTimer = null; }
+            if (mseSetupTimer) { clearTimeout(mseSetupTimer); mseSetupTimer = null; }
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+            if (localStream) localStream.getTracks().forEach(function(t) { t.stop(); });
             if (mediaSource && mediaSource.readyState === 'open') {
                 try { mediaSource.endOfStream(); } catch (e) {}
             }
+        }
+
+        function hangup() {
+            cleanupCall();
+            saveCallState();
+            disconnectWS();
             endCall();
             setTimeout(function() { window.close(); }, 1500);
         }
@@ -1841,11 +2026,9 @@
         }
 
         window.addEventListener('beforeunload', function() {
-            isActive = false;
+            cleanupCall();
             saveCallState();
             disconnectWS();
-            if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
-            if (localStream && !S.goSender) localStream.getTracks().forEach(function(t) { t.stop(); });
             endCall();
         });
     </script>
