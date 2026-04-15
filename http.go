@@ -726,8 +726,13 @@ func (h *WebDAVWithDirectoryListing) serveDirectoryListing(w http.ResponseWriter
 		});
 
 		// Получаем уникальный идентификатор для текущего пользователя
-		let currentUserId = localStorage.getItem('chatUserId') || 'user_' + Math.random().toString(36).substr(2, 9);
-		localStorage.setItem('chatUserId', currentUserId);
+		var chatRole = (savedHash === '#1') ? 'host' : 'guest';
+		var chatStorageKey = 'chatSessionId_' + chatRole;
+		let currentUserId = sessionStorage.getItem(chatStorageKey);
+		if (!currentUserId) {
+			currentUserId = chatRole + '_' + Math.random().toString(36).substr(2, 9);
+			sessionStorage.setItem(chatStorageKey, currentUserId);
+		}
 
 		const chatMessages = document.getElementById('chatMessages');
 		const chatInput = document.getElementById('chatInput');
