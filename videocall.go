@@ -180,6 +180,16 @@ func (r *VideoCallRoom) getLastIndex(peerID string) int64 {
 	return -1
 }
 
+// clearAllChunks очищает все чанки и индексы в комнате (вызывается при WS reconnect после reload)
+func (r *VideoCallRoom) clearAllChunks() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for peerID := range r.Chunks {
+		r.Chunks[peerID] = nil
+		delete(r.ChunkIdx, peerID)
+	}
+}
+
 // notifyPeerJoined уведомляет инициатора что второй участник подключился
 func (r *VideoCallRoom) notifyPeerJoined() {
 	r.mu.Lock()
@@ -436,6 +446,9 @@ func handleCallWS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Очищаем историю чанков — при reconnect после reload старые чанки не нужны
+	room.clearAllChunks()
+
 	// Upgrade to WebSocket
 	conn, err := wsUpgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -594,10 +607,19 @@ func handleCallEnd(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Закрываем все WS соединения перед удалением комнаты
+	// Уведомляем все пиры об отключении и закрываем WS соединения перед удалением комнаты
 	room := callStore.getRoom(roomID)
 	if room != nil {
 		room.wsMu.Lock()
+		// 1. СНАЧАЛА отправляем peer_left всем пирам
+		for _, wsc := range room.wsConns {
+			if wsc != nil {
+				wsc.mu.Lock()
+				wsc.conn.WriteMessage(websocket.TextMessage, []byte("peer_left"))
+				wsc.mu.Unlock()
+			}
+		}
+		// 2. ПОТОМ закрываем соединения
 		for _, wsc := range room.wsConns {
 			if wsc != nil {
 				wsc.mu.Lock()
