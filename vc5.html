@@ -495,12 +495,11 @@
         var mpxBtns = [mpx12Btn, mpx15Btn, mpx110Btn, mpx120Btn];
         var mpxValues = [0.5, 0.2, 0.1, 0.05];
         function setMpx(val) {
-            diagLog('SETMPX ' + S.mpx + '→' + val + ' wantVideo=' + S.wantVideo);
             S.mpx = val;
             applySettings();
             saveSettings();
             sendSettings();
-          }
+        }
         mpx12Btn.addEventListener('click', function(e) { e.stopPropagation(); setMpx(0.5); });
         mpx15Btn.addEventListener('click', function(e) { e.stopPropagation(); setMpx(0.2); });
         mpx110Btn.addEventListener('click', function(e) { e.stopPropagation(); setMpx(0.1); });
@@ -554,13 +553,11 @@
         var diagMSEAppends = 0;
         var diagMSEErrors = 0;
         var diagLastLogTime = 0;
-        var MSE_CRITICAL_THRESHOLD = 33;
+        var MSE_CRITICAL_THRESHOLD = 10;
         var MSE_CRITICAL_WINDOW_MS = 1000;
         var mseErrorTimestamps = [];
         var mseCriticalTriggered = false;
         var mseSetupTimer = null;
-        var mseRestarting = false;
-        var mseWaitingForInit = false;
         var lastHandledMpx = -1; // debounce: последний обработанный mpx пира
         var peerDisplayW = 0; // ширина MSE-окна пира (для аспект-соотношения)
         var peerDisplayH = 0; // высота MSE-окна пира (для аспект-соотношения)
@@ -598,8 +595,6 @@
             return constraints;
         }
 
-        var _lastMyResText = '';
-        var _lastPeerResText = '';
         function updateResLabels() {
             // pipResLabel — разрешение МОЕЙ камеры (PiP окно)
             var myText = '';
@@ -623,10 +618,6 @@
                 }
             }
             document.getElementById('pipResLabel').textContent = myText;
-            if (myText !== _lastMyResText && myText) {
-                diagLog('RES_LABEL my=' + myText);
-                _lastMyResText = myText;
-            }
 
             // remoteResLabel — разрешение камеры ПИРА (главное окно)
             var peerText = '';
@@ -637,10 +628,6 @@
                 }
             }
             document.getElementById('remoteResLabel').textContent = peerText;
-            if (peerText !== _lastPeerResText && peerText) {
-                diagLog('RES_LABEL peer=' + peerText);
-                _lastPeerResText = peerText;
-            }
         }
         function applyRemoteFitMode() {
             remoteVideo.classList.remove('fit-1to1', 'fit-half', 'fit-2x');
@@ -893,7 +880,6 @@
         remoteScreenBtn.addEventListener('click', function(e) {
             e.stopPropagation();
             S.wantVideo = !S.wantVideo;
-            diagLog('SCREEN toggle wantVideo=' + S.wantVideo);
             applySettings(); saveSettings(); sendSettings();
         });
         // Кодеки
@@ -1480,8 +1466,20 @@
                 }
             }
 
-            // При начальном получении настроек — не трогаем рекордер, startCall сам запустит
-            if (initial) return;
+            // При начальном получении настроек — установить incomingCodec если пир без видео
+            if (initial) {
+                if (msg.video === false) {
+                    var audioCodecs = ['audio/webm;codecs="opus"', 'audio/mp4;codecs="mp4a.40.2"', 'audio/webm'];
+                    for (var ai = 0; ai < audioCodecs.length; ai++) {
+                        if (MediaSource.isTypeSupported(audioCodecs[ai])) {
+                            incomingCodec = audioCodecs[ai];
+                            break;
+                        }
+                    }
+                    diagLog('incoming codec set to audio-only (initial): ' + codecDisplayName(incomingCodec));
+                }
+                return;
+            }
 
             // Дальнейшие изменения — рестарт рекордера при необходимости
             var codecChanged = false;
@@ -1649,30 +1647,15 @@
             lastReceivedIndex++;
             if (mseCriticalTriggered) return;
 
-            // If init segment arrives — detect codec and restart MSE if needed
+            // Init segment = пир переключил камеру → плавный перезапуск MSE
             if (isInitSegment(data)) {
                 var detectedCodec = detectCodecFromInitSegment(data);
                 if (detectedCodec) {
-                    diagLog('MSE init segment codec detected: ' + codecDisplayName(detectedCodec));
-                    incomingCodec = detectedCodec;
+                    diagLog('MSE init segment codec: ' + codecDisplayName(detectedCodec));
                 }
-                if (mseReady && !mseRestarting) {
-                    diagLog('MSE unexpected init segment (' + data.byteLength + ' bytes) — restarting MSE');
-                    restartMSE();
-                    // restartMSE() sets mseWaitingForInit=true — fall through to waiting path below
-                }
-            }
-
-            // During MSE restart: discard stale chunks until init segment arrives
-            if (mseWaitingForInit) {
-                if (!isInitSegment(data)) {
-                    diagLog('MSE discard stale chunk (' + data.byteLength + ' bytes)');
-                    return;
-                }
-                diagLog('MSE init segment arrived (' + data.byteLength + ' bytes) — creating MSE');
-                mseWaitingForInit = false;
-                if (mseSetupTimer) { clearTimeout(mseSetupTimer); mseSetupTimer = null; }
-                setupMSE();
+                restartMSE(detectedCodec);
+                mseQueue.push(data);
+                return;
             }
 
             mseQueue.push(data);
@@ -1828,8 +1811,7 @@
             mediaSource.addEventListener('sourceopen', function() {
                 try {
                     sourceBuffer = mediaSource.addSourceBuffer(codec);
-                    // sourceBuffer.mode = 'sequence';
-                    sourceBuffer.mode = 'segments';                   
+                    sourceBuffer.mode = 'sequence';
                     sourceBuffer.addEventListener('updateend', function() { onMSEUpdateEnd(); });
                     sourceBuffer.addEventListener('error', function() {
                         diagMSEErrors++;
@@ -1837,7 +1819,6 @@
                         checkMSECritical();
                     });
                     mseReady = true;
-                    mseRestarting = false;
                     mseCriticalTriggered = false;
                     if (mseQueue.length > 0) processMSEQueue();
                 } catch (e) { showError('MSE codec not supported: ' + codec); }
@@ -1930,42 +1911,32 @@
                 hangup();
             }
         }
-
-        function restartMSE() {
-            if (mseRestarting) return; // уже в процессе рестарта
-            mseRestarting = true;
-            diagLog('MSE RESTART (planned — codec/video change)');
-
-            // Очистка старого MSE
+                // restartMSE — плавный перезапуск MSE при смене кодека (вкл/выкл камеры)
+        // Без перезагрузки страницы: очищаем старый MSE, создаём новый с нужным кодеком
+        function restartMSE(newCodec) {
+            diagLog('MSE restart: switching to ' + codecDisplayName(newCodec));
             mseReady = false;
+            mseQueue = [];
             firstAppendDone = false;
             mseCriticalTriggered = false;
             mseErrorTimestamps = [];
-            mseQueue = [];
-            mseWaitingForInit = true;
-
-            if (mediaSource && mediaSource.readyState === 'open') {
+            // Очистка старого MSE
+            if (sourceBuffer) {
                 try {
-                    if (sourceBuffer && !sourceBuffer.updating) mediaSource.endOfStream();
-                } catch(e) {}
+                    if (mediaSource && mediaSource.readyState === 'open') {
+                        mediaSource.removeSourceBuffer(sourceBuffer);
+                    }
+                } catch(e) { diagLog('MSE restart removeSourceBuffer error: ' + e.message); }
+                sourceBuffer = null;
             }
-            try { URL.revokeObjectURL(remoteVideo.src); } catch(e) {}
-            remoteVideo.removeAttribute('src');
-            remoteVideo.load();
-            sourceBuffer = null;
-            mediaSource = null;
-
-            // Страховочный таймаут: если init segment не пришёл за 3 секунды —
-            // создать MSE с известным кодеком (как при начале звонка)
-            mseSetupTimer = setTimeout(function() {
-                mseSetupTimer = null;
-                if (!isActive) { mseRestarting = false; mseWaitingForInit = false; return; }
-                if (mseWaitingForInit) {
-                    mseWaitingForInit = false;
-                    diagLog('MSE timeout — creating MSE with known codec');
-                    setupMSE();
-                }
-            }, 3000);
+            if (mediaSource) {
+                try {
+                    if (mediaSource.readyState === 'open') mediaSource.endOfStream();
+                } catch(e) {}
+                mediaSource = null;
+            }
+            if (newCodec) incomingCodec = newCodec;
+            setupMSE();
         }
 
         // ============= MediaRecorder =============
@@ -2044,8 +2015,6 @@
             mseReady = false;
             mseQueue = [];
             mseCriticalTriggered = false;
-            mseRestarting = false;
-            mseWaitingForInit = false;
             // Очистка таймеров
             if (controlsTimer) { clearTimeout(controlsTimer); controlsTimer = null; }
             if (resizeDebounceTimer) { clearTimeout(resizeDebounceTimer); resizeDebounceTimer = null; }
