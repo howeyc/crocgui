@@ -56,19 +56,27 @@
         .video-container video.fit-2x {
             transform: scale(2);
         }
-        /* Панель управления — 3 ряда, скрыта по умолчанию */
-        .controls-panel {
+        /* Обёртка: метка разрешения + панель кнопок */
+        .controls-area {
             position: absolute;
-            top: 8px;
+            top: 1px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+            z-index: 15;
+            transition: right 0.3s ease, left 0.3s ease;
+        }
+        .controls-area.pos-right { right: 8px; left: auto; }
+        .controls-area.pos-left { left: 8px; right: auto; }
+        /* Панель кнопок — 3 ряда, скрыта по умолчанию */
+        .controls-panel {
             display: flex;
             flex-direction: column;
             gap: 4px;
-            z-index: 15;
             opacity: 0;
-            transition: opacity 0.3s ease, right 0.3s ease, left 0.3s ease;
+            transition: opacity 0.3s ease;
         }
-        .controls-panel.pos-right { right: 8px; left: auto; }
-        .controls-panel.pos-left { left: 8px; right: auto; }
         .controls-row {
             display: flex;
             gap: 4px;
@@ -126,12 +134,11 @@
         .pip-container .go-sender-wrap .ctrl-btn.go-sender.off {
             background: rgba(100, 100, 100, 0.85);
         }
-        .res-labels-row {
+        #pipResLabel {
             position: absolute;
-            bottom: calc(100% + 2px);
-            left: 0;
-            display: flex;
-            gap: 4px;
+            bottom: calc(100% + 4px);
+            left: 50%;
+            transform: translateX(-50%);
             z-index: 16;
         }
         .waiting-overlay {
@@ -255,8 +262,10 @@
     <div class="videos">
         <div class="video-container main-video">
             <video id="remoteVideo" autoplay playsinline></video>
-            <!-- Панель из 3 рядов -->
-            <div class="controls-panel pos-right" id="controlsPanel">
+            <!-- Метка удалённого видео + панель кнопок -->
+            <div class="controls-area pos-right" id="controlsArea">
+                <div class="res-label" id="remoteResLabel"></div>
+                <div class="controls-panel" id="controlsPanel">
                 <!-- Ряд 1: Fit, ⬚, ❌ -->
                 <div class="controls-row">
                     <button type="button" class="ctrl-btn pip-move pip-move-left" id="pipMoveLeft" title="Move left">◀</button>
@@ -287,16 +296,14 @@
                     <button type="button" class="ctrl-btn codec" id="nsBtn" title="Noise Suppression">NS</button>
                     <button type="button" class="ctrl-btn codec" id="agcBtn" title="Auto Gain Control">AGC</button>
                 </div>
+                </div>
             </div>
             <div class="waiting-overlay hidden" id="waitingOverlay">
                 <div class="waiting-spinner"></div>
                 <div class="waiting-text" id="waitingText">Waiting for peer...</div>
             </div>
             <div class="pip-container pip-tl" id="pipContainer">
-                <div class="res-labels-row">
-                    <div class="res-label" id="remoteResLabel"></div>
-                    <div class="res-label" id="pipResLabel"></div>
-                </div>
+                <div class="res-label" id="pipResLabel"></div>
                 <div class="go-sender-wrap">
                     <button type="button" class="ctrl-btn go-sender" id="goSenderBtn" title="Toggle Go/Browser sender" style="display:none">⏸️</button>
                 </div>
@@ -588,7 +595,7 @@
         var _lastMyResText = '';
         var _lastPeerResText = '';
         function updateResLabels() {
-            // pipResLabel — разрешение МОЕЙ камеры (PiP окно)
+            // pipResLabel — разрешение МОЕЙ камеры (PiP окно) + MIME рекордера
             var myText = '';
             if (localStream) {
                 var vt = localStream.getVideoTracks()[0];
@@ -609,19 +616,27 @@
                     }
                 }
             }
+            if (mediaRecorder && mediaRecorder.mimeType) {
+                myText += ' ' + codecDisplayName(mediaRecorder.mimeType);
+            }
             document.getElementById('pipResLabel').textContent = myText;
             if (myText !== _lastMyResText && myText) {
                 diagLog('RES_LABEL my=' + myText);
                 _lastMyResText = myText;
             }
 
-            // remoteResLabel — разрешение камеры ПИРА (главное окно)
+            // remoteResLabel — фактическое разрешение получаемого видео (главное окно) + MIME входящего
             var peerText = '';
-            if (peerSettings && peerSettings.width > 0 && peerSettings.height > 0) {
+            if (remoteNativeW > 0 && remoteNativeH > 0) {
+                peerText = remoteNativeW + '×' + remoteNativeH;
+            } else if (peerSettings && peerSettings.width > 0 && peerSettings.height > 0) {
                 peerText = peerSettings.width + '×' + peerSettings.height;
                 if (peerSettings.frameRate > 0) {
                     peerText += '×' + Math.max(10, Math.round(peerSettings.frameRate));
                 }
+            }
+            if (incomingCodec) {
+                peerText += ' ' + codecDisplayName(incomingCodec);
             }
             document.getElementById('remoteResLabel').textContent = peerText;
             if (peerText !== _lastPeerResText && peerText) {
@@ -684,10 +699,10 @@
         pipContainer.classList.add(pipCorners[pipCorner]);
 
         function updateControlsPosition() {
-            var panel = document.getElementById('controlsPanel');
+            var area = document.getElementById('controlsArea');
             var pos = pipCorners[pipCorner] === 'pip-tl' ? 'pos-right' : 'pos-left';
-            panel.classList.remove('pos-right', 'pos-left');
-            panel.classList.add(pos);
+            area.classList.remove('pos-right', 'pos-left');
+            area.classList.add(pos);
             pipMoveLeft.classList.toggle('visible', pipCorners[pipCorner] === 'pip-tl');
             pipMoveRight.classList.toggle('visible', pipCorners[pipCorner] === 'pip-tr');
         }
@@ -836,12 +851,16 @@
                     // Удаляем старые video tracks на всякий случай
                     localStream.getVideoTracks().forEach(function(t) { t.stop(); localStream.removeTrack(t); });
                     var camAspect = 4 / 3;
-                    var camCaps = getCameraCapabilities();
-                    if (camCaps) camAspect = camCaps.maxW / camCaps.maxH;
-                    if (peerDisplayW > 0 && peerDisplayH > 0) {
-                        camAspect = peerDisplayW / peerDisplayH;
+                    // Используем реальные настройки трека, а не физические размеры сенсора
+                    // (сенсор всегда ландшафтный, даже если камера в портрете)
+                    var oldVt = localStream ? localStream.getVideoTracks()[0] : null;
+                    if (oldVt) {
+                        var oldVs = oldVt.getSettings();
+                        if (oldVs.width && oldVs.height) camAspect = oldVs.width / oldVs.height;
                     }
-                    var camR = applyMpx(camAspect >= 1 ? camAspect : 1, camAspect >= 1 ? 1 : camAspect, S.mpx);
+                    // НЕ используем peerDisplay для аспекта камеры — камера должна
+                    // захватывать в своей нативной ориентации, а пир отображает через CSS
+                    var camR = applyMpx(camAspect, 1, S.mpx);
                     var newStream = await navigator.mediaDevices.getUserMedia({
                         video: addFrameRateConstraint({ width: { ideal: camR.w }, height: { ideal: camR.h }, aspectRatio: { ideal: camAspect }, facingMode: 'user' }),
                         audio: false
@@ -1145,19 +1164,21 @@
                     diagLog('CAM init settings: ' + vsInit.width + 'x' + vsInit.height + ' fps=' + (vsInit.frameRate || 'n/a'));
 
                     // Определяем нативный аспект камеры
+                    // Приоритет: реальные настройки трека (учитывают ориентацию устройства),
+                    // затем capabilities сенсора (всегда ландшафт!), затем fallback 4:3
                     var initAspect = 4 / 3;
-                    if (camCaps && camCaps.maxW > 0 && camCaps.maxH > 0) {
+                    if (vsInit.width && vsInit.height) {
+                        initAspect = vsInit.width / vsInit.height;
+                        diagLog('CAM init aspect from settings: ' + initAspect.toFixed(2) + ' (' + vsInit.width + 'x' + vsInit.height + ')');
+                    } else if (camCaps && camCaps.maxW > 0 && camCaps.maxH > 0) {
                         initAspect = camCaps.maxW / camCaps.maxH;
                         diagLog('CAM caps: ' + camCaps.minW + '-' + camCaps.maxW + 'x' + camCaps.minH + '-' + camCaps.maxH + ' step=' + camCaps.stepW + 'x' + camCaps.stepH + ' aspect=' + initAspect.toFixed(2));
-                    } else if (vsInit.width && vsInit.height) {
-                        initAspect = vsInit.width / vsInit.height;
-                        diagLog('CAM caps: NOT AVAILABLE, using settings aspect=' + initAspect.toFixed(2));
                     } else {
                         diagLog('CAM caps: NOT AVAILABLE, using fallback aspect=' + initAspect.toFixed(2));
                     }
 
                     // Пересчитываем разрешение по нативному аспекту + mpx
-                    var initR2 = applyMpx(initAspect >= 1 ? initAspect : 1, initAspect >= 1 ? 1 : initAspect, S.mpx);
+                    var initR2 = applyMpx(initAspect, 1, S.mpx);
                     W = initR2.w;
                     H = initR2.h;
 
@@ -1339,12 +1360,13 @@
             if (!vt) return null;
 
             if (caps) {
-                // Аспект пира имеет приоритет; фолбэк — аспект камеры
+                // Всегда используем нативный аспект камеры (из getSettings),
+                // а не аспект дисплея пира — камера должна захватывать в своей
+                // ориентации, отображение на пируе через CSS object-fit
                 var aspect;
-                if (dispW > 0 && dispH > 0) {
-                    aspect = dispW / dispH;
-                } else {
-                    aspect = caps.maxW / caps.maxH;
+                {
+                    var vs = vt.getSettings();
+                    aspect = (vs && vs.width && vs.height) ? vs.width / vs.height : caps.maxW / caps.maxH;
                 }
                 var maxPixels = mpx * 1000000;
                 var lo = caps.minW, hi = caps.maxW;
@@ -1393,13 +1415,10 @@
             }
 
             // Fallback: getSettings() → applyMpx
-            // Цепочка: аспект пира → аспект камеры → хардкод 4:3
+            // Всегда используем нативный аспект камеры, не аспект дисплея пира
             var s = vt.getSettings();
             var aspectW, aspectH;
-            if (dispW > 0 && dispH > 0) {
-                aspectW = dispW;
-                aspectH = dispH;
-            } else if (s.width > 0 && s.height > 0) {
+            if (s.width > 0 && s.height > 0) {
                 aspectW = s.width;
                 aspectH = s.height;
             } else {
