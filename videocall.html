@@ -558,13 +558,11 @@
         var mseErrorTimestamps = [];
         var mseCriticalTriggered = false;
         var mseSetupTimer = null;
+        var mseRestarting = false;
+        var mseWaitingForInit = false;
         var lastHandledMpx = -1; // debounce: последний обработанный mpx пира
         var peerDisplayW = 0; // ширина MSE-окна пира (для аспект-соотношения)
         var peerDisplayH = 0; // высота MSE-окна пира (для аспект-соотношения)
-
-        // ============= Reload-механизм при переключении камеры =============
-        var isReloading = false;       // страница сейчас перезагружается
-        var reloadScheduled = false;   // запланирована перезагрузка
 
         // Remote video fit modes: 0=fit, 1=1:1, 2=1:2, 3=2:1
         var remoteFitMode = Math.max(0, Math.min(3, parseInt(localStorage.getItem('vc_fitMode')) || 0));
@@ -1125,18 +1123,6 @@
         // ============= Инициализация =============
         async function init() {
             try {
-                // Проверяем: это reload после переключения камеры?
-                var isReload = sessionStorage.getItem('vc_reload') === '1';
-                if (isReload) {
-                    sessionStorage.removeItem('vc_reload');
-                    isCreator = sessionStorage.getItem('vc_isCreator') === '1';
-                    if (isCreator) { myPeerID = 'host'; remotePeerID = 'guest'; }
-                    else { myPeerID = 'guest'; remotePeerID = 'host'; }
-                    _chatUserId = myPeerID + '_' + getBrowserTag();
-                    localStorage.setItem('chatUserId', _chatUserId);
-                    diagLog('INIT reload mode peer=' + myPeerID);
-                }
-
                 // Фаза 1: getUserMedia с фолбэк-аспектом 4:3 и mpx
                 var initR = applyMpx(4, 3, S.mpx);
                 var W = initR.w;
@@ -1194,37 +1180,31 @@
                 var myCodecs = detectSupportedCodecs();
                 diagLog('CODECS supported: ' + myCodecs.map(codecDisplayName).join(' | '));
 
-                if (isReload) {
-                    // Reload mode: комната уже существует, пропускаем create/wait/join
-                    diagLog('INIT reload peer=' + myPeerID + ' cam=' + W + 'x' + H);
-                } else {
-                    // Нормальный старт: создаём/присоединяемся к комнате
-                    var createResult = await tryCreateRoom();
-                    isCreator = createResult.created;
-                    diagLog('INIT peer=' + (isCreator ? 'host' : 'guest') + ' cam=' + W + 'x' + H);
+                var createResult = await tryCreateRoom();
+                isCreator = createResult.created;
+                diagLog('INIT peer=' + (isCreator ? 'host' : 'guest') + ' cam=' + W + 'x' + H);
 
-                    if (isCreator) {
-                        myPeerID = 'host';
-                        remotePeerID = 'guest';
-                        _chatUserId = myPeerID + '_' + getBrowserTag();
-                        localStorage.setItem('chatUserId', _chatUserId);
-                        waitingOverlay.classList.remove('hidden');
-                        waitingText.textContent = 'Waiting for peer to join...';
-                        var joined = null;
-                        while (!joined) {
-                            try {
-                                joined = await waitForPeer();
-                            } catch(e) {}
-                            if (!joined) await new Promise(function(r) { setTimeout(r, 2000); });
-                        }
-                        waitingOverlay.classList.add('hidden');
-                    } else {
-                        myPeerID = 'guest';
-                        remotePeerID = 'host';
-                        _chatUserId = myPeerID + '_' + getBrowserTag();
-                        localStorage.setItem('chatUserId', _chatUserId);
-                        await joinRoom();
+                if (isCreator) {
+                    myPeerID = 'host';
+                    remotePeerID = 'guest';
+                    _chatUserId = myPeerID + '_' + getBrowserTag();
+                    localStorage.setItem('chatUserId', _chatUserId);
+                    waitingOverlay.classList.remove('hidden');
+                    waitingText.textContent = 'Waiting for peer to join...';
+                    var joined = null;
+                    while (!joined) {
+                        try {
+                            joined = await waitForPeer();
+                        } catch(e) {}
+                        if (!joined) await new Promise(function(r) { setTimeout(r, 2000); });
                     }
+                    waitingOverlay.classList.add('hidden');
+                } else {
+                    myPeerID = 'guest';
+                    remotePeerID = 'host';
+                    _chatUserId = myPeerID + '_' + getBrowserTag();
+                    localStorage.setItem('chatUserId', _chatUserId);
+                    await joinRoom();
                 }
                 await startCall();
             } catch (err) {
@@ -1604,10 +1584,8 @@
                     handleIncomingChunk(event.data);
                 } else if (typeof event.data === 'string') {
                     if (event.data === 'peer_left') {
-                        if (!(reloadScheduled || isReloading)) {
-                            diagLog('PEER left via WS');
-                        }
-                        hangup(reloadScheduled || isReloading);
+                        diagLog('PEER left via WS');
+                        hangup();
                     } else {
                         // JSON settings от пира
                         try {
@@ -1636,33 +1614,35 @@
         }
 
         function handleIncomingChunk(data) {
-            if (reloadScheduled) return; // игнорируем чанки если reload запланирован
             diagRecvChunks++;
             diagRecvBytes += data.byteLength;
             lastReceivedIndex++;
             if (mseCriticalTriggered) return;
 
-            // Init segment = пир переключил камеру → reload
+            // If init segment arrives — detect codec and restart MSE if needed
             if (isInitSegment(data)) {
                 var detectedCodec = detectCodecFromInitSegment(data);
                 if (detectedCodec) {
-                    diagLog('MSE init segment codec: ' + codecDisplayName(detectedCodec));
+                    diagLog('MSE init segment codec detected: ' + codecDisplayName(detectedCodec));
                     incomingCodec = detectedCodec;
                 }
-                if (!reloadScheduled) {
-                    reloadScheduled = true;
-                    var delay = isCreator ? 500 : 1000;
-                    diagLog('RELOAD receiver detected init segment — scheduling reload in ' + delay + 'ms');
-                    sessionStorage.setItem('vc_reload', '1');
-                    sessionStorage.setItem('vc_isCreator', isCreator ? '1' : '0');
-                    saveSettings();
-                    setTimeout(function() {
-                        isReloading = true;
-                        hangup(true);
-                        location.reload();
-                    }, delay);
+                if (mseReady && !mseRestarting) {
+                    diagLog('MSE unexpected init segment (' + data.byteLength + ' bytes) — restarting MSE');
+                    restartMSE();
+                    // restartMSE() sets mseWaitingForInit=true — fall through to waiting path below
                 }
-                return;
+            }
+
+            // During MSE restart: discard stale chunks until init segment arrives
+            if (mseWaitingForInit) {
+                if (!isInitSegment(data)) {
+                    diagLog('MSE discard stale chunk (' + data.byteLength + ' bytes)');
+                    return;
+                }
+                diagLog('MSE init segment arrived (' + data.byteLength + ' bytes) — creating MSE');
+                mseWaitingForInit = false;
+                if (mseSetupTimer) { clearTimeout(mseSetupTimer); mseSetupTimer = null; }
+                setupMSE();
             }
 
             mseQueue.push(data);
@@ -1822,6 +1802,7 @@
                         checkMSECritical();
                     });
                     mseReady = true;
+                    mseRestarting = false;
                     mseCriticalTriggered = false;
                     if (mseQueue.length > 0) processMSEQueue();
                 } catch (e) { showError('MSE codec not supported: ' + codec); }
@@ -1913,6 +1894,43 @@
             }
         }
 
+        function restartMSE() {
+            if (mseRestarting) return; // уже в процессе рестарта
+            mseRestarting = true;
+            diagLog('MSE RESTART (planned — codec/video change)');
+
+            // Очистка старого MSE
+            mseReady = false;
+            firstAppendDone = false;
+            mseCriticalTriggered = false;
+            mseErrorTimestamps = [];
+            mseQueue = [];
+            mseWaitingForInit = true;
+
+            if (mediaSource && mediaSource.readyState === 'open') {
+                try {
+                    if (sourceBuffer && !sourceBuffer.updating) mediaSource.endOfStream();
+                } catch(e) {}
+            }
+            try { URL.revokeObjectURL(remoteVideo.src); } catch(e) {}
+            remoteVideo.removeAttribute('src');
+            remoteVideo.load();
+            sourceBuffer = null;
+            mediaSource = null;
+
+            // Страховочный таймаут: если init segment не пришёл за 3 секунды —
+            // создать MSE с известным кодеком (как при начале звонка)
+            mseSetupTimer = setTimeout(function() {
+                mseSetupTimer = null;
+                if (!isActive) { mseRestarting = false; mseWaitingForInit = false; return; }
+                if (mseWaitingForInit) {
+                    mseWaitingForInit = false;
+                    diagLog('MSE timeout — creating MSE with known codec');
+                    setupMSE();
+                }
+            }, 3000);
+        }
+
         // ============= MediaRecorder =============
         function setupMediaRecorder() {
             if (!localStream) return;
@@ -1950,26 +1968,7 @@
             }
             mediaRecorder.ondataavailable = function(e) {
                 if (e.data && e.data.size > 0 && isActive) {
-                    e.data.arrayBuffer().then(function(buffer) {
-                        // Init segment = камера переключилась → reload
-                        if (isInitSegment(buffer)) {
-                            diagLog('REC init segment (' + buffer.byteLength + ' bytes)');
-                            if (!reloadScheduled) {
-                                reloadScheduled = true;
-                                var delay = isCreator ? 500 : 1000;
-                                diagLog('RELOAD sender detected init segment — scheduling reload in ' + delay + 'ms');
-                                sessionStorage.setItem('vc_reload', '1');
-                                sessionStorage.setItem('vc_isCreator', isCreator ? '1' : '0');
-                                saveSettings();
-                                setTimeout(function() {
-                                    isReloading = true;
-                                    hangup(true);
-                                    location.reload();
-                                }, delay);
-                            }
-                        }
-                        sendChunk(buffer);
-                    });
+                    e.data.arrayBuffer().then(function(buffer) { sendChunk(buffer); });
                 }
             };
             var recErrorCount = 0;
@@ -2000,6 +1999,8 @@
             mseReady = false;
             mseQueue = [];
             mseCriticalTriggered = false;
+            mseRestarting = false;
+            mseWaitingForInit = false;
             // Очистка таймеров
             if (controlsTimer) { clearTimeout(controlsTimer); controlsTimer = null; }
             if (resizeDebounceTimer) { clearTimeout(resizeDebounceTimer); resizeDebounceTimer = null; }
@@ -2011,15 +2012,12 @@
             }
         }
 
-        function hangup(keepRoom) {
-            if (!isActive) return;
+        function hangup() {
             cleanupCall();
             saveCallState();
             disconnectWS();
-            if (!keepRoom) {
-                endCall();
-                setTimeout(function() { window.close(); }, 1500);
-            }
+            endCall();
+            setTimeout(function() { window.close(); }, 1500);
         }
 
         function showError(msg) {
@@ -2031,7 +2029,7 @@
             cleanupCall();
             saveCallState();
             disconnectWS();
-            if (!isReloading && !reloadScheduled) endCall();
+            endCall();
         });
     </script>
 </body>
