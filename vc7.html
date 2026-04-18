@@ -319,7 +319,7 @@
     <script>
         // ============= Конфигурация =============
         var CHUNK_INTERVAL_MS = 100;
-        var MAX_BUFFER_SECONDS = 10;
+        var MAX_BUFFER_SECONDS = 5;
         var WS_RECONNECT_MS = 2000;
 
         // ============= Элементы UI =============
@@ -533,31 +533,15 @@
         var recorderStarted = false;
         var mediaSource = null;
         var sourceBuffer = null;
-        var MAX_MSE_QUEUE = 50;
+        var MAX_MSE_QUEUE = 30;
         var mseQueue = [];
+        var mseQueueReadIdx = 0;
         var mseReady = false;
         var negotiatedCodec = '';
         var recordCodec = '';    // чем мы записываем (MediaRecorder)
         var incomingCodec = '';  // какой кодек будет у входящего потока (MSE)
         var trimScheduled = false;
         var firstAppendDone = false;
-
-        // ============= Адаптивный catch-up =============
-        var LIVE_CATCHUP_RATE = 1.05;    // +5% скорость при догонянии
-        var LIVE_PLAYBACK_RATE = 1.0;     // нормальная скорость
-        var LIVE_CATCHUP_MARGIN = 0.2;    // гистерезис для переключения rate (сек)
-        var LIVE_MIN_LATENCY = 0.5;       // минимальный targetLatency (сек)
-        var LIVE_MAX_LATENCY = 3.0;       // максимальный targetLatency (сек)
-        var EWMA_ALPHA = 0.3;             // сглаживание оценки джиттера
-        var EMERGENCY_BEHIND = 5.0;       // порог для emergency seek (сек)
-        var EMERGENCY_TARGET = 1.5;       // отступ от bufEnd при emergency seek (сек)
-        var STALL_DEBOUNCE_MS = 3000;     // минимальный интервал между emergency seek (мс)
-
-        var liveJitter = 0.1;             // EWMA оценка джиттера сети (сек)
-        var liveTargetLatency = 1.0;      // целевое отставание от live-края (сек)
-        var liveLastChunkTime = 0;        // время прибытия предыдущего чанка (performance.now)
-        var liveCurrentRate = 1.0;        // текущий playbackRate
-        var lastEmergencySeekTime = 0;    // timestamp последнего emergency seek
 
         var diagSentChunks = 0;
         var diagSentBytes = 0;
@@ -1019,7 +1003,7 @@
         }
         setInterval(function() { diagStats(); }, 30000);
 
-        // ============= Экстренный seek + адаптивный rate контроль =============
+        // ============= Экстренный seek =============
         setInterval(function() {
             if (!isActive || !mseReady) return;
             try {
@@ -1028,50 +1012,12 @@
                     var bufStart = remoteVideo.buffered.start(0);
                     var ct = remoteVideo.currentTime;
                     var behind = bufEnd - ct;
-                    var now = Date.now();
-                    var isStalled = remoteVideo.readyState < 3;
-
-                    // 1. Emergency seek при реальном stall (readyState < 3)
-                    if (isStalled && behind > 0.5 && (now - lastEmergencySeekTime) > STALL_DEBOUNCE_MS) {
-                        var target = bufEnd - 1.0;
-                        if (target > ct) {
-                            diagLog('ADAPTIVE STALL seek ct=' + ct.toFixed(1) + ' -> ' + target.toFixed(1) + ' behind=' + behind.toFixed(1) + 's');
-                            remoteVideo.currentTime = target;
-                            remoteVideo.play().catch(function(){});
-                            lastEmergencySeekTime = now;
-                            remoteVideo.playbackRate = 1.0;
-                            liveCurrentRate = 1.0;
-                        }
+                    if (behind > 3) {
+                        var target = bufEnd - 1;
+                        diagLog('SEEK ct=' + ct.toFixed(1) + ' -> ' + target.toFixed(1) + ' behind=' + behind.toFixed(1) + 's EMERGENCY');
+                        remoteVideo.currentTime = target;
+                        if (remoteVideo.paused) remoteVideo.play().catch(function(){});
                     }
-                    // 2. Emergency seek при большом отставании (страховка от неконтролируемого роста лага)
-                    else if (behind > EMERGENCY_BEHIND && !isStalled && (now - lastEmergencySeekTime) > STALL_DEBOUNCE_MS) {
-                        var target2 = bufEnd - EMERGENCY_TARGET;
-                        diagLog('ADAPTIVE EMERGENCY seek ct=' + ct.toFixed(1) + ' -> ' + target2.toFixed(1) + ' behind=' + behind.toFixed(1) + 's');
-                        remoteVideo.currentTime = target2;
-                        lastEmergencySeekTime = now;
-                        remoteVideo.playbackRate = 1.0;
-                        liveCurrentRate = 1.0;
-                    }
-                    // 3. Адаптивный playbackRate (только если не stalled и не emergency)
-                    else if (!isStalled && firstAppendDone) {
-                        var newRate = LIVE_PLAYBACK_RATE;
-                        if (behind > liveTargetLatency + LIVE_CATCHUP_MARGIN) {
-                            newRate = LIVE_CATCHUP_RATE;
-                        } else if (behind < liveTargetLatency - LIVE_CATCHUP_MARGIN) {
-                            newRate = LIVE_PLAYBACK_RATE;
-                        } else {
-                            // В зоне гистерезиса — сохраняем текущий rate
-                            newRate = liveCurrentRate;
-                        }
-                        if (newRate !== liveCurrentRate) {
-                            remoteVideo.playbackRate = newRate;
-                            liveCurrentRate = newRate;
-                            if (newRate > 1.0) {
-                                diagLog('ADAPTIVE rate=' + newRate.toFixed(2) + ' behind=' + behind.toFixed(1) + 's target=' + liveTargetLatency.toFixed(1) + 's');
-                            }
-                        }
-                    }
-                    // 4. currentTime вышел за начало буфера
                     if (ct < bufStart - 0.5) {
                         remoteVideo.currentTime = bufStart + 0.1;
                         if (remoteVideo.paused) remoteVideo.play().catch(function(){});
@@ -1082,7 +1028,7 @@
             if (remoteVideo.paused && firstAppendDone) {
                 remoteVideo.play().catch(function(){});
             }
-        }, 1000);
+        }, 2000);
 
         // ============= Кодеки — строим из зелёных кнопок =============
         function buildCodecListFromButtons() {
@@ -1725,31 +1671,29 @@
             ws.onerror = function() {};
         }
 
+        function mseQueueLength() {
+            return mseQueue.length - mseQueueReadIdx;
+        }
+
+        function mseQueueCompact() {
+            if (mseQueueReadIdx > 100) {
+                mseQueue = mseQueue.slice(mseQueueReadIdx);
+                mseQueueReadIdx = 0;
+            }
+        }
+
         function handleIncomingChunk(data) {
             diagRecvChunks++;
             diagRecvBytes += data.byteLength;
             lastReceivedIndex++;
             if (mseCriticalTriggered) return;
 
-            // Адаптивный catch-up: измеряем джиттер прибытия чанков
-            var now = performance.now();
-            if (liveLastChunkTime > 0) {
-                var interval = (now - liveLastChunkTime) / 1000; // секунды
-                var expectedInterval = CHUNK_INTERVAL_MS / 1000;
-                var deviation = Math.abs(interval - expectedInterval);
-                // EWMA сглаживание
-                liveJitter = EWMA_ALPHA * deviation + (1 - EWMA_ALPHA) * liveJitter;
-                // Адаптивный targetLatency: минимум чтобы покрыть 3x джиттер + запас
-                var newTarget = Math.max(LIVE_MIN_LATENCY, Math.min(LIVE_MAX_LATENCY, liveJitter * 3 + 0.2));
-                liveTargetLatency = newTarget;
-            }
-            liveLastChunkTime = now;
-
             // Просто помещаем в очередь — MSE управляется только через cmd:initCodec
             mseQueue.push(data);
-            if (mseQueue.length > MAX_MSE_QUEUE) {
-                diagLog('MSE queue overflow (' + mseQueue.length + '), dropping oldest');
-                while (mseQueue.length > MAX_MSE_QUEUE / 2) mseQueue.shift();
+            if (mseQueueLength() > MAX_MSE_QUEUE) {
+                diagLog('MSE queue overflow (' + mseQueueLength() + '), dropping oldest');
+                mseQueueReadIdx = mseQueue.length - Math.floor(MAX_MSE_QUEUE / 2);
+                mseQueueCompact();
             }
             if (mseReady) processMSEQueue();
         }
@@ -1833,14 +1777,26 @@
                     mseRestarting = false;
                     mseCriticalTriggered = false;
                     currentMseCodec = codec;
-                    if (mseQueue.length > 0) processMSEQueue();
+                    if (mseQueueLength() > 0) processMSEQueue();
                 } catch (e) { showError('MSE codec not supported: ' + codec); }
             });
         }
 
 
         function onMSEUpdateEnd() {
-            // Seek убран — catch-up через playbackRate управляется в emergency interval
+            if (firstAppendDone) {
+                try {
+                    if (remoteVideo.buffered && remoteVideo.buffered.length > 0) {
+                        var bufEnd = remoteVideo.buffered.end(remoteVideo.buffered.length - 1);
+                        var behind = bufEnd - remoteVideo.currentTime;
+                        if (behind > 3.0) {
+                            var target = bufEnd - 1.5;
+                            remoteVideo.currentTime = target;
+                            diagLog('PLAY catchup ct=' + target.toFixed(1) + ' behind=' + behind.toFixed(1) + 's');
+                        }
+                    }
+                } catch(e) {}
+            }
             if (!trimScheduled) {
                 trimScheduled = true;
                 setTimeout(function() { trimBuffer(); trimScheduled = false; }, 500);
@@ -1851,10 +1807,13 @@
         function processMSEQueue() {
             if (!isActive) return;
             if (!mseReady || !sourceBuffer || sourceBuffer.updating) return;
-            if (mseQueue.length === 0) return;
-            var chunkData = mseQueue.shift();
+            if (mseQueueLength() === 0) return;
+            var chunkData = mseQueue[mseQueueReadIdx++];
+            mseQueueCompact();
             try {
-                sourceBuffer.appendBuffer(new Uint8Array(chunkData));
+                // Avoid unnecessary allocation if already Uint8Array
+                var view = (chunkData instanceof Uint8Array) ? chunkData : new Uint8Array(chunkData);
+                sourceBuffer.appendBuffer(view);
                 diagMSEAppends++;
                 if (!firstAppendDone) {
                     firstAppendDone = true;
@@ -1871,6 +1830,7 @@
                     if (!mseCriticalTriggered) {
                         mseCriticalTriggered = true;
                         mseQueue = [];
+                        mseQueueReadIdx = 0;
                         hangup();
                     }
                     return;
@@ -1908,6 +1868,7 @@
             if (mseErrorTimestamps.length >= MSE_CRITICAL_THRESHOLD) {
                 mseCriticalTriggered = true;
                 mseQueue = [];
+                mseQueueReadIdx = 0;
                 diagLog('MSE CRITICAL (' + mseErrorTimestamps.length + ' errors in ' + (MSE_CRITICAL_WINDOW_MS / 1000) + 's) — hanging up');
                 hangup();
             }
@@ -1918,20 +1879,13 @@
             mseRestarting = true;
             diagLog('MSE RESTART (teardown — codec change)');
 
-            // Сброс адаптивных параметров
-            liveCurrentRate = 1.0;
-            liveLastChunkTime = 0;
-            liveJitter = 0.1;
-            liveTargetLatency = 1.0;
-            lastEmergencySeekTime = 0;
-            try { remoteVideo.playbackRate = 1.0; } catch(e) {}
-
             // Очистка старого MSE
             mseReady = false;
             firstAppendDone = false;
             mseCriticalTriggered = false;
             mseErrorTimestamps = [];
             mseQueue = []; // очищаем — старые чанки от предыдущего кодека вызовут ошибку
+            mseQueueReadIdx = 0;
             currentMseCodec = '';
 
             if (mediaSource && mediaSource.readyState === 'open') {
@@ -2022,6 +1976,7 @@
             isActive = false;
             mseReady = false;
             mseQueue = [];
+            mseQueueReadIdx = 0;
             mseCriticalTriggered = false;
             mseRestarting = false;
             currentMseCodec = '';

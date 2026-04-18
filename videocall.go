@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -76,9 +77,9 @@ type wsConn struct {
 }
 
 const (
-	maxChunksPerPeer = 100     // ~10 секунд при 10 чанков/сек
+	maxChunksPerPeer = 300     // ~15 секунд при 20 чанков/сек (CHUNK_INTERVAL_MS=50)
 	maxChunkSize     = 1 << 20 // 1 MB максимальный размер чанка
-	wsHistoryLimit   = 20      // Максимум чанков истории при WS подключении
+	wsHistoryLimit   = 40      // Максимум чанков истории при WS подключении (~2 сек при 20 чанков/сек)
 )
 
 // createRoom создаёт новую комнату видеозвонка или возвращает ошибку если комната уже существует
@@ -141,32 +142,40 @@ func (r *VideoCallRoom) addChunk(peerID string, data []byte) int64 {
 
 	r.Chunks[peerID] = append(r.Chunks[peerID], chunk)
 
-	// Ограничиваем количество хранимых чанков
+	// Ограничиваем количество хранимых чанков — копируем в новый slice
+	// чтобы освободить старые Data для GC
 	if len(r.Chunks[peerID]) > maxChunksPerPeer {
-		r.Chunks[peerID] = r.Chunks[peerID][len(r.Chunks[peerID])-maxChunksPerPeer:]
+		excess := len(r.Chunks[peerID]) - maxChunksPerPeer
+		trimmed := make([]VideoChunk, maxChunksPerPeer)
+		copy(trimmed, r.Chunks[peerID][excess:])
+		r.Chunks[peerID] = trimmed
 	}
 
 	return idx
 }
 
 // getChunksAfter возвращает чанки от указанного пира с индексом > afterIndex
+// Использует бинарный поиск — чанки упорядочены по Index
 func (r *VideoCallRoom) getChunksAfter(peerID string, afterIndex int64) []VideoChunk {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
 	chunks, ok := r.Chunks[peerID]
-	if !ok {
+	if !ok || len(chunks) == 0 {
 		return nil
 	}
 
-	// Ищем чанки с индексом > afterIndex
-	var result []VideoChunk
-	for _, chunk := range chunks {
-		if chunk.Index > afterIndex {
-			result = append(result, chunk)
-		}
+	// Бинарный поиск первого чанка с Index > afterIndex
+	n := len(chunks)
+	i := sort.Search(n, func(j int) bool {
+		return chunks[j].Index > afterIndex
+	})
+	if i >= n {
+		return nil
 	}
-	return result
+
+	// Возвращаем слайс без копирования
+	return chunks[i:]
 }
 
 // getLastIndex возвращает последний индекс чанка от пира

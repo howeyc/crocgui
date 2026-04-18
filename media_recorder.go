@@ -35,18 +35,43 @@ func (b *syncedBuffer) take() []byte {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	d := b.data
-	b.data = nil
+	// Pre-allocate with previous capacity to avoid re-allocation on next Write cycle
+	b.data = make([]byte, 0, cap(d))
 	return d
 }
 
 func (b *syncedBuffer) Close() error { return nil }
 
-// ========== frameData ==========
+// ========== frameData + pool ==========
 
 type frameData struct {
 	data        []byte
 	samples     uint32
 	timestampMS int64 // время чтения из энкодера — максимально близко к моменту захвата
+}
+
+// framePool reuses byte slices for encoded frames to reduce GC pressure
+var framePool = sync.Pool{
+	New: func() interface{} {
+		b := make([]byte, 0, 4096)
+		return &b
+	},
+}
+
+func framePoolGet(size int) []byte {
+	bp := framePool.Get().(*[]byte)
+	if cap(*bp) >= size {
+		return (*bp)[:size]
+	}
+	// Pool buffer too small — return it and allocate fresh
+	framePool.Put(bp)
+	b := make([]byte, size)
+	return b
+}
+
+func framePoolPut(b []byte) {
+	// Reset slice but keep capacity
+	framePool.Put(&b)
 }
 
 // ========== mediaRecorder — аналог JS MediaRecorder ==========
@@ -127,7 +152,7 @@ func (mr *mediaRecorder) start(intervalMs int) {
 				}
 				return
 			}
-			data := make([]byte, len(encoded.Data))
+			data := framePoolGet(len(encoded.Data))
 			copy(data, encoded.Data)
 			totalVideoSamples += uint64(encoded.Samples)
 			timestampMS := int64(totalVideoSamples * 1000 / 90000)
@@ -135,6 +160,7 @@ func (mr *mediaRecorder) start(intervalMs int) {
 			select {
 			case videoCh <- frameData{data: data, samples: encoded.Samples, timestampMS: timestampMS}:
 			case <-mr.done:
+				framePoolPut(data)
 				return
 			}
 		}
@@ -153,7 +179,7 @@ func (mr *mediaRecorder) start(intervalMs int) {
 				}
 				return
 			}
-			data := make([]byte, len(encoded.Data))
+			data := framePoolGet(len(encoded.Data))
 			copy(data, encoded.Data)
 			totalAudioSamples += uint64(encoded.Samples)
 			timestampMS := int64(totalAudioSamples * 1000 / 48000)
@@ -161,6 +187,7 @@ func (mr *mediaRecorder) start(intervalMs int) {
 			select {
 			case audioCh <- frameData{data: data, samples: encoded.Samples, timestampMS: timestampMS}:
 			case <-mr.done:
+				framePoolPut(data)
 				return
 			}
 		}
@@ -253,16 +280,18 @@ func (mr *mediaRecorder) start(intervalMs int) {
 				for {
 					select {
 					case f, ok := <-videoCh:
-						if !ok {
-							mr.stop() // Fix: clean shutdown on unexpected channel close
-							return
-						}
-						ts := f.timestampMS
-						if _, err := videoWriter.Write(true, ts, f.data); err != nil {
-							log.Debugf("MediaRecorder video write error: %v", err)
-							mr.stop() // Fix: clean shutdown on write error
-							return
-						}
+							if !ok {
+								mr.stop() // Fix: clean shutdown on unexpected channel close
+								return
+							}
+							ts := f.timestampMS
+							if _, err := videoWriter.Write(true, ts, f.data); err != nil {
+								framePoolPut(f.data)
+								log.Debugf("MediaRecorder video write error: %v", err)
+								mr.stop() // Fix: clean shutdown on write error
+								return
+							}
+							framePoolPut(f.data)
 					default:
 						break readVideo
 					}
@@ -273,16 +302,18 @@ func (mr *mediaRecorder) start(intervalMs int) {
 				for {
 					select {
 					case f, ok := <-audioCh:
-						if !ok {
-							mr.stop() // Fix: clean shutdown on unexpected channel close
-							return
-						}
-						ts := f.timestampMS
-						if _, err := audioWriter.Write(true, ts, f.data); err != nil {
-							log.Debugf("MediaRecorder audio write error: %v", err)
-							mr.stop() // Fix: clean shutdown on write error
-							return
-						}
+							if !ok {
+								mr.stop() // Fix: clean shutdown on unexpected channel close
+								return
+							}
+							ts := f.timestampMS
+							if _, err := audioWriter.Write(true, ts, f.data); err != nil {
+								framePoolPut(f.data)
+								log.Debugf("MediaRecorder audio write error: %v", err)
+								mr.stop() // Fix: clean shutdown on write error
+								return
+							}
+							framePoolPut(f.data)
 					default:
 						break readAudio
 					}
