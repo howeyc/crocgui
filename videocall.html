@@ -321,6 +321,7 @@
         var CHUNK_INTERVAL_MS = 100;
         var MAX_BUFFER_SECONDS = 10;
         var WS_RECONNECT_MS = 2000;
+        var TARGET_FPS = 10;
 
         // ============= Элементы UI =============
         var localVideo = document.getElementById('localVideo');
@@ -576,6 +577,8 @@
         var lastHandledMpx = -1; // debounce: последний обработанный mpx пира
         var peerDisplayW = 0; // ширина MSE-окна пира (для аспект-соотношения)
         var peerDisplayH = 0; // высота MSE-окна пира (для аспект-соотношения)
+        var peerRecorderCodec = ''; // mimeType рекордера пира из cmd:initCodec (для remoteResLabel)
+        var peerRes = { width: 0, height: 0, frameRate: 0 }; // разрешение камеры пира из cmd:myRes
 
         // Remote video fit modes: 0=fit, 1=1:1, 2=1:2, 3=2:1
         var remoteFitMode = Math.max(0, Math.min(3, parseInt(localStorage.getItem('vc_fitMode')) || 0));
@@ -591,22 +594,8 @@
             fitContainBtn.classList.toggle('active', remoteFitMode === 0);
         }
 
-        function getMinFrameRate() {
-            if (!localStream) return 0;
-            var vt = localStream.getVideoTracks()[0];
-            if (!vt || typeof vt.getCapabilities !== 'function') return 0;
-            try {
-                var caps = vt.getCapabilities();
-                if (caps && caps.frameRate && typeof caps.frameRate.min === 'number') {
-                    return Math.max(10, Math.round(caps.frameRate.min));
-                }
-            } catch(e) {}
-            return 0;
-        }
-
         function addFrameRateConstraint(constraints) {
-            var fps = getMinFrameRate();
-            if (fps > 0) constraints.frameRate = { ideal: fps };
+            constraints.frameRate = { ideal: TARGET_FPS };
             return constraints;
         }
 
@@ -623,13 +612,8 @@
                     var h = s.height || 0;
                     if (w > 0 && h > 0) {
                         myText = w + '×' + h;
-                        if (typeof vt.getCapabilities === 'function') {
-                            try {
-                                var caps = vt.getCapabilities();
-                                if (caps && caps.frameRate && typeof caps.frameRate.min === 'number') {
-                                    myText += '×' + Math.max(10, Math.round(caps.frameRate.min));
-                                }
-                            } catch(e) {}
+                        if (s.frameRate > 0) {
+                            myText += '×' + Math.round(s.frameRate);
                         }
                     }
                 }
@@ -643,18 +627,16 @@
                 _lastMyResText = myText;
             }
 
-            // remoteResLabel — фактическое разрешение получаемого видео (главное окно) + MIME входящего
+            // remoteResLabel — разрешение камеры пира из cmd:myRes + кодек рекордера из cmd:initCodec
             var peerText = '';
-            if (remoteNativeW > 0 && remoteNativeH > 0) {
-                peerText = remoteNativeW + '×' + remoteNativeH;
-            } else if (peerSettings && peerSettings.width > 0 && peerSettings.height > 0) {
-                peerText = peerSettings.width + '×' + peerSettings.height;
-                if (peerSettings.frameRate > 0) {
-                    peerText += '×' + Math.max(10, Math.round(peerSettings.frameRate));
+            if (peerRes.width > 0 && peerRes.height > 0) {
+                peerText = peerRes.width + '×' + peerRes.height;
+                if (peerRes.frameRate > 0) {
+                    peerText += '×' + Math.round(peerRes.frameRate);
                 }
             }
-            if (incomingCodec) {
-                peerText += ' ' + codecDisplayName(incomingCodec);
+            if (peerRecorderCodec) {
+                peerText += ' ' + codecDisplayName(peerRecorderCodec);
             }
             document.getElementById('remoteResLabel').textContent = peerText;
             if (peerText !== _lastPeerResText && peerText) {
@@ -1365,7 +1347,27 @@
                 var s = videoTracks[0].getSettings();
                 diagLog('RES applied peer desire ' + s.width + 'x' + s.height);
                 updateResLabels();
+                sendMyRes();
             } catch (e) { diagLog('RES desire failed: ' + e.message); }
+        }
+
+        // Отправляет пире текущее разрешение своей камеры (cmd:myRes)
+        function sendMyRes() {
+            if (!wsConnected || !ws || ws.readyState !== WebSocket.OPEN) return;
+            if (!localStream) return;
+            var vt = localStream.getVideoTracks()[0];
+            if (!vt) return;
+            var s = vt.getSettings();
+            if (s.width > 0 && s.height > 0) {
+                try {
+                    ws.send(JSON.stringify({
+                        cmd: 'myRes',
+                        width: s.width,
+                        height: s.height,
+                        frameRate: s.frameRate || 0
+                    }));
+                } catch(e) {}
+            }
         }
 
         var RES_TOLERANCE = 32;
@@ -1699,6 +1701,8 @@
                                 if (msg.codec) {
                                     diagLog('PEER initCodec=' + codecDisplayName(msg.codec));
                                     incomingCodec = msg.codec;
+                                    peerRecorderCodec = msg.codec;
+                                    updateResLabels();
                                     if (mseRestarting) {
                                         // MSE перезапускается — incomingCodec обновлён, будет использован при sourceopen
                                         diagLog('MSE restarting — initCodec will be used on setup');
@@ -1712,6 +1716,12 @@
                                         restartMSE();
                                         setupMSE();
                                     }
+                                }
+                            } else if (msg.cmd === 'myRes') {
+                                // Пир сообщает своё текущее разрешение камеры (для remoteResLabel)
+                                if (msg.width > 0 && msg.height > 0) {
+                                    peerRes = { width: msg.width, height: msg.height, frameRate: msg.frameRate || 0 };
+                                    updateResLabels();
                                 }
                             }
                         } catch(e) {}
@@ -2013,6 +2023,7 @@
                     try { ws.send(JSON.stringify({ cmd: 'initCodec', codec: recMime })); } catch(e) {}
                 }
                 sendSettings();
+                sendMyRes();
             };
             mediaRecorder.start(CHUNK_INTERVAL_MS);
         }
