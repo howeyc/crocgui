@@ -535,6 +535,7 @@
         var sourceBuffer = null;
         var MAX_MSE_QUEUE = 50;
         var mseQueue = [];
+        var mseQueueReadIdx = 0;
         var mseReady = false;
         var negotiatedCodec = '';
         var recordCodec = '';    // чем мы записываем (MediaRecorder)
@@ -1725,6 +1726,14 @@
             ws.onerror = function() {};
         }
 
+        function mseQueueLength() { return mseQueue.length - mseQueueReadIdx; }
+        function mseQueueCompact() {
+            if (mseQueueReadIdx > 100) {
+                mseQueue = mseQueue.slice(mseQueueReadIdx);
+                mseQueueReadIdx = 0;
+            }
+        }
+
         function handleIncomingChunk(data) {
             diagRecvChunks++;
             diagRecvBytes += data.byteLength;
@@ -1747,9 +1756,10 @@
 
             // Просто помещаем в очередь — MSE управляется только через cmd:initCodec
             mseQueue.push(data);
-            if (mseQueue.length > MAX_MSE_QUEUE) {
-                diagLog('MSE queue overflow (' + mseQueue.length + '), dropping oldest');
-                while (mseQueue.length > MAX_MSE_QUEUE / 2) mseQueue.shift();
+            if (mseQueueLength() > MAX_MSE_QUEUE) {
+                diagLog('MSE queue overflow (' + mseQueueLength() + '), dropping oldest');
+                mseQueueReadIdx = mseQueue.length - Math.floor(MAX_MSE_QUEUE / 2);
+                mseQueueCompact();
             }
             if (mseReady) processMSEQueue();
         }
@@ -1833,7 +1843,7 @@
                     mseRestarting = false;
                     mseCriticalTriggered = false;
                     currentMseCodec = codec;
-                    if (mseQueue.length > 0) processMSEQueue();
+                    if (mseQueueLength() > 0) processMSEQueue();
                 } catch (e) { showError('MSE codec not supported: ' + codec); }
             });
         }
@@ -1851,8 +1861,9 @@
         function processMSEQueue() {
             if (!isActive) return;
             if (!mseReady || !sourceBuffer || sourceBuffer.updating) return;
-            if (mseQueue.length === 0) return;
-            var chunkData = mseQueue.shift();
+            if (mseQueueLength() === 0) return;
+            var chunkData = mseQueue[mseQueueReadIdx++];
+            mseQueueCompact();
             try {
                 sourceBuffer.appendBuffer(new Uint8Array(chunkData));
                 diagMSEAppends++;
@@ -1870,7 +1881,7 @@
                     diagLog('MSE ERR sourceBuffer removed — hanging up');
                     if (!mseCriticalTriggered) {
                         mseCriticalTriggered = true;
-                        mseQueue = [];
+                        mseQueue = []; mseQueueReadIdx = 0;
                         hangup();
                     }
                     return;
@@ -1907,7 +1918,7 @@
             }
             if (mseErrorTimestamps.length >= MSE_CRITICAL_THRESHOLD) {
                 mseCriticalTriggered = true;
-                mseQueue = [];
+                mseQueue = []; mseQueueReadIdx = 0;
                 diagLog('MSE CRITICAL (' + mseErrorTimestamps.length + ' errors in ' + (MSE_CRITICAL_WINDOW_MS / 1000) + 's) — hanging up');
                 hangup();
             }
@@ -1931,7 +1942,7 @@
             firstAppendDone = false;
             mseCriticalTriggered = false;
             mseErrorTimestamps = [];
-            mseQueue = []; // очищаем — старые чанки от предыдущего кодека вызовут ошибку
+            mseQueue = []; mseQueueReadIdx = 0; // очищаем — старые чанки от предыдущего кодека вызовут ошибку
             currentMseCodec = '';
 
             if (mediaSource && mediaSource.readyState === 'open') {
@@ -2021,7 +2032,7 @@
         function cleanupCall() {
             isActive = false;
             mseReady = false;
-            mseQueue = [];
+            mseQueue = []; mseQueueReadIdx = 0;
             mseCriticalTriggered = false;
             mseRestarting = false;
             currentMseCodec = '';
