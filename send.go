@@ -430,6 +430,11 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 			name := uriBase(u)
 			dst = join(name)
 		}
+		if err := os.MkdirAll(filepath.Dir(dst), 0700); err != nil {
+			close()
+			onComplete(fmt.Errorf("unable to create directory %s error: %s", filepath.Dir(dst), err.Error()))
+			return
+		}
 		destination, err := os.Create(dst)
 		if err != nil {
 			close()
@@ -1026,6 +1031,7 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 					case <-doneChan:
 						if !swap && sendErr == nil {
 							os.RemoveAll(join())
+							os.MkdirAll(join(), 0700)
 						}
 						fyne.Do(func() {
 							restart(w)
