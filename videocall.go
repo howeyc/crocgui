@@ -327,7 +327,8 @@ func handleCallCreate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		Room string `json:"room"`
+		Room     string `json:"room"`
+		GoSender bool   `json:"goSender"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request", http.StatusBadRequest)
@@ -346,6 +347,16 @@ func handleCallCreate(w http.ResponseWriter, r *http.Request) {
 			"room":   req.Room,
 		})
 		return
+	}
+
+	// Аналог JS init→startCall: на десктопе запускаем Go sender (захват камеры/микрофона)
+	// Выполняется once — только при создании комнаты локальным десктоп-браузером (#2)
+	if req.GoSender && !goSenderActive {
+		go func() {
+			if err := startGoSender(req.Room, "host", room); err != nil {
+				log.Debugf("GoSender start failed: %v", err)
+			}
+		}()
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -396,7 +407,8 @@ func handleCallJoin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		Room string `json:"room"`
+		Room     string `json:"room"`
+		GoSender bool   `json:"goSender"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request", http.StatusBadRequest)
@@ -411,6 +423,16 @@ func handleCallJoin(w http.ResponseWriter, r *http.Request) {
 	if room == nil {
 		http.Error(w, "Room not found", http.StatusNotFound)
 		return
+	}
+
+	// Аналог JS init→startCall: на десктопе запускаем Go sender (захват камеры/микрофона)
+	// Выполняется once — только при присоединении локальным десктоп-браузером (#2)
+	if req.GoSender && !goSenderActive {
+		go func() {
+			if err := startGoSender(req.Room, "guest", room); err != nil {
+				log.Debugf("GoSender start failed: %v", err)
+			}
+		}()
 	}
 
 	// Уведомляем инициатора
@@ -479,16 +501,6 @@ func handleCallWS(w http.ResponseWriter, r *http.Request) {
 	defer room.removeWS(peerID)
 
 	log.Debugf("WS connected: room=%s peer=%s", roomID, peerID)
-
-	// На десктопе: запускаем Go sender (захват камеры/микрофона через mediadevices)
-	// Запускаем в горутине — он дождётся settings пира перед захватом медиа
-	if !(isMobile || asMobile) && !goSenderActive {
-		go func() {
-			if err := startGoSender(roomID, peerID, room); err != nil {
-				log.Debugf("GoSender start failed: %v", err)
-			}
-		}()
-	}
 
 	// Определяем remote peer
 	remotePeer := getRemotePeer(room, peerID)

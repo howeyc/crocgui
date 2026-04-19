@@ -371,12 +371,11 @@
         }
 
         // ============= Определяем режим Go Sender (десктоп #2) =============
-        var isDesktop = window.matchMedia('(hover: hover)').matches;
         var goSender = (window.location.hash === '#2');
         var goSenderReallyActive = false;  // реальный статус от Go (обновляется через cmd:goSenderStatus)
         // Диагностика видимости goSenderBtn
         setTimeout(function() {
-            diagLog('GOSENDER INIT: hash=' + window.location.hash + ' isDesktop=' + isDesktop + ' goSender=' + goSender + ' S.goSender=' + S.goSender);
+            diagLog('GOSENDER INIT: hash=' + window.location.hash + ' goSender=' + goSender + ' S.goSender=' + S.goSender);
         }, 1000);
 
         // ============= Единый объект настроек =============
@@ -956,6 +955,7 @@
                     mediaRecorder.stop();
                     recorderStarted = false;
                 }
+                // Освобождаем камеру чтобы Go мог её захватить
                 if (localStream) {
                     localStream.getTracks().forEach(function(t) { t.stop(); });
                     localStream = null;
@@ -964,6 +964,10 @@
             } else {
                 // Go sender OFF: camera будет захвачена когда Go пришлёт goSenderStatus(false)
                 diagLog('GOSENDER OFF — waiting for Go to release camera');
+                if (isActive && localStream && (S.audio || S.video)) {
+                    recorderStarted = true;
+                    setupMediaRecorder();
+                }
             }
         });
 
@@ -1182,6 +1186,7 @@
             return name;
         }
 
+        // ============= Инициализация =============
         // acquireLocalMediaAndStartRecorder — захват камеры/микрофона и запуск MediaRecorder
         // Вызывается когда Go sender неактивен и браузер берёт отправку на себя
         async function acquireLocalMediaAndStartRecorder() {
@@ -1214,73 +1219,68 @@
                 var isLocalDesktop = (window.location.hash === '#2');
 
                 if (!isLocalDesktop) {
-                // Фаза 1: getUserMedia с фолбэк-аспектом 4:3 и mpx
-                var initR = applyMpx(4, 3, S.mpx);
-                W = initR.w;
-                var H = initR.h;
+                    // Фаза 1: getUserMedia с фолбэк-аспектом 4:3 и mpx
+                    var initR = applyMpx(4, 3, S.mpx);
+                    W = initR.w;
+                    H = initR.h;
 
-                localStream = await navigator.mediaDevices.getUserMedia({
-                    video: addFrameRateConstraint({ width: { ideal: W }, height: { ideal: H }, facingMode: 'user' }),
-                    audio: {
-                        echoCancellation: S.ec,
-                        noiseSuppression: S.ns,
-                        autoGainControl: S.agc
-                    }
-                });
-                localVideo.srcObject = localStream;
+                    localStream = await navigator.mediaDevices.getUserMedia({
+                        video: addFrameRateConstraint({ width: { ideal: W }, height: { ideal: H }, facingMode: 'user' }),
+                        audio: {
+                            echoCancellation: S.ec,
+                            noiseSuppression: S.ns,
+                            autoGainControl: S.agc
+                        }
+                    });
+                    localVideo.srcObject = localStream;
 
-                // Фаза 2: уточняем разрешение по нативному аспекту камеры + mpx
-                var camCaps = getCameraCapabilities();
-                var vtInit = localStream.getVideoTracks()[0];
-                if (vtInit) {
-                    var vsInit = vtInit.getSettings();
-                    diagLog('CAM init settings: ' + vsInit.width + 'x' + vsInit.height + ' fps=' + (vsInit.frameRate || 'n/a'));
+                    // Фаза 2: уточняем разрешение по нативному аспекту камеры + mpx
+                    var camCaps = getCameraCapabilities();
+                    var vtInit = localStream.getVideoTracks()[0];
+                    if (vtInit) {
+                        var vsInit = vtInit.getSettings();
+                        diagLog('CAM init settings: ' + vsInit.width + 'x' + vsInit.height + ' fps=' + (vsInit.frameRate || 'n/a'));
 
-                    // Определяем нативный аспект камеры
-                    // Приоритет: реальные настройки трека (учитывают ориентацию устройства),
-                    // затем capabilities сенсора (всегда ландшафт!), затем fallback 4:3
-                    var initAspect = 4 / 3;
-                    if (vsInit.width && vsInit.height) {
-                        initAspect = vsInit.width / vsInit.height;
-                        diagLog('CAM init aspect from settings: ' + initAspect.toFixed(2) + ' (' + vsInit.width + 'x' + vsInit.height + ')');
-                    } else if (camCaps && camCaps.maxW > 0 && camCaps.maxH > 0) {
-                        initAspect = camCaps.maxW / camCaps.maxH;
-                        diagLog('CAM caps: ' + camCaps.minW + '-' + camCaps.maxW + 'x' + camCaps.minH + '-' + camCaps.maxH + ' step=' + camCaps.stepW + 'x' + camCaps.stepH + ' aspect=' + initAspect.toFixed(2));
-                    } else {
-                        diagLog('CAM caps: NOT AVAILABLE, using fallback aspect=' + initAspect.toFixed(2));
-                    }
+                        var initAspect = 4 / 3;
+                        if (vsInit.width && vsInit.height) {
+                            initAspect = vsInit.width / vsInit.height;
+                            diagLog('CAM init aspect from settings: ' + initAspect.toFixed(2) + ' (' + vsInit.width + 'x' + vsInit.height + ')');
+                        } else if (camCaps && camCaps.maxW > 0 && camCaps.maxH > 0) {
+                            initAspect = camCaps.maxW / camCaps.maxH;
+                            diagLog('CAM caps: ' + camCaps.minW + '-' + camCaps.maxW + 'x' + camCaps.minH + '-' + camCaps.maxH + ' step=' + camCaps.stepW + 'x' + camCaps.stepH + ' aspect=' + initAspect.toFixed(2));
+                        } else {
+                            diagLog('CAM caps: NOT AVAILABLE, using fallback aspect=' + initAspect.toFixed(2));
+                        }
 
-                    // Пересчитываем разрешение по нативному аспекту + mpx
-                    var initR2 = applyMpx(initAspect, 1, S.mpx);
-                    W = initR2.w;
-                    H = initR2.h;
+                        var initR2 = applyMpx(initAspect, 1, S.mpx);
+                        W = initR2.w;
+                        H = initR2.h;
 
-                    // Применяем уточнённое разрешение
-                    try {
-                        await vtInit.applyConstraints(addFrameRateConstraint({ width: { ideal: W }, height: { ideal: H }, aspectRatio: { ideal: initAspect } }));
-                        vsInit = vtInit.getSettings();
-                        diagLog('CAM init aspect=' + initAspect.toFixed(2) + ' res=' + vsInit.width + 'x' + vsInit.height);
-                    } catch(e) { diagLog('CAM aspect apply failed: ' + e.message); }
-
-                    if (typeof vtInit.getCapabilities === 'function') {
                         try {
-                            var fullCaps = vtInit.getCapabilities();
-                            diagLog('CAM full capabilities: ' + JSON.stringify(fullCaps));
-                        } catch(e) { diagLog('CAM getCapabilities error: ' + e.message); }
-                    }
-                }
+                            await vtInit.applyConstraints(addFrameRateConstraint({ width: { ideal: W }, height: { ideal: H }, aspectRatio: { ideal: initAspect } }));
+                            vsInit = vtInit.getSettings();
+                            diagLog('CAM init aspect=' + initAspect.toFixed(2) + ' res=' + vsInit.width + 'x' + vsInit.height);
+                        } catch(e) { diagLog('CAM aspect apply failed: ' + e.message); }
 
-                // Если камера/микрофон выключены — освободить соответствующие треки из localStream
-                if (!S.video) {
-                    localStream.getVideoTracks().forEach(function(t) { t.stop(); localStream.removeTrack(t); });
-                    diagLog('CAM released (init with video off)');
-                }
-                if (!S.audio) {
-                    localStream.getAudioTracks().forEach(function(t) { t.stop(); localStream.removeTrack(t); });
-                    diagLog('MIC released (init with audio off)');
-                }
+                        if (typeof vtInit.getCapabilities === 'function') {
+                            try {
+                                var fullCaps = vtInit.getCapabilities();
+                                diagLog('CAM full capabilities: ' + JSON.stringify(fullCaps));
+                            } catch(e) { diagLog('CAM getCapabilities error: ' + e.message); }
+                        }
+                    }
+
+                    // Если камера/микрофон выключены — освободить соответствующие треки из localStream
+                    if (!S.video) {
+                        localStream.getVideoTracks().forEach(function(t) { t.stop(); localStream.removeTrack(t); });
+                        diagLog('CAM released (init with video off)');
+                    }
+                    if (!S.audio) {
+                        localStream.getAudioTracks().forEach(function(t) { t.stop(); localStream.removeTrack(t); });
+                        diagLog('MIC released (init with audio off)');
+                    }
                 } else {
-                    diagLog('INIT: skipping getUserMedia — waiting for Go sender (#2)');
+                    diagLog('INIT: skipping getUserMedia — waiting for Go sender (#1)');
                 }
 
                 var myCodecs = detectSupportedCodecs();
@@ -1327,7 +1327,7 @@
                 var resp = await fetch('/api/call/create', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ room: roomID, goSender: window.location.hash === '#2' })
+                    body: JSON.stringify({ room: roomID })
                 });
                 if (!resp.ok) return { created: false };
                 var data = await resp.json();
@@ -1350,7 +1350,7 @@
                 var resp = await fetch('/api/call/join', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ room: roomID, goSender: window.location.hash === '#2' })
+                    body: JSON.stringify({ room: roomID })
                 });
                 if (!resp.ok) return null;
                 return await resp.json();
@@ -1825,12 +1825,6 @@
             diagRecvChunks++;
             diagRecvBytes += data.byteLength;
             lastReceivedIndex++;
-            // Hex dump первых 2 чанков (init segment + первый media segment) для диагностики
-            if (diagRecvChunks <= 2) {
-                var arr = new Uint8Array(data);
-                var hex = Array.from(arr.slice(0, Math.min(arr.length, 128))).map(function(b) { return b.toString(16).padStart(2, '0'); }).join('');
-                diagLog('CHUNK[' + diagRecvChunks + '] hex(' + arr.length + '): ' + hex);
-            }
             if (mseCriticalTriggered) return;
 
             // Адаптивный catch-up: измеряем джиттер прибытия чанков
@@ -1905,12 +1899,11 @@
             if (!isActive) return;
             // 5. MSE создаётся из cmd:initCodec handler — не здесь
             // 6. Запускаем запись с известным recordCodec и разрешением (если browser sender)
-            // На десктопе #2: localStream=null, пропускаем — Go sender или goSenderStatus обработчик запустит
-            if (!S.goSender) {
+            if (!S.goSender || !goSenderReallyActive) {
                 recorderStarted = true;
                 setupMediaRecorder();
             } else {
-                diagLog('REC skip — Go sender expected');
+                diagLog('REC skip — Go sender active (confirmed)');
             }
         }
 
@@ -2086,17 +2079,9 @@
                 try { mediaRecorder = new MediaRecorder(localStream, {}); }
                 catch (e2) { showError('MediaRecorder not supported: ' + e2.message); return; }
             }
-            var recChunkCount = 0;
             mediaRecorder.ondataavailable = function(e) {
                 if (!e.data || e.data.size === 0 || !isActive) return;
                 e.data.arrayBuffer().then(function(buffer) {
-                    recChunkCount++;
-                    // Hex dump первых 2 чанков для сравнения с Go sender
-                    if (recChunkCount <= 2) {
-                        var arr = new Uint8Array(buffer);
-                        var hex = Array.from(arr.slice(0, Math.min(arr.length, 128))).map(function(b) { return b.toString(16).padStart(2, '0'); }).join('');
-                        diagLog('REC_CHUNK[' + recChunkCount + '] hex(' + arr.length + '): ' + hex);
-                    }
                     sendChunk(buffer);
                 }).catch(function(err) {
                     diagLog('REC arrayBuffer error: ' + err.message);

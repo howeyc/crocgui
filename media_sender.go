@@ -3,8 +3,10 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"math"
+	"sync/atomic"
 	"time"
 
 	"github.com/pion/mediadevices"
@@ -14,7 +16,8 @@ import (
 // ========== Переменные состояния — аналоги JS ==========
 
 var (
-	goSenderActive bool
+	goSenderActive   bool
+	goSenderStarting atomic.Bool // защита от повторного запуска (once)
 )
 
 // localStream — аналог JS: var localStream = null
@@ -29,11 +32,26 @@ var recorderStarted bool
 // Go sender state для обработки команд от remote peer — аналоги JS peerSettings, recordCodec, lastHandledMpx
 var (
 	goSenderRoom       *VideoCallRoom         // текущая комната
+	goSenderLocalPeer  string                 // ID локального пира (браузер с #1)
 	goSenderRemotePeer string                 // ID remote пира
 	goPeerSettings     map[string]interface{} // последние настройки remote пира (аналог JS peerSettings)
 	goRecordCodec      string                 // negotiated record codec (аналог JS recordCodec)
 	goLastHandledMpx   float64                // debounce по mpx (аналог JS lastHandledMpx)
 )
+
+// sendGoSenderStatus отправляет статус Go sender локальному браузеру через WS
+func sendGoSenderStatus(active bool) {
+	if goSenderRoom == nil || goSenderLocalPeer == "" {
+		log.Debugf("GoSender: sendGoSenderStatus SKIP active=%v room=%v localPeer=%q", active, goSenderRoom != nil, goSenderLocalPeer)
+		return
+	}
+	msg, _ := json.Marshal(map[string]interface{}{
+		"cmd":    "goSenderStatus",
+		"active": active,
+	})
+	log.Debugf("GoSender: sending status active=%v to peer=%s", active, goSenderLocalPeer)
+	goSenderRoom.forwardTextToWS(goSenderLocalPeer, string(msg))
+}
 
 func detectSupportedCodecs() []string {
 	// На десктопе через mediadevices поддерживаем VP8+Opus
@@ -93,6 +111,18 @@ func setupMediaRecorder(stream mediadevices.MediaStream, codec string, W, H int,
 	mediaRecorderInst = rec
 	recorderStarted = true
 	rec.start(CHUNK_INTERVAL_MS)
+
+	// Аналог JS: mediaRecorder.onstart → ws.send({cmd: "initCodec", codec: recMime})
+	// Remote peer не создаст MSE без этого сообщения
+	if goSenderRoom != nil && goSenderRemotePeer != "" {
+		initCodecMsg, _ := json.Marshal(map[string]interface{}{
+			"cmd":   "initCodec",
+			"codec": codec,
+		})
+		goSenderRoom.forwardTextToWS(goSenderRemotePeer, string(initCodecMsg))
+		log.Debugf("GoSender: sent initCodec=%s to remote peer=%s", codec, goSenderRemotePeer)
+	}
+
 	return nil
 }
 
@@ -135,6 +165,11 @@ func toStringSlice(v interface{}) []string {
 // Вызывается когда remote peer присылает settings JSON через WebSocket.
 // Отвечает за: codec negotiation, resolution change (mpx), composition change
 func handlePeerSettingsForGoSender(msg map[string]interface{}) {
+	// Если startGoSender ещё не завершился — пропускаем, чтобы не было race
+	if goSenderStarting.Load() {
+		log.Debugf("GoSender: handlePeerSettingsForGoSender skipped — startGoSender in progress")
+		return
+	}
 	if !goSenderActive || localStream == nil || goSenderRoom == nil {
 		return
 	}
@@ -259,6 +294,7 @@ func restartGoSenderWithResolution(mpx float64) {
 	stream, err := getUserMedia(W, H)
 	if err != nil {
 		log.Debugf("GoSender: getUserMedia restart failed: %v", err)
+		sendGoSenderStatus(false)
 		goSenderActive = false
 		return
 	}
@@ -290,6 +326,13 @@ func handleRestartRecorderForGoSender() {
 // Запускает захват камеры/микрофона через mediadevices,
 // кодирует VP8+Opus, муксит в WebM чанки и отправляет через WebSocket
 func startGoSender(roomID, peerID string, room *VideoCallRoom) error {
+	// Защита от повторного запуска (once) — аналог JS init() выполняется один раз
+	if !goSenderStarting.CompareAndSwap(false, true) {
+		log.Debugf("GoSender: start already in progress, skipping")
+		return nil
+	}
+	defer goSenderStarting.Store(false)
+
 	if localStream != nil {
 		stopGoSender()
 	}
@@ -298,6 +341,7 @@ func startGoSender(roomID, peerID string, room *VideoCallRoom) error {
 
 	// Сохраняем контекст для handlePeerSettingsForGoSender
 	goSenderRoom = room
+	goSenderLocalPeer = peerID
 	goSenderRemotePeer = remotePeer
 
 	// Ждём settings от remote пира (таймаут 10 сек)
@@ -327,15 +371,16 @@ func startGoSender(roomID, peerID string, room *VideoCallRoom) error {
 	// Аналог JS: navigator.mediaDevices.getUserMedia(...)
 	stream, err := getUserMedia(W, H)
 	if err != nil {
+		sendGoSenderStatus(false)
 		return fmt.Errorf("getUserMedia: %w", err)
 	}
 	localStream = stream
 
 	// sendChunk callback — аналог JS sendChunk(buffer)
+	// Примечание: НЕ проверяем goSenderActive — init segment отправляется
+	// ВНУТРИ setupMediaRecorder() → rec.start() → onChunk(), когда goSenderActive ещё false.
+	// Callback очищается в stopGoSender(), поэтому лишняя проверка не нужна.
 	sendChunkFn = func(data []byte) {
-		if !goSenderActive {
-			return
-		}
 		room.addChunk(peerID, data)
 		if remotePeer != "" {
 			room.forwardChunkToWS(remotePeer, data)
@@ -346,14 +391,17 @@ func startGoSender(roomID, peerID string, room *VideoCallRoom) error {
 	codec := detectCodec()
 
 	// Аналог JS: setupMediaRecorder()
-	goSenderActive = true
+	// ВАЖНО: goSenderActive = true ТОЛЬКО после успешного setup,
+	// иначе handlePeerSettingsForGoSender увидит active и запустит параллельный restart
 	err = setupMediaRecorder(stream, codec, W, H, sendChunkFn)
 	if err != nil {
-		goSenderActive = false
+		sendGoSenderStatus(false)
 		return fmt.Errorf("setupMediaRecorder: %w", err)
 	}
+	goSenderActive = true
 
 	log.Debugf("GoSender started: room=%s peer=%s", roomID, peerID)
+	sendGoSenderStatus(true)
 	return nil
 }
 
@@ -523,6 +571,7 @@ func restartGoSenderTrack(trackType string, wantAudio, wantVideo bool) {
 	stream, err := getUserMedia(W, H)
 	if err != nil {
 		log.Debugf("GoSender: getUserMedia restart failed: %v", err)
+		sendGoSenderStatus(false)
 		goSenderActive = false
 		return
 	}
@@ -543,6 +592,7 @@ func stopGoSender() {
 		mediaRecorderInst = nil
 	}
 	recorderStarted = false
+	sendGoSenderStatus(false)
 	goSenderActive = false
 
 	// Аналог JS: if (localStream) localStream.getTracks().forEach(t => t.stop())

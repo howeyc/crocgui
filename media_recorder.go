@@ -193,6 +193,18 @@ func (mr *mediaRecorder) start(intervalMs int) {
 		}
 	}()
 
+	// OpusHead — required by Chrome MSE for Opus decoder initialization
+	// https://wiki.xiph.org/OggOpus#ID_Header
+	opusHead := []byte{
+		'O', 'p', 'u', 's', 'H', 'e', 'a', 'd', // magic (8 bytes)
+		1,                                      // version (1 byte)
+		1,                                      // channel count: mono — MonoMixer default in opus.NewParams (1 byte)
+		0x30, 0x0C,                             // pre-skip: 3120 samples (LE uint16)
+		0x80, 0xBB, 0x00, 0x00,                // input sample rate: 48000 Hz (LE uint32)
+		0x00, 0x00,                             // output gain: 0 (LE uint16)
+		0,                                      // channel mapping family: 0 (1 byte)
+	}
+
 	// WebM tracks — аналог JS MediaRecorder {mimeType} + Video/Audio specification
 	tracks := []webm.TrackEntry{
 		{
@@ -201,7 +213,7 @@ func (mr *mediaRecorder) start(intervalMs int) {
 			TrackUID:        1,
 			CodecID:         "V_VP8",
 			TrackType:       1,
-			DefaultDuration: 33333333, // ~30fps
+			DefaultDuration: 100000000, // 10fps = TARGET_FPS в JS
 			Video: &webm.Video{
 				PixelWidth:  uint64(mr.W),
 				PixelHeight: uint64(mr.H),
@@ -213,7 +225,10 @@ func (mr *mediaRecorder) start(intervalMs int) {
 			TrackUID:        2,
 			CodecID:         "A_OPUS",
 			TrackType:       2,
-			DefaultDuration: 20000000, // 20ms
+			DefaultDuration: 20000000, // 20ms (Latency20ms в opus.NewParams)
+			CodecPrivate:    opusHead,
+			CodecDelay:      65000000,  // pre-skip: 3120 samples × 10⁹ / 48000 ≈ 65ms in ns
+			SeekPreRoll:     80000000,  // 80ms in ns (WebM spec for Opus)
 			Audio: &webm.Audio{
 				SamplingFrequency: 48000,
 				Channels:          1,
@@ -260,6 +275,12 @@ func (mr *mediaRecorder) start(intervalMs int) {
 
 	// Init segment — отправляем первым (аналог JS: первый чанк от MediaRecorder)
 	if initSeg := mr.buf.take(); len(initSeg) > 0 && mr.onChunk != nil {
+		// Hex dump для диагностики Chrome MSE
+		hexLen := len(initSeg)
+		if hexLen > 128 {
+			hexLen = 128
+		}
+		log.Debugf("MediaRecorder init segment hex (%d bytes): %x", len(initSeg), initSeg[:hexLen])
 		mr.onChunk(initSeg)
 		log.Debugf("MediaRecorder sent init segment (%d bytes)", len(initSeg))
 	}

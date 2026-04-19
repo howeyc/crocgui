@@ -177,7 +177,8 @@ ios:
 	fyne package -os ios --release
 
 install:
-	GOFLAGS=-ldflags=-s go install
+	# Требует: sudo apt install libopus-dev (системная libopus без AVX, в отличие от встроенной .a)
+	GOFLAGS=-ldflags=-s go install -tags dynamic
 
 darm: 
 	#brew install glfw

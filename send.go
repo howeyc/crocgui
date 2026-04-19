@@ -551,7 +551,11 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 			}
 
 			if davServer.IsActive() {
-				fullURLStr += "#1"
+				if isMobile || asMobile {
+					fullURLStr += "#1"
+				} else {
+					fullURLStr += "#2"
+				}
 			}
 			log.Debugf("[createWebDAVTree] Opening URL: %s", fullURLStr)
 			chatOpened.Store(true) // сброс: браузер открыт вручную через дерево
@@ -659,7 +663,11 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 							lastCount += len(newMsgs)
 							if chatOpened.CompareAndSwap(false, true) && chatURL != "" {
 								if davServer.IsActive() {
-									chatURL += "#1"
+									if isMobile || asMobile {
+										chatURL += "#1"
+									} else {
+										chatURL += "#2"
+									}
 								}
 
 								log.Debugf("[polling] auto-opening browser: %s", chatURL)
@@ -1325,7 +1333,11 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 						// deepLink davX: webdavX:
 						if _, ccn, _, ok := isDAV(uriString); ok {
 							if davServer.IsActive() {
-								ccn += "#1"
+								if isMobile || asMobile {
+									ccn += "#1"
+								} else {
+									ccn += "#2"
+								}
 							}
 
 							log.Debugf("[intent] isDAV ccn=%q, opening manually", ccn)

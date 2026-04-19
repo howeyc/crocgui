@@ -441,7 +441,7 @@ func crocNew(NoRestart bool, ctx context.Context, opt croc.Options) (client *cro
 		return croc.New(opt)
 	}
 	return croc.NewCtx(ctx, opt)
-	return croc.New(opt)
+	// return croc.New(opt)
 }
 
 func tcpRun(NoRestart bool, ctx context.Context, debugLevel, host, port, password string, banner ...string) (err error) {
@@ -449,5 +449,5 @@ func tcpRun(NoRestart bool, ctx context.Context, debugLevel, host, port, passwor
 		return tcp.Run(debugLevel, host, port, password, banner...)
 	}
 	return tcp.RunCtx(ctx, debugLevel, host, port, password, banner...)
-	return tcp.Run(debugLevel, host, port, password, banner...)
+	// return tcp.Run(debugLevel, host, port, password, banner...)
 }
