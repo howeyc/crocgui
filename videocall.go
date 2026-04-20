@@ -327,8 +327,7 @@ func handleCallCreate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		Room     string `json:"room"`
-		GoSender bool   `json:"goSender"`
+		Room string `json:"room"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request", http.StatusBadRequest)
@@ -347,16 +346,6 @@ func handleCallCreate(w http.ResponseWriter, r *http.Request) {
 			"room":   req.Room,
 		})
 		return
-	}
-
-	// Аналог JS init→startCall: на десктопе запускаем Go sender (захват камеры/микрофона)
-	// Выполняется once — только при создании комнаты локальным десктоп-браузером (#2)
-	if req.GoSender && !goSenderActive {
-		go func() {
-			if err := startGoSender(req.Room, "host", room); err != nil {
-				log.Debugf("GoSender start failed: %v", err)
-			}
-		}()
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -407,8 +396,7 @@ func handleCallJoin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		Room     string `json:"room"`
-		GoSender bool   `json:"goSender"`
+		Room string `json:"room"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request", http.StatusBadRequest)
@@ -423,16 +411,6 @@ func handleCallJoin(w http.ResponseWriter, r *http.Request) {
 	if room == nil {
 		http.Error(w, "Room not found", http.StatusNotFound)
 		return
-	}
-
-	// Аналог JS init→startCall: на десктопе запускаем Go sender (захват камеры/микрофона)
-	// Выполняется once — только при присоединении локальным десктоп-браузером (#2)
-	if req.GoSender && !goSenderActive {
-		go func() {
-			if err := startGoSender(req.Room, "guest", room); err != nil {
-				log.Debugf("GoSender start failed: %v", err)
-			}
-		}()
 	}
 
 	// Уведомляем инициатора
@@ -586,23 +564,6 @@ func handleCallWS(w http.ResponseWriter, r *http.Request) {
 			// Текстовые сообщения (settings, restart_recorder) — перенаправляем remote peer
 			if remotePeer != "" {
 				room.forwardTextToWS(remotePeer, dataStr)
-			}
-			// На десктопе: различаем локального пира (direct #1, goSender=true)
-			// от удалённого пира (через прокси, goSender=false)
-			if !(isMobile || asMobile) && msg != nil && msg["cmd"] == "settings" {
-				if isLocal, _ := msg["goSender"].(bool); isLocal {
-					// Настройки от ЛОКАЛЬНОГО браузера (direct #1)
-					handleLocalPeerSettingsForGoSender(msg, roomID, peerID, room)
-				} else {
-					// Настройки от УДАЛЁННОГО пира (через прокси)
-					if goSenderActive {
-						handlePeerSettingsForGoSender(msg)
-					}
-				}
-			}
-			// restart_recorder всегда от remote peer
-			if goSenderActive && dataStr == "restart_recorder" {
-				handleRestartRecorderForGoSender()
 			}
 		}
 	}

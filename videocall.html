@@ -115,25 +115,6 @@
             overflow: visible;
             border-radius: 0 0 8px 8px;
         }
-        /* Go Sender кнопка — верхний правый угол PiP */
-        .pip-container .go-sender-wrap {
-            position: absolute;
-            top: 4px;
-            right: 4px;
-            z-index: 26;
-            opacity: 0;
-            transition: opacity 0.3s;
-        }
-        body.show-pip-controls .pip-container .go-sender-wrap { opacity: 1; }
-        .pip-container .go-sender-wrap .ctrl-btn.go-sender {
-            background: rgba(100, 100, 100, 0.85);
-        }
-        .pip-container .go-sender-wrap .ctrl-btn.go-sender:hover {
-            background: rgba(130, 130, 130, 0.95);
-        }
-        .pip-container .go-sender-wrap .ctrl-btn.go-sender.off {
-            background: rgba(100, 100, 100, 0.85);
-        }
         #pipResLabel {
             position: absolute;
             bottom: calc(100% + 4px);
@@ -219,8 +200,6 @@
         .ctrl-btn.mic.off { background: #e94560; }
         .ctrl-btn.cam { background: #4ecca3; }
         .ctrl-btn.cam.off { background: #e94560; }
-        .ctrl-btn.go-sender { background: #4ecca3; }
-        .ctrl-btn.go-sender.off { background: #e94560; }
         .ctrl-btn.hangup { background: #555; }
         .ctrl-btn.hangup:hover { background: #666; }
         .ctrl-btn.fullscreen { background: #4ecca3; }
@@ -304,9 +283,6 @@
             </div>
             <div class="pip-container pip-tl" id="pipContainer">
                 <div class="res-label" id="pipResLabel"></div>
-                <div class="go-sender-wrap">
-                    <button type="button" class="ctrl-btn go-sender" id="goSenderBtn" title="Toggle Go/Browser sender" style="display:none">⏸️</button>
-                </div>
                 <video id="localVideo" autoplay muted playsinline></video>
                 <div class="pip-controls" id="pipControls">
                     <button type="button" class="ctrl-btn mic" id="micBtn" title="Mic">🎤</button>
@@ -350,7 +326,6 @@
         var ecBtn = document.getElementById('ecBtn');
         var nsBtn = document.getElementById('nsBtn');
         var agcBtn = document.getElementById('agcBtn');
-        var goSenderBtn = document.getElementById('goSenderBtn');
 
         function getBrowserTag() {
             var ua = navigator.userAgent;
@@ -365,19 +340,8 @@
         var _chatUserId = localStorage.getItem('chatUserId') || 'user_' + Math.random().toString(36).substr(2, 9);
         localStorage.setItem('chatUserId', _chatUserId);
 
-        // Сохраняем hash в sessionStorage при загрузке видеозвонка
-        if (window.location.hash) {
-            sessionStorage.setItem('webdav_hash', window.location.hash);
-        }
-
-        // ============= Определяем режим Go Sender (десктоп #2) =============
+        // ============= Определяем десктоп =============
         var isDesktop = window.matchMedia('(hover: hover)').matches;
-        var goSender = (window.location.hash === '#2');
-        var goSenderReallyActive = false;  // реальный статус от Go (обновляется через cmd:goSenderStatus)
-        // Диагностика видимости goSenderBtn
-        setTimeout(function() {
-            diagLog('GOSENDER INIT: hash=' + window.location.hash + ' isDesktop=' + isDesktop + ' goSender=' + goSender + ' S.goSender=' + S.goSender);
-        }, 1000);
 
         // ============= Единый объект настроек =============
         var S = {
@@ -393,8 +357,7 @@
             ns: true,
             agc: true,
             mpx: 0.1,
-            pipCorner: 0,        // только локально, не отправляется пиру
-            goSender: goSender   // Go захватывает медиа вместо браузера
+            pipCorner: 0         // только локально, не отправляется пиру
         };
 
         function loadSettings() {
@@ -413,7 +376,6 @@
                 if (s.agc !== undefined) S.agc = s.agc;
                 if (s.mpx !== undefined) S.mpx = s.mpx;
                 if (s.pipCorner !== undefined) S.pipCorner = s.pipCorner;
-                if (s.goSender !== undefined && goSender) S.goSender = s.goSender;
             } catch(e) {}
         }
 
@@ -445,10 +407,6 @@
             for (var i = 0; i < mpxValues.length; i++) {
                 mpxBtns[i].classList.toggle('active', Math.abs(S.mpx - mpxValues[i]) < 0.01);
             }
-            // Go sender button — видна только на десктопе (#2)
-            goSenderBtn.style.display = (window.location.hash === '#2') ? '' : 'none';
-            goSenderBtn.classList.toggle('off', !goSenderReallyActive);
-            goSenderBtn.textContent = goSenderReallyActive ? '\u23F8\uFE0F' : '\uD83D\uDD34';
             // Применяем аудио фильтры
             if (localStream) {
                 var tracks = localStream.getAudioTracks();
@@ -485,7 +443,6 @@
                 width: vs.width || 0,
                 height: vs.height || 0,
                 frameRate: vs.frameRate || 0,
-                goSender: S.goSender,
                 displayW: dw,
                 displayH: dh
             }));
@@ -944,28 +901,6 @@
             S.agc = !S.agc;
             applySettings(); saveSettings(); sendSettings();
         });
-        // goSenderBtn — toggle Go sender vs browser sender
-        // Go сам определит нужно ли стартовать по изменению goSender в settings
-        goSenderBtn.addEventListener('click', function() {
-            S.goSender = !S.goSender;
-            applySettings(); saveSettings(); sendSettings();
-            if (S.goSender) {
-                // Go sender ON: stop browser MediaRecorder and release camera
-                diagLog('GOSENDER ON — stopping browser recorder, releasing camera');
-                if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-                    mediaRecorder.stop();
-                    recorderStarted = false;
-                }
-                if (localStream) {
-                    localStream.getTracks().forEach(function(t) { t.stop(); });
-                    localStream = null;
-                    localVideo.srcObject = null;
-                }
-            } else {
-                // Go sender OFF: camera будет захвачена когда Go пришлёт goSenderStatus(false)
-                diagLog('GOSENDER OFF — waiting for Go to release camera');
-            }
-        });
 
         hangupBtn.addEventListener('click', function() { hangup(); });
 
@@ -1182,38 +1117,12 @@
             return name;
         }
 
-        // acquireLocalMediaAndStartRecorder — захват камеры/микрофона и запуск MediaRecorder
-        // Вызывается когда Go sender неактивен и браузер берёт отправку на себя
-        async function acquireLocalMediaAndStartRecorder() {
-            try {
-                var initR = applyMpx(4, 3, S.mpx);
-                var aW = initR.w;
-                var aH = initR.h;
-                localStream = await navigator.mediaDevices.getUserMedia({
-                    video: addFrameRateConstraint({ width: { ideal: aW }, height: { ideal: aH }, facingMode: 'user' }),
-                    audio: { echoCancellation: S.ec, noiseSuppression: S.ns, autoGainControl: S.agc }
-                });
-                localVideo.srcObject = localStream;
-                diagLog('GOSENDER: browser acquired camera ' + aW + 'x' + aH);
-                if (isActive && (S.audio || S.video)) {
-                    recorderStarted = true;
-                    setupMediaRecorder();
-                }
-            } catch(e) {
-                diagLog('GOSENDER: browser getUserMedia failed: ' + e.message);
-            }
-        }
 
         // ============= Инициализация =============
         async function init() {
             try {
                 var W = 320, H = 240; // default для diagLog
 
-                // Для #2 (локальный десктоп): пропускаем getUserMedia — Go sender захватит камеру
-                // Если Go sender упадёт, браузер захватит камеру в обработчике goSenderStatus
-                var isLocalDesktop = (window.location.hash === '#2');
-
-                if (!isLocalDesktop) {
                 // Фаза 1: getUserMedia с фолбэк-аспектом 4:3 и mpx
                 var initR = applyMpx(4, 3, S.mpx);
                 W = initR.w;
@@ -1279,9 +1188,6 @@
                     localStream.getAudioTracks().forEach(function(t) { t.stop(); localStream.removeTrack(t); });
                     diagLog('MIC released (init with audio off)');
                 }
-                } else {
-                    diagLog('INIT: skipping getUserMedia — waiting for Go sender (#2)');
-                }
 
                 var myCodecs = detectSupportedCodecs();
                 diagLog('CODECS supported: ' + myCodecs.map(codecDisplayName).join(' | '));
@@ -1327,7 +1233,7 @@
                 var resp = await fetch('/api/call/create', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ room: roomID, goSender: window.location.hash === '#2' })
+                    body: JSON.stringify({ room: roomID })
                 });
                 if (!resp.ok) return { created: false };
                 var data = await resp.json();
@@ -1350,7 +1256,7 @@
                 var resp = await fetch('/api/call/join', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ room: roomID, goSender: window.location.hash === '#2' })
+                    body: JSON.stringify({ room: roomID })
                 });
                 if (!resp.ok) return null;
                 return await resp.json();
@@ -1358,7 +1264,6 @@
         }
 
         async function sendChunk(buffer) {
-            if (S.goSender) return; // Go sender active — browser doesn't send
             diagSentChunks++;
             diagSentBytes += buffer.byteLength;
             if (wsConnected && ws && ws.readyState === WebSocket.OPEN) {
@@ -1755,45 +1660,6 @@
                                         setupMSE();
                                     }
                                 }
-                            } else if (msg.cmd === 'goSenderStatus') {
-                                // Go sender сообщает свой статус (только active, без desktop — десктоп определяется по #2 в URL)
-                                var wasActive = goSenderReallyActive;
-                                goSenderReallyActive = !!msg.active;
-                                diagLog('GOSENDER status: active=' + goSenderReallyActive + ' (was=' + wasActive + ')');
-                                applySettings();
-                                if (!goSenderReallyActive) {
-                                    // Go sender неактивен (упал или не смог стартовать) — браузер берёт отправку на себя
-                                    S.goSender = false;
-                                    if (!localStream) {
-                                        // Камера ещё не захвачена (#2 ждёт) — захватываем сейчас
-                                        diagLog('GOSENDER inactive — browser acquiring camera');
-                                        acquireLocalMediaAndStartRecorder();
-                                    } else if (wasActive) {
-                                        // Go sender упал — перезапускаем браузерный рекордер
-                                        diagLog('GOSENDER fell — starting browser recorder');
-                                        if (isActive && localStream && (S.audio || S.video)) {
-                                            recorderStarted = true;
-                                            setupMediaRecorder();
-                                        }
-                                    }
-                                    sendSettings();
-                                } else if (goSenderReallyActive && !wasActive) {
-                                    // Go sender заработал — останавливаем браузерный рекордер, освобождаем камеру
-                                    diagLog('GOSENDER active — stopping browser recorder, releasing camera');
-                                    S.goSender = true;
-                                    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-                                        mediaRecorder.stop();
-                                        recorderStarted = false;
-                                    }
-                                    // Освобождаем камеру чтобы Go мог её захватить
-                                    if (localStream) {
-                                        localStream.getTracks().forEach(function(t) { t.stop(); });
-                                        localStream = null;
-                                        localVideo.srcObject = null;
-                                        diagLog('GOSENDER: browser released camera for Go sender');
-                                    }
-                                    sendSettings();
-                                }
                             } else if (msg.cmd === 'myRes') {
                                 // Пир сообщает своё текущее разрешение камеры (для remoteResLabel)
                                 if (msg.width > 0 && msg.height > 0) {
@@ -1904,14 +1770,9 @@
             }
             if (!isActive) return;
             // 5. MSE создаётся из cmd:initCodec handler — не здесь
-            // 6. Запускаем запись с известным recordCodec и разрешением (если browser sender)
-            // На десктопе #2: localStream=null, пропускаем — Go sender или goSenderStatus обработчик запустит
-            if (!S.goSender) {
-                recorderStarted = true;
-                setupMediaRecorder();
-            } else {
-                diagLog('REC skip — Go sender expected');
-            }
+            // 6. Запускаем запись с известным recordCodec и разрешением
+            recorderStarted = true;
+            setupMediaRecorder();
         }
 
         // ============= MSE =============
@@ -1925,7 +1786,6 @@
             mediaSource.addEventListener('sourceopen', function() {
                 try {
                     sourceBuffer = mediaSource.addSourceBuffer(codec);
-                    // sourceBuffer.mode = 'sequence';
                     sourceBuffer.mode = 'segments';                   
                     sourceBuffer.addEventListener('updateend', function() { onMSEUpdateEnd(); });
                     sourceBuffer.addEventListener('error', function() {

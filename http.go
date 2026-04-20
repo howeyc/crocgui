@@ -704,34 +704,11 @@ func (h *WebDAVWithDirectoryListing) serveDirectoryListing(w http.ResponseWriter
 	</div>
 
 	<script>
-		// Сохраняем и восстанавливаем hash (маркер локального подключения)
-		if (window.location.hash) {
-			sessionStorage.setItem('webdav_hash', window.location.hash);
-		}
-		var savedHash = sessionStorage.getItem('webdav_hash') || '';
-		if (savedHash && !window.location.hash) {
-			window.location.hash = savedHash;
-		}
-
-		// Перехват кликов по ссылкам навигации — добавляем сохранённый hash
-		document.addEventListener('click', function(e) {
-			var a = e.target.closest('.directory-listing a, .breadcrumbs a');
-			if (!a) return;
-			var href = a.getAttribute('href');
-			var hash = sessionStorage.getItem('webdav_hash') || '';
-			if (href && hash && href.indexOf('#') === -1) {
-				e.preventDefault();
-				window.location = href + hash;
-			}
-		});
-
 		// Получаем уникальный идентификатор для текущего пользователя
-		var chatRole = (savedHash === '') ? 'guest' : 'host';
-		var chatStorageKey = 'chatSessionId_' + chatRole;
-		let currentUserId = sessionStorage.getItem(chatStorageKey);
+		let currentUserId = sessionStorage.getItem('chatSessionId');
 		if (!currentUserId) {
-			currentUserId = chatRole + '_' + Math.random().toString(36).substr(2, 9);
-			sessionStorage.setItem(chatStorageKey, currentUserId);
+			currentUserId = 'user_' + Math.random().toString(36).substr(2, 9);
+			sessionStorage.setItem('chatSessionId', currentUserId);
 		}
 
 		const chatMessages = document.getElementById('chatMessages');
@@ -764,12 +741,8 @@ func (h *WebDAVWithDirectoryListing) serveDirectoryListing(w http.ResponseWriter
 			var callMatch = msg.text.match(/^📞\s*(\/videocall\S+)/);
 			if (callMatch) {
 				var rawUrl = callMatch[1];
-				// Убираем любой хеш из сохранённого URL
-				var hashIdx = rawUrl.indexOf('#');
-				if (hashIdx !== -1) rawUrl = rawUrl.substring(0, hashIdx);
 				var a = document.createElement('a');
-					// Всегда добавляем СВОЙ hash — локальный (#1 мобильный / #2 десктоп) или удалённый (пусто)
-				a.href = rawUrl + (savedHash || '');
+				a.href = rawUrl;
 				a.target = '_blank';
 				a.className = 'call-link';
 				a.textContent = '📞Call';
@@ -871,12 +844,10 @@ func (h *WebDAVWithDirectoryListing) serveDirectoryListing(w http.ResponseWriter
 		const chatCallBtn = document.getElementById('chatCallBtn');
 		chatCallBtn.addEventListener('click', function() {
 			const roomId = 'call_' + Math.random().toString(36).substr(2, 8);
-			// Отправляем ссылку БЕЗ хеша — получатель сам добавит #1/#2 если он локальный
 			const callUrl = '/videocall.html?room=' + roomId;
 			if (chatWS && chatWS.readyState === WebSocket.OPEN) {
 				chatWS.send(JSON.stringify({ text: '📞 ' + callUrl, sender: currentUserId }));
-				// Открываем себе С хешем если мы локальные
-				window.open(callUrl + (savedHash || ''), '_blank');
+				window.open(callUrl, '_blank');
 			}
 		});
 	</script>
