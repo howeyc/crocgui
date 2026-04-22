@@ -308,7 +308,6 @@
     <script>
         // ============= Конфигурация =============
         var CHUNK_INTERVAL_MS = 100;
-        var MAX_BUFFER_SECONDS = 10;
         var WS_RECONNECT_MS = 2000;
         var TARGET_FPS = 10;
 
@@ -517,24 +516,26 @@
         var negotiatedCodec = '';
         var recordCodec = '';    // чем мы записываем (MediaRecorder)
         var incomingCodec = '';  // какой кодек будет у входящего потока (MSE)
-        var trimScheduled = false;
         var firstAppendDone = false;
 
         // ============= Адаптивный catch-up =============
-        var LIVE_TARGET_MS = 250;         // целевой лаг (мс) — точка равновесия rate=1.0
-        var LIVE_RATE_K = 0.1;            // коэффициент наклона: rate = A + K * behind
-        var LIVE_RATE_A = 1 - LIVE_RATE_K * (LIVE_TARGET_MS / 1000); // playbackRate при behind=0
-        var LIVE_RATE_MAX = 1.1;          // максимальный playbackRate (clamp)
-        var EWMA_ALPHA = 0.3;             // сглаживание оценки джиттера
-        var STALL_BEHIND = LIVE_TARGET_MS*2/1000;       // порог для stall seek (сек)
-        var STALL_TARGET = LIVE_TARGET_MS/1000;      // отступ от bufEnd при stall seek (сек)
-        var EMERGENCY_BEHIND = STALL_BEHIND*2;     // порог для emergency seek (сек)
-        var EMERGENCY_TARGET = STALL_TARGET*2; // отступ от bufEnd при emergency seek (сек)
-        var STALL_DEBOUNCE_MS = 3000;     // минимальный интервал между emergency seek (мс)
+        var BUST_MS = 800;                    // верхняя граница зоны 1.0 (мс)
+        var SLOMO_MS = 400;                    // нижняя граница зоны 1.0 (мс)
+        var BUST = BUST_MS / 1000;             // в секундах
+        var SLOMO = SLOMO_MS / 1000;           // в секундах
+        var RATE_MAX = 1.25;                   // макс скорость на разгоне
+        var RATE_MIN = 0.1;                    // мин скорость на торможении
+        var EMERGENCY_BEHIND = BUST * 2;       // порог emergency seek (сек)
+        var STALL_DEBOUNCE_MS = 3000;          // мин интервал между emergency seek (мс)
+        var BUF_START_THRESHOLD = CHUNK_INTERVAL_MS / 1000 * 2; // порог BUF-START seek (2 чанка)
+        var EWMA_ALPHA = 0.3;                  // сглаживание оценки джиттера
 
         var liveJitter = 0.1;             // EWMA оценка джиттера сети (сек)
         var liveLastChunkTime = 0;        // время прибытия предыдущего чанка (performance.now)
         var lastEmergencySeekTime = 0;    // timestamp последнего emergency seek
+        var stallStartWallTime = 0;       // Date.now() момента начала stall
+        var stallStartCt = 0;             // currentTime в момент начала stall
+        var lastStallLogTime = 0;         // троттлинг логов stall-seek
 
         var diagSentChunks = 0;
         var diagSentBytes = 0;
@@ -969,34 +970,60 @@
                     var now = Date.now();
                     var isStalled = remoteVideo.readyState < 3;
 
-                    // 1. Stall seek при реальном stall (readyState < 3)
-                    if (isStalled && behind > STALL_BEHIND && (now - lastEmergencySeekTime) > STALL_DEBOUNCE_MS) {
-                        var target = bufEnd - STALL_TARGET;
-                        if (target > ct) {
-                            diagLog('ADAPTIVE STALL seek ct=' + ct.toFixed(1) + ' -> ' + target.toFixed(1) + ' behind=' + behind.toFixed(1) + 's');
-                            remoteVideo.currentTime = target;
+                    // 3. Трёхзонный playbackRate: торможение / 1.0 / разгон
+                    if (firstAppendDone) {
+                        var newRate;
+                        if (behind <= SLOMO) {
+                            // Зона торможения: пропорциональный контроллер, буфер не кончается
+                            newRate = Math.max(RATE_MIN, behind / SLOMO);
+                        } else if (behind <= BUST) {
+                            // Зона стабильная: ровно 1.0
+                            newRate = 1.0;
+                        } else {
+                            // Зона разгона: пропорциональный контроллер, max RATE_MAX
+                            newRate = Math.min(RATE_MAX, 1.0 + (behind - BUST) / BUST * (RATE_MAX - 1.0));
+                        }
+                        remoteVideo.playbackRate = newRate;
+                    }
+                    // 1. Stall seek: каждый тик сикаем на предполагаемое время
+                    if (isStalled) {
+                        if (stallStartWallTime === 0) {
+                            stallStartWallTime = now;
+                            stallStartCt = ct;
+                        }
+                        var elapsed = (now - stallStartWallTime) / 1000;
+                        var expected = stallStartCt + elapsed;
+                        if (expected > ct && expected <= bufEnd) {
+                            remoteVideo.currentTime = expected;
                             remoteVideo.play().catch(function(){});
+                            if (now - lastStallLogTime > 1000) {
+                                diagLog('ADAPTIVE STALL seek ct=' + ct.toFixed(1) + ' -> ' + expected.toFixed(1) + ' behind=' + behind.toFixed(1) + 's');
+                                lastStallLogTime = now;
+                            }
+                        }
+                    } else {
+                        stallStartWallTime = 0;
+                        stallStartCt = 0;
+                    }
+                    // 4. currentTime вышел за начало буфера — приоритет выше emergency seek
+                    if (ct < bufStart - BUF_START_THRESHOLD && (now - lastEmergencySeekTime) > STALL_DEBOUNCE_MS) {
+                        var target4 = Math.min(bufStart + 0.1, bufEnd - 0.05);
+                        if (target4 > bufStart) {
+                            diagLog('ADAPTIVE BUF-START seek ct=' + ct.toFixed(1) + ' -> ' + target4.toFixed(1) +
+                                ' buf=[' + bufStart.toFixed(1) + '-' + bufEnd.toFixed(1) + ']');
+                            remoteVideo.currentTime = target4;
                             lastEmergencySeekTime = now;
                             remoteVideo.playbackRate = 1.0;
+                            if (remoteVideo.paused) remoteVideo.play().catch(function(){});
                         }
-                    }
+                    } else
                     // 2. Emergency seek при большом отставании (страховка от неконтролируемого роста лага)
-                    else if (behind > EMERGENCY_BEHIND && !isStalled && (now - lastEmergencySeekTime) > STALL_DEBOUNCE_MS) {
-                        var target2 = bufEnd - EMERGENCY_TARGET;
+                    if (behind > EMERGENCY_BEHIND && !isStalled && (now - lastEmergencySeekTime) > STALL_DEBOUNCE_MS) {
+                        var target2 = bufEnd - BUST;
                         diagLog('ADAPTIVE EMERGENCY seek ct=' + ct.toFixed(1) + ' -> ' + target2.toFixed(1) + ' behind=' + behind.toFixed(1) + 's');
                         remoteVideo.currentTime = target2;
                         lastEmergencySeekTime = now;
                         remoteVideo.playbackRate = 1.0;
-                    }
-                    // 3. Линейный playbackRate: rate = A + K * behind (clamp [A, MAX])
-                    else if (!isStalled && firstAppendDone) {
-                        var newRate = Math.max(LIVE_RATE_A, Math.min(LIVE_RATE_MAX, LIVE_RATE_A + LIVE_RATE_K * behind));
-                        remoteVideo.playbackRate = newRate;
-                    }
-                    // 4. currentTime вышел за начало буфера
-                    if (ct < bufStart - 0.5) {
-                        remoteVideo.currentTime = bufStart + 0.1;
-                        if (remoteVideo.paused) remoteVideo.play().catch(function(){});
                     }
                 }
             } catch (e) {}
@@ -1820,11 +1847,6 @@
 
 
         function onMSEUpdateEnd() {
-            // Seek убран — catch-up через playbackRate управляется в emergency interval
-            if (!trimScheduled) {
-                trimScheduled = true;
-                setTimeout(function() { trimBuffer(); trimScheduled = false; }, 500);
-            }
             processMSEQueue();
         }
 
@@ -1861,23 +1883,6 @@
             }
         }
 
-        function trimBuffer() {
-            if (!sourceBuffer || sourceBuffer.updating) return;
-            if (!remoteVideo.buffered || remoteVideo.buffered.length === 0) return;
-            try {
-                var buffered = remoteVideo.buffered;
-                var bufferEnd = buffered.end(buffered.length - 1);
-                var bufferStart = buffered.start(0);
-                var bufferDuration = bufferEnd - bufferStart;
-                if (bufferDuration > MAX_BUFFER_SECONDS) {
-                    var removeEnd = bufferEnd - MAX_BUFFER_SECONDS;
-                    if (removeEnd > bufferStart + 0.5) {
-                        if (remoteVideo.currentTime < removeEnd) remoteVideo.currentTime = removeEnd + 0.1;
-                        sourceBuffer.remove(bufferStart, removeEnd);
-                    }
-                }
-            } catch (e) {}
-        }
 
         function checkMSECritical() {
             if (mseCriticalTriggered) return;
