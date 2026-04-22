@@ -3,6 +3,7 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/xml"
 	"fmt"
 	"io"
@@ -26,6 +27,16 @@ import (
 const (
 	WebDAVTimeout = 3 * time.Second
 )
+
+// insecureHTTPClient — HTTP-клиент с InsecureSkipVerify для работы
+// с самоподписанными сертификатами WebDAV-сервера в локальной сети
+var insecureHTTPClient = &http.Client{
+	Transport: &http.Transport{
+		TLSClientConfig: &tls.Config{
+			InsecureSkipVerify: true, //nolint:gosec // самоподписанный сертификат в локальной сети
+		},
+	},
+}
 
 // WebDAVURI представляет WebDAV URL
 type WebDAVURI struct {
@@ -114,10 +125,17 @@ type WebDAVClient struct {
 }
 
 // NewWebDAVClient создает новый WebDAV клиент
+// InsecureSkipVerify: true — сервер использует самоподписанный сертификат,
+// поэтому клиент должен пропускать проверку сертификата для локальной/LAN сети
 func NewWebDAVClient() *WebDAVClient {
 	return &WebDAVClient{
 		httpClient: &http.Client{
 			Timeout: WebDAVTimeout,
+			Transport: &http.Transport{
+				TLSClientConfig: &tls.Config{
+					InsecureSkipVerify: true, //nolint:gosec // самоподписанный сертификат в локальной сети
+				},
+			},
 		},
 	}
 }
@@ -600,9 +618,7 @@ func (t *WebDAVFileTree) CheckConnection(ctx context.Context) error {
 	ctx, cancel := context.WithTimeout(ctx, WebDAVTimeout)
 	defer cancel()
 
-	// Создаем отдельный клиент с коротким timeout
-	client := &http.Client{}
-
+	// Используем клиент дерева (с InsecureSkipVerify для самоподписанных сертификатов)
 	req, err := http.NewRequestWithContext(ctx, "PROPFIND", t.rootURL.String(), nil)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
@@ -610,7 +626,7 @@ func (t *WebDAVFileTree) CheckConnection(ctx context.Context) error {
 
 	req.Header.Set("Depth", "0")
 
-	resp, err := client.Do(req)
+	resp, err := t.client.httpClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to connect to server: %w", err)
 	}

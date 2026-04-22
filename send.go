@@ -13,7 +13,6 @@ import (
 	"io"
 	"math"
 	"net"
-	"net/http"
 	"net/url"
 	"os"
 	"path"
@@ -622,7 +621,7 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 			// Polling goroutine: опрашивает /api/messages для auto-open
 			go func() {
 				// Начальный fetch — устанавливаем baseline (все текущие сообщения)
-				resp, err := http.Get(proxyURL.String() + "/api/messages")
+					resp, err := insecureHTTPClient.Get(proxyURL.String() + "/api/messages")
 				if err != nil {
 					log.Debugf("[polling] initial fetch error: %v", err)
 					return
@@ -644,7 +643,7 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 							return // браузер уже открыт, JS возьмёт на себя
 						}
 						// Запрашиваем только новые сообщения с индекса lastCount
-						resp, err := http.Get(fmt.Sprintf("%s/api/messages?since=%d", proxyURL.String(), lastCount))
+						resp, err := insecureHTTPClient.Get(fmt.Sprintf("%s/api/messages?since=%d", proxyURL.String(), lastCount))
 						if err != nil {
 							log.Debugf("[polling] error: %v, stopping", err)
 							return // ошибка → прекращаем
