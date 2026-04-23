@@ -214,6 +214,19 @@
         .ctrl-btn:hover { transform: scale(1.05); }
         .ctrl-btn:active { transform: scale(0.95); }
         .ctrl-btn.off { background: #e94560; }
+        .ctrl-btn.screen-share {
+            position: absolute;
+            top: 2px;
+            right: 2px;
+            z-index: 25;
+            background: #555;
+            font-size: 0.6em;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .ctrl-btn.screen-share:hover { background: #666; }
+        .ctrl-btn.screen-share.active { background: #4ecca3; }
+        body.show-pip-controls .ctrl-btn.screen-share { opacity: 1; }
         .ctrl-btn.screen { padding: 0 6px; }
         .ctrl-btn.speaker { padding: 0 4px; }
         .ctrl-btn.mic { background: #4ecca3; }
@@ -302,6 +315,7 @@
                 <div class="waiting-text" id="waitingText">Waiting for peer...</div>
             </div>
             <div class="pip-container pip-tl" id="pipContainer">
+                <button type="button" class="ctrl-btn screen-share" id="screenBtn" title="Screen Share">🖼️</button>
                 <video id="localVideo" autoplay muted playsinline></video>
                 <div class="pip-controls" id="pipControls">
                     <button type="button" class="ctrl-btn mic" id="micBtn" title="Mic">🎤</button>
@@ -327,6 +341,13 @@
         var errorBanner = document.getElementById('errorBanner');
         var micBtn = document.getElementById('micBtn');
         var camBtn = document.getElementById('camBtn');
+        var screenBtn = document.getElementById('screenBtn');
+        var isScreenSharing = false;
+        var screenToggling = false;
+        // Скрываем кнопку шаринга экрана если API недоступно
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+            screenBtn.style.display = 'none';
+        }
         var hangupBtn = document.getElementById('hangupBtn');
         var remoteMuteBtn = document.getElementById('remoteMuteBtn');
         var remoteScreenBtn = document.getElementById('remoteScreenBtn');
@@ -407,6 +428,7 @@
             // Sender кнопки
             micBtn.classList.toggle('off', !S.audio);
             camBtn.classList.toggle('off', !S.video);
+            screenBtn.classList.toggle('active', isScreenSharing);
             // Receiver кнопки
             remoteScreenBtn.classList.toggle('off', !S.wantVideo);
             remoteVideo.style.visibility = S.wantVideo ? 'visible' : 'hidden';
@@ -923,6 +945,106 @@
             updateResLabels();
             camToggling = false;
         });
+        // screenBtn — переключение камера/шаринг экрана
+        screenBtn.addEventListener('click', async function(e) {
+            e.stopPropagation();
+            if (screenToggling) return;
+            screenToggling = true;
+            if (!isScreenSharing) {
+                // Включаем шаринг экрана
+                try {
+                    var displayStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+                    // Останавливаем текущие video tracks (камеру)
+                    localStream.getVideoTracks().forEach(function(t) { t.stop(); localStream.removeTrack(t); });
+                    // Добавляем display track
+                    var displayTrack = displayStream.getVideoTracks()[0];
+                    localStream.addTrack(displayTrack);
+                    localVideo.srcObject = localStream;
+                    updatePipSize();
+                    isScreenSharing = true;
+                    // Переводим видео собеседника в нативный PiP, чтобы видеть его при шаринге экрана
+                    try { await remoteVideo.requestPictureInPicture(); } catch(pipErr) { diagLog('PiP request failed: ' + pipErr.message); }
+                    // Когда пользователь остановит шаринг через браузерный UI
+                    displayTrack.onended = function() {
+                        isScreenSharing = false;
+                        // Выходим из нативного PiP
+                        try { document.exitPictureInPicture(); } catch(pipErr) {}
+                        // Переключаемся обратно на камеру
+                        localStream.getVideoTracks().forEach(function(t) { t.stop(); localStream.removeTrack(t); });
+                        S.video = true;
+                        (async function() {
+                            try {
+                                var camR = applyMpx(4 / 3, 1, S.mpx);
+                                var newStream = await navigator.mediaDevices.getUserMedia({
+                                    video: addFrameRateConstraint({ width: { ideal: camR.w }, height: { ideal: camR.h }, facingMode: 'user' }),
+                                    audio: false
+                                });
+                                newStream.getVideoTracks().forEach(function(t) { localStream.addTrack(t); });
+                                localVideo.srcObject = localStream;
+                                updatePipSize();
+                                diagLog('CAM re-acquired after screen share ended');
+                            } catch(e2) {
+                                diagLog('CAM re-acquire after screen share failed: ' + e2.message);
+                                S.video = false;
+                            }
+                            applySettings(); saveSettings(); sendSettings();
+                            if (recorderStarted || S.video) restartMediaRecorder();
+                            updateResLabels();
+                        })();
+                    };
+                    diagLog('SCREEN share started');
+                } catch(e) {
+                    diagLog('SCREEN share failed: ' + e.message);
+                    isScreenSharing = false;
+                    // Восстанавливаем камеру
+                    S.video = true;
+                    try {
+                        var camR = applyMpx(4 / 3, 1, S.mpx);
+                        var camStream = await navigator.mediaDevices.getUserMedia({
+                            video: addFrameRateConstraint({ width: { ideal: camR.w }, height: { ideal: camR.h }, facingMode: 'user' }),
+                            audio: false
+                        });
+                        camStream.getVideoTracks().forEach(function(t) { localStream.addTrack(t); });
+                        localVideo.srcObject = localStream;
+                        updatePipSize();
+                    } catch(e2) {
+                        diagLog('CAM re-acquire after screen share cancel failed: ' + e2.message);
+                        S.video = false;
+                    }
+                }
+            } else {
+                // Выключаем шаринг экрана — переключаемся на камеру
+                localStream.getVideoTracks().forEach(function(t) { t.stop(); localStream.removeTrack(t); });
+                isScreenSharing = false;
+                // Выходим из нативного PiP
+                try { document.exitPictureInPicture(); } catch(pipErr) {}
+                S.video = true;
+                try {
+                    var camR = applyMpx(4 / 3, 1, S.mpx);
+                    var newStream = await navigator.mediaDevices.getUserMedia({
+                        video: addFrameRateConstraint({ width: { ideal: camR.w }, height: { ideal: camR.h }, facingMode: 'user' }),
+                        audio: false
+                    });
+                    newStream.getVideoTracks().forEach(function(t) { localStream.addTrack(t); });
+                    localVideo.srcObject = localStream;
+                    updatePipSize();
+                    diagLog('CAM re-acquired after screen share toggle off');
+                } catch(e) {
+                    diagLog('CAM re-acquire after screen share toggle off failed: ' + e.message);
+                    S.video = false;
+                }
+            }
+            applySettings(); saveSettings(); sendSettings();
+            if (!S.audio && !S.video && !isScreenSharing) {
+                if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                    mediaRecorder.stop(); recorderStarted = false;
+                }
+            } else if (recorderStarted || S.video || isScreenSharing) {
+                restartMediaRecorder();
+            }
+            updateResLabels();
+            screenToggling = false;
+        });
         // remoteMuteBtn — toggle хочу ли я аудио от пира
         remoteMuteBtn.addEventListener('click', function(e) {
             e.stopPropagation();
@@ -1089,7 +1211,7 @@
             if (remoteVideo.paused && firstAppendDone) {
                 remoteVideo.play().catch(function(){});
             }
-        }, 100);
+        }, CHUNK_INTERVAL_MS);
 
         // ============= Обновление метки задержки (раз в секунду) =============
         setInterval(function() {
