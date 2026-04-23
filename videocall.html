@@ -99,7 +99,7 @@
             box-shadow: 0 4px 16px rgba(0,0,0,0.5);
             border: 1px solid rgba(255,255,255,0.3);
             z-index: 20;
-            transition: top 0.3s ease, left 0.3s ease, right 0.3s ease;
+            transition: top 0.3s ease, left 0.3s ease, right 0.3s ease, width 0.3s ease, height 0.3s ease;
         }
         .pip-container.pip-tl { top: 16px; left: 2px; bottom: auto; right: auto; }
         .pip-container.pip-tr { top: 16px; right: 2px; bottom: auto; left: auto; }
@@ -247,11 +247,9 @@
         }
         .error-banner.show { display: block; }
         @media (max-height: 500px) {
-            .pip-container { width: 160px; height: 120px; }
             .ctrl-btn { height: 22px; width: 22px; font-size: 0.6em; }
         }
         @media (max-width: 600px) {
-            .pip-container { width: 30%; height: auto; aspect-ratio: 4/3; min-width: 80px; }
             .ctrl-btn { height: 36px; width: 36px; font-size: 1em; }
         }
     </style>
@@ -696,6 +694,43 @@
             pipMoveLeft.classList.toggle('visible', pipCorners[pipCorner] === 'pip-tl');
             pipMoveRight.classList.toggle('visible', pipCorners[pipCorner] === 'pip-tr');
         }
+        // Динамический размер PiP: высота = высота блока кнопок, ширина по аспекту видео
+        function updatePipSize() {
+            var controlsPanel = document.getElementById('controlsPanel');
+            var pipHeight = controlsPanel ? controlsPanel.offsetHeight : 0;
+            if (pipHeight < 40) pipHeight = 92; // fallback десктоп
+            // Определяем аспект: сначала из track settings (учитывает портрет/ландшафт),
+            // затем из videoWidth/Height (fallback если стрим ещё не готов)
+            var aspect = 4 / 3;
+            if (localStream) {
+                var vt = localStream.getVideoTracks()[0];
+                if (vt) {
+                    var s = vt.getSettings();
+                    if (s.width && s.height) {
+                        aspect = s.width / s.height;
+                    }
+                }
+            }
+            if (aspect === 4 / 3 && localVideo.videoWidth > 0 && localVideo.videoHeight > 0) {
+                aspect = localVideo.videoWidth / localVideo.videoHeight;
+            }
+            var pipWidth = Math.round(pipHeight * aspect);
+            // Проверяем перекрытие PiP с блоком кнопок
+            var container = document.querySelector('.video-container.main-video');
+            var controlsArea = document.getElementById('controlsArea');
+            if (container && controlsArea) {
+                var containerWidth = container.clientWidth;
+                var controlsWidth = controlsArea.offsetWidth;
+                if (controlsWidth > 0 && containerWidth > 0) {
+                    var available = containerWidth - controlsWidth - 8;
+                    if (pipWidth > available) {
+                        pipWidth = Math.max(available, 60);
+                    }
+                }
+            }
+            pipContainer.style.width = pipWidth + 'px';
+            pipContainer.style.height = pipHeight + 'px';
+        }
         // Один таймер для всех кнопок
         var controlsTimer = null;
         function showAllControls() {
@@ -735,6 +770,7 @@
             pipCorners.forEach(function(c) { pipContainer.classList.remove(c); });
             pipContainer.classList.add(pipCorners[pipCorner]);
             updateControlsPosition();
+            updatePipSize();
             saveSettings();
         }
         pipMoveLeft.addEventListener('click', function(e) {
@@ -749,6 +785,12 @@
         });
         updateControlsPosition();
         applySettings();
+        updatePipSize();
+
+        // Размер PiP обновляется при загрузке видео и при ресайзе
+        localVideo.addEventListener('loadedmetadata', updatePipSize);
+        localVideo.addEventListener('resize', updatePipSize);
+        window.addEventListener('resize', updatePipSize);
 
         // ResizeObserver на MSE-контейнере: при ресайзе переотправляем settings пиру
         // чтобы пир мог пересчитать аспект-соотношение для камеры
@@ -759,6 +801,7 @@
                 if (resizeDebounceTimer) clearTimeout(resizeDebounceTimer);
                 resizeDebounceTimer = setTimeout(function() {
                     sendSettings();
+                    updatePipSize();
                 }, 500);
             }).observe(mainVideoContainer);
         }
@@ -857,6 +900,7 @@
                     });
                     newStream.getVideoTracks().forEach(function(t) { localStream.addTrack(t); });
                     localVideo.srcObject = localStream;
+                    updatePipSize();
                     diagLog('CAM re-acquired with aspect ' + camAspect.toFixed(2) + ' res=' + camR.w + 'x' + camR.h);
                 } catch(e) {
                     diagLog('CAM re-acquire failed: ' + e.message);
@@ -1185,6 +1229,7 @@
                     }
                 });
                 localVideo.srcObject = localStream;
+                updatePipSize();
 
                 // Фаза 2: уточняем разрешение по нативному аспекту камеры + mpx
                 var camCaps = getCameraCapabilities();
