@@ -227,6 +227,19 @@
         .ctrl-btn.screen-share:hover { background: #666; }
         .ctrl-btn.screen-share.active { background: #4ecca3; }
         body.show-pip-controls .ctrl-btn.screen-share { opacity: 1; }
+        .ctrl-btn.rec {
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            z-index: 25;
+            background: #555;
+            font-size: 0.6em;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .ctrl-btn.rec:hover { background: #666; }
+        .ctrl-btn.rec.recording { background: #4ecca3; }
+        body.show-pip-controls .ctrl-btn.rec { opacity: 1; }
         .ctrl-btn.screen { padding: 0 6px; }
         .ctrl-btn.speaker { padding: 0 4px; }
         .ctrl-btn.mic { background: #4ecca3; }
@@ -315,6 +328,7 @@
                 <div class="waiting-text" id="waitingText">Waiting for peer...</div>
             </div>
             <div class="pip-container pip-tl" id="pipContainer">
+                <button type="button" class="ctrl-btn rec" id="recBtn" title="Record">🔴</button>
                 <button type="button" class="ctrl-btn screen-share" id="screenBtn" title="Screen Share">🖼️</button>
                 <video id="localVideo" autoplay muted playsinline></video>
                 <div class="pip-controls" id="pipControls">
@@ -347,6 +361,15 @@
         // Скрываем кнопку шаринга экрана если API недоступно
         if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
             screenBtn.style.display = 'none';
+        }
+        var recBtn = document.getElementById('recBtn');
+        var isRecording = false;
+        var recordWritable = null;     // FileSystemWritableFileStream
+        var recMimeType = '';          // MIME-тип текущего рекордера (для расширения файла)
+        var recStartPending = false;   // флаг: рекордер перезапускается для начала записи (нужен init-сегмент)
+        // Скрываем кнопку записи если File System Access API недоступно
+        if (!('showSaveFilePicker' in window)) {
+            recBtn.style.display = 'none';
         }
         var hangupBtn = document.getElementById('hangupBtn');
         var remoteMuteBtn = document.getElementById('remoteMuteBtn');
@@ -944,6 +967,45 @@
             }
             updateResLabels();
             camToggling = false;
+        });
+        // recBtn — запись в файл через File System Access API
+        recBtn.addEventListener('click', async function(e) {
+            e.stopPropagation();
+            if (isRecording) {
+                // Остановка записи — onstop закроет файл после последнего ondataavailable
+                isRecording = false;
+                recBtn.classList.remove('recording');
+                if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                    mediaRecorder.stop(); // ondataavailable запишет последний чанк, onstop закроет файл
+                }
+            } else {
+                // Начало записи — открываем файл и перезапускаем рекордер для init-сегмента
+                try {
+                    var recExt = recMimeType && recMimeType.indexOf('mp4') !== -1 ? '.mp4' : '.webm';
+                    var recMimeForPicker = recMimeType && recMimeType.indexOf('mp4') !== -1 ? 'video/mp4' : 'video/webm';
+                    var recAcceptObj = {};
+                    recAcceptObj[recMimeForPicker] = [recExt];
+                    var fileHandle = await window.showSaveFilePicker({
+                        suggestedName: 'recording' + recExt,
+                        types: [{ description: 'Video', accept: recAcceptObj }]
+                    });
+                    recordWritable = await fileHandle.createWritable();
+                    isRecording = true;
+                    recStartPending = true;
+                    recBtn.classList.add('recording');
+                    diagLog('REC FILE starting (restart for init segment)');
+                    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                        mediaRecorder.stop(); // onstop перезапустит рекордер
+                    } else {
+                        setupMediaRecorder(); // рекордер неактивен — запустим напрямую
+                    }
+                } catch (err) {
+                    if (err.name !== 'AbortError') {
+                        diagLog('REC FILE error: ' + err.message);
+                    }
+                }
+            }
+            showAllControls();
         });
         // screenBtn — переключение камера/шаринг экрана
         screenBtn.addEventListener('click', async function(e) {
@@ -1804,18 +1866,9 @@
         }
 
         function restartMediaRecorder() {
+            // onstop закроет файл после последнего ondataavailable
             if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-                var oldRecorder = mediaRecorder;
-                var restarted = false;
-                var doRestart = function() {
-                    if (restarted) return;
-                    restarted = true;
-                    if (isActive) setupMediaRecorder();
-                };
-                oldRecorder.onstop = doRestart;
-                oldRecorder.stop();
-                // Fallback если onstop не сработает за 500мс
-                setTimeout(doRestart, 500);
+                mediaRecorder.stop();
             } else {
                 if (isActive) setupMediaRecorder();
             }
@@ -2149,6 +2202,11 @@
             mediaRecorder.ondataavailable = function(e) {
                 if (!e.data || e.data.size === 0 || !isActive) return;
                 sendChunk(e.data);
+                if (recordWritable && !recStartPending) {
+                    recordWritable.write(e.data).catch(function(err) {
+                        diagLog('REC FILE write error: ' + err.message);
+                    });
+                }
             };
             var recErrorCount = 0;
             mediaRecorder.onerror = function(e) {
@@ -2158,6 +2216,9 @@
             };
             mediaRecorder.onstart = function() {
                 var recMime = mediaRecorder.mimeType;
+                recMimeType = recMime;
+                recStartPending = false;  // рекордер перезапустился — следующие чанки пишем в файл
+                recorderStarted = true;   // отмечаем что рекордер работает
                 diagLog('REC started mime=' + recMime);
                 if (recMime && wsConnected && ws && ws.readyState === WebSocket.OPEN) {
                     try {
@@ -2171,6 +2232,29 @@
                 }
                 sendSettings();
                 sendMyRes();
+            };
+            mediaRecorder.onstop = async function() {
+                diagLog('REC onstop called, isRecording=' + isRecording + ' recStartPending=' + recStartPending + ' hasWritable=' + !!recordWritable);
+                // Закрываем файл если он открыт и это не перезапуск для записи (recStartPending)
+                if (recordWritable && !recStartPending) {
+                    var writer = recordWritable;
+                    recordWritable = null;
+                    isRecording = false;
+                    recBtn.classList.remove('recording');
+                    try {
+                        await writer.close();
+                        diagLog('REC FILE saved successfully');
+                    } catch(err) {
+                        diagLog('REC FILE close error: ' + err.message);
+                    }
+                }
+                // Перезапуск рекордера если звонок активен
+                if (isActive && (recorderStarted || recStartPending)) {
+                    setTimeout(function() {
+                        if (isActive) setupMediaRecorder();
+                    }, 200);
+                }
+                recorderStarted = false;
             };
             mediaRecorder.start(CHUNK_INTERVAL_MS);
         }
@@ -2198,6 +2282,17 @@
             if (controlsTimer) { clearTimeout(controlsTimer); controlsTimer = null; }
             if (resizeDebounceTimer) { clearTimeout(resizeDebounceTimer); resizeDebounceTimer = null; }
             if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+            // Закрываем файл записи если идёт запись
+            recStartPending = false;
+            if (isRecording) {
+                isRecording = false;
+                recBtn.classList.remove('recording');
+            }
+            if (recordWritable) {
+                var w = recordWritable;
+                recordWritable = null;
+                w.close().catch(function() {});
+            }
             if (localStream) localStream.getTracks().forEach(function(t) { t.stop(); });
             if (mediaSource && mediaSource.readyState === 'open') {
                 try { mediaSource.endOfStream(); } catch (e) {}
