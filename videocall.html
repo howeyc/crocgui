@@ -59,7 +59,7 @@
         /* Обёртка: метка разрешения + панель кнопок */
         .controls-area {
             position: absolute;
-            top: 1px;
+            top: 16px;
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -69,8 +69,6 @@
         }
         .controls-area.pos-right { right: 2px; left: auto; }
         .controls-area.pos-left { left: 2px; right: auto; }
-        .controls-area.pos-right #remoteResLabel { align-self: flex-end; }
-        .controls-area.pos-left #remoteResLabel { align-self: flex-start; }
         /* Панель кнопок — 3 ряда, скрыта по умолчанию */
         .controls-panel {
             display: flex;
@@ -117,15 +115,25 @@
             overflow: visible;
             border-radius: 0 0 8px 8px;
         }
-        #pipResLabel {
+        #remoteResLabel {
             position: absolute;
-            top: -14px;
-            left: 0;
+            top: 1px;
+            right: 2px;
             z-index: 16;
         }
-        .pip-container.pip-tr #pipResLabel {
+        #remoteResLabel.pos-left {
+            right: auto;
+            left: 2px;
+        }
+        #pipResLabel {
+            position: absolute;
+            top: 1px;
+            left: 2px;
+            z-index: 16;
+        }
+        #pipResLabel.pos-right {
             left: auto;
-            right: 0;
+            right: 2px;
         }
         #latencyLabel {
             position: absolute;
@@ -254,9 +262,10 @@
         <div class="video-container main-video">
             <video id="remoteVideo" autoplay playsinline></video>
             <div class="res-label" id="latencyLabel"></div>
-            <!-- Метка удалённого видео + панель кнопок -->
+            <div class="res-label" id="remoteResLabel"></div>
+            <div class="res-label" id="pipResLabel"></div>
+            <!-- Панель кнопок -->
             <div class="controls-area pos-right" id="controlsArea">
-                <div class="res-label" id="remoteResLabel"></div>
                 <div class="controls-panel" id="controlsPanel">
                 <!-- Ряд 1: Fit, ⬚, ❌ -->
                 <div class="controls-row">
@@ -295,7 +304,6 @@
                 <div class="waiting-text" id="waitingText">Waiting for peer...</div>
             </div>
             <div class="pip-container pip-tl" id="pipContainer">
-                <div class="res-label" id="pipResLabel"></div>
                 <video id="localVideo" autoplay muted playsinline></video>
                 <div class="pip-controls" id="pipControls">
                     <button type="button" class="ctrl-btn mic" id="micBtn" title="Mic">🎤</button>
@@ -676,9 +684,15 @@
 
         function updateControlsPosition() {
             var area = document.getElementById('controlsArea');
+            var remoteLabel = document.getElementById('remoteResLabel');
+            var pipLabel = document.getElementById('pipResLabel');
             var pos = pipCorners[pipCorner] === 'pip-tl' ? 'pos-right' : 'pos-left';
             area.classList.remove('pos-right', 'pos-left');
             area.classList.add(pos);
+            remoteLabel.classList.remove('pos-right', 'pos-left');
+            remoteLabel.classList.add(pos);
+            pipLabel.classList.remove('pos-right', 'pos-left');
+            pipLabel.classList.add(pipCorners[pipCorner] === 'pip-tl' ? 'pos-left' : 'pos-right');
             pipMoveLeft.classList.toggle('visible', pipCorners[pipCorner] === 'pip-tl');
             pipMoveRight.classList.toggle('visible', pipCorners[pipCorner] === 'pip-tr');
         }
