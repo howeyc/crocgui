@@ -188,13 +188,12 @@
         }
         /* Скрытие курсора на десктопе */
         body.hide-cursor, body.hide-cursor * { cursor: none !important; }
-        /* Кнопки перемещения PiP (в первом ряду controls-panel) */
-        .ctrl-btn.pip-move {
-            background: rgba(100, 100, 100, 0.8);
-            display: none;
+        /* Кнопка записи собеседника (в первом ряду controls-panel) */
+        .ctrl-btn.peer-rec {
+            background: #555;
         }
-        .ctrl-btn.pip-move:hover { background: rgba(130, 130, 130, 0.9); }
-        .ctrl-btn.pip-move.visible { display: flex; }
+        .ctrl-btn.peer-rec:hover { background: #666; }
+        .ctrl-btn.peer-rec.recording { background: #4ecca3; }
         .ctrl-btn {
             height: 28px;
             width: 28px;
@@ -291,16 +290,15 @@
             <!-- Панель кнопок -->
             <div class="controls-area pos-right" id="controlsArea">
                 <div class="controls-panel" id="controlsPanel">
-                <!-- Ряд 1: Fit, ⬚, ❌ -->
+                <!-- Ряд 1: 🔴 /2 1 ×2 💡 ☐ ❌ -->
                 <div class="controls-row">
-                    <button type="button" class="ctrl-btn pip-move pip-move-left" id="pipMoveLeft" title="Move left">◀</button>
+                    <button type="button" class="ctrl-btn peer-rec" id="peerRecBtn" title="Record Peer">🔴</button>
                     <button type="button" class="ctrl-btn fit" id="fitHalfBtn" title="Half Size">/2</button>
                     <button type="button" class="ctrl-btn fit" id="fit1to1Btn" title="1:1">1</button>
                     <button type="button" class="ctrl-btn fit" id="fit2xBtn" title="2x Zoom">×2</button>
                     <button type="button" class="ctrl-btn fit active" id="fitContainBtn" title="Fit">💡</button>
                     <button type="button" class="ctrl-btn fullscreen off" id="fullscreenBtn" title="Fullscreen">☐</button>
                     <button type="button" class="ctrl-btn hangup" id="hangupBtn" title="Hangup">❌</button>
-                    <button type="button" class="ctrl-btn pip-move pip-move-right" id="pipMoveRight" title="Move right">▶</button>
                 </div>
                 <!-- Ряд 2: 💻 VP8 H264 + мегапиксельный множитель для запроса пиру -->
                 <div class="controls-row">
@@ -371,6 +369,15 @@
         if (!('showSaveFilePicker' in window)) {
             recBtn.style.display = 'none';
         }
+        // Запись видео собеседника (remote)
+        var peerRecBtn = document.getElementById('peerRecBtn');
+        var isPeerRecording = false;
+        var peerRecPending = false;    // ожидаем init-сегмент после restartRecorder
+        var peerRecActive = false;     // активно пишем чанки в файл
+        var peerRecWritable = null;    // FileSystemWritableFileStream
+        if (!('showSaveFilePicker' in window)) {
+            peerRecBtn.style.display = 'none';
+        }
         var hangupBtn = document.getElementById('hangupBtn');
         var remoteMuteBtn = document.getElementById('remoteMuteBtn');
         var remoteScreenBtn = document.getElementById('remoteScreenBtn');
@@ -421,6 +428,9 @@
             ns: true,
             agc: true,
             mpx: 0.1,
+            isRecording: false,
+            isPeerRecording: false,
+            isScreenSharing: false,
             pipCorner: 0         // только локально, не отправляется пиру
         };
 
@@ -439,6 +449,9 @@
                 if (s.ns !== undefined) S.ns = s.ns;
                 if (s.agc !== undefined) S.agc = s.agc;
                 if (s.mpx !== undefined) S.mpx = s.mpx;
+                if (s.isRecording !== undefined) S.isRecording = s.isRecording;
+                if (s.isPeerRecording !== undefined) S.isPeerRecording = s.isPeerRecording;
+                if (s.isScreenSharing !== undefined) S.isScreenSharing = s.isScreenSharing;
                 if (s.pipCorner !== undefined) S.pipCorner = s.pipCorner;
             } catch(e) {}
         }
@@ -503,6 +516,9 @@
                 ns: S.ns,
                 agc: S.agc,
                 mpx: S.mpx,
+                isRecording: S.isRecording,
+                isPeerRecording: S.isPeerRecording,
+                isScreenSharing: S.isScreenSharing,
                 recordCodecs: detectAllRecordCodecs(),
                 playCodecs: detectSupportedCodecs(),
                 width: vs.width || 0,
@@ -514,6 +530,10 @@
         }
 
         loadSettings();
+        // Не восстанавливаем состояния записи и шаринга — файловые дескрипторы не сохраняются
+        S.isRecording = false;
+        S.isPeerRecording = false;
+        S.isScreenSharing = false;
 
         // ============= Мегапиксельный множитель для запроса пиру =============
         var mpxBtns = [mpx12Btn, mpx15Btn, mpx110Btn, mpx120Btn];
@@ -719,8 +739,6 @@
         var pipCorners = ['pip-tl', 'pip-tr'];
         var pipCorner = S.pipCorner || 0;
         var pipContainer = document.getElementById('pipContainer');
-        var pipMoveLeft = document.getElementById('pipMoveLeft');
-        var pipMoveRight = document.getElementById('pipMoveRight');
         // Применяем сохранённую позицию PiP
         pipCorners.forEach(function(c) { pipContainer.classList.remove(c); });
         pipContainer.classList.add(pipCorners[pipCorner]);
@@ -736,8 +754,6 @@
             remoteLabel.classList.add(pos);
             pipLabel.classList.remove('pos-right', 'pos-left');
             pipLabel.classList.add(pipCorners[pipCorner] === 'pip-tl' ? 'pos-left' : 'pos-right');
-            pipMoveLeft.classList.toggle('visible', pipCorners[pipCorner] === 'pip-tl');
-            pipMoveRight.classList.toggle('visible', pipCorners[pipCorner] === 'pip-tr');
         }
         // Динамический размер PiP: высота = высота блока кнопок, ширина по аспекту видео
         function updatePipSize() {
@@ -795,6 +811,9 @@
         }
         pipContainer.addEventListener('click', function(e) {
             if (e.target.closest('.pip-controls')) return;
+            if (e.target.closest('.ctrl-btn.rec')) return;
+            if (e.target.closest('.ctrl-btn.screen-share')) return;
+            movePip();
             showAllControls();
         });
         document.querySelector('.video-container.main-video').addEventListener('click', function(e) {
@@ -807,10 +826,9 @@
         document.getElementById('controlsPanel').addEventListener('click', function() {
             showAllControls();
         }, true);
-        // Кнопки перемещения PiP
-        function movePip(dir) {
-            if (dir === 'left') pipCorner = 1;
-            else pipCorner = 0;
+        // Рокировка PiP и блока кнопок
+        function movePip() {
+            pipCorner = pipCorner === 0 ? 1 : 0;
             S.pipCorner = pipCorner;
             pipCorners.forEach(function(c) { pipContainer.classList.remove(c); });
             pipContainer.classList.add(pipCorners[pipCorner]);
@@ -818,16 +836,6 @@
             updatePipSize();
             saveSettings();
         }
-        pipMoveLeft.addEventListener('click', function(e) {
-            e.stopPropagation();
-            movePip('left');
-            showAllControls();
-        });
-        pipMoveRight.addEventListener('click', function(e) {
-            e.stopPropagation();
-            movePip('right');
-            showAllControls();
-        });
         updateControlsPosition();
         applySettings();
         updatePipSize();
@@ -974,7 +982,9 @@
             if (isRecording) {
                 // Остановка записи — onstop закроет файл после последнего ondataavailable
                 isRecording = false;
+                S.isRecording = false;
                 recBtn.classList.remove('recording');
+                saveSettings(); sendSettings();
                 if (mediaRecorder && mediaRecorder.state !== 'inactive') {
                     mediaRecorder.stop(); // ondataavailable запишет последний чанк, onstop закроет файл
                 }
@@ -986,13 +996,15 @@
                     var recAcceptObj = {};
                     recAcceptObj[recMimeForPicker] = [recExt];
                     var fileHandle = await window.showSaveFilePicker({
-                        suggestedName: 'recording' + recExt,
+                        suggestedName: new Date().toISOString().replace(/-/g, '').replace('T', '_').replace(/:/g, '').replace(/\..+$/, '') + recExt,
                         types: [{ description: 'Video', accept: recAcceptObj }]
                     });
                     recordWritable = await fileHandle.createWritable();
                     isRecording = true;
+                    S.isRecording = true;
                     recStartPending = true;
                     recBtn.classList.add('recording');
+                    saveSettings(); sendSettings();
                     diagLog('REC FILE starting (restart for init segment)');
                     if (mediaRecorder && mediaRecorder.state !== 'inactive') {
                         mediaRecorder.stop(); // onstop перезапустит рекордер
@@ -1002,6 +1014,51 @@
                 } catch (err) {
                     if (err.name !== 'AbortError') {
                         diagLog('REC FILE error: ' + err.message);
+                    }
+                }
+            }
+            showAllControls();
+        });
+        // peerRecBtn — запись видео собеседника (remote) через прямое сохранение чанков
+        peerRecBtn.addEventListener('click', async function(e) {
+            e.stopPropagation();
+            if (isPeerRecording) {
+                // Стоп — отправить restartRecorder пиру, чанки продолжают писаться до initCodec
+                // Файл закроется когда придёт initCodec
+                if (!peerRecBtn.classList.contains('recording')) return; // уже в процессе стопа
+                peerRecPending = false;
+                peerRecBtn.classList.remove('recording');
+                diagLog('PEER REC stopping — waiting for initCodec to close file');
+                // Попросить пир перезапустить рекордер — когда придёт initCodec, закроем файл
+                if (wsConnected && ws && ws.readyState === WebSocket.OPEN) {
+                    try { ws.send(JSON.stringify({ cmd: 'restartRecorder' })); } catch(e) {}
+                }
+            } else {
+                // Старт — открыть файл, отправить restartRecorder пиру для получения init-сегмента
+                try {
+                    var peerExt = incomingCodec && incomingCodec.indexOf('mp4') !== -1 ? '.mp4' : '.webm';
+                    var peerMime = peerExt === '.mp4' ? 'video/mp4' : 'video/webm';
+                    var peerAcceptObj = {};
+                    peerAcceptObj[peerMime] = [peerExt];
+                    var fileHandle = await window.showSaveFilePicker({
+                        suggestedName: new Date().toISOString().replace(/-/g, '').replace('T', '_').replace(/:/g, '').replace(/\..+$/, '') + peerExt,
+                        types: [{ description: 'Video', accept: peerAcceptObj }]
+                    });
+                    peerRecWritable = await fileHandle.createWritable();
+                    isPeerRecording = true;
+                    S.isPeerRecording = true;
+                    peerRecPending = true;
+                    peerRecActive = false;
+                    peerRecBtn.classList.add('recording');
+                    saveSettings(); sendSettings();
+                    diagLog('PEER REC FILE starting (waiting for init segment)');
+                    // Попросить пир перезапустить рекордер — мы получим init-сегмент в cmd:initCodec
+                    if (wsConnected && ws && ws.readyState === WebSocket.OPEN) {
+                        try { ws.send(JSON.stringify({ cmd: 'restartRecorder' })); } catch(e) {}
+                    }
+                } catch (err) {
+                    if (err.name !== 'AbortError') {
+                        diagLog('PEER REC FILE error: ' + err.message);
                     }
                 }
             }
@@ -1024,11 +1081,13 @@
                     localVideo.srcObject = localStream;
                     updatePipSize();
                     isScreenSharing = true;
+                    S.isScreenSharing = true;
                     // Переводим видео собеседника в нативный PiP, чтобы видеть его при шаринге экрана
                     try { await remoteVideo.requestPictureInPicture(); } catch(pipErr) { diagLog('PiP request failed: ' + pipErr.message); }
                     // Когда пользователь остановит шаринг через браузерный UI
                     displayTrack.onended = function() {
                         isScreenSharing = false;
+                        S.isScreenSharing = false;
                         // Выходим из нативного PiP
                         try { document.exitPictureInPicture(); } catch(pipErr) {}
                         // Переключаемся обратно на камеру
@@ -1058,6 +1117,7 @@
                 } catch(e) {
                     diagLog('SCREEN share failed: ' + e.message);
                     isScreenSharing = false;
+                    S.isScreenSharing = false;
                     // Восстанавливаем камеру
                     S.video = true;
                     try {
@@ -1078,6 +1138,7 @@
                 // Выключаем шаринг экрана — переключаемся на камеру
                 localStream.getVideoTracks().forEach(function(t) { t.stop(); localStream.removeTrack(t); });
                 isScreenSharing = false;
+                S.isScreenSharing = false;
                 // Выходим из нативного PiP
                 try { document.exitPictureInPicture(); } catch(pipErr) {}
                 S.video = true;
@@ -1936,6 +1997,33 @@
                                 } else {
                                     diagLog('RECV initCodec: codec is empty — no action');
                                 }
+                                // Запись remote video: обработка initCodec
+                                if (isPeerRecording) {
+                                    if (peerRecPending) {
+                                        // Первый init-сегмент после запроса — начинаем запись
+                                        peerRecPending = false;
+                                        peerRecActive = true;
+                                        diagLog('PEER REC started — writing chunks');
+                                    } else {
+                                        // Любой initCodec при активной записи или ожидании стопа — закрыть файл
+                                        diagLog('PEER REC stopped by initCodec');
+                                        isPeerRecording = false;
+                                        S.isPeerRecording = false;
+                                        peerRecActive = false;
+                                        peerRecPending = false;
+                                        peerRecBtn.classList.remove('recording');
+                                        saveSettings(); sendSettings();
+                                        if (peerRecWritable) {
+                                            var pw = peerRecWritable;
+                                            peerRecWritable = null;
+                                            pw.close().catch(function(){});
+                                        }
+                                    }
+                                }
+                            } else if (msg.cmd === 'restartRecorder') {
+                                // Пир просит перезапустить наш рекордер
+                                diagLog('PEER requested recorder restart');
+                                restartMediaRecorder();
                             } else if (msg.cmd === 'myRes') {
                                 // Пир сообщает своё текущее разрешение камеры (для remoteResLabel)
                                 if (msg.width > 0 && msg.height > 0) {
@@ -1979,6 +2067,12 @@
             }
             liveLastChunkTime = now;
 
+            // Запись remote video: пишем чанк в файл
+            if (peerRecActive && peerRecWritable) {
+                peerRecWritable.write(new Uint8Array(data)).catch(function(err) {
+                    diagLog('PEER REC write error: ' + err.message);
+                });
+            }
             // Просто помещаем в очередь — MSE управляется только через cmd:initCodec
             mseQueue.push(data);
             if (mseQueueLength() > MAX_MSE_QUEUE) {
@@ -2240,7 +2334,9 @@
                     var writer = recordWritable;
                     recordWritable = null;
                     isRecording = false;
+                    S.isRecording = false;
                     recBtn.classList.remove('recording');
+                    saveSettings(); sendSettings();
                     try {
                         await writer.close();
                         diagLog('REC FILE saved successfully');
@@ -2286,12 +2382,30 @@
             recStartPending = false;
             if (isRecording) {
                 isRecording = false;
+                S.isRecording = false;
                 recBtn.classList.remove('recording');
             }
             if (recordWritable) {
                 var w = recordWritable;
                 recordWritable = null;
                 w.close().catch(function() {});
+            }
+            // Закрываем файл записи собеседника если открыт
+            if (isPeerRecording) {
+                isPeerRecording = false;
+                S.isPeerRecording = false;
+                peerRecActive = false;
+                peerRecPending = false;
+                peerRecBtn.classList.remove('recording');
+            }
+            if (peerRecWritable) {
+                var pw = peerRecWritable;
+                peerRecWritable = null;
+                pw.close().catch(function() {});
+            }
+            if (isScreenSharing) {
+                isScreenSharing = false;
+                S.isScreenSharing = false;
             }
             if (localStream) localStream.getTracks().forEach(function(t) { t.stop(); });
             if (mediaSource && mediaSource.readyState === 'open') {
