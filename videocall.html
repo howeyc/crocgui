@@ -109,12 +109,6 @@
             object-fit: cover;
             border-radius: 8px;
         }
-        .pip-container .pip-controls {
-            position: absolute;
-            bottom: 0; left: 0; right: 0;
-            overflow: visible;
-            border-radius: 0 0 8px 8px;
-        }
         #remoteResLabel {
             position: absolute;
             top: 1px;
@@ -163,19 +157,8 @@
         }
         @keyframes spin { to { transform: rotate(360deg); } }
         .waiting-text { color: #aaa; font-size: 1em; }
-        .pip-controls {
-            display: flex;
-            justify-content: space-between;
-            gap: 4px;
-            padding: 4px;
-            background: none;
-            z-index: 25;
-            opacity: 0;
-            transition: opacity 0.3s;
-        }
         /* Показ кнопок через классы (десктоп + мобильные) */
         body.show-main-controls .controls-panel { opacity: 1; }
-        body.show-pip-controls .pip-controls { opacity: 1; }
         .res-label {
             color: rgba(255,255,255,0.7);
             font-size: 0.65em;
@@ -226,6 +209,20 @@
         .ctrl-btn.screen-share:hover { background: #666; }
         .ctrl-btn.screen-share.active { background: #4ecca3; }
         body.show-pip-controls .ctrl-btn.screen-share { opacity: 1; }
+        .ctrl-btn.flip {
+            position: absolute;
+            top: 50%;
+            right: 2px;
+            transform: translateY(-50%);
+            z-index: 25;
+            background: #555;
+            font-size: 0.6em;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .ctrl-btn.flip:hover { background: #666; }
+        .ctrl-btn.flip.active { background: #4ecca3; }
+        body.show-pip-controls .ctrl-btn.flip { opacity: 1; }
         .ctrl-btn.rec {
             position: absolute;
             top: 2px;
@@ -241,10 +238,30 @@
         body.show-pip-controls .ctrl-btn.rec { opacity: 1; }
         .ctrl-btn.screen { padding: 0 6px; }
         .ctrl-btn.speaker { padding: 0 4px; }
-        .ctrl-btn.mic { background: #4ecca3; }
+        .ctrl-btn.mic {
+            position: absolute;
+            bottom: 2px;
+            left: 2px;
+            z-index: 25;
+            background: #4ecca3;
+            font-size: 0.6em;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
         .ctrl-btn.mic.off { background: #e94560; }
-        .ctrl-btn.cam { background: #4ecca3; }
+        body.show-pip-controls .ctrl-btn.mic { opacity: 1; }
+        .ctrl-btn.cam {
+            position: absolute;
+            bottom: 2px;
+            right: 2px;
+            z-index: 25;
+            background: #4ecca3;
+            font-size: 0.6em;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
         .ctrl-btn.cam.off { background: #e94560; }
+        body.show-pip-controls .ctrl-btn.cam { opacity: 1; }
         .ctrl-btn.hangup { background: #555; }
         .ctrl-btn.hangup:hover { background: #666; }
         .ctrl-btn.fullscreen { background: #4ecca3; }
@@ -328,11 +345,10 @@
             <div class="pip-container pip-tl" id="pipContainer">
                 <button type="button" class="ctrl-btn rec" id="recBtn" title="Record">🔴</button>
                 <button type="button" class="ctrl-btn screen-share" id="screenBtn" title="Screen Share">🖼️</button>
+                <button type="button" class="ctrl-btn flip" id="flipBtn" title="Flip Camera">🔄</button>
                 <video id="localVideo" autoplay muted playsinline></video>
-                <div class="pip-controls" id="pipControls">
-                    <button type="button" class="ctrl-btn mic" id="micBtn" title="Mic">🎤</button>
-                    <button type="button" class="ctrl-btn cam" id="camBtn" title="Cam">📷</button>
-                </div>
+                <button type="button" class="ctrl-btn mic" id="micBtn" title="Mic">🎤</button>
+                <button type="button" class="ctrl-btn cam" id="camBtn" title="Cam">📷</button>
             </div>
         </div>
     </div>
@@ -354,6 +370,7 @@
         var micBtn = document.getElementById('micBtn');
         var camBtn = document.getElementById('camBtn');
         var screenBtn = document.getElementById('screenBtn');
+        var flipBtn = document.getElementById('flipBtn');
         var isScreenSharing = false;
         var screenToggling = false;
         // Скрываем кнопку шаринга экрана если API недоступно
@@ -431,7 +448,8 @@
             isRecording: false,
             isPeerRecording: false,
             isScreenSharing: false,
-            pipCorner: 0         // только локально, не отправляется пиру
+            pipCorner: 0,        // только локально, не отправляется пиру
+            facingMode: 'user'   // 'user' = фронтальная, 'environment' = задняя
         };
 
         function loadSettings() {
@@ -453,6 +471,7 @@
                 if (s.isPeerRecording !== undefined) S.isPeerRecording = s.isPeerRecording;
                 if (s.isScreenSharing !== undefined) S.isScreenSharing = s.isScreenSharing;
                 if (s.pipCorner !== undefined) S.pipCorner = s.pipCorner;
+                if (s.facingMode !== undefined) S.facingMode = s.facingMode;
             } catch(e) {}
         }
 
@@ -465,6 +484,7 @@
             micBtn.classList.toggle('off', !S.audio);
             camBtn.classList.toggle('off', !S.video);
             screenBtn.classList.toggle('active', isScreenSharing);
+            flipBtn.classList.toggle('active', S.facingMode === 'environment');
             // Receiver кнопки
             remoteScreenBtn.classList.toggle('off', !S.wantVideo);
             remoteVideo.style.visibility = S.wantVideo ? 'visible' : 'hidden';
@@ -810,9 +830,11 @@
             }, 5000);
         }
         pipContainer.addEventListener('click', function(e) {
-            if (e.target.closest('.pip-controls')) return;
             if (e.target.closest('.ctrl-btn.rec')) return;
             if (e.target.closest('.ctrl-btn.screen-share')) return;
+            if (e.target.closest('.ctrl-btn.flip')) return;
+            if (e.target.closest('.ctrl-btn.mic')) return;
+            if (e.target.closest('.ctrl-btn.cam')) return;
             movePip();
             showAllControls();
         });
@@ -820,9 +842,6 @@
             if (e.target.closest('.controls-panel') || e.target.closest('.pip-container')) return;
             showAllControls();
         });
-        document.getElementById('pipControls').addEventListener('click', function() {
-            showAllControls();
-        }, true);
         document.getElementById('controlsPanel').addEventListener('click', function() {
             showAllControls();
         }, true);
@@ -948,7 +967,7 @@
                     // захватывать в своей нативной ориентации, а пир отображает через CSS
                     var camR = applyMpx(camAspect, 1, S.mpx);
                     var newStream = await navigator.mediaDevices.getUserMedia({
-                        video: addFrameRateConstraint({ width: { ideal: camR.w }, height: { ideal: camR.h }, aspectRatio: { ideal: camAspect }, facingMode: 'user' }),
+                        video: addFrameRateConstraint({ width: { ideal: camR.w }, height: { ideal: camR.h }, aspectRatio: { ideal: camAspect }, facingMode: S.facingMode }),
                         audio: false
                     });
                     newStream.getVideoTracks().forEach(function(t) { localStream.addTrack(t); });
@@ -975,6 +994,62 @@
             }
             updateResLabels();
             camToggling = false;
+        });
+        // flipBtn — переключение фронтальная/задняя камера
+        var flipToggling = false;
+        flipBtn.addEventListener('click', async function(e) {
+            e.stopPropagation();
+            if (!localStream || flipToggling || isScreenSharing) return;
+            flipToggling = true;
+            S.facingMode = S.facingMode === 'user' ? 'environment' : 'user';
+
+            if (S.video) {
+                try {
+                    // Сохраняем аспект и разрешение текущего трека до остановки
+                    var oldVt = localStream.getVideoTracks()[0];
+                    var camAspect = 4 / 3;
+                    var curW = 0, curH = 0;
+                    if (oldVt) {
+                        var oldVs = oldVt.getSettings();
+                        if (oldVs.width && oldVs.height) {
+                            camAspect = oldVs.width / oldVs.height;
+                            curW = oldVs.width;
+                            curH = oldVs.height;
+                        }
+                    }
+                    localStream.getVideoTracks().forEach(function(t) { t.stop(); localStream.removeTrack(t); });
+                    // Запрашиваем с тем же аспектом и mpx
+                    var camR = applyMpx(camAspect, 1, S.mpx);
+                    var newStream = await navigator.mediaDevices.getUserMedia({
+                        video: addFrameRateConstraint({ width: { ideal: camR.w }, height: { ideal: camR.h }, aspectRatio: { ideal: camAspect }, facingMode: S.facingMode }),
+                        audio: false
+                    });
+                    newStream.getVideoTracks().forEach(function(t) { localStream.addTrack(t); });
+                    localVideo.srcObject = localStream;
+                    updatePipSize();
+                    // Если было точное разрешение — применяем его через applyConstraints
+                    if (curW > 0 && curH > 0) {
+                        var newVt = localStream.getVideoTracks()[0];
+                        if (newVt) {
+                            try {
+                                await newVt.applyConstraints(addFrameRateConstraint({ width: { ideal: curW }, height: { ideal: curH }, aspectRatio: { ideal: camAspect } }));
+                            } catch(acErr) {
+                                diagLog('FLIP applyConstraints failed: ' + acErr.message);
+                            }
+                        }
+                    }
+                    diagLog('FLIP camera to ' + S.facingMode);
+                } catch(e) {
+                    diagLog('FLIP failed: ' + e.message);
+                    // Откатываем
+                    S.facingMode = S.facingMode === 'user' ? 'environment' : 'user';
+                }
+            }
+
+            applySettings(); saveSettings(); sendSettings();
+            if (recorderStarted || S.video) restartMediaRecorder();
+            updateResLabels();
+            flipToggling = false;
         });
         // recBtn — запись в файл через File System Access API
         recBtn.addEventListener('click', async function(e) {
@@ -1097,7 +1172,7 @@
                             try {
                                 var camR = applyMpx(4 / 3, 1, S.mpx);
                                 var newStream = await navigator.mediaDevices.getUserMedia({
-                                    video: addFrameRateConstraint({ width: { ideal: camR.w }, height: { ideal: camR.h }, facingMode: 'user' }),
+                                    video: addFrameRateConstraint({ width: { ideal: camR.w }, height: { ideal: camR.h }, facingMode: S.facingMode }),
                                     audio: false
                                 });
                                 newStream.getVideoTracks().forEach(function(t) { localStream.addTrack(t); });
@@ -1123,7 +1198,7 @@
                     try {
                         var camR = applyMpx(4 / 3, 1, S.mpx);
                         var camStream = await navigator.mediaDevices.getUserMedia({
-                            video: addFrameRateConstraint({ width: { ideal: camR.w }, height: { ideal: camR.h }, facingMode: 'user' }),
+                            video: addFrameRateConstraint({ width: { ideal: camR.w }, height: { ideal: camR.h }, facingMode: S.facingMode }),
                             audio: false
                         });
                         camStream.getVideoTracks().forEach(function(t) { localStream.addTrack(t); });
@@ -1145,7 +1220,7 @@
                 try {
                     var camR = applyMpx(4 / 3, 1, S.mpx);
                     var newStream = await navigator.mediaDevices.getUserMedia({
-                        video: addFrameRateConstraint({ width: { ideal: camR.w }, height: { ideal: camR.h }, facingMode: 'user' }),
+                        video: addFrameRateConstraint({ width: { ideal: camR.w }, height: { ideal: camR.h }, facingMode: S.facingMode }),
                         audio: false
                     });
                     newStream.getVideoTracks().forEach(function(t) { localStream.addTrack(t); });
@@ -1466,7 +1541,7 @@
                 var H = initR.h;
 
                 localStream = await navigator.mediaDevices.getUserMedia({
-                    video: addFrameRateConstraint({ width: { ideal: W }, height: { ideal: H }, facingMode: 'user' }),
+                    video: addFrameRateConstraint({ width: { ideal: W }, height: { ideal: H }, facingMode: S.facingMode }),
                     audio: {
                         echoCancellation: S.ec,
                         noiseSuppression: S.ns,
@@ -1986,13 +2061,12 @@
                                         // MSE ещё не создан — создаём с фактическим кодеком от пира
                                         diagLog('MSE CREATING from initCodec=' + codecDisplayName(msg.codec));
                                         setupMSE();
-                                    } else if (msg.codec !== currentMseCodec) {
-                                        // Кодек изменился — пересоздаём MSE
-                                        diagLog('MSE CODEC CHANGE (' + codecDisplayName(currentMseCodec) + '→' + codecDisplayName(msg.codec) + ') — restarting');
+                                    } else {
+                                        // Кодек тот же или изменился — пересоздаём MSE,
+                                        // т.к. init-сегмент от нового рекордера имеет другие таймстампы
+                                        diagLog('MSE RESTART (initCodec, codec=' + codecDisplayName(msg.codec) + ' same=' + (msg.codec === currentMseCodec) + ')');
                                         restartMSE();
                                         setupMSE();
-                                    } else {
-                                        diagLog('MSE ALREADY RUNNING with same codec — no action');
                                     }
                                 } else {
                                     diagLog('RECV initCodec: codec is empty — no action');
