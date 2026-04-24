@@ -1,0 +1,7 @@
+{
+  "mcpServers": {
+    "code-index": {
+      "command": "/home/koka/go/bin/code-index-mcp"
+    }
+  }
+}
