@@ -180,12 +180,12 @@
         .ctrl-btn.peer-rec.pending { background: #4ecca3; }
         .ctrl-btn.peer-rec.recording { background: #4ecca3; }
         .ctrl-btn {
-            height: 28px;
-            width: 28px;
-            border-radius: 14px;
+            height: 36px;
+            width: 36px;
+            border-radius: 18px;
             border: none;
             cursor: pointer;
-            font-size: 0.7em;
+            font-size: 1.0em;
             font-family: monospace;
             padding: 0;
             display: flex;
@@ -194,7 +194,9 @@
             transition: all 0.2s;
             color: white;
             background: #4ecca3;
+            overflow: hidden;
         }
+        .ctrl-btn.emoji { font-size: 1.2em; }
         .ctrl-btn:hover { transform: scale(1.05); }
         .ctrl-btn:active { transform: scale(0.95); }
         .ctrl-btn.off { background: #555; }
@@ -204,7 +206,6 @@
             right: 2px;
             z-index: 25;
             background: #555;
-            font-size: 0.6em;
             opacity: 0;
             transition: opacity 0.3s;
         }
@@ -218,7 +219,6 @@
             transform: translateY(-50%);
             z-index: 25;
             background: #555;
-            font-size: 0.6em;
             opacity: 0;
             transition: opacity 0.3s;
         }
@@ -231,7 +231,6 @@
             left: 2px;
             z-index: 25;
             background: #555;
-            font-size: 0.6em;
             opacity: 0;
             transition: opacity 0.3s;
         }
@@ -247,7 +246,6 @@
             left: 2px;
             z-index: 25;
             background: #4ecca3;
-            font-size: 0.6em;
             opacity: 0;
             transition: opacity 0.3s;
         }
@@ -259,7 +257,6 @@
             right: 2px;
             z-index: 25;
             background: #4ecca3;
-            font-size: 0.6em;
             opacity: 0;
             transition: opacity 0.3s;
         }
@@ -291,12 +288,6 @@
             display: none;
         }
         .error-banner.show { display: block; }
-        @media (max-height: 500px) {
-            .ctrl-btn { height: 22px; width: 22px; font-size: 0.6em; }
-        }
-        @media (max-width: 600px) {
-            .ctrl-btn { height: 36px; width: 36px; font-size: 1em; }
-        }
     </style>
 </head>
 <body>
@@ -312,17 +303,17 @@
                 <div class="controls-panel" id="controlsPanel">
                 <!-- Ряд 1: 🔴 /2 1 ×2 💡 ☐ ❌ -->
                 <div class="controls-row">
-                    <button type="button" class="ctrl-btn peer-rec" id="peerRecBtn" title="Record Peer">⏺</button>
+                    <button type="button" class="ctrl-btn peer-rec emoji" id="peerRecBtn" title="Record Peer">⏺</button>
                     <button type="button" class="ctrl-btn fit" id="fitHalfBtn" title="Half Size">/2</button>
                     <button type="button" class="ctrl-btn fit" id="fit1to1Btn" title="1:1">1</button>
                     <button type="button" class="ctrl-btn fit" id="fit2xBtn" title="2x Zoom">×2</button>
-                    <button type="button" class="ctrl-btn fit active" id="fitContainBtn" title="Fit">💡</button>
-                    <button type="button" class="ctrl-btn fullscreen off" id="fullscreenBtn" title="Fullscreen">☐</button>
-                    <button type="button" class="ctrl-btn hangup" id="hangupBtn" title="Hangup">❌</button>
+                    <button type="button" class="ctrl-btn fit active emoji" id="fitContainBtn" title="Fit">💡</button>
+                    <button type="button" class="ctrl-btn fullscreen off emoji" id="fullscreenBtn" title="Fullscreen">☐</button>
+                    <button type="button" class="ctrl-btn hangup emoji" id="hangupBtn" title="Hangup">❌</button>
                 </div>
                 <!-- Ряд 2: 💻 VP8 H264 + мегапиксельный множитель для запроса пиру -->
                 <div class="controls-row">
-                    <button type="button" class="ctrl-btn screen" id="remoteScreenBtn" title="Remote Video">💻</button>
+                    <button type="button" class="ctrl-btn screen emoji" id="remoteScreenBtn" title="Remote Video">💻</button>
                     <button type="button" class="ctrl-btn codec" id="vp8Btn" title="VP8">VP8</button>
                     <button type="button" class="ctrl-btn codec" id="h264Btn" title="H.264">AVC</button>
                     <button type="button" class="ctrl-btn codec mpx" id="mpx12Btn" title="0.5 megapixels">.5</button>
@@ -332,7 +323,7 @@
                 </div>
                 <!-- Ряд 3: 🔈 Opus AAC EC NS AGC -->
                 <div class="controls-row">
-                    <button type="button" class="ctrl-btn speaker" id="remoteMuteBtn" title="Remote Audio">🔈</button>
+                    <button type="button" class="ctrl-btn speaker emoji" id="remoteMuteBtn" title="Remote Audio">🔈</button>
                     <button type="button" class="ctrl-btn codec" id="opusBtn" title="Opus">Opus</button>
                     <button type="button" class="ctrl-btn codec" id="aacBtn" title="AAC">AAC</button>
                     <button type="button" class="ctrl-btn codec" id="ecBtn" title="Echo Cancellation">EC</button>
@@ -346,12 +337,12 @@
                 <div class="waiting-text" id="waitingText">Waiting for peer...</div>
             </div>
             <div class="pip-container pip-tl" id="pipContainer">
-                <button type="button" class="ctrl-btn rec" id="recBtn" title="Record">⏺</button>
-                <button type="button" class="ctrl-btn screen-share" id="screenBtn" title="Screen Share">🖼️</button>
-                <button type="button" class="ctrl-btn flip" id="flipBtn" title="Flip Camera">🔄</button>
+                <button type="button" class="ctrl-btn rec emoji" id="recBtn" title="Record">⏺</button>
+                <button type="button" class="ctrl-btn screen-share emoji" id="screenBtn" title="Screen Share">🖼️</button>
+                <button type="button" class="ctrl-btn flip emoji" id="flipBtn" title="Flip Camera">🔄</button>
                 <video id="localVideo" autoplay muted playsinline></video>
-                <button type="button" class="ctrl-btn mic" id="micBtn" title="Mic">🎤</button>
-                <button type="button" class="ctrl-btn cam" id="camBtn" title="Cam">📷</button>
+                <button type="button" class="ctrl-btn mic emoji" id="micBtn" title="Mic">🎤</button>
+                <button type="button" class="ctrl-btn cam emoji" id="camBtn" title="Cam">📷</button>
             </div>
         </div>
     </div>

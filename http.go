@@ -544,8 +544,9 @@ func (h *WebDAVWithDirectoryListing) serveDirectoryListing(w http.ResponseWriter
 			border: none;
 			border-radius: 4px;
 			cursor: pointer;
-			font-size: 0.85em;
-			font-weight: 500;
+			font-size: 1.2em;
+			min-width: 36px;
+			min-height: 36px;
 			transition: background-color 0.2s;
 		}
 		.chat-send-btn:hover {
@@ -699,8 +700,8 @@ func (h *WebDAVWithDirectoryListing) serveDirectoryListing(w http.ResponseWriter
 		<div class="chat-messages" id="chatMessages"></div>
 		<div class="chat-input-container">
 			<input type="text" class="chat-input" id="chatInput" placeholder="Type a message...">
-			<button class="chat-send-btn" id="chatSendBtn">💬Send</button>
-			<button class="chat-call-btn chat-send-btn" id="chatCallBtn" style="padding:6px 10px;" title="Video Call">📞Call</button>
+			<button class="chat-send-btn" id="chatSendBtn">💬</button>
+			<button class="chat-call-btn chat-send-btn" id="chatCallBtn" title="Video Call">📞</button>
 		</div>
 	</div>
 
@@ -746,7 +747,7 @@ func (h *WebDAVWithDirectoryListing) serveDirectoryListing(w http.ResponseWriter
 				a.href = rawUrl;
 				a.target = '_blank';
 				a.className = 'call-link';
-				a.textContent = '📞Call';
+				a.textContent = '📞';
 				contentDiv.appendChild(a);
 			} else {
 				contentDiv.textContent = msg.text;
