@@ -176,6 +176,7 @@
             background: #555;
         }
         .ctrl-btn.peer-rec:hover { background: #666; }
+        .ctrl-btn.peer-rec.pending { background: #4ecca3; }
         .ctrl-btn.peer-rec.recording { background: #4ecca3; }
         .ctrl-btn {
             height: 28px;
@@ -195,7 +196,7 @@
         }
         .ctrl-btn:hover { transform: scale(1.05); }
         .ctrl-btn:active { transform: scale(0.95); }
-        .ctrl-btn.off { background: #e94560; }
+        .ctrl-btn.off { background: #555; }
         .ctrl-btn.screen-share {
             position: absolute;
             top: 2px;
@@ -234,6 +235,7 @@
             transition: opacity 0.3s;
         }
         .ctrl-btn.rec:hover { background: #666; }
+        .ctrl-btn.rec.pending { background: #4ecca3; }
         .ctrl-btn.rec.recording { background: #4ecca3; }
         body.show-pip-controls .ctrl-btn.rec { opacity: 1; }
         .ctrl-btn.screen { padding: 0 6px; }
@@ -248,7 +250,7 @@
             opacity: 0;
             transition: opacity 0.3s;
         }
-        .ctrl-btn.mic.off { background: #e94560; }
+        .ctrl-btn.mic.off { background: #555; }
         body.show-pip-controls .ctrl-btn.mic { opacity: 1; }
         .ctrl-btn.cam {
             position: absolute;
@@ -260,7 +262,7 @@
             opacity: 0;
             transition: opacity 0.3s;
         }
-        .ctrl-btn.cam.off { background: #e94560; }
+        .ctrl-btn.cam.off { background: #555; }
         body.show-pip-controls .ctrl-btn.cam { opacity: 1; }
         .ctrl-btn.hangup { background: #555; }
         .ctrl-btn.hangup:hover { background: #666; }
@@ -309,7 +311,7 @@
                 <div class="controls-panel" id="controlsPanel">
                 <!-- Ряд 1: 🔴 /2 1 ×2 💡 ☐ ❌ -->
                 <div class="controls-row">
-                    <button type="button" class="ctrl-btn peer-rec" id="peerRecBtn" title="Record Peer">🔴</button>
+                    <button type="button" class="ctrl-btn peer-rec" id="peerRecBtn" title="Record Peer">⏺</button>
                     <button type="button" class="ctrl-btn fit" id="fitHalfBtn" title="Half Size">/2</button>
                     <button type="button" class="ctrl-btn fit" id="fit1to1Btn" title="1:1">1</button>
                     <button type="button" class="ctrl-btn fit" id="fit2xBtn" title="2x Zoom">×2</button>
@@ -343,7 +345,7 @@
                 <div class="waiting-text" id="waitingText">Waiting for peer...</div>
             </div>
             <div class="pip-container pip-tl" id="pipContainer">
-                <button type="button" class="ctrl-btn rec" id="recBtn" title="Record">🔴</button>
+                <button type="button" class="ctrl-btn rec" id="recBtn" title="Record">⏺</button>
                 <button type="button" class="ctrl-btn screen-share" id="screenBtn" title="Screen Share">🖼️</button>
                 <button type="button" class="ctrl-btn flip" id="flipBtn" title="Flip Camera">🔄</button>
                 <video id="localVideo" autoplay muted playsinline></video>
@@ -1058,7 +1060,8 @@
                 // Остановка записи — onstop закроет файл после последнего ondataavailable
                 isRecording = false;
                 S.isRecording = false;
-                recBtn.classList.remove('recording');
+                recBtn.classList.remove('recording', 'pending');
+                recBtn.textContent = '⏺';
                 saveSettings(); sendSettings();
                 if (mediaRecorder && mediaRecorder.state !== 'inactive') {
                     mediaRecorder.stop(); // ondataavailable запишет последний чанк, onstop закроет файл
@@ -1078,7 +1081,7 @@
                     isRecording = true;
                     S.isRecording = true;
                     recStartPending = true;
-                    recBtn.classList.add('recording');
+                    recBtn.classList.add('pending');
                     saveSettings(); sendSettings();
                     diagLog('REC FILE starting (restart for init segment)');
                     if (mediaRecorder && mediaRecorder.state !== 'inactive') {
@@ -1100,9 +1103,10 @@
             if (isPeerRecording) {
                 // Стоп — отправить restartRecorder пиру, чанки продолжают писаться до initCodec
                 // Файл закроется когда придёт initCodec
-                if (!peerRecBtn.classList.contains('recording')) return; // уже в процессе стопа
+                if (!peerRecBtn.classList.contains('recording') && !peerRecBtn.classList.contains('pending')) return; // уже в процессе стопа
                 peerRecPending = false;
-                peerRecBtn.classList.remove('recording');
+                peerRecBtn.classList.remove('recording', 'pending');
+                peerRecBtn.textContent = '⏺';
                 diagLog('PEER REC stopping — waiting for initCodec to close file');
                 // Попросить пир перезапустить рекордер — когда придёт initCodec, закроем файл
                 if (wsConnected && ws && ws.readyState === WebSocket.OPEN) {
@@ -1124,7 +1128,7 @@
                     S.isPeerRecording = true;
                     peerRecPending = true;
                     peerRecActive = false;
-                    peerRecBtn.classList.add('recording');
+                    peerRecBtn.classList.add('pending');
                     saveSettings(); sendSettings();
                     diagLog('PEER REC FILE starting (waiting for init segment)');
                     // Попросить пир перезапустить рекордер — мы получим init-сегмент в cmd:initCodec
@@ -2077,6 +2081,9 @@
                                         // Первый init-сегмент после запроса — начинаем запись
                                         peerRecPending = false;
                                         peerRecActive = true;
+                                        peerRecBtn.classList.remove('pending');
+                                        peerRecBtn.classList.add('recording');
+                                        peerRecBtn.textContent = '🔴';
                                         diagLog('PEER REC started — writing chunks');
                                     } else {
                                         // Любой initCodec при активной записи или ожидании стопа — закрыть файл
@@ -2085,7 +2092,8 @@
                                         S.isPeerRecording = false;
                                         peerRecActive = false;
                                         peerRecPending = false;
-                                        peerRecBtn.classList.remove('recording');
+                                        peerRecBtn.classList.remove('recording', 'pending');
+                                        peerRecBtn.textContent = '⏺';
                                         saveSettings(); sendSettings();
                                         if (peerRecWritable) {
                                             var pw = peerRecWritable;
@@ -2387,6 +2395,11 @@
                 recMimeType = recMime;
                 recStartPending = false;  // рекордер перезапустился — следующие чанки пишем в файл
                 recorderStarted = true;   // отмечаем что рекордер работает
+                if (isRecording) {
+                    recBtn.classList.remove('pending');
+                    recBtn.classList.add('recording');
+                    recBtn.textContent = '🔴';
+                }
                 diagLog('REC started mime=' + recMime);
                 if (recMime && wsConnected && ws && ws.readyState === WebSocket.OPEN) {
                     try {
@@ -2409,8 +2422,9 @@
                     recordWritable = null;
                     isRecording = false;
                     S.isRecording = false;
-                    recBtn.classList.remove('recording');
-                    saveSettings(); sendSettings();
+                recBtn.classList.remove('recording', 'pending');
+                recBtn.textContent = '⏺';
+                saveSettings(); sendSettings();
                     try {
                         await writer.close();
                         diagLog('REC FILE saved successfully');
@@ -2470,7 +2484,8 @@
                 S.isPeerRecording = false;
                 peerRecActive = false;
                 peerRecPending = false;
-                peerRecBtn.classList.remove('recording');
+                peerRecBtn.classList.remove('recording', 'pending');
+                peerRecBtn.textContent = '⏺';
             }
             if (peerRecWritable) {
                 var pw = peerRecWritable;
