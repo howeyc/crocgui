@@ -4,47 +4,135 @@
 
 ```mermaid
 graph TD
-    subgraph Peer A - Browser
-        A_UI[UI кнопки]
-        A_S[Объект S - настройки]
-        A_REC[MediaRecorder]
-        A_MSE[MSE - проигрывание]
+    subgraph Host - Browser
+        H_UI[UI кнопки]
+        H_S[Объект S - настройки]
+        H_REC[MediaRecorder]
+        H_MSE[MSE - проигрывание]
+        H_ECHO[echo=true при старте]
     end
     subgraph Go Server
         WS[WebSocket relay]
+        ECHO{Remote peer online?}
     end
-    subgraph Peer B - Browser
-        B_UI[UI кнопки]
-        B_S[Объект S - настройки]
-        B_REC[MediaRecorder]
-        B_MSE[MSE - проигрывание]
+    subgraph Guest - Browser
+        G_UI[UI кнопки]
+        G_S[Объект S - настройки]
+        G_REC[MediaRecorder]
+        G_MSE[MSE - проигрывание]
     end
 
-    A_S -->|sendSettings - JSON| WS
-    A_REC -->|ArrayBuffer chunks| WS
-    WS -->|JSON settings| B_S
-    WS -->|ArrayBuffer chunks| B_MSE
-    B_S -->|sendSettings - JSON| WS
-    B_REC -->|ArrayBuffer chunks| WS
-    WS -->|JSON settings| A_S
-    WS -->|ArrayBuffer chunks| A_MSE
+    H_S -->|sendSettings role:host| WS
+    H_REC -->|ArrayBuffer chunks| WS
+    G_S -->|sendSettings role:guest| WS
+    G_REC -->|ArrayBuffer chunks| WS
+
+    WS --> ECHO
+    ECHO -->|Peer online| G_S
+    ECHO -->|Peer online| G_MSE
+    ECHO -->|Peer online| H_S
+    ECHO -->|Peer online| H_MSE
+    ECHO -->|Peer offline - echo| H_S
+    ECHO -->|Peer offline - echo| H_MSE
+```
+
+## Эхо-режим
+
+Когда хост один в комнате — нет удалённого пира — сервер возвращает все сообщения и чанки обратно отправителю. Это позволяет хосту видеть своё локальное видео как удалённое.
+
+**Серверная логика** — в `videocall.go`: если `room.getWS(remotePeer) == nil`, текстовые и бинарные сообщения пересылаются обратно отправителю.
+
+**Клиентская логика:**
+
+| Переменная | Тип | Описание |
+|------------|-----|----------|
+| `echo` | `bool` | Локальная переменная — НЕ входит в JSON. `true` у хоста при старте |
+| `guestSettings` | `object/null` | Последние настройки от гостя. Сохраняются в `localStorage.vc_peerSettings` только при `role === guest` |
+
+**Поведение хоста в `ws.onopen`:**
+1. Установить `echo = true`
+2. Загрузить `guestSettings` из `localStorage` → если есть, вызвать `handlePeerSettings(saved, true)`
+3. Если нет — создать fallback из собственного `S` + `recordCodecs` + `playCodecs` → `handlePeerSettings(fallback, true)`
+4. Запустить `setupMediaRecorder()` — рекордер работает в эхо-режиме
+
+**Поведение хоста при получении `cmd:settings`:**
+- `handlePeerSettings(msg, false)` вызывается **всегда** — и для эха, и для реальных настроек
+- Если `echo === true` и `msg.role === 'guest'` → первый реальный гость! Установить `echo = false`, отправить `sendSettings()` однократно
+- Если `echo === true` и `msg.role !== 'guest'` → эхо собственных настроек, `handlePeerSettings` всё равно вызывается (обновляет negotiated codec и т.д.)
+
+**Поведение гостя в `ws.onopen`:**
+1. Отправить `sendSettings()` — хост получит их и ответит своими настройками
+
+## Инициализация — init flow
+
+Оба пира проходят одинаковый путь: `init()` → `startCall()` → `connectWS()`. Никаких HTTP-запросов `waitForPeer`/`joinRoom` — всё через WS.
+
+### Хост — один в комнате — эхо-режим
+
+```mermaid
+sequenceDiagram
+    participant H as Host
+    participant WS as Go Server
+
+    H->>H: init - isCreator=true
+    H->>H: startCall - connectWS
+    H->>WS: WebSocket connect
+    WS-->>H: onopen
+    H->>H: echo = true
+    H->>H: Загрузить guestSettings из localStorage
+    alt Есть сохранённые guestSettings
+        H->>H: handlePeerSettings - saved - initial=true
+    else Нет сохранённых
+        H->>H: fallbackSettings = копия S + recordCodecs + playCodecs
+        H->>H: handlePeerSettings - fallback - initial=true
+    end
+    H->>H: setupMediaRecorder
+    H->>WS: init segment - binary
+    WS-->>H: echo — binary back
+    H->>H: setupMSE - вижу своё видео
+    Note over H: Хост видит своё локальное видео как удалённое
+```
+
+### Гость подключается — переход из эхо в нормальный режим
+
+```mermaid
+sequenceDiagram
+    participant H as Host
+    participant WS as Go Server
+    participant G as Guest
+
+    G->>G: init - isCreator=false
+    G->>G: startCall - connectWS
+    G->>WS: WebSocket connect
+    WS-->>G: onopen
+    G->>WS: cmd:settings role=guest
+    WS->>H: cmd:settings role=guest - не эхо! удалённый пир онлайн
+    H->>H: echo=true, role=guest → echo=false
+    H->>H: handlePeerSettings - guest settings
+    H->>H: restartMediaRecorder - с настройками гостя
+    H->>WS: cmd:settings role=host
+    WS->>G: cmd:settings role=host
+    G->>G: handlePeerSettings - host settings
+    G->>G: setupMediaRecorder
+    Note over H,G: Двусторонняя связь установлена
 ```
 
 ## WS-сообщения
 
 ### 1. `cmd: settings` — настройки пира
 
-**Направление:** Peer → Server → Remote Peer  
+**Направление:** Peer → Server → Remote Peer (или обратно отправителю в эхо-режиме)
 **Когда отправляется:**
-- При подключении к WS
-- При нажатии любой кнопки управления
-- При resize окна (через ResizeObserver, debounce 500ms)
-- Через 200ms после старта MediaRecorder
+- Гость: при подключении к WS (`ws.onopen`)
+- Хост: однократно в ответ на первые `settings` от гостя (`role=guest`)
+- Оба: при нажатии любой кнопки управления
+- Оба: при resize окна (через ResizeObserver, debounce 500ms)
 
 **Поля:**
 
 | Поле | Тип | Описание | Кнопка |
 |------|-----|----------|--------|
+| `role` | string | `host` или `guest` — идентифицирует отправителя | — |
 | `audio` | bool | Мой микрофон вкл/выкл | `micBtn` 🎤 |
 | `video` | bool | Моя камера вкл/выкл | `camBtn` 📷 |
 | `wantAudio` | bool | Хочу аудио от пира | `remoteMuteBtn` 🔈 |
@@ -62,7 +150,6 @@ graph TD
 | `width` | int | Фактическая ширина видео | — |
 | `height` | int | Фактическая высота видео | — |
 | `frameRate` | float | FPS | — |
-| `goSender` | bool | Go sender активен | `goSenderBtn` ⏸️ |
 | `displayW` | int | Ширина MSE-контейнера | — |
 | `displayH` | int | Высота MSE-контейнера | — |
 
@@ -83,22 +170,20 @@ graph TD
 **Направление:** Server → Peer  
 **Когда отправляется:** При отключении пира от WS
 
-### 4. `restart_recorder` — рестарт рекордера (Go sender)
-
-**Направление:** Peer → Server → Go sender  
-**Когда отправляется:** Из Go sender
-
-### 5. ArrayBuffer chunks — медиаданные
+### 4. ArrayBuffer chunks — медиаданные
 
 **Направление:** Peer → Server → Remote Peer  
 **Тип:** `websocket.BinaryMessage`  
 **Содержимое:** WebM chunks от MediaRecorder, включая init segment
 
-## Обработка settings на получателе
+## Обработка settings — фильтрация эха и обработка
 
 ```mermaid
 flowchart TD
-    MSG[Получено cmd: settings] --> EXTRACT[Извлечь displayW/displayH]
+    MSG[Получено cmd: settings] --> ECHO{echo=true AND role=guest?}
+    ECHO -->|Да| DISABLE[echo=false + sendSettings однократно]
+    ECHO -->|Нет — эхо или обычный режим| EXTRACT
+    DISABLE --> EXTRACT[Извлечь displayW/displayH]
     EXTRACT --> DISPLAY{displayChanged?}
     DISPLAY -->|Да| SAVE_DISPLAY[Сохранить peerDisplayW/H]
     DISPLAY -->|Нет| NEGOTIATE
@@ -143,7 +228,7 @@ MSE отслеживает `currentMseCodec` — фактический коде
 
 **`restartMSE()`** — только teardown (очистка очереди, уничтожение MSE). Не создаёт MSE.
 
-**`startCall()`** — не создаёт MSE. MSE создаётся только из `cmd:initCodec` handler.
+**`startCall()`** — упрощён до `isActive = true; connectWS()`. Не создаёт MSE, не ждёт пира. MSE создаётся только из `cmd:initCodec` handler. Рекордер запускается в `ws.onopen` (хост) или в `handlePeerSettings()` (гость).
 
 ## Локальные настройки — объект S
 
@@ -161,8 +246,7 @@ S = {
     ns: true,             // Noise Suppression → nsBtn
     agc: true,            // Auto Gain Control → agcBtn
     mpx: 0.1,             // Мегапиксели → .5/.2/.1/.05 кнопки
-    pipCorner: 0,         // Позиция PiP — ТОЛЬКО локально, НЕ отправляется
-    goSender: goSender    // Go sender → goSenderBtn
+    pipCorner: 0          // Позиция PiP — ТОЛЬКО локально, НЕ отправляется
 }
 ```
 
@@ -174,7 +258,6 @@ S = {
 |--------|-----|-------------|------------------|-------------------|
 | 🎤 Mic | `micBtn` | `S.audio` | release/acquire audio track | `audio` в settings |
 | 📷 Cam | `camBtn` | `S.video` | release/acquire video track | `video` в settings |
-| ⏸️ Go Sender | `goSenderBtn` | `S.goSender` | Переключает Go/browser sender | `goSender` в settings |
 
 ### Receiver — управление что я хочу от пира
 

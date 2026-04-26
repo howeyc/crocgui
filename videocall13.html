@@ -133,17 +133,15 @@
         #latencyLabel {
             position: absolute;
             top: 1px;
-            left: 0;
-            right: 0;
-            width: fit-content;
-            margin: 0 auto;
+            left: 50%;
+            transform: translateX(-50%);
             z-index: 16;
         }
         /* Показ кнопок через классы (десктоп + мобильные) */
         body.show-main-controls .controls-panel { opacity: 1; }
         .res-label {
             color: rgba(255,255,255,0.7);
-            font-size: 0.80em;
+            font-size: 0.65em;
             font-family: monospace;
             pointer-events: none;
             white-space: nowrap;
@@ -566,7 +564,7 @@
         var wsConnected = false;
         var wsReconnectTimer = null;
         var peerSettings = null; // настройки пира (полученные через WS)
-        var echo = false; // эхо-режим (хост видит своё видео пока гость не подключился)
+        var echo = false; // эхо-режим
         var recorderStarted = false;
         var mediaSource = null;
         var sourceBuffer = null;
@@ -597,8 +595,6 @@
         var stallStartWallTime = 0;       // Date.now() момента начала stall
         var stallStartCt = 0;             // currentTime в момент начала stall
         var lastStallLogTime = 0;         // троттлинг логов stall-seek
-        var recorderRestartTimer = null;  // debounce для restartMediaRecorder
-        var RECORDER_RESTART_DEBOUNCE_MS = 1000;
 
         var diagSentChunks = 0;
         var diagSentBytes = 0;
@@ -613,6 +609,7 @@
         var mseCriticalTriggered = false;
         var mseRestarting = false;
         var currentMseCodec = ''; // фактический кодек sourceBuffer (для сравнения при смене)
+        var lastHandledMpx = -1; // debounce: последний обработанный mpx пира
         var peerDisplayW = 0; // ширина MSE-окна пира (для аспект-соотношения)
         var peerDisplayH = 0; // высота MSE-окна пира (для аспект-соотношения)
         var peerRecorderCodec = ''; // mimeType рекордера пира из cmd:initCodec (для remoteResLabel)
@@ -811,14 +808,7 @@
         });
         document.querySelector('.video-container.main-video').addEventListener('click', function(e) {
             if (e.target.closest('.controls-panel') || e.target.closest('.pip-container')) return;
-            if (document.body.classList.contains('show-main-controls')) {
-                if (controlsTimer) clearTimeout(controlsTimer);
-                controlsTimer = null;
-                document.body.classList.remove('show-main-controls');
-                document.body.classList.remove('show-pip-controls');
-            } else {
-                showAllControls();
-            }
+            showAllControls();
         });
         document.getElementById('controlsPanel').addEventListener('click', function() {
             showAllControls();
@@ -918,7 +908,7 @@
                     mediaRecorder.stop(); recorderStarted = false;
                 }
             } else if (recorderStarted || S.audio) {
-                restartMediaRecorder('settings');
+                restartMediaRecorder();
             }
             micToggling = false;
         });
@@ -968,7 +958,7 @@
                     mediaRecorder.stop(); recorderStarted = false;
                 }
             } else if (recorderStarted || S.video) {
-                restartMediaRecorder('settings');
+                restartMediaRecorder();
             }
             updateResLabels();
             camToggling = false;
@@ -1025,7 +1015,7 @@
             }
 
             applySettings(); saveSettings(); sendSettings();
-            if (recorderStarted || S.video) restartMediaRecorder('settings');
+            if (recorderStarted || S.video) restartMediaRecorder();
             updateResLabels();
             flipToggling = false;
         });
@@ -1164,7 +1154,7 @@
                                 S.video = false;
                             }
                             applySettings(); saveSettings(); sendSettings();
-                            if (recorderStarted || S.video) restartMediaRecorder('settings');
+                            if (recorderStarted || S.video) restartMediaRecorder();
                             updateResLabels();
                         })();
                     };
@@ -1218,7 +1208,7 @@
                     mediaRecorder.stop(); recorderStarted = false;
                 }
             } else if (recorderStarted || S.video || isScreenSharing) {
-                restartMediaRecorder('settings');
+                restartMediaRecorder();
             }
             updateResLabels();
             screenToggling = false;
@@ -1372,7 +1362,7 @@
                             remoteVideo.currentTime = target4;
                             lastEmergencySeekTime = now;
                             remoteVideo.playbackRate = 1.0;
-                            if (remoteVideo.paused) remoteVideo.play().catch(function(){});
+                            remoteVideo.play().catch(function(){});
                         }
                     } else
                     // 2. Emergency seek при большом отставании (страховка от неконтролируемого роста лага)
@@ -1382,6 +1372,7 @@
                         remoteVideo.currentTime = target2;
                         lastEmergencySeekTime = now;
                         remoteVideo.playbackRate = 1.0;
+                        remoteVideo.play().catch(function(){});
                     }
                 }
             } catch (e) {}
@@ -1394,9 +1385,7 @@
         // ============= Обновление метки задержки (раз в секунду) =============
         setInterval(function() {
             if (currentBehind > 0) {
-                var _lt = currentBehind >= 1 ? currentBehind.toFixed(2) : currentBehind.toFixed(1);
-                if (currentBehind < 1 && _lt.charAt(0) === '0') _lt = _lt.substring(1);
-                latencyLabel.textContent = _lt;
+                latencyLabel.textContent = currentBehind.toFixed(1) + 's';
             } else {
                 latencyLabel.textContent = '';
             }
@@ -1408,24 +1397,25 @@
             if (S.h264) {
                 if (S.aac) {
                     list.push('video/mp4;codecs="avc1.42E01E,mp4a.40.2"');
+                    list.push('audio/mp4;codecs="mp4a.40.2"');
                 }
                 if (S.opus) {
                     list.push('video/mp4;codecs="avc1.42E01E,opus"');
+                    list.push('audio/mp4;codecs="opus"');
                 }
                 if (!S.aac && !S.opus) {
-                    list.push('video/mp4');
+                    list.push('video/mp4;codecs="avc1.42E01E');
                 }
+                if (S.aac) list.push('audio/mp4;codecs="mp4a.40.2"');
             }
             if (S.vp8) {
                 if (S.opus) {
                     list.push('video/webm;codecs="vp8,opus"');
+                    list.push('audio/webm;codecs="opus"');
                 } else {
-                    list.push('video/webm');
+                    list.push('video/webm;codecs="vp8"');
                 }
             }
-            // Audio-only codecs
-            if (S.opus) list.push('audio/webm;codecs="opus"');
-            if (S.aac) list.push('audio/mp4;codecs="mp4a.40.2"');
             if (list.length === 0) list.push('video/webm');
             return list;
         }
@@ -1464,14 +1454,15 @@
             var allCandidates = [
                 'video/webm;codecs="vp8,opus"',
                 'video/webm;codecs="vp8"',
-                'video/webm',
+                // 'video/webm',
                 'video/mp4;codecs="avc1.42E01E,opus"',
                 'video/mp4;codecs="avc1.42E01E,mp4a.40.2"',
-                'video/mp4',
+                'video/mp4;codecs="avc1.42E01E"',
+                // 'video/mp4',
                 'audio/webm;codecs="opus"',
-                'audio/webm',
+                // 'audio/webm',
                 'audio/mp4;codecs="mp4a.40.2"',
-                'audio/mp4'
+                // 'audio/mp4'
             ];
             var supported = [];
             var seen = {};
@@ -1854,11 +1845,25 @@
             if (initial) return;
 
             // Дальнейшие изменения — рестарт рекордера при необходимости
+            var codecChanged = false;
+            // Проверяем изменился ли кодек
+            if (msg.recordCodecs && msg.playCodecs) {
+                var myRec = detectAllRecordCodecs();
+                var newRec = negotiateCodecClient(myRec, msg.playCodecs);
+                if (newRec !== recordCodec) codecChanged = true;
+            }
+
             var peerWantsMyAudio = msg.wantAudio !== false;
             var peerWantsMyVideo = msg.wantVideo !== false;
             var canSend = (S.audio && peerWantsMyAudio) || (S.video && peerWantsMyVideo);
             // Обновляем метку разрешения пира
             updateResLabels();
+
+            // Проверяем изменилось ли разрешение (mpx) — с debounce по lastHandledMpx
+            var resolutionChanged = false;
+            if (Math.abs(msg.mpx - lastHandledMpx) > 0.001) {
+                resolutionChanged = true;
+            }
 
             // Обновляем incomingCodec из настроек пира (fallback — основной источник кодека — инит-сегмент)
             if (msg.recordCodecs && msg.playCodecs) {
@@ -1898,18 +1903,20 @@
                 }
             }
 
-            // Проверяем изменились ли настройки кнопок рядов 2-3 (кроме EC/NS/AGC)
-            var settingsChanged = false;
+            // MSE restart is now triggered by init segment detection in handleIncomingChunk,
+            // not by settings changes. Codec is detected from the init segment bytes.
+            // incomingCodec is still updated above as a fallback for setupMSE().
+
+            // Проверяем изменился ли состав источников/приёмников
+            var compositionChanged = false;
             if (prev) {
-                if (
-                    // prev.wantAudio !== msg.wantAudio ||
-                    // prev.wantVideo !== msg.wantVideo ||
-                    prev.vp8 !== msg.vp8 ||
-                    prev.h264 !== msg.h264 ||
-                    prev.opus !== msg.opus ||
-                    prev.aac !== msg.aac ||
-                    Math.abs((prev.mpx || 0) - (msg.mpx || 0)) > 0.001) {
-                    settingsChanged = true;
+                var prevWantA = prev.wantAudio !== false;
+                var prevWantV = prev.wantVideo !== false;
+                var prevCanSend = (S.audio && prevWantA) || (S.video && prevWantV);
+                var prevVideoActive = S.video && prevWantV;
+                var curVideoActive = S.video && peerWantsMyVideo;
+                if (prevCanSend !== canSend || prevVideoActive !== curVideoActive) {
+                    compositionChanged = true;
                 }
             }
 
@@ -1922,30 +1929,23 @@
                     mediaRecorder.stop();
                     recorderStarted = false;
                 }
-            } else if (settingsChanged || wasStopped) {
-                diagLog('REC restart: settings=' + settingsChanged + ' stopped=' + wasStopped);
-                restartMediaRecorder(settingsChanged ? 'settings' : 'stopped');
+            } else if (codecChanged || compositionChanged || wasStopped) {
+                diagLog('REC restart: codec=' + codecChanged +
+                    ' comp=' + compositionChanged + ' stopped=' + wasStopped);
+                restartMediaRecorder();
+            } else if (resolutionChanged || displayChanged) {
+                if (resolutionChanged) lastHandledMpx = msg.mpx;
+                diagLog('RES changed on the fly (no recorder restart)');
             }
         }
 
-        function restartMediaRecorder(reason) {
-            if (recorderRestartTimer) { clearTimeout(recorderRestartTimer); recorderRestartTimer = null; }
-            recorderRestartTimer = setTimeout(function() {
-                recorderRestartTimer = null;
-                if (!isActive) return;
-                // Если рекордер уже записывает и причина только wasStopped — пропускаем
-                // (рекордер уже перезапустился через onstop auto-restart)
-                if (reason !== 'settings' && mediaRecorder && mediaRecorder.state === 'recording') {
-                    diagLog('REC restart skipped: already recording, reason=' + reason);
-                    return;
-                }
-                // onstop закроет файл после последнего ondataavailable
-                if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-                    mediaRecorder.stop();
-                } else {
-                    setupMediaRecorder();
-                }
-            }, RECORDER_RESTART_DEBOUNCE_MS);
+        function restartMediaRecorder() {
+            // onstop закроет файл после последнего ondataavailable
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                mediaRecorder.stop();
+            } else {
+                if (isActive) setupMediaRecorder();
+            }
         }
 
         // ============= WebSocket =============
@@ -1980,6 +1980,8 @@
                         handlePeerSettings(fallbackSettings, false);
                     }
                     // Запускаем рекордер без sendSettings — хост не инициирует обмен
+                    // recorderStarted = true;
+                    // setupMediaRecorder();
                 } else {
                     // Guest: отправляем свои настройки хосту, он ответит своими
                     sendSettings();
@@ -2001,7 +2003,6 @@
                                 if (echo && msg.role === 'guest') {
                                     echo = false;
                                     sendSettings(); // отвечаем однократно
-                                    restartMediaRecorder('settings'); // рестарт → свежий initCodec гостю
                                 }
                                 handlePeerSettings(msg, false);
                             } else if (msg.cmd === 'initCodec') {
@@ -2059,7 +2060,7 @@
                             } else if (msg.cmd === 'restartRecorder') {
                                 // Пир просит перезапустить наш рекордер
                                 diagLog('PEER requested recorder restart');
-                                restartMediaRecorder('settings');
+                                restartMediaRecorder();
                             } else if (msg.cmd === 'myRes') {
                                 // Пир сообщает своё текущее разрешение камеры (для remoteResLabel)
                                 if (msg.width > 0 && msg.height > 0) {
@@ -2143,8 +2144,6 @@
         function setupMSE() {
             var codec = incomingCodec || negotiatedCodec || detectCodec();
             diagLog('MSE setup codec=' + codecDisplayName(codec) + ' muted=' + remoteVideo.muted + ' wantAudio=' + S.wantAudio);
-            // Очищаем очередь — устаревшие чанки без init-сегмента вызовут MSE error
-            mseQueue = []; mseQueueReadIdx = 0;
             mseRestarting = true; // сбросится в sourceopen
             try { if (remoteVideo.src && remoteVideo.src.startsWith('blob:')) URL.revokeObjectURL(remoteVideo.src); } catch(e) {}
             mediaSource = new MediaSource();
@@ -2311,8 +2310,6 @@
                 if (recErrorCount >= 3 && S.video) camBtn.click();
             };
             mediaRecorder.onstart = function() {
-                // Отменяем отложенный рестарт — рекордер уже работает
-                if (recorderRestartTimer) { clearTimeout(recorderRestartTimer); recorderRestartTimer = null; }
                 var recMime = mediaRecorder.mimeType;
                 recMimeType = recMime;
                 recStartPending = false;  // рекордер перезапустился — следующие чанки пишем в файл

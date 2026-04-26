@@ -133,17 +133,15 @@
         #latencyLabel {
             position: absolute;
             top: 1px;
-            left: 0;
-            right: 0;
-            width: fit-content;
-            margin: 0 auto;
+            left: 50%;
+            transform: translateX(-50%);
             z-index: 16;
         }
         /* Показ кнопок через классы (десктоп + мобильные) */
         body.show-main-controls .controls-panel { opacity: 1; }
         .res-label {
             color: rgba(255,255,255,0.7);
-            font-size: 0.80em;
+            font-size: 0.65em;
             font-family: monospace;
             pointer-events: none;
             white-space: nowrap;
@@ -493,7 +491,6 @@
             var dh = mainContainer ? mainContainer.clientHeight : 0;
             ws.send(JSON.stringify({
                 cmd: 'settings',
-                role: isCreator ? 'host' : 'guest',
                 audio: S.audio,
                 video: S.video,
                 wantAudio: S.wantAudio,
@@ -566,7 +563,7 @@
         var wsConnected = false;
         var wsReconnectTimer = null;
         var peerSettings = null; // настройки пира (полученные через WS)
-        var echo = false; // эхо-режим (хост видит своё видео пока гость не подключился)
+        var peerSettingsResolve = null; // для ожидания первых настроек пира
         var recorderStarted = false;
         var mediaSource = null;
         var sourceBuffer = null;
@@ -597,8 +594,6 @@
         var stallStartWallTime = 0;       // Date.now() момента начала stall
         var stallStartCt = 0;             // currentTime в момент начала stall
         var lastStallLogTime = 0;         // троттлинг логов stall-seek
-        var recorderRestartTimer = null;  // debounce для restartMediaRecorder
-        var RECORDER_RESTART_DEBOUNCE_MS = 1000;
 
         var diagSentChunks = 0;
         var diagSentBytes = 0;
@@ -612,7 +607,9 @@
         var mseErrorTimestamps = [];
         var mseCriticalTriggered = false;
         var mseRestarting = false;
+        var mseGeneration = 0; // счётчик поколений MSE для защиты от stale sourceopen
         var currentMseCodec = ''; // фактический кодек sourceBuffer (для сравнения при смене)
+        var lastHandledMpx = -1; // debounce: последний обработанный mpx пира
         var peerDisplayW = 0; // ширина MSE-окна пира (для аспект-соотношения)
         var peerDisplayH = 0; // высота MSE-окна пира (для аспект-соотношения)
         var peerRecorderCodec = ''; // mimeType рекордера пира из cmd:initCodec (для remoteResLabel)
@@ -811,14 +808,7 @@
         });
         document.querySelector('.video-container.main-video').addEventListener('click', function(e) {
             if (e.target.closest('.controls-panel') || e.target.closest('.pip-container')) return;
-            if (document.body.classList.contains('show-main-controls')) {
-                if (controlsTimer) clearTimeout(controlsTimer);
-                controlsTimer = null;
-                document.body.classList.remove('show-main-controls');
-                document.body.classList.remove('show-pip-controls');
-            } else {
-                showAllControls();
-            }
+            showAllControls();
         });
         document.getElementById('controlsPanel').addEventListener('click', function() {
             showAllControls();
@@ -918,7 +908,7 @@
                     mediaRecorder.stop(); recorderStarted = false;
                 }
             } else if (recorderStarted || S.audio) {
-                restartMediaRecorder('settings');
+                restartMediaRecorder();
             }
             micToggling = false;
         });
@@ -968,7 +958,7 @@
                     mediaRecorder.stop(); recorderStarted = false;
                 }
             } else if (recorderStarted || S.video) {
-                restartMediaRecorder('settings');
+                restartMediaRecorder();
             }
             updateResLabels();
             camToggling = false;
@@ -1025,7 +1015,7 @@
             }
 
             applySettings(); saveSettings(); sendSettings();
-            if (recorderStarted || S.video) restartMediaRecorder('settings');
+            if (recorderStarted || S.video) restartMediaRecorder();
             updateResLabels();
             flipToggling = false;
         });
@@ -1164,7 +1154,7 @@
                                 S.video = false;
                             }
                             applySettings(); saveSettings(); sendSettings();
-                            if (recorderStarted || S.video) restartMediaRecorder('settings');
+                            if (recorderStarted || S.video) restartMediaRecorder();
                             updateResLabels();
                         })();
                     };
@@ -1218,7 +1208,7 @@
                     mediaRecorder.stop(); recorderStarted = false;
                 }
             } else if (recorderStarted || S.video || isScreenSharing) {
-                restartMediaRecorder('settings');
+                restartMediaRecorder();
             }
             updateResLabels();
             screenToggling = false;
@@ -1351,7 +1341,7 @@
                         }
                         var elapsed = (now - stallStartWallTime) / 1000;
                         var expected = stallStartCt + elapsed;
-                        if (expected > ct && expected <= SLOMO) {
+                        if (expected > ct && expected <= SLOMO) { //bufEnd
                             remoteVideo.currentTime = expected;
                             remoteVideo.play().catch(function(){});
                             if (now - lastStallLogTime > 1000) {
@@ -1382,6 +1372,7 @@
                         remoteVideo.currentTime = target2;
                         lastEmergencySeekTime = now;
                         remoteVideo.playbackRate = 1.0;
+                        if (remoteVideo.paused) remoteVideo.play().catch(function(){});
                     }
                 }
             } catch (e) {}
@@ -1394,9 +1385,7 @@
         // ============= Обновление метки задержки (раз в секунду) =============
         setInterval(function() {
             if (currentBehind > 0) {
-                var _lt = currentBehind >= 1 ? currentBehind.toFixed(2) : currentBehind.toFixed(1);
-                if (currentBehind < 1 && _lt.charAt(0) === '0') _lt = _lt.substring(1);
-                latencyLabel.textContent = _lt;
+                latencyLabel.textContent = currentBehind.toFixed(1) + 's';
             } else {
                 latencyLabel.textContent = '';
             }
@@ -1408,24 +1397,25 @@
             if (S.h264) {
                 if (S.aac) {
                     list.push('video/mp4;codecs="avc1.42E01E,mp4a.40.2"');
+                    list.push('audio/mp4;codecs="mp4a.40.2"');
                 }
                 if (S.opus) {
                     list.push('video/mp4;codecs="avc1.42E01E,opus"');
+                    list.push('audio/mp4;codecs="opus"');
                 }
                 if (!S.aac && !S.opus) {
-                    list.push('video/mp4');
+                    list.push('video/mp4;codecs="avc1.42E01E');
                 }
+                if (S.aac) list.push('audio/mp4;codecs="mp4a.40.2"');
             }
             if (S.vp8) {
                 if (S.opus) {
                     list.push('video/webm;codecs="vp8,opus"');
+                    list.push('audio/webm;codecs="opus"');
                 } else {
-                    list.push('video/webm');
+                    list.push('video/webm;codecs="vp8"');
                 }
             }
-            // Audio-only codecs
-            if (S.opus) list.push('audio/webm;codecs="opus"');
-            if (S.aac) list.push('audio/mp4;codecs="mp4a.40.2"');
             if (list.length === 0) list.push('video/webm');
             return list;
         }
@@ -1464,14 +1454,15 @@
             var allCandidates = [
                 'video/webm;codecs="vp8,opus"',
                 'video/webm;codecs="vp8"',
-                'video/webm',
+                // 'video/webm',
                 'video/mp4;codecs="avc1.42E01E,opus"',
                 'video/mp4;codecs="avc1.42E01E,mp4a.40.2"',
-                'video/mp4',
+                'video/mp4;codecs="avc1.42E01E"',
+                // 'video/mp4',
                 'audio/webm;codecs="opus"',
-                'audio/webm',
+                // 'audio/webm',
                 'audio/mp4;codecs="mp4a.40.2"',
-                'audio/mp4'
+                // 'audio/mp4'
             ];
             var supported = [];
             var seen = {};
@@ -1589,8 +1580,11 @@
 
                 var createResult = await tryCreateRoom();
                 isCreator = createResult.created;
+                diagLog('INIT peer=' + (isCreator ? 'host' : 'guest') + ' cam=' + W + 'x' + H);
 
                 isActive = true; // Разрешаем hangup во время ожидания пира
+
+                // Определяем роль
                 if (isCreator) {
                     myPeerID = 'host';
                     remotePeerID = 'guest';
@@ -1598,9 +1592,39 @@
                     myPeerID = 'guest';
                     remotePeerID = 'host';
                 }
-                diagLog('INIT peer=' + myPeerID + ' cam=' + W + 'x' + H);
                 _chatUserId = myPeerID + '_' + getBrowserTag();
                 localStorage.setItem('chatUserId', _chatUserId);
+
+                // Раннее подключение WS — Go будет эхо-отражать чанки для preview
+                connectWS();
+                var wsWaitStart = Date.now();
+                while (!wsConnected && isActive && (Date.now() - wsWaitStart < 10000)) {
+                    await new Promise(function(r) { setTimeout(r, 100); });
+                }
+                if (!wsConnected) {
+                    showError('WebSocket connection failed');
+                    return;
+                }
+
+                // Запускаем MSE + MediaRecorder — Go эхо-отражает чанки обратно
+                recordCodec = detectCodec();
+                incomingCodec = recordCodec;
+                setupMSE();
+                setupMediaRecorder();
+                diagLog('PREVIEW started via Go-echo codec=' + codecDisplayName(recordCodec));
+
+                if (isCreator) {
+                    var joined = null;
+                    while (!joined && isActive) {
+                        try {
+                            joined = await waitForPeer();
+                        } catch(e) {}
+                        if (!joined) await new Promise(function(r) { setTimeout(r, 2000); });
+                    }
+                    if (!isActive) return; // Hangup нажат во время ожидания
+                } else {
+                    await joinRoom();
+                }
                 await startCall();
             } catch (err) {
                 isActive = false;
@@ -1623,6 +1647,28 @@
                 var data = await resp.json();
                 return { created: data.status === 'created' };
             } catch (e) { return { created: false }; }
+        }
+
+        async function waitForPeer() {
+            try {
+                var resp = await fetch('/api/call/wait?room=' + encodeURIComponent(roomID));
+                if (!resp.ok) return false;
+                var data = await resp.json();
+                if (data.status === 'joined') return data;
+                return false;
+            } catch (e) { return false; }
+        }
+
+        async function joinRoom() {
+            try {
+                var resp = await fetch('/api/call/join', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ room: roomID })
+                });
+                if (!resp.ok) return null;
+                return await resp.json();
+            } catch (e) { return null; }
         }
 
         async function sendChunk(data) {
@@ -1806,7 +1852,6 @@
         function handlePeerSettings(msg, initial) {
             var prev = peerSettings;
             peerSettings = msg;
-            if (msg.role === remotePeerID) { try { localStorage.setItem('vc_peerSettings', JSON.stringify(msg)); } catch(e) {} }
             if (!isActive || !localStream) return;
 
             // Извлекаем размеры MSE-окна пира для аспект-соотношения
@@ -1854,11 +1899,25 @@
             if (initial) return;
 
             // Дальнейшие изменения — рестарт рекордера при необходимости
+            var codecChanged = false;
+            // Проверяем изменился ли кодек
+            if (msg.recordCodecs && msg.playCodecs) {
+                var myRec = detectAllRecordCodecs();
+                var newRec = negotiateCodecClient(myRec, msg.playCodecs);
+                if (newRec !== recordCodec) codecChanged = true;
+            }
+
             var peerWantsMyAudio = msg.wantAudio !== false;
             var peerWantsMyVideo = msg.wantVideo !== false;
             var canSend = (S.audio && peerWantsMyAudio) || (S.video && peerWantsMyVideo);
             // Обновляем метку разрешения пира
             updateResLabels();
+
+            // Проверяем изменилось ли разрешение (mpx) — с debounce по lastHandledMpx
+            var resolutionChanged = false;
+            if (Math.abs(msg.mpx - lastHandledMpx) > 0.001) {
+                resolutionChanged = true;
+            }
 
             // Обновляем incomingCodec из настроек пира (fallback — основной источник кодека — инит-сегмент)
             if (msg.recordCodecs && msg.playCodecs) {
@@ -1898,18 +1957,20 @@
                 }
             }
 
-            // Проверяем изменились ли настройки кнопок рядов 2-3 (кроме EC/NS/AGC)
-            var settingsChanged = false;
+            // MSE restart is now triggered by init segment detection in handleIncomingChunk,
+            // not by settings changes. Codec is detected from the init segment bytes.
+            // incomingCodec is still updated above as a fallback for setupMSE().
+
+            // Проверяем изменился ли состав источников/приёмников
+            var compositionChanged = false;
             if (prev) {
-                if (
-                    // prev.wantAudio !== msg.wantAudio ||
-                    // prev.wantVideo !== msg.wantVideo ||
-                    prev.vp8 !== msg.vp8 ||
-                    prev.h264 !== msg.h264 ||
-                    prev.opus !== msg.opus ||
-                    prev.aac !== msg.aac ||
-                    Math.abs((prev.mpx || 0) - (msg.mpx || 0)) > 0.001) {
-                    settingsChanged = true;
+                var prevWantA = prev.wantAudio !== false;
+                var prevWantV = prev.wantVideo !== false;
+                var prevCanSend = (S.audio && prevWantA) || (S.video && prevWantV);
+                var prevVideoActive = S.video && prevWantV;
+                var curVideoActive = S.video && peerWantsMyVideo;
+                if (prevCanSend !== canSend || prevVideoActive !== curVideoActive) {
+                    compositionChanged = true;
                 }
             }
 
@@ -1922,36 +1983,30 @@
                     mediaRecorder.stop();
                     recorderStarted = false;
                 }
-            } else if (settingsChanged || wasStopped) {
-                diagLog('REC restart: settings=' + settingsChanged + ' stopped=' + wasStopped);
-                restartMediaRecorder(settingsChanged ? 'settings' : 'stopped');
+            } else if (codecChanged || compositionChanged || wasStopped) {
+                diagLog('REC restart: codec=' + codecChanged +
+                    ' comp=' + compositionChanged + ' stopped=' + wasStopped);
+                restartMediaRecorder();
+            } else if (resolutionChanged || displayChanged) {
+                if (resolutionChanged) lastHandledMpx = msg.mpx;
+                diagLog('RES changed on the fly (no recorder restart)');
             }
         }
 
-        function restartMediaRecorder(reason) {
-            if (recorderRestartTimer) { clearTimeout(recorderRestartTimer); recorderRestartTimer = null; }
-            recorderRestartTimer = setTimeout(function() {
-                recorderRestartTimer = null;
-                if (!isActive) return;
-                // Если рекордер уже записывает и причина только wasStopped — пропускаем
-                // (рекордер уже перезапустился через onstop auto-restart)
-                if (reason !== 'settings' && mediaRecorder && mediaRecorder.state === 'recording') {
-                    diagLog('REC restart skipped: already recording, reason=' + reason);
-                    return;
-                }
-                // onstop закроет файл после последнего ondataavailable
-                if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-                    mediaRecorder.stop();
-                } else {
-                    setupMediaRecorder();
-                }
-            }, RECORDER_RESTART_DEBOUNCE_MS);
+        function restartMediaRecorder() {
+            // onstop закроет файл после последнего ondataavailable
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                mediaRecorder.stop();
+            } else {
+                if (isActive) setupMediaRecorder();
+            }
         }
 
         // ============= WebSocket =============
         function connectWS() {
             if (wsReconnectTimer) { clearTimeout(wsReconnectTimer); wsReconnectTimer = null; }
             if (!isActive) return;
+            if (wsConnected) return;
             var proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
             var wsURL = proto + '//' + location.host + '/api/call/ws?room=' + encodeURIComponent(roomID) + '&peer=' + encodeURIComponent(myPeerID);
             diagLog('WS connecting...');
@@ -1959,31 +2014,9 @@
             catch (e) { diagLog('WS create error: ' + e.message); return; }
             ws.onopen = function() {
                 wsConnected = true;
-                diagLog('WS connected role=' + (isCreator ? 'host' : 'guest'));
-                if (isCreator) {
-                    echo = true; // хост в эхо-режиме пока не придут settings от гостя
-                    // Host: загружаем сохранённые peer settings для немедленного старта рекордера
-                    var savedPeerSettings = null;
-                    try { savedPeerSettings = JSON.parse(localStorage.getItem('vc_peerSettings')); } catch(e) {}
-                    if (savedPeerSettings) {
-                        diagLog('PEER settings restored from localStorage');
-                        handlePeerSettings(savedPeerSettings, false);
-                    } else {
-                        // Fallback: используем свои настройки как peer settings (эхо-режим / первый запуск)
-                        var fallbackSettings = JSON.parse(JSON.stringify(S));
-                        fallbackSettings.cmd = 'settings';
-                        fallbackSettings.role = remotePeerID;
-                        fallbackSettings.recordCodecs = detectAllRecordCodecs();
-                        fallbackSettings.playCodecs = detectSupportedCodecs();
-                        try { localStorage.setItem('vc_peerSettings', JSON.stringify(fallbackSettings)); } catch(e) {}
-                        diagLog('PEER settings fallback from own S');
-                        handlePeerSettings(fallbackSettings, false);
-                    }
-                    // Запускаем рекордер без sendSettings — хост не инициирует обмен
-                } else {
-                    // Guest: отправляем свои настройки хосту, он ответит своими
-                    sendSettings();
-                }
+                diagLog('WS connected');
+                // Отправляем свои настройки пиру при подключении
+                sendSettings();
             };
             ws.onmessage = function(event) {
                 if (event.data instanceof ArrayBuffer) {
@@ -1997,69 +2030,21 @@
                         try {
                             var msg = JSON.parse(event.data);
                             if (msg.cmd === 'settings') {
-                                diagLog('PEER settings: role=' + msg.role + ' a=' + msg.audio + ' v=' + msg.video + ' wa=' + msg.wantAudio + ' wv=' + msg.wantVideo);
-                                if (echo && msg.role === 'guest') {
-                                    echo = false;
-                                    sendSettings(); // отвечаем однократно
-                                    restartMediaRecorder('settings'); // рестарт → свежий initCodec гостю
+                                diagLog('PEER settings: a=' + msg.audio + ' v=' + msg.video + ' wa=' + msg.wantAudio + ' wv=' + msg.wantVideo);
+                                var initial = !peerSettings && peerSettingsResolve;
+                                handlePeerSettings(msg, initial);
+                                // Резолвим ожидание первых настроек
+                                if (peerSettingsResolve) {
+                                    var resolve = peerSettingsResolve;
+                                    peerSettingsResolve = null;
+                                    resolve(peerSettings);
                                 }
-                                handlePeerSettings(msg, false);
                             } else if (msg.cmd === 'initCodec') {
-                                // Единственная точка управления MSE: создание и пересоздание
-                                diagLog('RECV initCodec=' + (msg.codec || 'null') + ' mseRestarting=' + mseRestarting + ' mediaSource=' + !!mediaSource + ' readyState=' + (mediaSource ? mediaSource.readyState : 'none') + ' currentMseCodec=' + codecDisplayName(currentMseCodec));
-                                if (msg.codec) {
-                                    diagLog('PEER initCodec=' + codecDisplayName(msg.codec));
-                                    incomingCodec = msg.codec;
-                                    peerRecorderCodec = msg.codec;
-                                    updateResLabels();
-                                    if (mseRestarting) {
-                                        // MSE перезапускается — incomingCodec обновлён, будет использован при sourceopen
-                                        diagLog('MSE RESTARTING — initCodec will be used on sourceopen');
-                                    } else if (!mediaSource || mediaSource.readyState === 'closed') {
-                                        // MSE ещё не создан — создаём с фактическим кодеком от пира
-                                        diagLog('MSE CREATING from initCodec=' + codecDisplayName(msg.codec));
-                                        setupMSE();
-                                    } else {
-                                        // Кодек тот же или изменился — пересоздаём MSE,
-                                        // т.к. init-сегмент от нового рекордера имеет другие таймстампы
-                                        diagLog('MSE RESTART (initCodec, codec=' + codecDisplayName(msg.codec) + ' same=' + (msg.codec === currentMseCodec) + ')');
-                                        restartMSE();
-                                        setupMSE();
-                                    }
-                                } else {
-                                    diagLog('RECV initCodec: codec is empty — no action');
-                                }
-                                // Запись remote video: обработка initCodec
-                                if (isPeerRecording) {
-                                    if (peerRecPending) {
-                                        // Первый init-сегмент после запроса — начинаем запись
-                                        peerRecPending = false;
-                                        peerRecActive = true;
-                                        peerRecBtn.classList.remove('pending');
-                                        peerRecBtn.classList.add('recording');
-                                        peerRecBtn.textContent = '🔴';
-                                        diagLog('PEER REC started — writing chunks');
-                                    } else {
-                                        // Любой initCodec при активной записи или ожидании стопа — закрыть файл
-                                        diagLog('PEER REC stopped by initCodec');
-                                        isPeerRecording = false;
-                                        S.isPeerRecording = false;
-                                        peerRecActive = false;
-                                        peerRecPending = false;
-                                        peerRecBtn.classList.remove('recording', 'pending');
-                                        peerRecBtn.textContent = '⏺';
-                                        saveSettings(); sendSettings();
-                                        if (peerRecWritable) {
-                                            var pw = peerRecWritable;
-                                            peerRecWritable = null;
-                                            pw.close().catch(function(){});
-                                        }
-                                    }
-                                }
+                                handleInitCodec(msg.codec);
                             } else if (msg.cmd === 'restartRecorder') {
                                 // Пир просит перезапустить наш рекордер
                                 diagLog('PEER requested recorder restart');
-                                restartMediaRecorder('settings');
+                                restartMediaRecorder();
                             } else if (msg.cmd === 'myRes') {
                                 // Пир сообщает своё текущее разрешение камеры (для remoteResLabel)
                                 if (msg.width > 0 && msg.height > 0) {
@@ -2133,26 +2118,122 @@
             wsConnected = false;
         }
 
+        // ============= initCodec handler (общий для WS и loopback) =============
+        function handleInitCodec(codec) {
+            diagLog('INIT_CODEC=' + (codec || 'null') + ' mseRestarting=' + mseRestarting + ' mediaSource=' + !!mediaSource + ' readyState=' + (mediaSource ? mediaSource.readyState : 'none') + ' currentMseCodec=' + codecDisplayName(currentMseCodec));
+            if (codec) {
+                diagLog('initCodec=' + codecDisplayName(codec));
+                incomingCodec = codec;
+                peerRecorderCodec = codec;
+                updateResLabels();
+                // Лёгкая очистка: сброс очереди, удаление sourceBuffer, но mediaSource остаётся
+                resetMSE(false);
+                if (mseRestarting) {
+                    if (!mediaSource) {
+                        diagLog('MSE RESTARTING — creating new MSE from initCodec');
+                        setupMSE();
+                    } else {
+                        diagLog('MSE RESTARTING — initCodec will be used on sourceopen');
+                    }
+                } else if (!mediaSource || mediaSource.readyState === 'closed') {
+                    diagLog('MSE CREATING from initCodec=' + codecDisplayName(codec));
+                    setupMSE();
+                } else {
+                    diagLog('MSE RESTART (initCodec, codec=' + codecDisplayName(codec) + ')');
+                    resetMSE(true);
+                    setupMSE();
+                }
+            } else {
+                diagLog('INIT_CODEC: codec is empty — no action');
+            }
+            // Запись remote video: обработка initCodec
+            if (isPeerRecording) {
+                if (peerRecPending) {
+                    peerRecPending = false;
+                    peerRecActive = true;
+                    peerRecBtn.classList.remove('pending');
+                    peerRecBtn.classList.add('recording');
+                    peerRecBtn.textContent = '🔴';
+                    diagLog('PEER REC started — writing chunks');
+                } else {
+                    diagLog('PEER REC stopped by initCodec');
+                    isPeerRecording = false;
+                    S.isPeerRecording = false;
+                    peerRecActive = false;
+                    peerRecPending = false;
+                    peerRecBtn.classList.remove('recording', 'pending');
+                    peerRecBtn.textContent = '⏺';
+                    saveSettings(); sendSettings();
+                    if (peerRecWritable) {
+                        var pw = peerRecWritable;
+                        peerRecWritable = null;
+                        pw.close().catch(function(){});
+                    }
+                }
+            }
+        }
+
         // ============= Звонок =============
         async function startCall() {
             isActive = true;
-            connectWS();
+
+            // Сброс настроек пира — ждём реальные от подключившегося пира
+            peerSettings = null;
+
+            // 1. Готовимся принять настройки пира
+            peerSettingsResolve = null;
+            var settingsPromise = new Promise(function(resolve) { peerSettingsResolve = resolve; });
+
+            // 2. Подключаем WS если ещё не подключён
+            if (!wsConnected) {
+                connectWS();
+                var waitStart = Date.now();
+                while (!wsConnected && isActive && (Date.now() - waitStart < 10000)) {
+                    await new Promise(function(r) { setTimeout(r, 100); });
+                }
+                if (!wsConnected) {
+                    diagLog('WS connect timeout');
+                    showError('WebSocket connection failed');
+                    peerSettingsResolve = null;
+                    return;
+                }
+            }
+
+            // 3. Ждём настройки пира (до 5 секунд) — чтобы знать кодек и разрешение
+            diagLog('Waiting for peer settings...');
+            var timeoutPromise = new Promise(function(resolve) { setTimeout(function() { resolve(null); }, 5000); });
+            var firstSettings = await Promise.race([settingsPromise, timeoutPromise]);
+            peerSettingsResolve = null;
+            if (firstSettings) {
+                diagLog('Got peer settings, codec=' + codecDisplayName(recordCodec) + ' incoming=' + codecDisplayName(incomingCodec));
+            } else {
+                diagLog('Peer settings timeout, using defaults');
+            }
+            if (!isActive) return;
+
+            // 4. Перезапускаем рекордер — отправит свежий initCodec пиру
+            recorderStarted = true;
+            setupMediaRecorder();
         }
 
         // ============= MSE =============
         function setupMSE() {
             var codec = incomingCodec || negotiatedCodec || detectCodec();
             diagLog('MSE setup codec=' + codecDisplayName(codec) + ' muted=' + remoteVideo.muted + ' wantAudio=' + S.wantAudio);
-            // Очищаем очередь — устаревшие чанки без init-сегмента вызовут MSE error
-            mseQueue = []; mseQueueReadIdx = 0;
+            var gen = ++mseGeneration;
             mseRestarting = true; // сбросится в sourceopen
             try { if (remoteVideo.src && remoteVideo.src.startsWith('blob:')) URL.revokeObjectURL(remoteVideo.src); } catch(e) {}
-            mediaSource = new MediaSource();
-            remoteVideo.src = URL.createObjectURL(mediaSource);
-            mediaSource.addEventListener('sourceopen', function() {
-                diagLog('MSE sourceopen codec=' + codecDisplayName(codec) + ' readyState=' + mediaSource.readyState);
+            var ms = new MediaSource();
+            mediaSource = ms;
+            remoteVideo.src = URL.createObjectURL(ms);
+            ms.addEventListener('sourceopen', function() {
+                if (gen !== mseGeneration) {
+                    diagLog('MSE sourceopen STALE gen=' + gen + ' current=' + mseGeneration + ' — ignored');
+                    return;
+                }
+                diagLog('MSE sourceopen codec=' + codecDisplayName(codec) + ' readyState=' + ms.readyState);
                 try {
-                    sourceBuffer = mediaSource.addSourceBuffer(codec);
+                    sourceBuffer = ms.addSourceBuffer(codec);
                     sourceBuffer.mode = 'segments';
                     // sourceBuffer.mode = 'sequence';
                     sourceBuffer.addEventListener('updateend', function() { onMSEUpdateEnd(); });
@@ -2260,6 +2341,54 @@
             mediaSource = null;
         }
 
+        function resetMSE(full) {
+            // full = true  - полный сброс (при hangup, критических ошибках)
+            // full = false - лёгкий сброс (при смене таймстемпов/кодека)
+            
+            // --- Общая очистка для обоих режимов ---
+            mseReady = false;
+            firstAppendDone = false;
+            mseQueue = [];
+            mseQueueReadIdx = 0;
+            mseErrorTimestamps = [];
+            mseCriticalTriggered = false;
+            
+            // Сброс адаптивных параметров
+            liveLastChunkTime = 0;
+            liveJitter = 0.1;
+            lastEmergencySeekTime = 0;
+            stallStartWallTime = 0;
+            try { remoteVideo.playbackRate = 1.0; } catch(e) {}
+            
+            // --- Очистка sourceBuffer (всегда) ---
+            if (sourceBuffer && !sourceBuffer.updating && mediaSource && mediaSource.readyState === 'open') {
+                try {
+                    mediaSource.removeSourceBuffer(sourceBuffer);
+                } catch(e) {}
+            }
+            sourceBuffer = null;
+            currentMseCodec = '';
+            
+            // --- Только для полного сброса ---
+            if (full) {
+                mseRestarting = false;
+                mseGeneration++;
+                
+                if (mediaSource && mediaSource.readyState === 'open') {
+                    try { mediaSource.endOfStream(); } catch(e) {}
+                }
+                
+                try {
+                    if (remoteVideo.src && remoteVideo.src.startsWith('blob:')) {
+                        URL.revokeObjectURL(remoteVideo.src);
+                    }
+                } catch(e) {}
+                
+                remoteVideo.removeAttribute('src');
+                mediaSource = null;
+            }
+        }
+
         // ============= MediaRecorder =============
         function setupMediaRecorder() {
             if (!localStream) return;
@@ -2311,8 +2440,6 @@
                 if (recErrorCount >= 3 && S.video) camBtn.click();
             };
             mediaRecorder.onstart = function() {
-                // Отменяем отложенный рестарт — рекордер уже работает
-                if (recorderRestartTimer) { clearTimeout(recorderRestartTimer); recorderRestartTimer = null; }
                 var recMime = mediaRecorder.mimeType;
                 recMimeType = recMime;
                 recStartPending = false;  // рекордер перезапустился — следующие чанки пишем в файл
@@ -2379,28 +2506,43 @@
 
         function cleanupCall() {
             isActive = false;
-            mseReady = false;
-            mseQueue = []; mseQueueReadIdx = 0;
-            mseCriticalTriggered = false;
-            mseRestarting = false;
-            currentMseCodec = '';
+            
+            // Полный сброс MSE
+            resetMSE(true);
+            
             // Очистка таймеров
-            if (controlsTimer) { clearTimeout(controlsTimer); controlsTimer = null; }
-            if (resizeDebounceTimer) { clearTimeout(resizeDebounceTimer); resizeDebounceTimer = null; }
-            if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
-            // Закрываем файл записи если идёт запись
+            if (controlsTimer) {
+                clearTimeout(controlsTimer);
+                controlsTimer = null;
+            }
+            if (resizeDebounceTimer) {
+                clearTimeout(resizeDebounceTimer);
+                resizeDebounceTimer = null;
+            }
+            
+            // Остановка медиарекордера
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                mediaRecorder.onstop = null; // предотвращаем перезапуск
+                mediaRecorder.stop();
+                mediaRecorder = null;
+            }
+            recorderStarted = false;
             recStartPending = false;
+            
+            // Закрытие файла записи своего видео
             if (isRecording) {
                 isRecording = false;
                 S.isRecording = false;
-                recBtn.classList.remove('recording');
+                recBtn.classList.remove('recording', 'pending');
+                recBtn.textContent = '⏺';
             }
             if (recordWritable) {
                 var w = recordWritable;
                 recordWritable = null;
                 w.close().catch(function() {});
             }
-            // Закрываем файл записи собеседника если открыт
+            
+            // Закрытие файла записи видео собеседника
             if (isPeerRecording) {
                 isPeerRecording = false;
                 S.isPeerRecording = false;
@@ -2414,14 +2556,41 @@
                 peerRecWritable = null;
                 pw.close().catch(function() {});
             }
+            
+            // Сброс флагов шаринга экрана
             if (isScreenSharing) {
                 isScreenSharing = false;
                 S.isScreenSharing = false;
             }
-            if (localStream) localStream.getTracks().forEach(function(t) { t.stop(); });
-            if (mediaSource && mediaSource.readyState === 'open') {
-                try { mediaSource.endOfStream(); } catch (e) {}
+            screenToggling = false;
+            
+            // Остановка всех треков локального стрима
+            if (localStream) {
+                localStream.getTracks().forEach(function(t) {
+                    t.stop();
+                });
+                localStream = null;
             }
+            localVideo.srcObject = null;
+            
+            // Сброс настроек пира
+            peerSettings = null;
+            peerSettingsResolve = null;
+            
+            // Сброс переменных состояния
+            firstAppendDone = false;
+            mseQueue = [];
+            mseQueueReadIdx = 0;
+            mseCriticalTriggered = false;
+            mseRestarting = false;
+            currentMseCodec = '';
+            peerDisplayW = 0;
+            peerDisplayH = 0;
+            peerRecorderCodec = '';
+            peerRes = { width: 0, height: 0, frameRate: 0 };
+            lastHandledMpx = -1;
+            
+            saveSettings();
         }
 
         function hangup() {

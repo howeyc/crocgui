@@ -549,9 +549,13 @@ func handleCallWS(w http.ResponseWriter, r *http.Request) {
 			// Сохраняем чанк в памяти (для reconnect/history)
 			room.addChunk(peerID, data)
 
-			// Мгновенно перенаправляем remote peer через WS
+			// Перенаправляем remote peer через WS, или echo обратно (loopback preview)
 			if remotePeer != "" {
-				room.forwardChunkToWS(remotePeer, data)
+				if room.getWS(remotePeer) != nil {
+					room.forwardChunkToWS(remotePeer, data)
+				} else {
+					room.forwardChunkToWS(peerID, data)
+				}
 			}
 		} else if msgType == websocket.TextMessage && len(data) > 0 {
 			dataStr := string(data)
@@ -561,9 +565,13 @@ func handleCallWS(w http.ResponseWriter, r *http.Request) {
 			if msg != nil && msg["cmd"] == "settings" {
 				room.storePeerSettings(peerID, msg)
 			}
-			// Текстовые сообщения (settings, restart_recorder) — перенаправляем remote peer
+			// Текстовые сообщения (settings, restart_recorder) — перенаправляем remote peer или echo
 			if remotePeer != "" {
-				room.forwardTextToWS(remotePeer, dataStr)
+				if room.getWS(remotePeer) != nil {
+					room.forwardTextToWS(remotePeer, dataStr)
+				} else {
+					room.forwardTextToWS(peerID, dataStr)
+				}
 			}
 		}
 	}

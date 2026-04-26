@@ -133,17 +133,15 @@
         #latencyLabel {
             position: absolute;
             top: 1px;
-            left: 0;
-            right: 0;
-            width: fit-content;
-            margin: 0 auto;
+            left: 50%;
+            transform: translateX(-50%);
             z-index: 16;
         }
         /* Показ кнопок через классы (десктоп + мобильные) */
         body.show-main-controls .controls-panel { opacity: 1; }
         .res-label {
             color: rgba(255,255,255,0.7);
-            font-size: 0.80em;
+            font-size: 0.65em;
             font-family: monospace;
             pointer-events: none;
             white-space: nowrap;
@@ -811,14 +809,7 @@
         });
         document.querySelector('.video-container.main-video').addEventListener('click', function(e) {
             if (e.target.closest('.controls-panel') || e.target.closest('.pip-container')) return;
-            if (document.body.classList.contains('show-main-controls')) {
-                if (controlsTimer) clearTimeout(controlsTimer);
-                controlsTimer = null;
-                document.body.classList.remove('show-main-controls');
-                document.body.classList.remove('show-pip-controls');
-            } else {
-                showAllControls();
-            }
+            showAllControls();
         });
         document.getElementById('controlsPanel').addEventListener('click', function() {
             showAllControls();
@@ -1394,9 +1385,7 @@
         // ============= Обновление метки задержки (раз в секунду) =============
         setInterval(function() {
             if (currentBehind > 0) {
-                var _lt = currentBehind >= 1 ? currentBehind.toFixed(2) : currentBehind.toFixed(1);
-                if (currentBehind < 1 && _lt.charAt(0) === '0') _lt = _lt.substring(1);
-                latencyLabel.textContent = _lt;
+                latencyLabel.textContent = currentBehind.toFixed(1) + 's';
             } else {
                 latencyLabel.textContent = '';
             }
@@ -2001,7 +1990,6 @@
                                 if (echo && msg.role === 'guest') {
                                     echo = false;
                                     sendSettings(); // отвечаем однократно
-                                    restartMediaRecorder('settings'); // рестарт → свежий initCodec гостю
                                 }
                                 handlePeerSettings(msg, false);
                             } else if (msg.cmd === 'initCodec') {
@@ -2143,8 +2131,6 @@
         function setupMSE() {
             var codec = incomingCodec || negotiatedCodec || detectCodec();
             diagLog('MSE setup codec=' + codecDisplayName(codec) + ' muted=' + remoteVideo.muted + ' wantAudio=' + S.wantAudio);
-            // Очищаем очередь — устаревшие чанки без init-сегмента вызовут MSE error
-            mseQueue = []; mseQueueReadIdx = 0;
             mseRestarting = true; // сбросится в sourceopen
             try { if (remoteVideo.src && remoteVideo.src.startsWith('blob:')) URL.revokeObjectURL(remoteVideo.src); } catch(e) {}
             mediaSource = new MediaSource();
