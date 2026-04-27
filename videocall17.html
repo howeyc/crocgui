@@ -342,7 +342,6 @@
         var flipBtn = document.getElementById('flipBtn');
         var isScreenSharing = false;
         var screenToggling = false;
-        var audioBeforeScreenShare = false;
         // Скрываем кнопку шаринга экрана если API недоступно
         if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
             screenBtn.style.display = 'none';
@@ -621,10 +620,8 @@
         var peerRecorderCodec = ''; // mimeType рекордера пира из cmd:initCodec (для remoteResLabel)
         var peerRes = { width: 0, height: 0, frameRate: 0 }; // разрешение камеры пира из cmd:myRes
 
-        // Remote video fit+mirror: 0=fit 1=1:1 2=/2 3=×2 4=fit+🪞 5=1:1+🪞 6=/2+🪞 7=×2+🪞
-        var _savedFitMode = Math.max(0, Math.min(7, parseInt(localStorage.getItem('vc_fitMode')) || 0));
-        var remoteFitMode = _savedFitMode % 4;
-        var remoteMirrored = _savedFitMode >= 4;
+        // Remote video fit modes: 0=fit, 1=1:1, 2=1:2, 3=2:1
+        var remoteFitMode = Math.max(0, Math.min(3, parseInt(localStorage.getItem('vc_fitMode')) || 0));
         var remoteFitModes = ['', 'fit-1to1', 'fit-half', 'fit-2x'];
         var remoteFitLabels = ['Fit', '1:1', '1:2', '2:1'];
         var remoteNativeW = 0;
@@ -635,8 +632,6 @@
             fit1to1Btn.classList.toggle('active', remoteFitMode === 1);
             fit2xBtn.classList.toggle('active', remoteFitMode === 3);
             fitContainBtn.classList.toggle('active', remoteFitMode === 0);
-            fitContainBtn.textContent = remoteMirrored ? '🪞' : '💡';
-            fitContainBtn.title = remoteMirrored ? 'Mirror' : 'Fit';
         }
 
         function addFrameRateConstraint(constraints) {
@@ -693,9 +688,7 @@
             remoteVideo.classList.remove('fit-1to1', 'fit-half', 'fit-2x');
             remoteVideo.style.width = '';
             remoteVideo.style.height = '';
-            remoteVideo.style.transform = '';
             if (remoteFitMode === 0 || remoteNativeW === 0) {
-                if (remoteMirrored) remoteVideo.style.transform = 'scaleX(-1)';
                 updateFitBtnHighlight();
                 return;
             }
@@ -708,10 +701,6 @@
             } else if (remoteFitMode === 2) {
                 remoteVideo.style.width = Math.round(remoteNativeW / 2) + 'px';
                 remoteVideo.style.height = Math.round(remoteNativeH / 2) + 'px';
-            }
-            // Mirror: inline transform overrides CSS class transform
-            if (remoteMirrored) {
-                remoteVideo.style.transform = remoteFitMode === 3 ? 'scaleX(-1) scale(2)' : 'scaleX(-1)';
             }
             updateFitBtnHighlight();
         }
@@ -737,19 +726,7 @@
         fitHalfBtn.addEventListener('click', function(e) { e.stopPropagation(); setFitMode(2); });
         fit1to1Btn.addEventListener('click', function(e) { e.stopPropagation(); setFitMode(1); });
         fit2xBtn.addEventListener('click', function(e) { e.stopPropagation(); setFitMode(3); });
-        fitContainBtn.addEventListener('click', function(e) { e.stopPropagation();
-            if (remoteFitMode === 0) {
-                // Кнопка зелёная — toggle mirror
-                remoteMirrored = !remoteMirrored;
-            } else {
-                // Кнопка серая — включить Fit, mirror не трогать
-                remoteFitMode = 0;
-            }
-            applyRemoteFitMode();
-            saveCallState();
-        });
-        // Установить начальное состояние кнопки 💡/🪞
-        updateFitBtnHighlight();
+        fitContainBtn.addEventListener('click', function(e) { e.stopPropagation(); setFitMode(0); });
 
         // PiP — только сверху
         var pipCorners = ['pip-tl', 'pip-tr'];
@@ -955,15 +932,7 @@
             camToggling = true;
             videoDisabledByPrivacy = false; // ручное управление — сбрасываем флаг приватности
             S.video = !S.video;
-            if (isScreenSharing) {
-                // При шаринге экрана — не останавливаем display track (иначе сработает onended),
-                // используем enabled для приостановки/возобновления видео
-                var vt = localStream.getVideoTracks()[0];
-                if (vt) {
-                    vt.enabled = S.video;
-                    diagLog('CAM ' + (S.video ? 'enabled' : 'disabled') + ' (screen share active)');
-                }
-            } else if (S.video) {
+            if (S.video) {
                 // Включаем: двухфазное получение камеры
                 try {
                     await acquireCamera('CAM');
@@ -1143,21 +1112,14 @@
                     updatePipSize();
                     isScreenSharing = true;
                     S.isScreenSharing = true;
-                    // Выключаем микрофон при шаринге экрана
-                    audioBeforeScreenShare = S.audio;
-                    if (S.audio) {
-                        S.audio = false;
-                        localStream.getAudioTracks().forEach(function(t) { t.stop(); localStream.removeTrack(t); });
-                        diagLog('MIC muted for screen share');
-                    }
                     // Переводим видео собеседника в нативный PiP, чтобы видеть его при шаринге экрана
-                    try { await remoteVideo.requestPictureInPicture(); } catch(pipErr) { diagLog('PiP request failed: ' + pipErr.message); }
+                    // try { await remoteVideo.requestPictureInPicture(); } catch(pipErr) { diagLog('PiP request failed: ' + pipErr.message); }
                     // Когда пользователь остановит шаринг через браузерный UI
                     displayTrack.onended = function() {
                         isScreenSharing = false;
                         S.isScreenSharing = false;
                         // Выходим из нативного PiP
-                        try { document.exitPictureInPicture(); } catch(pipErr) {}
+                        // try { document.exitPictureInPicture(); } catch(pipErr) {}
                         // Переключаемся обратно на камеру
                         S.video = true;
                         (async function() {
@@ -1166,21 +1128,6 @@
                             } catch(e2) {
                                 diagLog('CAM re-acquire after screen share failed: ' + e2.message);
                                 S.video = false;
-                            }
-                            // Восстанавливаем микрофон после шаринга экрана
-                            if (audioBeforeScreenShare) {
-                                try {
-                                    var restoreStream = await navigator.mediaDevices.getUserMedia({
-                                        video: false,
-                                        audio: { echoCancellation: S.ec, noiseSuppression: S.ns, autoGainControl: S.agc }
-                                    });
-                                    restoreStream.getAudioTracks().forEach(function(t) { localStream.addTrack(t); });
-                                    S.audio = true;
-                                    diagLog('MIC restored after screen share end');
-                                } catch(ae) {
-                                    diagLog('MIC restore after screen share end failed: ' + ae.message);
-                                    S.audio = false;
-                                }
                             }
                             applySettings(); saveSettings(); sendSettings();
                             if (recorderStarted || S.video) restartMediaRecorder('settings');
@@ -1206,7 +1153,7 @@
                 isScreenSharing = false;
                 S.isScreenSharing = false;
                 // Выходим из нативного PiP
-                try { document.exitPictureInPicture(); } catch(pipErr) {}
+                // try { document.exitPictureInPicture(); } catch(pipErr) {}
                 S.video = true;
                 try {
                     await acquireCamera('CAM screen off');
@@ -1214,21 +1161,6 @@
                 } catch(e) {
                     diagLog('CAM re-acquire after screen share toggle off failed: ' + e.message);
                     S.video = false;
-                }
-                // Восстанавливаем микрофон после шаринга экрана
-                if (audioBeforeScreenShare) {
-                    try {
-                        var restoreStream2 = await navigator.mediaDevices.getUserMedia({
-                            video: false,
-                            audio: { echoCancellation: S.ec, noiseSuppression: S.ns, autoGainControl: S.agc }
-                        });
-                        restoreStream2.getAudioTracks().forEach(function(t) { localStream.addTrack(t); });
-                        S.audio = true;
-                        diagLog('MIC restored after screen share toggle off');
-                    } catch(ae2) {
-                        diagLog('MIC restore after screen share toggle off failed: ' + ae2.message);
-                        S.audio = false;
-                    }
                 }
             }
             applySettings(); saveSettings(); sendSettings();
@@ -2521,7 +2453,7 @@
                     localStorage.setItem('vc_peerW', remoteNativeW);
                     localStorage.setItem('vc_peerH', remoteNativeH);
                 }
-                localStorage.setItem('vc_fitMode', remoteFitMode + (remoteMirrored ? 4 : 0));
+                localStorage.setItem('vc_fitMode', remoteFitMode);
                 saveSettings();
             } catch(e) {}
         }
