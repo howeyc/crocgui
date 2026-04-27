@@ -662,11 +662,18 @@ func serveVideoCallHTML(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	// Для отладки: если videocall.html есть рядом с бинарником — читаем из файла
+	// Для отладки: если videocall.html есть рядом с бинарником и он новее бинарника — читаем из файла
 	if exe, err := os.Executable(); err == nil {
-		if data, err := os.ReadFile(filepath.Join(filepath.Dir(exe), "videocall.html")); err == nil {
-			w.Write(data)
-			return
+		htmlPath := filepath.Join(filepath.Dir(exe), "videocall.html")
+		if htmlInfo, err := os.Stat(htmlPath); err == nil {
+			if exeInfo, err := os.Stat(exe); err == nil {
+				if htmlInfo.ModTime().After(exeInfo.ModTime()) {
+					if data, err := os.ReadFile(htmlPath); err == nil {
+						w.Write(data)
+						return
+					}
+				}
+			}
 		}
 	}
 	w.Write(videocallHTML)
