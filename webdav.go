@@ -5,9 +5,11 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"math/big"
@@ -402,7 +404,55 @@ func (s *WebDAVServer) prepareTLSConfig(addrs ...string) error {
 	return nil
 }
 
-// generateTLSConfig генерирует TLS конфигурацию с самоподписанным сертификатом в памяти.
+// hardcodedTLSKey — захардкоженный приватный RSA-2048 ключ.
+// Используется для детерминированной генерации самоподписанного сертификата:
+// для одного и того же списка IP-адресов всегда получается один и тот же сертификат,
+// поэтому пользователь подтверждает исключение безопасности только один раз.
+var hardcodedTLSKey *rsa.PrivateKey
+
+func init() {
+	block, _ := pem.Decode([]byte(`
+-----BEGIN RSA PRIVATE KEY-----
+MIIEoAIBAAKCAQEA/gTTr+gCtZYMyNvL6VfrEIW+G5eu1zDg0tBt2HoQa1bFMLlb
+gEFhTbE1k7J/RKCVkHXUwUITy8zJTdS78LgIfIHsXGOVe0Qbi7MYXUz4hBtMAc7Y
+sJzGkVRJzN1TLQf2CgZgsaPQgLFLRN/x9X5dGUEWQvzBpxvRr39zosg952S5rxVn
+OgCjkyzvuyngzMqNHMGxgy3OeAe2VKrWoX1UCRoWhLGOfRl+rCLosAmC4q8436nW
+pJSOqH0ZWG1YuOTMQZDr99IPGVWTaZgAvV+7P1OeFcZvk9oAxWR7c/zV/i2FGFRd
+AAJyfE1533rkM7tptoqBmzDUkSC3P1WNNziKWQIDAQABAoH/c5i+vM5YbUpbhwx/
+PzFDR8GVQflFF6imp0kys9DYqABUvFedzD/0h+ac+xm/0PtDFPqKV2g6mgQXl9O3
+s1QMiJyXc3PeErprzqcx70OX1IaXkDsRYU33DyvMae5Oa6+zx9wfJLfnqqkEF9PR
+yGY498Um3FUpy2Jdif/2H54Ajcvgm0D4nDA9Dlsycf3QiTnQO89RthOvlVk5epYW
+vnVPpoSTL0MGzW2SVciX0mtOMCmbUyiKvYKyf2NH9tkLTZ8/rz4tIQJGz5EBBDT5
+642IsRNdz9GUX8h4o3wFeMQHNZu43S+LXehOSqR0sb0ysf6SU+zPWJm8xaexXFo+
+TrPDAoGBAP/Qu3YydciL3RGnFUuMCWLFm6qdoMf/ULsDtSTeDLF8Tf7BT6f0ZJ9A
+GKQmqCQPYQYVAH5vPc6cKV05wcJE98/WyCk5cP9lh0QSy5FobJHrJpx7DG1aqRbd
+VyjAT3ynURv+YzKYS2uW9pHCl9O1d7xI+noyCN8PSLKIBdo4rK4TAoGBAP4zwz9W
+TI/HYOQCFjWawphM/UIuS1Qgvf7935JGFVIa6Cn/ElRDlmKwen6JWn+NDuyAdxi0
+rJZHeHqFqnh0qMBptDDlhqAHpynM/v3inqlXOylnx26SfRCIj7fhMTHXHElMr3G0
+uwrad1ML+l++ql62FcTkaJl+yLasOX8A3QNjAoGAS2DHDCH8QNatklkIVlVyIo+V
+ueVujd/2etSx2KYxWU8GcG2nuhayW5Z4bE4Tt2Rss20W0yqWLL4pFhZBuKu31Z81
+JaiOWkMhY3aiUztQ2oJOw0cit0pCjsEzwIdCJLnslXIU6sCjYJWAHB0ZvcE4AdwD
+KmR55rhLNIgOKWoPv88CgYBI09ukUb0tlBmWOWLTiLsnlycXxtueBqNoYqOi7KE/
+HKZXIdTGf3aeX6E4j3F2CZu09jkowtqPU3qY36KvT/zo41/Ugm3He2nQ+AI2Cq8a
+JPu2KR1h+GYMTpOeQs4tUUuxVF8PXJAZ0+1Lxaq9s4psCA7EkgvFriUi8MSoNj8b
+sQKBgHVACU7cvuH+mgNl1N6j3lyWwDyk9ToNoBNS9syeAcFII2heO/TFAaEBhis3
+t9pqiQrPhdqnEDMN5/Sz2g+AYtXQmrBF+H07DlFA5rxL+2pv1q5lX2DoZVCSkKTR
+I+8pZcDzhk499jsPRvHUzgiGkMBbxarpOTaDkTT1w+QGpPX6
+-----END RSA PRIVATE KEY-----
+`))
+	if block == nil {
+		panic("failed to decode hardcoded TLS private key PEM")
+	}
+	var err error
+	hardcodedTLSKey, err = x509.ParsePKCS1PrivateKey(block.Bytes)
+	if err != nil {
+		panic(fmt.Sprintf("failed to parse hardcoded TLS private key: %v", err))
+	}
+}
+
+// generateTLSConfig генерирует детерминированную TLS конфигурацию с самоподписанным сертификатом.
+// Для одного и того же списка IP-адресов всегда выдаёт один и тот же сертификат,
+// чтобы пользователь подтверждал исключение безопасности только один раз.
 // Ожидает addr в формате "IP" (например, "192.168.0.107").
 func generateTLSConfig(addrs ...string) (*tls.Config, error) {
 	if len(addrs) == 0 {
@@ -418,27 +468,33 @@ func generateTLSConfig(addrs ...string) (*tls.Config, error) {
 		IPAddresses = append(IPAddresses, ip)
 	}
 
-	priv, err := rsa.GenerateKey(rand.Reader, 2048)
-	if err != nil {
-		return nil, fmt.Errorf("failed to generate private key: %v", err)
+	// Сортируем адреса для детерминированности серийного номера
+	sorted := make([]string, len(addrs))
+	copy(sorted, addrs)
+	slices.Sort(sorted)
+
+	// Детерминированный серийный номер: SHA-256 от отсортированных адресов
+	h := sha256.New()
+	for _, addr := range sorted {
+		h.Write([]byte(addr))
+		h.Write([]byte{0}) // разделитель
+	}
+	serialNumber := new(big.Int).SetBytes(h.Sum(nil))
+	// Убеждаемся, что serial number положительный
+	if serialNumber.Sign() <= 0 {
+		serialNumber.Add(serialNumber, new(big.Int).Lsh(big.NewInt(1), 255))
 	}
 
-	// Настраиваем сроки действия (на 1 год)
-	notBefore := time.Now()
-	notAfter := notBefore.Add(365 * 24 * time.Hour)
-
-	// Генерируем уникальный серийный номер
-	serialNumber, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
-	if err != nil {
-		return nil, fmt.Errorf("failed to generate serial number: %v", err)
-	}
+	// Фиксированные даты, чтобы сертификат был детерминированным
+	notBefore := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+	notAfter := time.Date(2124, 1, 1, 0, 0, 0, 0, time.UTC) // 100 лет
 
 	// Создаем шаблон сертификата
 	template := x509.Certificate{
 		SerialNumber: serialNumber,
 		Subject: pkix.Name{
 			Organization: []string{CG},
-			CommonName:   addrs[0], // Для совместимости со старым софтом
+			CommonName:   sorted[0], // Детерминированный CN — первый из отсортированных
 		},
 		NotBefore:             notBefore,
 		NotAfter:              notAfter,
@@ -448,8 +504,8 @@ func generateTLSConfig(addrs ...string) (*tls.Config, error) {
 		IPAddresses:           IPAddresses,
 	}
 
-	// Создаем сам сертификат (самоподписанный)
-	derBytes, err := x509.CreateCertificate(rand.Reader, &template, &template, &priv.PublicKey, priv)
+	// Создаем сам сертификат (самоподписанный, используем захардкоженный ключ)
+	derBytes, err := x509.CreateCertificate(rand.Reader, &template, &template, &hardcodedTLSKey.PublicKey, hardcodedTLSKey)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create certificate: %v", err)
 	}
@@ -457,7 +513,7 @@ func generateTLSConfig(addrs ...string) (*tls.Config, error) {
 	// Формируем структуру tls.Certificate для использования в сервере
 	cert := tls.Certificate{
 		Certificate: [][]byte{derBytes},
-		PrivateKey:  priv,
+		PrivateKey:  hardcodedTLSKey,
 	}
 
 	// Возвращаем итоговый конфиг (требуем минимум TLS 1.2)
