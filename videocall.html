@@ -567,6 +567,8 @@
         var wsReconnectTimer = null;
         var peerSettings = null; // настройки пира (полученные через WS)
         var echo = false; // эхо-режим (хост видит своё видео пока гость не подключился)
+        var audioDisabledByPrivacy = false; // Mic выключен пиром через кодеки (не автором вручную)
+        var videoDisabledByPrivacy = false; // Cam выключена пиром через кодеки (не автором вручную)
         var recorderStarted = false;
         var mediaSource = null;
         var sourceBuffer = null;
@@ -587,7 +589,7 @@
         var RATE_MAX = 1.25;                   // макс скорость на разгоне
         var RATE_MIN = 0.1;                    // мин скорость на торможении
         var EMERGENCY_BEHIND = BUST * 2;       // порог emergency seek (сек)
-        var STALL_DEBOUNCE_MS = 3000;          // мин интервал между emergency seek (мс)
+        var STALL_DEBOUNCE_MS = 1000;          // мин интервал между emergency seek (мс)
         var BUF_START_THRESHOLD = CHUNK_INTERVAL_MS / 1000 * 2; // порог BUF-START seek (2 чанка)
         var EWMA_ALPHA = 0.3;                  // сглаживание оценки джиттера
 
@@ -890,6 +892,7 @@
         micBtn.addEventListener('click', async function() {
             if (!localStream || micToggling) return;
             micToggling = true;
+            audioDisabledByPrivacy = false; // ручное управление — сбрасываем флаг приватности
             S.audio = !S.audio;
             if (S.audio) {
                 // Включаем: заново получаем аудио поток
@@ -927,6 +930,7 @@
         camBtn.addEventListener('click', async function() {
             if (!localStream || camToggling) return;
             camToggling = true;
+            videoDisabledByPrivacy = false; // ручное управление — сбрасываем флаг приватности
             S.video = !S.video;
             if (S.video) {
                 // Включаем: заново получаем видео поток с аспектом пира + mpx
@@ -1240,6 +1244,7 @@
         vp8Btn.addEventListener('click', function(e) {
             e.stopPropagation();
             S.vp8 = !S.vp8;
+            if (S.vp8 && S.aac) S.aac = false; // VP8 и AAC взаимоисключающие
             applySettings(); saveSettings(); sendSettings();
         });
         h264Btn.addEventListener('click', function(e) {
@@ -1255,6 +1260,7 @@
         aacBtn.addEventListener('click', function(e) {
             e.stopPropagation();
             S.aac = !S.aac;
+            if (S.aac && S.vp8) S.vp8 = false; // AAC и VP8 взаимоисключающие
             applySettings(); saveSettings(); sendSettings();
         });
         // Аудио фильтры
@@ -1464,14 +1470,10 @@
             var allCandidates = [
                 'video/webm;codecs="vp8,opus"',
                 'video/webm;codecs="vp8"',
-                'video/webm',
                 'video/mp4;codecs="avc1.42E01E,opus"',
                 'video/mp4;codecs="avc1.42E01E,mp4a.40.2"',
-                'video/mp4',
                 'audio/webm;codecs="opus"',
-                'audio/webm',
                 'audio/mp4;codecs="mp4a.40.2"',
-                'audio/mp4'
             ];
             var supported = [];
             var seen = {};
@@ -1803,11 +1805,99 @@
         }
 
         // ============= Обработка настроек пира =============
-        function handlePeerSettings(msg, initial) {
+        async function handlePeerSettings(msg, initial) {
             var prev = peerSettings;
             peerSettings = msg;
             if (msg.role === remotePeerID) { try { localStorage.setItem('vc_peerSettings', JSON.stringify(msg)); } catch(e) {} }
             if (!isActive || !localStream) return;
+
+            // === PRIVACY: управление Mic/Cam на основе кодеков пира ===
+            var peerNoAudio = msg.opus === false && msg.aac === false;
+            var peerNoVideo = msg.vp8 === false && msg.h264 === false;
+
+            // Пир отключил все аудио кодеки → выключаем свой Mic (если ещё включён)
+            if (peerNoAudio && S.audio) {
+                diagLog('PRIVACY: peer disabled all audio codecs, turning off my Mic');
+                S.audio = false;
+                audioDisabledByPrivacy = true;
+                localStream.getAudioTracks().forEach(function(t) { t.stop(); localStream.removeTrack(t); });
+                applySettings(); saveSettings();
+                if (!S.audio && !S.video) {
+                    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                        mediaRecorder.stop(); recorderStarted = false;
+                    }
+                } else if (recorderStarted) {
+                    restartMediaRecorder('settings');
+                }
+            }
+            // Пир включил хотя бы один аудио кодек обратно → включаем Mic (если был выключен пиром, а не автором)
+            if (!peerNoAudio && audioDisabledByPrivacy && !S.audio) {
+                diagLog('PRIVACY: peer re-enabled audio codecs, turning my Mic back on');
+                audioDisabledByPrivacy = false;
+                S.audio = true;
+                try {
+                    var newAudioStream = await navigator.mediaDevices.getUserMedia({
+                        video: false,
+                        audio: { echoCancellation: S.ec, noiseSuppression: S.ns, autoGainControl: S.agc }
+                    });
+                    newAudioStream.getAudioTracks().forEach(function(t) { localStream.addTrack(t); });
+                    diagLog('MIC re-acquired (privacy restore)');
+                } catch(e) {
+                    diagLog('MIC re-acquire failed (privacy restore): ' + e.message);
+                    S.audio = false;
+                }
+                applySettings(); saveSettings(); sendSettings();
+                if (recorderStarted || S.audio) {
+                    restartMediaRecorder('settings');
+                }
+            }
+
+            // Пир отключил все видео кодеки → выключаем свою Cam (если ещё включена)
+            if (peerNoVideo && S.video) {
+                diagLog('PRIVACY: peer disabled all video codecs, turning off my Cam');
+                S.video = false;
+                videoDisabledByPrivacy = true;
+                localStream.getVideoTracks().forEach(function(t) { t.stop(); localStream.removeTrack(t); });
+                applySettings(); saveSettings();
+                if (!S.audio && !S.video) {
+                    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                        mediaRecorder.stop(); recorderStarted = false;
+                    }
+                } else if (recorderStarted) {
+                    restartMediaRecorder('settings');
+                }
+            }
+            // Пир включил хотя бы один видео кодек обратно → включаем Cam (если была выключена пиром, а не автором)
+            if (!peerNoVideo && videoDisabledByPrivacy && !S.video) {
+                diagLog('PRIVACY: peer re-enabled video codecs, turning my Cam back on');
+                videoDisabledByPrivacy = false;
+                S.video = true;
+                try {
+                    var camAspect = 4 / 3;
+                    var oldVt = localStream ? localStream.getVideoTracks()[0] : null;
+                    if (oldVt) {
+                        var oldVs = oldVt.getSettings();
+                        if (oldVs.width && oldVs.height) camAspect = oldVs.width / oldVs.height;
+                    }
+                    var camR = applyMpx(camAspect, 1, S.mpx);
+                    var newVideoStream = await navigator.mediaDevices.getUserMedia({
+                        video: addFrameRateConstraint({ width: { ideal: camR.w }, height: { ideal: camR.h }, aspectRatio: { ideal: camAspect }, facingMode: S.facingMode }),
+                        audio: false
+                    });
+                    newVideoStream.getVideoTracks().forEach(function(t) { localStream.addTrack(t); });
+                    localVideo.srcObject = localStream;
+                    updatePipSize();
+                    diagLog('CAM re-acquired (privacy restore) res=' + camR.w + 'x' + camR.h);
+                } catch(e) {
+                    diagLog('CAM re-acquire failed (privacy restore): ' + e.message);
+                    S.video = false;
+                }
+                applySettings(); saveSettings(); sendSettings();
+                if (recorderStarted || S.video) {
+                    restartMediaRecorder('settings');
+                }
+                updateResLabels();
+            }
 
             // Извлекаем размеры MSE-окна пира для аспект-соотношения
             var newPeerDisplayW = 0, newPeerDisplayH = 0;
@@ -2270,11 +2360,15 @@
             var w = settings.width || 320;
             var h = settings.height || 240;
 
-            // При выключенном видео — выбираем audio-only кодек
+            // При выключенном видео — выбираем audio-only кодек с учётом кнопок Opus/AAC
             var codec;
             if (!S.video && S.audio) {
-                var audioCodecs = ['audio/webm;codecs="opus"', 'audio/mp4;codecs="mp4a.40.2"', 'audio/webm'];
-                codec = 'audio/webm;codecs="opus"';
+                var audioCodecs = [];
+                if (peerSettings && peerSettings.opus) audioCodecs.push('audio/webm;codecs="opus"');
+                if (peerSettings && peerSettings.aac) audioCodecs.push('audio/mp4;codecs="mp4a.40.2"');
+                if (!audioCodecs.length) audioCodecs.push('audio/webm;codecs="opus"', 'audio/mp4;codecs="mp4a.40.2"');
+                audioCodecs.push('audio/webm'); // fallback
+                codec = audioCodecs[0];
                 for (var i = 0; i < audioCodecs.length; i++) {
                     if (typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(audioCodecs[i])) {
                         codec = audioCodecs[i];
@@ -2283,7 +2377,15 @@
                 }
                 diagLog('REC audio-only codec=' + codecDisplayName(codec));
             } else {
-                codec = recordCodec || negotiatedCodec || detectCodec();
+                // Если recordCodec/negotiatedCodec audio-only но есть видео-треки — используем detectCodec()
+                var hasVideoTrack = !!videoTrack;
+                var candidate = recordCodec || negotiatedCodec;
+                if (candidate && candidate.indexOf('audio/') === 0 && hasVideoTrack) {
+                    codec = detectCodec();
+                    diagLog('REC codec override: ' + codecDisplayName(candidate) + ' is audio-only but video track present, using ' + codecDisplayName(codec));
+                } else {
+                    codec = candidate || detectCodec();
+                }
                 diagLog('REC codec=' + codecDisplayName(codec) + ' res=' + w + 'x' + h);
             }
             updateResLabels();
