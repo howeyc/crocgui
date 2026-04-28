@@ -254,6 +254,9 @@
         }
         .ctrl-btn.fit.active { background: #4ecca3; }
         .ctrl-btn.fit:not(.active) { background: #555; }
+        .ctrl-btn.fit.mirrored { transform: scaleX(-1); }
+        .ctrl-btn.fit.mirrored:hover { transform: scaleX(-1) scale(1.05); }
+        .ctrl-btn.fit.mirrored:active { transform: scaleX(-1) scale(0.95); }
         .ctrl-btn.codec {
             width: auto;
             padding: 0 6px;
@@ -288,7 +291,7 @@
                     <button type="button" class="ctrl-btn fit" id="fitHalfBtn" title="Half Size">/2</button>
                     <button type="button" class="ctrl-btn fit" id="fit1to1Btn" title="1:1">1</button>
                     <button type="button" class="ctrl-btn fit" id="fit2xBtn" title="2x Zoom">×2</button>
-                    <button type="button" class="ctrl-btn fit active emoji" id="fitContainBtn" title="Fit">╒i╤</button>
+                    <button type="button" class="ctrl-btn fit active" id="fitContainBtn" title="Fit">Fit</button>
                     <button type="button" class="ctrl-btn fullscreen off emoji" id="fullscreenBtn" title="Fullscreen">☐</button>
                     <button type="button" class="ctrl-btn hangup emoji" id="hangupBtn" title="Hangup">❌</button>
                 </div>
@@ -636,7 +639,7 @@
             fit1to1Btn.classList.toggle('active', remoteFitMode === 1);
             fit2xBtn.classList.toggle('active', remoteFitMode === 3);
             fitContainBtn.classList.toggle('active', remoteFitMode === 0);
-            fitContainBtn.textContent = remoteMirrored ? '╤i╕' : '╒i╤';
+            fitContainBtn.classList.toggle('mirrored', remoteMirrored);
             fitContainBtn.title = remoteMirrored ? 'Mirror' : 'Fit';
         }
 
@@ -1546,27 +1549,70 @@
 
                 // Создаём пустой стрим — tracks будут добавлены по мере успеха
                 localStream = new MediaStream();
+                var phase2Done = false; // Флаг: acquireCamera уже делает Фазу 2
 
-                // --- Запрос камеры (video-only) ---
-                if (S.video) {
+                // --- Комбинированный запрос камеры + микрофона ---
+                if (S.video && S.audio) {
                     var initR = applyMpx(4, 3, S.mpx);
                     W = initR.w;
                     H = initR.h;
+                    // Один вызов вместо двух — быстрее на Linux (один cold-start медиа-стека)
                     try {
-                        var videoStream = await navigator.mediaDevices.getUserMedia({
+                        var combinedStream = await navigator.mediaDevices.getUserMedia({
                             video: addFrameRateConstraint({ width: { ideal: W }, height: { ideal: H }, facingMode: S.facingMode }),
-                            audio: false
+                            audio: {
+                                echoCancellation: S.ec,
+                                noiseSuppression: S.ns,
+                                autoGainControl: S.agc
+                            }
                         });
-                        videoStream.getVideoTracks().forEach(function(t) { localStream.addTrack(t); });
-                        diagLog('CAM acquired');
+                        combinedStream.getVideoTracks().forEach(function(t) { localStream.addTrack(t); });
+                        combinedStream.getAudioTracks().forEach(function(t) { localStream.addTrack(t); });
+                        diagLog('CAM+MIC acquired (combined)');
+                    } catch(e) {
+                        diagLog('Combined acquire failed: ' + e.name + ' ' + e.message + ', trying separate');
+                        // Fallback: раздельные вызовы
+                        try {
+                            var videoStream = await navigator.mediaDevices.getUserMedia({
+                                video: addFrameRateConstraint({ width: { ideal: W }, height: { ideal: H }, facingMode: S.facingMode }),
+                                audio: false
+                            });
+                            videoStream.getVideoTracks().forEach(function(t) { localStream.addTrack(t); });
+                            diagLog('CAM acquired (fallback)');
+                        } catch(ve) {
+                            diagLog('CAM not available: ' + ve.name + ' ' + ve.message);
+                            S.video = false;
+                        }
+                        try {
+                            var audioStream = await navigator.mediaDevices.getUserMedia({
+                                video: false,
+                                audio: {
+                                    echoCancellation: S.ec,
+                                    noiseSuppression: S.ns,
+                                    autoGainControl: S.agc
+                                }
+                            });
+                            audioStream.getAudioTracks().forEach(function(t) { localStream.addTrack(t); });
+                            diagLog('MIC acquired (fallback)');
+                        } catch(ae) {
+                            diagLog('MIC not available: ' + ae.name + ' ' + ae.message);
+                            S.audio = false;
+                        }
+                    }
+                } else if (S.video) {
+                    // Только камера — используем acquireCamera (включает Фазу 2)
+                    try {
+                        await acquireCamera('CAM');
+                        var vs = localStream.getVideoTracks()[0].getSettings();
+                        W = vs.width || W;
+                        H = vs.height || H;
+                        phase2Done = true;
                     } catch(e) {
                         diagLog('CAM not available: ' + e.name + ' ' + e.message);
                         S.video = false;
                     }
-                }
-
-                // --- Запрос микрофона (audio-only) ---
-                if (S.audio) {
+                } else if (S.audio) {
+                    // Только микрофон
                     try {
                         var audioStream = await navigator.mediaDevices.getUserMedia({
                             video: false,
@@ -1592,45 +1638,11 @@
                     diagLog('INIT no camera and no microphone, continuing (screen share available)');
                 }
 
-                // Фаза 2: уточняем разрешение по нативному аспекту камеры + mpx (только если камера есть)
-                if (localStream.getVideoTracks().length > 0) {
-                    var camCaps = getCameraCapabilities();
-                    var vtInit = localStream.getVideoTracks()[0];
-                    if (vtInit) {
-                        var vsInit = vtInit.getSettings();
-                        diagLog('CAM init settings: ' + vsInit.width + 'x' + vsInit.height + ' fps=' + (vsInit.frameRate || 'n/a'));
-
-                        // Определяем нативный аспект камеры
-                        var initAspect = 4 / 3;
-                        if (vsInit.width && vsInit.height) {
-                            initAspect = vsInit.width / vsInit.height;
-                            diagLog('CAM init aspect from settings: ' + initAspect.toFixed(2) + ' (' + vsInit.width + 'x' + vsInit.height + ')');
-                        } else if (camCaps && camCaps.maxW > 0 && camCaps.maxH > 0) {
-                            initAspect = camCaps.maxW / camCaps.maxH;
-                            diagLog('CAM caps: ' + camCaps.minW + '-' + camCaps.maxW + 'x' + camCaps.minH + '-' + camCaps.maxH + ' step=' + camCaps.stepW + 'x' + camCaps.stepH + ' aspect=' + initAspect.toFixed(2));
-                        } else {
-                            diagLog('CAM caps: NOT AVAILABLE, using fallback aspect=' + initAspect.toFixed(2));
-                        }
-
-                        // Пересчитываем разрешение по нативному аспекту + mpx
-                        var initR2 = applyMpx(initAspect, 1, S.mpx);
-                        W = initR2.w;
-                        H = initR2.h;
-
-                        // Применяем уточнённое разрешение
-                        try {
-                            await vtInit.applyConstraints(addFrameRateConstraint({ width: { ideal: W }, height: { ideal: H }, aspectRatio: { ideal: initAspect } }));
-                            vsInit = vtInit.getSettings();
-                            diagLog('CAM init aspect=' + initAspect.toFixed(2) + ' res=' + vsInit.width + 'x' + vsInit.height);
-                        } catch(e) { diagLog('CAM aspect apply failed: ' + e.message); }
-
-                        if (typeof vtInit.getCapabilities === 'function') {
-                            try {
-                                var fullCaps = vtInit.getCapabilities();
-                                diagLog('CAM full capabilities: ' + JSON.stringify(fullCaps));
-                            } catch(e) { diagLog('CAM getCapabilities error: ' + e.message); }
-                        }
-                    }
+                // Фаза 2: уточняем разрешение по нативному аспекту камеры + mpx
+                // Пропускаем если уже сделано через acquireCamera()
+                if (!phase2Done && localStream.getVideoTracks().length > 0) {
+                    var refined = await refineCameraResolution('CAM init');
+                    if (refined) { W = refined.w; H = refined.h; }
                 }
 
                 // Если камера/микрофон выключены — освободить соответствующие треки из localStream
@@ -1773,9 +1785,47 @@
             return null;
         }
 
+        // ============= Уточнение разрешения камеры (Фаза 2) =============
+        // Определяет нативный аспект камеры, пересчитывает разрешение по mpx,
+        // применяет applyConstraints. Возвращает { w, h } или null.
+        // Используется как из acquireCamera(), так и из init().
+        async function refineCameraResolution(logPrefix) {
+            logPrefix = logPrefix || 'CAM';
+            var vt = localStream ? localStream.getVideoTracks()[0] : null;
+            if (!vt) return null;
+            var camCaps = getCameraCapabilities();
+            var vs = vt.getSettings();
+            diagLog(logPrefix + ' phase1 settings: ' + vs.width + 'x' + vs.height + ' fps=' + (vs.frameRate || 'n/a'));
+            // Определяем нативный аспект камеры
+            var aspect = 4 / 3;
+            if (vs.width && vs.height) {
+                aspect = vs.width / vs.height;
+                diagLog(logPrefix + ' aspect from settings: ' + aspect.toFixed(2) + ' (' + vs.width + 'x' + vs.height + ')');
+            } else if (camCaps && camCaps.maxW > 0 && camCaps.maxH > 0) {
+                aspect = camCaps.maxW / camCaps.maxH;
+                diagLog(logPrefix + ' caps: ' + camCaps.minW + '-' + camCaps.maxW + 'x' + camCaps.minH + '-' + camCaps.maxH + ' step=' + camCaps.stepW + 'x' + camCaps.stepH + ' aspect=' + aspect.toFixed(2));
+            } else {
+                diagLog(logPrefix + ' caps: NOT AVAILABLE, using fallback aspect=' + aspect.toFixed(2));
+            }
+            // Пересчитываем разрешение по нативному аспекту + mpx
+            var refined = applyMpx(aspect, 1, S.mpx);
+            try {
+                await vt.applyConstraints(addFrameRateConstraint({ width: { ideal: refined.w }, height: { ideal: refined.h }, aspectRatio: { ideal: aspect } }));
+                vs = vt.getSettings();
+                diagLog(logPrefix + ' phase2 aspect=' + aspect.toFixed(2) + ' res=' + vs.width + 'x' + vs.height);
+            } catch(e) { diagLog(logPrefix + ' phase2 apply failed: ' + e.message); }
+            if (typeof vt.getCapabilities === 'function') {
+                try {
+                    var fullCaps = vt.getCapabilities();
+                    diagLog(logPrefix + ' full capabilities: ' + JSON.stringify(fullCaps));
+                } catch(e) { diagLog(logPrefix + ' getCapabilities error: ' + e.message); }
+            }
+            return { w: refined.w, h: refined.h };
+        }
+
         // ============= Двухфазное получение камеры =============
         // Фаза 1: getUserMedia с fallback-аспектом 4:3 + mpx
-        // Фаза 2: уточнение по нативному аспекту камеры (getSettings / getCameraCapabilities) + applyConstraints с aspectRatio
+        // Фаза 2: уточнение через refineCameraResolution()
         // Останавливает старые video tracks, получает новые, добавляет в localStream
         // Бросает исключение при ошибке (caller ловит и ставит S.video=false)
         async function acquireCamera(logPrefix) {
@@ -1791,31 +1841,8 @@
             newStream.getVideoTracks().forEach(function(t) { localStream.addTrack(t); });
             localVideo.srcObject = localStream;
             updatePipSize();
-            // Фаза 2: уточняем разрешение по нативному аспекту камеры + mpx
-            var camCaps = getCameraCapabilities();
-            var vt = localStream.getVideoTracks()[0];
-            if (vt) {
-                var vs = vt.getSettings();
-                diagLog(logPrefix + ' phase1 settings: ' + vs.width + 'x' + vs.height + ' fps=' + (vs.frameRate || 'n/a'));
-                // Определяем нативный аспект камеры
-                var aspect = 4 / 3;
-                if (vs.width && vs.height) {
-                    aspect = vs.width / vs.height;
-                    diagLog(logPrefix + ' aspect from settings: ' + aspect.toFixed(2) + ' (' + vs.width + 'x' + vs.height + ')');
-                } else if (camCaps && camCaps.maxW > 0 && camCaps.maxH > 0) {
-                    aspect = camCaps.maxW / camCaps.maxH;
-                    diagLog(logPrefix + ' caps: ' + camCaps.minW + '-' + camCaps.maxW + 'x' + camCaps.minH + '-' + camCaps.maxH + ' step=' + camCaps.stepW + 'x' + camCaps.stepH + ' aspect=' + aspect.toFixed(2));
-                } else {
-                    diagLog(logPrefix + ' caps: NOT AVAILABLE, using fallback aspect=' + aspect.toFixed(2));
-                }
-                // Пересчитываем разрешение по нативному аспекту + mpx
-                var refined = applyMpx(aspect, 1, S.mpx);
-                try {
-                    await vt.applyConstraints(addFrameRateConstraint({ width: { ideal: refined.w }, height: { ideal: refined.h }, aspectRatio: { ideal: aspect } }));
-                    vs = vt.getSettings();
-                    diagLog(logPrefix + ' phase2 aspect=' + aspect.toFixed(2) + ' res=' + vs.width + 'x' + vs.height);
-                } catch(e) { diagLog(logPrefix + ' phase2 apply failed: ' + e.message); }
-            }
+            // Фаза 2: уточняем разрешение
+            await refineCameraResolution(logPrefix);
         }
 
         // Находит максимальное нативное разрешение <= mpx мегапикселей
