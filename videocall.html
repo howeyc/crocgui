@@ -282,13 +282,13 @@
             <!-- Панель кнопок -->
             <div class="controls-area pos-right" id="controlsArea">
                 <div class="controls-panel" id="controlsPanel">
-                <!-- Ряд 1: 🔴 /2 1 ×2 💡 ☐ ❌ -->
+                <!-- Ряд 1: 🔴 /2 1 ×2 ╒i╤ ☐ ❌ -->
                 <div class="controls-row">
                     <button type="button" class="ctrl-btn peer-rec emoji" id="peerRecBtn" title="Record Peer">⏺</button>
                     <button type="button" class="ctrl-btn fit" id="fitHalfBtn" title="Half Size">/2</button>
                     <button type="button" class="ctrl-btn fit" id="fit1to1Btn" title="1:1">1</button>
                     <button type="button" class="ctrl-btn fit" id="fit2xBtn" title="2x Zoom">×2</button>
-                    <button type="button" class="ctrl-btn fit active emoji" id="fitContainBtn" title="Fit">💡</button>
+                    <button type="button" class="ctrl-btn fit active emoji" id="fitContainBtn" title="Fit">╒i╤</button>
                     <button type="button" class="ctrl-btn fullscreen off emoji" id="fullscreenBtn" title="Fullscreen">☐</button>
                     <button type="button" class="ctrl-btn hangup emoji" id="hangupBtn" title="Hangup">❌</button>
                 </div>
@@ -343,6 +343,7 @@
         var isScreenSharing = false;
         var screenToggling = false;
         var audioBeforeScreenShare = false;
+        var videoBeforeScreenShare = false;
         // Скрываем кнопку шаринга экрана если API недоступно
         if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
             screenBtn.style.display = 'none';
@@ -621,7 +622,7 @@
         var peerRecorderCodec = ''; // mimeType рекордера пира из cmd:initCodec (для remoteResLabel)
         var peerRes = { width: 0, height: 0, frameRate: 0 }; // разрешение камеры пира из cmd:myRes
 
-        // Remote video fit+mirror: 0=fit 1=1:1 2=/2 3=×2 4=fit+🪞 5=1:1+🪞 6=/2+🪞 7=×2+🪞
+        // Remote video fit+mirror: 0=fit 1=1:1 2=/2 3=×2 4=fit+╤i╕ 5=1:1+╤i╕ 6=/2+╤i╕ 7=×2+╤i╕
         var _savedFitMode = Math.max(0, Math.min(7, parseInt(localStorage.getItem('vc_fitMode')) || 0));
         var remoteFitMode = _savedFitMode % 4;
         var remoteMirrored = _savedFitMode >= 4;
@@ -635,7 +636,7 @@
             fit1to1Btn.classList.toggle('active', remoteFitMode === 1);
             fit2xBtn.classList.toggle('active', remoteFitMode === 3);
             fitContainBtn.classList.toggle('active', remoteFitMode === 0);
-            fitContainBtn.textContent = remoteMirrored ? '🪞' : '💡';
+            fitContainBtn.textContent = remoteMirrored ? '╤i╕' : '╒i╤';
             fitContainBtn.title = remoteMirrored ? 'Mirror' : 'Fit';
         }
 
@@ -748,7 +749,7 @@
             applyRemoteFitMode();
             saveCallState();
         });
-        // Установить начальное состояние кнопки 💡/🪞
+        // Установить начальное состояние кнопки ╒i╤/╤i╕
         updateFitBtnHighlight();
 
         // PiP — только сверху
@@ -1143,29 +1144,34 @@
                     updatePipSize();
                     isScreenSharing = true;
                     S.isScreenSharing = true;
-                    // Выключаем микрофон при шаринге экрана
+                    // Запоминаем состояние камеры и микрофона до шаринга
+                    videoBeforeScreenShare = S.video;
                     audioBeforeScreenShare = S.audio;
+                    // Display track активен — Cam кнопка зелёная (toggle enabled/disabled)
+                    S.video = true;
                     if (S.audio) {
                         S.audio = false;
                         localStream.getAudioTracks().forEach(function(t) { t.stop(); localStream.removeTrack(t); });
                         diagLog('MIC muted for screen share');
                     }
                     // Переводим видео собеседника в нативный PiP, чтобы видеть его при шаринге экрана
-                    try { await remoteVideo.requestPictureInPicture(); } catch(pipErr) { diagLog('PiP request failed: ' + pipErr.message); }
+                    //try { await remoteVideo.requestPictureInPicture(); } catch(pipErr) { diagLog('PiP request failed: ' + pipErr.message); }
                     // Когда пользователь остановит шаринг через браузерный UI
                     displayTrack.onended = function() {
                         isScreenSharing = false;
                         S.isScreenSharing = false;
                         // Выходим из нативного PiP
-                        try { document.exitPictureInPicture(); } catch(pipErr) {}
-                        // Переключаемся обратно на камеру
-                        S.video = true;
+                        //try { document.exitPictureInPicture(); } catch(pipErr) {}
+                        // Переключаемся обратно на камеру (если была включена)
+                        S.video = videoBeforeScreenShare;
                         (async function() {
-                            try {
-                                await acquireCamera('CAM screen end');
-                            } catch(e2) {
-                                diagLog('CAM re-acquire after screen share failed: ' + e2.message);
-                                S.video = false;
+                            if (videoBeforeScreenShare) {
+                                try {
+                                    await acquireCamera('CAM screen end');
+                                } catch(e2) {
+                                    diagLog('CAM re-acquire after screen share failed: ' + e2.message);
+                                    S.video = false;
+                                }
                             }
                             // Восстанавливаем микрофон после шаринга экрана
                             if (audioBeforeScreenShare) {
@@ -1192,13 +1198,15 @@
                     diagLog('SCREEN share failed: ' + e.message);
                     isScreenSharing = false;
                     S.isScreenSharing = false;
-                    // Восстанавливаем камеру
-                    S.video = true;
-                    try {
-                        await acquireCamera('CAM screen fallback');
-                    } catch(e2) {
-                        diagLog('CAM re-acquire after screen share cancel failed: ' + e2.message);
-                        S.video = false;
+                    // Восстанавливаем камеру (если была включена)
+                    S.video = videoBeforeScreenShare;
+                    if (videoBeforeScreenShare) {
+                        try {
+                            await acquireCamera('CAM screen fallback');
+                        } catch(e2) {
+                            diagLog('CAM re-acquire after screen share cancel failed: ' + e2.message);
+                            S.video = false;
+                        }
                     }
                 }
             } else {
@@ -1206,14 +1214,16 @@
                 isScreenSharing = false;
                 S.isScreenSharing = false;
                 // Выходим из нативного PiP
-                try { document.exitPictureInPicture(); } catch(pipErr) {}
-                S.video = true;
-                try {
-                    await acquireCamera('CAM screen off');
-                    diagLog('CAM re-acquired after screen share toggle off');
-                } catch(e) {
-                    diagLog('CAM re-acquire after screen share toggle off failed: ' + e.message);
-                    S.video = false;
+                //try { document.exitPictureInPicture(); } catch(pipErr) {}
+                S.video = videoBeforeScreenShare;
+                if (videoBeforeScreenShare) {
+                    try {
+                        await acquireCamera('CAM screen off');
+                        diagLog('CAM re-acquired after screen share toggle off');
+                    } catch(e) {
+                        diagLog('CAM re-acquire after screen share toggle off failed: ' + e.message);
+                        S.video = false;
+                    }
                 }
                 // Восстанавливаем микрофон после шаринга экрана
                 if (audioBeforeScreenShare) {
@@ -1534,60 +1544,92 @@
             try {
                 var W = 320, H = 240; // default для diagLog
 
-                // Фаза 1: getUserMedia с фолбэк-аспектом 4:3 и mpx
-                var initR = applyMpx(4, 3, S.mpx);
-                W = initR.w;
-                var H = initR.h;
+                // Создаём пустой стрим — tracks будут добавлены по мере успеха
+                localStream = new MediaStream();
 
-                localStream = await navigator.mediaDevices.getUserMedia({
-                    video: addFrameRateConstraint({ width: { ideal: W }, height: { ideal: H }, facingMode: S.facingMode }),
-                    audio: {
-                        echoCancellation: S.ec,
-                        noiseSuppression: S.ns,
-                        autoGainControl: S.agc
+                // --- Запрос камеры (video-only) ---
+                if (S.video) {
+                    var initR = applyMpx(4, 3, S.mpx);
+                    W = initR.w;
+                    H = initR.h;
+                    try {
+                        var videoStream = await navigator.mediaDevices.getUserMedia({
+                            video: addFrameRateConstraint({ width: { ideal: W }, height: { ideal: H }, facingMode: S.facingMode }),
+                            audio: false
+                        });
+                        videoStream.getVideoTracks().forEach(function(t) { localStream.addTrack(t); });
+                        diagLog('CAM acquired');
+                    } catch(e) {
+                        diagLog('CAM not available: ' + e.name + ' ' + e.message);
+                        S.video = false;
                     }
-                });
+                }
+
+                // --- Запрос микрофона (audio-only) ---
+                if (S.audio) {
+                    try {
+                        var audioStream = await navigator.mediaDevices.getUserMedia({
+                            video: false,
+                            audio: {
+                                echoCancellation: S.ec,
+                                noiseSuppression: S.ns,
+                                autoGainControl: S.agc
+                            }
+                        });
+                        audioStream.getAudioTracks().forEach(function(t) { localStream.addTrack(t); });
+                        diagLog('MIC acquired');
+                    } catch(e) {
+                        diagLog('MIC not available: ' + e.name + ' ' + e.message);
+                        S.audio = false;
+                    }
+                }
+
                 localVideo.srcObject = localStream;
                 updatePipSize();
 
-                // Фаза 2: уточняем разрешение по нативному аспекту камеры + mpx
-                var camCaps = getCameraCapabilities();
-                var vtInit = localStream.getVideoTracks()[0];
-                if (vtInit) {
-                    var vsInit = vtInit.getSettings();
-                    diagLog('CAM init settings: ' + vsInit.width + 'x' + vsInit.height + ' fps=' + (vsInit.frameRate || 'n/a'));
+                // Предупреждение если нет ни камеры ни микрофона — но звонок продолжается (можно шарить экран)
+                if (!S.video && !S.audio) {
+                    diagLog('INIT no camera and no microphone, continuing (screen share available)');
+                }
 
-                    // Определяем нативный аспект камеры
-                    // Приоритет: реальные настройки трека (учитывают ориентацию устройства),
-                    // затем capabilities сенсора (всегда ландшафт!), затем fallback 4:3
-                    var initAspect = 4 / 3;
-                    if (vsInit.width && vsInit.height) {
-                        initAspect = vsInit.width / vsInit.height;
-                        diagLog('CAM init aspect from settings: ' + initAspect.toFixed(2) + ' (' + vsInit.width + 'x' + vsInit.height + ')');
-                    } else if (camCaps && camCaps.maxW > 0 && camCaps.maxH > 0) {
-                        initAspect = camCaps.maxW / camCaps.maxH;
-                        diagLog('CAM caps: ' + camCaps.minW + '-' + camCaps.maxW + 'x' + camCaps.minH + '-' + camCaps.maxH + ' step=' + camCaps.stepW + 'x' + camCaps.stepH + ' aspect=' + initAspect.toFixed(2));
-                    } else {
-                        diagLog('CAM caps: NOT AVAILABLE, using fallback aspect=' + initAspect.toFixed(2));
-                    }
+                // Фаза 2: уточняем разрешение по нативному аспекту камеры + mpx (только если камера есть)
+                if (localStream.getVideoTracks().length > 0) {
+                    var camCaps = getCameraCapabilities();
+                    var vtInit = localStream.getVideoTracks()[0];
+                    if (vtInit) {
+                        var vsInit = vtInit.getSettings();
+                        diagLog('CAM init settings: ' + vsInit.width + 'x' + vsInit.height + ' fps=' + (vsInit.frameRate || 'n/a'));
 
-                    // Пересчитываем разрешение по нативному аспекту + mpx
-                    var initR2 = applyMpx(initAspect, 1, S.mpx);
-                    W = initR2.w;
-                    H = initR2.h;
+                        // Определяем нативный аспект камеры
+                        var initAspect = 4 / 3;
+                        if (vsInit.width && vsInit.height) {
+                            initAspect = vsInit.width / vsInit.height;
+                            diagLog('CAM init aspect from settings: ' + initAspect.toFixed(2) + ' (' + vsInit.width + 'x' + vsInit.height + ')');
+                        } else if (camCaps && camCaps.maxW > 0 && camCaps.maxH > 0) {
+                            initAspect = camCaps.maxW / camCaps.maxH;
+                            diagLog('CAM caps: ' + camCaps.minW + '-' + camCaps.maxW + 'x' + camCaps.minH + '-' + camCaps.maxH + ' step=' + camCaps.stepW + 'x' + camCaps.stepH + ' aspect=' + initAspect.toFixed(2));
+                        } else {
+                            diagLog('CAM caps: NOT AVAILABLE, using fallback aspect=' + initAspect.toFixed(2));
+                        }
 
-                    // Применяем уточнённое разрешение
-                    try {
-                        await vtInit.applyConstraints(addFrameRateConstraint({ width: { ideal: W }, height: { ideal: H }, aspectRatio: { ideal: initAspect } }));
-                        vsInit = vtInit.getSettings();
-                        diagLog('CAM init aspect=' + initAspect.toFixed(2) + ' res=' + vsInit.width + 'x' + vsInit.height);
-                    } catch(e) { diagLog('CAM aspect apply failed: ' + e.message); }
+                        // Пересчитываем разрешение по нативному аспекту + mpx
+                        var initR2 = applyMpx(initAspect, 1, S.mpx);
+                        W = initR2.w;
+                        H = initR2.h;
 
-                    if (typeof vtInit.getCapabilities === 'function') {
+                        // Применяем уточнённое разрешение
                         try {
-                            var fullCaps = vtInit.getCapabilities();
-                            diagLog('CAM full capabilities: ' + JSON.stringify(fullCaps));
-                        } catch(e) { diagLog('CAM getCapabilities error: ' + e.message); }
+                            await vtInit.applyConstraints(addFrameRateConstraint({ width: { ideal: W }, height: { ideal: H }, aspectRatio: { ideal: initAspect } }));
+                            vsInit = vtInit.getSettings();
+                            diagLog('CAM init aspect=' + initAspect.toFixed(2) + ' res=' + vsInit.width + 'x' + vsInit.height);
+                        } catch(e) { diagLog('CAM aspect apply failed: ' + e.message); }
+
+                        if (typeof vtInit.getCapabilities === 'function') {
+                            try {
+                                var fullCaps = vtInit.getCapabilities();
+                                diagLog('CAM full capabilities: ' + JSON.stringify(fullCaps));
+                            } catch(e) { diagLog('CAM getCapabilities error: ' + e.message); }
+                        }
                     }
                 }
 
@@ -1600,6 +1642,8 @@
                     localStream.getAudioTracks().forEach(function(t) { t.stop(); localStream.removeTrack(t); });
                     diagLog('MIC released (init with audio off)');
                 }
+
+                applySettings(); saveSettings();
 
                 var myCodecs = detectSupportedCodecs();
                 diagLog('CODECS supported: ' + myCodecs.map(codecDisplayName).join(' | '));
@@ -1615,16 +1659,14 @@
                     myPeerID = 'guest';
                     remotePeerID = 'host';
                 }
-                diagLog('INIT peer=' + myPeerID + ' cam=' + W + 'x' + H);
+                diagLog('INIT peer=' + myPeerID + ' cam=' + W + 'x' + H + ' video=' + S.video + ' audio=' + S.audio);
                 _chatUserId = myPeerID + '_' + getBrowserTag();
                 localStorage.setItem('chatUserId', _chatUserId);
                 await startCall();
             } catch (err) {
                 isActive = false;
                 console.error('Init error:', err);
-                if (err.name === 'NotAllowedError') showError('Camera and microphone access denied.');
-                else if (err.name === 'NotFoundError') showError('No camera or microphone found.');
-                else showError('Error: ' + err.message);
+                showError('Error: ' + err.message);
             }
         }
 
