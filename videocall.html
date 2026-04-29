@@ -330,7 +330,6 @@
     <script>
         // ============= Конфигурация =============
         var CHUNK_INTERVAL_MS = 100;
-        var WS_RECONNECT_MS = 2000;
         var TARGET_FPS = 10;
 
         // ============= Элементы UI =============
@@ -569,7 +568,6 @@
 
         var ws = null;
         var wsConnected = false;
-        var wsReconnectTimer = null;
         var peerSettings = null; // настройки пира (полученные через WS)
         var echo = false; // эхо-режим (хост видит своё видео пока гость не подключился)
         var audioDisabledByPrivacy = false; // Mic выключен пиром через кодеки (не автором вручную)
@@ -2122,7 +2120,6 @@
 
         // ============= WebSocket =============
         function connectWS() {
-            if (wsReconnectTimer) { clearTimeout(wsReconnectTimer); wsReconnectTimer = null; }
             if (!isActive) return;
             var proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
             var wsURL = proto + '//' + location.host + '/api/call/ws?room=' + encodeURIComponent(roomID) + '&peer=' + encodeURIComponent(myPeerID);
@@ -2246,7 +2243,7 @@
             ws.onclose = function(event) {
                 wsConnected = false;
                 diagLog('WS closed code=' + event.code);
-                if (isActive) { wsReconnectTimer = setTimeout(function() { connectWS(); }, WS_RECONNECT_MS); }
+                if (isActive) hangup();
             };
             ws.onerror = function() {};
         }
@@ -2285,7 +2282,6 @@
         }
 
         function disconnectWS() {
-            if (wsReconnectTimer) { clearTimeout(wsReconnectTimer); wsReconnectTimer = null; }
             if (ws) {
                 ws.onclose = null; ws.onerror = null; ws.onmessage = null;
                 if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) ws.close();
