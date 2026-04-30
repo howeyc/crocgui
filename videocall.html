@@ -530,11 +530,18 @@
         S.isScreenSharing = false;
 
         // ============= Мегапиксельный множитель для запроса пиру =============
-        var mpxBtns = [mpx12Btn, mpx15Btn, mpx110Btn, mpx120Btn];
-        var mpxValues = [0.5, 0.2, 0.1, 0.05];
         function setMpx(val) {
             diagLog('SETMPX ' + S.mpx + '→' + val + ' wantVideo=' + S.wantVideo);
             S.mpx = val;
+            // Сброс опыта BUST при смене разрешения — новое разрешение = новые чанки
+            bustEwma = 0;
+            BUST = SLOMO * 2;
+            EMERGENCY_BEHIND = BUST * 2;
+            localStorage.removeItem('vc_bustEwma');
+            lastChunkSize = 0;
+            recvChunkSizes = [];
+            // chunkMin = 0; chunkMed = 0; chunkMax = 0;
+            chunkMed = 0; // chunkMin, chunkMax закомментированы — не участвуют в формулах
             applySettings();
             saveSettings();
             sendSettings();
@@ -575,7 +582,8 @@
         var recorderStarted = false;
         var mediaSource = null;
         var sourceBuffer = null;
-        var MAX_MSE_QUEUE = 50;
+        var MAX_MSE_QUEUE = 150;
+        var MAX_BUFFER_SEC = 30; // держим буфер в 30 секунд
         var mseQueue = [];
         var mseQueueReadIdx = 0;
         var mseReady = false;
@@ -585,13 +593,19 @@
         var firstAppendDone = false;
 
         // ============= Адаптивный catch-up =============
-        var BUST_MS = 800;                    // верхняя граница зоны 1.0 (мс)
-        var SLOMO_MS = 400;                    // нижняя граница зоны 1.0 (мс)
-        var BUST = BUST_MS / 1000;             // в секундах
-        var SLOMO = SLOMO_MS / 1000;           // в секундах
-        var RATE_MAX = 1.25;                   // макс скорость на разгоне
-        var RATE_MIN = 0.1;                    // мин скорость на торможении
-        var EMERGENCY_BEHIND = BUST * 2;       // порог emergency seek (сек)
+        var SLOMO_MS = 400;                   // нижняя граница зоны 1.0 (мс)
+        var SLOMO = SLOMO_MS / 1000;          // в секундах (фиксирован)
+        var K_BUST_MED = 0.005;               // BUST базовая линия: K × √(chunkMed)
+        var K_BUST_CHUNK = 0.003;             // BUST реактивность: K × √(lastChunkSize)
+        var BUST_EWMA_ALPHA = 0.1;            // скорость адаптации BUST (EWMA factor)
+        var BUST = SLOMO * 2;                 // начальный BUST, адаптируется по chunkMed
+        var bustEwma = parseFloat(localStorage.getItem('vc_bustEwma')) || 0; // EWMA-сглаженное BUST (сохраняется)
+        if (bustEwma > 0) { BUST = bustEwma; } // восстановление из предыдущей сессии
+        var EMERGENCY_BEHIND = BUST * 2;       // порог emergency seek, пересчитывается с BUST
+        var RATE_MAX = 1.15;                   // макс скорость на разгоне
+        var RATE_MIN = 0.85;                   // мин скорость на торможении
+        var BEHIND_MIN = 0.5;                  // минимальное расстояние от live edge (сек)
+        var SOFT_CATCHUP = 0.03;               // мягкий догон в stable zone: rate до 1.03 у границы BUST
         var BUF_START_THRESHOLD = CHUNK_INTERVAL_MS / 1000 * 2; // порог BUF-START seek (2 чанка)
 
         var stallStartWallTime = 0;       // Date.now() момента начала stall
@@ -616,6 +630,18 @@
         var peerDisplayH = 0; // высота MSE-окна пира (для аспект-соотношения)
         var peerRecorderCodec = ''; // mimeType рекордера пира из cmd:initCodec (для remoteResLabel)
         var peerRes = { width: 0, height: 0, frameRate: 0 }; // разрешение камеры пира из cmd:myRes
+
+        // ============= Статистика для анализа гистерезиса =============
+        var lastChunkSize = 0;                // размер последнего чанка (байт)
+        var recvChunkSizes = [];              // sliding window размеров чанков
+        var RECV_CHUNK_WINDOW = 50;           // размер окна
+        var chunkMed = 0; // статистика чанков в окне (chunkMin, chunkMax закомментированы — не участвуют в формулах)
+        // var chunkMin = 0, chunkMax = 0;
+        // var recvKbps = 0;                     // оценочный битрейт приёма (kbps)
+        // var recvKbpsLastBytes = 0;            // diagRecvBytes при последнем замере
+        // var recvKbpsLastTime = 0;             // Date.now при последнем замере
+        // var _lastHystLogTime = 0;             // троттлинг периодического лога
+        // var HYST_LOG_INTERVAL_MS = 2000;      // интервал логирования
 
         // Remote video fit+mirror: 0=fit 1=1:1 2=/2 3=×2 4=fit+╤i╕ 5=1:1+╤i╕ 6=/2+╤i╕ 7=×2+╤i╕
         var _savedFitMode = Math.max(0, Math.min(7, parseInt(localStorage.getItem('vc_fitMode')) || 0));
@@ -1332,7 +1358,7 @@
                 ' appends:' + diagMSEAppends + ' errs:' + diagMSEErrors +
                 ' buf:' + bufInfo + ' ct:' + ct + paused + waiting);
         }
-        setInterval(function() { diagStats(); }, 30000);
+        // setInterval(function() { diagStats(); }, 30000);
 
         // ============= Экстренный seek + линейный rate контроль =============
         setInterval(function() {
@@ -1342,23 +1368,59 @@
                     var bufEnd = remoteVideo.buffered.end(remoteVideo.buffered.length - 1);
                     var bufStart = remoteVideo.buffered.start(0);
                     var ct = remoteVideo.currentTime;
-                    var behind = bufEnd - ct;
+                    var behind = Math.max(BEHIND_MIN, bufEnd - ct);
                     currentBehind = behind;
                     var now = Date.now();
                     var isStalled = remoteVideo.readyState < 3;
+
+                    // Адаптивный BUST = SLOMO + K1×√(chunkMed) + K2×√(lastChunkSize), EWMA-сглаженный
+                    if (chunkMed > 100 && lastChunkSize > 0) {
+                        var bustTarget = SLOMO + K_BUST_MED * Math.sqrt(chunkMed) + K_BUST_CHUNK * Math.sqrt(lastChunkSize);
+                        if (bustEwma === 0) {
+                            bustEwma = bustTarget; // первый замер — без сглаживания
+                        } else {
+                            bustEwma = bustEwma + BUST_EWMA_ALPHA * (bustTarget - bustEwma);
+                        }
+                        BUST = bustEwma;
+                        EMERGENCY_BEHIND = BUST * 2;
+                        localStorage.setItem('vc_bustEwma', bustEwma.toFixed(4));
+                    }
+
+                    // Периодический лог статистики гистерезиса (закомментирован — переменные не участвуют в формулах)
+                    // if (now - _lastHystLogTime >= HYST_LOG_INTERVAL_MS) {
+                    //     diagLog('HYST chunk=' + lastChunkSize +
+                    //         ' behind=' + behind.toFixed(3) +
+                    //         ' rate=' + remoteVideo.playbackRate.toFixed(2) +
+                    //         ' SLOMO=' + SLOMO.toFixed(2) +
+                    //         ' BUST=' + BUST.toFixed(3) +
+                    //         ' EMER=' + EMERGENCY_BEHIND.toFixed(3) +
+                    //         ' bustEwma=' + bustEwma.toFixed(3) +
+                    //         ' buf=[' + bufStart.toFixed(1) + '-' + bufEnd.toFixed(1) + ']' +
+                    //         ' ct=' + ct.toFixed(1) +
+                    //         ' stall=' + (isStalled ? 1 : 0) +
+                    //         ' qLen=' + mseQueueLength() +
+                    //         ' chunkMin=' + chunkMin +
+                    //         ' chunkMed=' + chunkMed +
+                    //         ' chunkMax=' + chunkMax +
+                    //         ' recvKbps=' + recvKbps +
+                    //         ' appends=' + diagMSEAppends);
+                    //     _lastHystLogTime = now;
+                    // }
 
                     // 3. Трёхзонный playbackRate: торможение / 1.0 / разгон
                     if (firstAppendDone) {
                         var newRate;
                         if (behind <= SLOMO) {
-                            // Зона торможения: пропорциональный контроллер, буфер не кончается
-                            newRate = Math.max(RATE_MIN, behind / SLOMO);
+                            // Зона торможения: экспоненциальный контроллер (√), мягче при малом behind
+                            newRate = Math.max(RATE_MIN, Math.sqrt(behind / SLOMO));
                         } else if (behind <= BUST) {
-                            // Зона стабильная: ровно 1.0
-                            newRate = 1.0;
+                            // Зона стабильная: мягкий догон от 1.0 (у SLOMO) до 1.0+SOFT_CATCHUP (у BUST)
+                            newRate = 1.0 + SOFT_CATCHUP * (behind - SLOMO) / (BUST - SLOMO);
                         } else {
-                            // Зона разгона: пропорциональный контроллер, max RATE_MAX
-                            newRate = Math.min(RATE_MAX, 1.0 + (behind - BUST) / BUST * (RATE_MAX - 1.0));
+                            // Зона разгона: экспоненциальный контроллер, max RATE_MAX
+                            // √(excess/BUST) даёт 3× больше ускорения при малом превышении BUST
+                            var excess = (behind - BUST) / BUST;
+                            newRate = Math.min(RATE_MAX, 1.0 + Math.sqrt(excess) * (RATE_MAX - 1.0));
                         }
                         remoteVideo.playbackRate = newRate;
                     }
@@ -1370,11 +1432,11 @@
                         }
                         var elapsed = (now - stallStartWallTime) / 1000;
                         var expected = stallStartCt + elapsed;
-                        if (expected > ct && expected <= SLOMO) {
+                        if (expected > ct && expected <= bufEnd - SLOMO) { // BEHIND_MIN
                             remoteVideo.currentTime = expected;
                             remoteVideo.play().catch(function(){});
                             if (now - lastStallLogTime > 1000) {
-                                diagLog('ADAPTIVE STALL seek ct=' + ct.toFixed(1) + ' -> ' + expected.toFixed(1) + ' behind=' + behind.toFixed(1) + 's');
+                                diagLog('ADAPTIVE STALL seek ct=' + ct.toFixed(1) + ' -> ' + expected.toFixed(1) + ' behind=' + behind.toFixed(1) + 's chunk=' + lastChunkSize);
                                 lastStallLogTime = now;
                             }
                         }
@@ -1384,21 +1446,28 @@
                     }
                     // 4. currentTime вышел за начало буфера
                     if (ct < bufStart - BUF_START_THRESHOLD ) {
-                        var target4 = Math.min(bufStart + 0.1, bufEnd - 0.05);
+                        var target4 = Math.min(bufStart + BEHIND_MIN*2, bufEnd - BEHIND_MIN);
                         if (target4 > bufStart) {
                             diagLog('ADAPTIVE BUF-START seek ct=' + ct.toFixed(1) + ' -> ' + target4.toFixed(1) +
-                                ' buf=[' + bufStart.toFixed(1) + '-' + bufEnd.toFixed(1) + ']');
+                                ' buf=[' + bufStart.toFixed(1) + '-' + bufEnd.toFixed(1) + '] chunk=' + lastChunkSize);
                             remoteVideo.currentTime = target4;
                             remoteVideo.playbackRate = 1.0;
                             if (remoteVideo.paused) remoteVideo.play().catch(function(){});
                         }
                     } else
                     // 2. Emergency seek при большом отставании (страховка от неконтролируемого роста лага)
-                    if (behind > EMERGENCY_BEHIND && !isStalled ) {
-                        var target2 = bufEnd - BUST;
-                        diagLog('ADAPTIVE EMERGENCY seek ct=' + ct.toFixed(1) + ' -> ' + target2.toFixed(1) + ' behind=' + behind.toFixed(1) + 's');
+                    // Работает и при stall — иначе stall + behind > EMERGENCY = дедлок
+                    if (behind > EMERGENCY_BEHIND) {
+                        // При stall: seek ближе к bufEnd (bufEnd - SLOMO) чтобы не уйти в отрицательный behind
+                        // При норме: seek дальше (bufEnd - BUST) для плавного catch-up
+                        var target2 = isStalled ? bufEnd - SLOMO : bufEnd - BUST;
+                        diagLog('ADAPTIVE EMERGENCY seek ct=' + ct.toFixed(1) + ' -> ' + target2.toFixed(1) +
+                            ' behind=' + behind.toFixed(1) + 's' +
+                            ' stall=' + (isStalled ? 1 : 0) +
+                            ' chunk=' + lastChunkSize + ' chunkMed=' + chunkMed);
                         remoteVideo.currentTime = target2;
                         remoteVideo.playbackRate = 1.0;
+                        if (remoteVideo.paused) remoteVideo.play().catch(function(){});
                     }
                 }
             } catch (e) {}
@@ -2261,6 +2330,34 @@
             diagRecvBytes += data.byteLength;
             if (mseCriticalTriggered) return;
 
+            // Статистика чанков для анализа гистерезиса
+            lastChunkSize = data.byteLength;
+            recvChunkSizes.push(data.byteLength);
+            if (recvChunkSizes.length > RECV_CHUNK_WINDOW) recvChunkSizes.shift();
+
+            // Пересчитываем статистику окна
+            if (recvChunkSizes.length >= 5) {
+                var sorted = recvChunkSizes.slice().sort(function(a,b){return a-b;});
+                // chunkMin = sorted[0]; // закомментирован — не участвует в формулах
+                chunkMed = sorted[Math.floor(sorted.length / 2)];
+                // chunkMax = sorted[sorted.length - 1]; // закомментирован — не участвует в формулах
+            }
+
+            // Оценка битрейта приёма (каждые 2 сек) — закомментирована: recvKbps не участвует в формулах
+            // var nowBr = Date.now();
+            // if (recvKbpsLastTime === 0) {
+            //     recvKbpsLastTime = nowBr;
+            //     recvKbpsLastBytes = diagRecvBytes;
+            // } else {
+            //     var dtBr = (nowBr - recvKbpsLastTime) / 1000;
+            //     if (dtBr >= 2) {
+            //         var bytesBr = diagRecvBytes - recvKbpsLastBytes;
+            //         recvKbps = Math.round((bytesBr * 8) / dtBr / 1000);
+            //         recvKbpsLastTime = nowBr;
+            //         recvKbpsLastBytes = diagRecvBytes;
+            //     }
+            // }
+
             // Запись remote video: пишем чанк в файл
             if (peerRecActive && peerRecWritable) {
                 peerRecWritable.write(new Uint8Array(data)).catch(function(err) {
@@ -2333,12 +2430,53 @@
 
 
         function onMSEUpdateEnd() {
+            // Логируем завершение trim
+            // if (trimStartTime > 0) {
+            //     var trimDuration = Date.now() - trimStartTime;
+            //     diagLog('BUF TRIM done in ' + trimDuration + 'ms');
+            //     trimStartTime = 0;
+            // }
             processMSEQueue();
+        }
+
+        // ============= Buffer trim (превентивно + по QuotaExceededError) =============
+        var TRIM_KEEP_BEHIND = 10;                // держим 10с позади currentTime
+        var TRIM_INTERVAL_MS = 10000;             // периодический trim каждые 10 сек
+        var lastTrimTime = 0;
+        // var trimStartTime = 0;                   // для замера длительности remove()
+
+        function emergencyTrim() {
+            if (!sourceBuffer || sourceBuffer.updating) return;
+            if (!remoteVideo.buffered || remoteVideo.buffered.length === 0) return;
+
+            var bufStart = remoteVideo.buffered.start(0);
+            var bufEnd = remoteVideo.buffered.end(remoteVideo.buffered.length - 1);
+            var ct = remoteVideo.currentTime;
+            var removeEnd = ct - TRIM_KEEP_BEHIND;
+
+            // Обрезаем только если буфер превышает MAX_BUFFER_SEC
+            if (bufEnd - bufStart > MAX_BUFFER_SEC && removeEnd > bufStart) {
+                // trimStartTime = Date.now();
+                // diagLog('BUF TRIM start [' + bufStart.toFixed(1) + '-' + removeEnd.toFixed(1) + '] ct=' + ct.toFixed(1));
+                try {
+                    sourceBuffer.remove(bufStart, removeEnd);
+                } catch(e) {
+                    // trimStartTime = 0;
+                    diagLog('BUF TRIM error: ' + e.message);
+                }
+            }
         }
 
         function processMSEQueue() {
             if (!isActive) return;
             if (!mseReady || !sourceBuffer || sourceBuffer.updating) return;
+            // Периодическая обрезка буфера — до взятия чанка из очереди
+            var now = Date.now();
+            if (now - lastTrimTime >= TRIM_INTERVAL_MS) {
+                lastTrimTime = now;
+                emergencyTrim();
+                if (sourceBuffer.updating) return; // remove() запущен — чанк останется в очереди
+            }
             if (mseQueueLength() === 0) return;
             var chunkData = mseQueue[mseQueueReadIdx++];
             mseQueueCompact();
@@ -2355,6 +2493,14 @@
             } catch (e) {
                 diagMSEErrors++;
                 mseErrorTimestamps.push(Date.now());
+                if (e.name === 'QuotaExceededError') {
+                    // Буфер переполнен — агрессивная очистка и повтор
+                    diagLog('MSE QuotaExceededError — emergency trim + retry');
+                    // Возвращаем чанк в очередь для повторной попытки после updateend от remove
+                    if (mseQueueReadIdx > 0) mseQueueReadIdx--;
+                    emergencyTrim();
+                    return;
+                }
                 if (e.message && e.message.indexOf('removed from the parent') !== -1) {
                     diagLog('MSE ERR sourceBuffer removed — hanging up');
                     if (!mseCriticalTriggered) {
@@ -2392,6 +2538,15 @@
 
             // Сброс адаптивных параметров
             try { remoteVideo.playbackRate = 1.0; } catch(e) {}
+            lastChunkSize = 0;
+            recvChunkSizes = [];
+            // chunkMin = 0; chunkMax = 0; // закомментированы — не участвуют в формулах
+            chunkMed = 0;
+            // recvKbps = 0;               // закомментирован — не участвует в формулах
+            // recvKbpsLastBytes = 0;
+            // recvKbpsLastTime = 0;
+            // _lastHystLogTime = 0;
+            // BUST/bustEwma НЕ сбрасываем — при MSE RESTART разрешение то же, опыт сохраняется
 
             // Очистка старого MSE
             mseReady = false;

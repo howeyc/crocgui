@@ -59,7 +59,7 @@
         /* Обёртка: метка разрешения + панель кнопок */
         .controls-area {
             position: absolute;
-            top: 16px;
+            top: 20px;
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -102,8 +102,8 @@
             min-width: 120px;
             transition: top 0.3s ease, left 0.3s ease, right 0.3s ease, width 0.3s ease, height 0.3s ease;
         }
-        .pip-container.pip-tl { top: 16px; left: 2px; bottom: auto; right: auto; }
-        .pip-container.pip-tr { top: 16px; right: 2px; bottom: auto; left: auto; }
+        .pip-container.pip-tl { top: 18px; left: 2px; bottom: auto; right: auto; }
+        .pip-container.pip-tr { top: 18px; right: 2px; bottom: auto; left: auto; }
         .pip-container video {
             width: 100%;
             height: 100%;
@@ -133,36 +133,17 @@
         #latencyLabel {
             position: absolute;
             top: 1px;
-            left: 50%;
-            transform: translateX(-50%);
+            left: 0;
+            right: 0;
+            width: fit-content;
+            margin: 0 auto;
             z-index: 16;
         }
-        .waiting-overlay {
-            position: absolute;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(0,0,0,0.8);
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            z-index: 10;
-        }
-        .waiting-overlay.hidden { display: none; }
-        .waiting-spinner {
-            width: 48px; height: 48px;
-            border: 4px solid #333;
-            border-top: 4px solid #e94560;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin-bottom: 16px;
-        }
-        @keyframes spin { to { transform: rotate(360deg); } }
-        .waiting-text { color: #aaa; font-size: 1em; }
         /* Показ кнопок через классы (десктоп + мобильные) */
         body.show-main-controls .controls-panel { opacity: 1; }
         .res-label {
             color: rgba(255,255,255,0.7);
-            font-size: 0.65em;
+            font-size: 0.80em;
             font-family: monospace;
             pointer-events: none;
             white-space: nowrap;
@@ -273,6 +254,9 @@
         }
         .ctrl-btn.fit.active { background: #4ecca3; }
         .ctrl-btn.fit:not(.active) { background: #555; }
+        .ctrl-btn.fit.mirrored { transform: scaleX(-1); }
+        .ctrl-btn.fit.mirrored:hover { transform: scaleX(-1) scale(1.05); }
+        .ctrl-btn.fit.mirrored:active { transform: scaleX(-1) scale(0.95); }
         .ctrl-btn.codec {
             width: auto;
             padding: 0 6px;
@@ -301,13 +285,13 @@
             <!-- Панель кнопок -->
             <div class="controls-area pos-right" id="controlsArea">
                 <div class="controls-panel" id="controlsPanel">
-                <!-- Ряд 1: 🔴 /2 1 ×2 💡 ☐ ❌ -->
+                <!-- Ряд 1: 🔴 /2 1 ×2 ╒i╤ ☐ ❌ -->
                 <div class="controls-row">
                     <button type="button" class="ctrl-btn peer-rec emoji" id="peerRecBtn" title="Record Peer">⏺</button>
                     <button type="button" class="ctrl-btn fit" id="fitHalfBtn" title="Half Size">/2</button>
                     <button type="button" class="ctrl-btn fit" id="fit1to1Btn" title="1:1">1</button>
                     <button type="button" class="ctrl-btn fit" id="fit2xBtn" title="2x Zoom">×2</button>
-                    <button type="button" class="ctrl-btn fit active emoji" id="fitContainBtn" title="Fit">💡</button>
+                    <button type="button" class="ctrl-btn fit active" id="fitContainBtn" title="Fit">Fit</button>
                     <button type="button" class="ctrl-btn fullscreen off emoji" id="fullscreenBtn" title="Fullscreen">☐</button>
                     <button type="button" class="ctrl-btn hangup emoji" id="hangupBtn" title="Hangup">❌</button>
                 </div>
@@ -332,10 +316,6 @@
                 </div>
                 </div>
             </div>
-            <div class="waiting-overlay hidden" id="waitingOverlay">
-                <div class="waiting-spinner"></div>
-                <div class="waiting-text" id="waitingText">Waiting for peer...</div>
-            </div>
             <div class="pip-container pip-tl" id="pipContainer">
                 <button type="button" class="ctrl-btn rec emoji" id="recBtn" title="Record">⏺</button>
                 <button type="button" class="ctrl-btn screen-share emoji" id="screenBtn" title="Screen Share">🖼️</button>
@@ -350,7 +330,6 @@
     <script>
         // ============= Конфигурация =============
         var CHUNK_INTERVAL_MS = 100;
-        var WS_RECONNECT_MS = 2000;
         var TARGET_FPS = 10;
 
         // ============= Элементы UI =============
@@ -358,8 +337,6 @@
         var remoteVideo = document.getElementById('remoteVideo');
         var latencyLabel = document.getElementById('latencyLabel');
         var currentBehind = 0;
-        var waitingOverlay = document.getElementById('waitingOverlay');
-        var waitingText = document.getElementById('waitingText');
         var errorBanner = document.getElementById('errorBanner');
         var micBtn = document.getElementById('micBtn');
         var camBtn = document.getElementById('camBtn');
@@ -367,6 +344,8 @@
         var flipBtn = document.getElementById('flipBtn');
         var isScreenSharing = false;
         var screenToggling = false;
+        var audioBeforeScreenShare = false;
+        var videoBeforeScreenShare = false;
         // Скрываем кнопку шаринга экрана если API недоступно
         if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
             screenBtn.style.display = 'none';
@@ -518,6 +497,7 @@
             var dh = mainContainer ? mainContainer.clientHeight : 0;
             ws.send(JSON.stringify({
                 cmd: 'settings',
+                role: isCreator ? 'host' : 'guest',
                 audio: S.audio,
                 video: S.video,
                 wantAudio: S.wantAudio,
@@ -550,11 +530,18 @@
         S.isScreenSharing = false;
 
         // ============= Мегапиксельный множитель для запроса пиру =============
-        var mpxBtns = [mpx12Btn, mpx15Btn, mpx110Btn, mpx120Btn];
-        var mpxValues = [0.5, 0.2, 0.1, 0.05];
         function setMpx(val) {
             diagLog('SETMPX ' + S.mpx + '→' + val + ' wantVideo=' + S.wantVideo);
             S.mpx = val;
+            // Сброс опыта BUST при смене разрешения — новое разрешение = новые чанки
+            bustEwma = 0;
+            BUST = 0.8;
+            EMERGENCY_BEHIND = BUST * 2;
+            localStorage.removeItem('vc_bustEwma');
+            lastChunkSize = 0;
+            recvChunkSizes = [];
+            // chunkMin = 0; chunkMed = 0; chunkMax = 0;
+            chunkMed = 0; // chunkMin, chunkMax закомментированы — не участвуют в формулах
             applySettings();
             saveSettings();
             sendSettings();
@@ -588,13 +575,15 @@
 
         var ws = null;
         var wsConnected = false;
-        var wsReconnectTimer = null;
         var peerSettings = null; // настройки пира (полученные через WS)
-        var peerSettingsResolve = null; // для ожидания первых настроек пира
+        var echo = false; // эхо-режим (хост видит своё видео пока гость не подключился)
+        var audioDisabledByPrivacy = false; // Mic выключен пиром через кодеки (не автором вручную)
+        var videoDisabledByPrivacy = false; // Cam выключена пиром через кодеки (не автором вручную)
         var recorderStarted = false;
         var mediaSource = null;
         var sourceBuffer = null;
-        var MAX_MSE_QUEUE = 50;
+        var MAX_MSE_QUEUE = 150;
+        var MAX_BUFFER_SEC = 30; // держим буфер в 30 секунд
         var mseQueue = [];
         var mseQueueReadIdx = 0;
         var mseReady = false;
@@ -604,23 +593,26 @@
         var firstAppendDone = false;
 
         // ============= Адаптивный catch-up =============
-        var BUST_MS = 800;                    // верхняя граница зоны 1.0 (мс)
         var SLOMO_MS = 400;                    // нижняя граница зоны 1.0 (мс)
-        var BUST = BUST_MS / 1000;             // в секундах
-        var SLOMO = SLOMO_MS / 1000;           // в секундах
+        var SLOMO = SLOMO_MS / 1000;           // в секундах (фиксирован)
+        var K_BUST_MED = 0.005;               // BUST базовая линия: K × √(chunkMed)
+        var K_BUST_CHUNK = 0.003;             // BUST реактивность: K × √(lastChunkSize)
+        var BUST_EWMA_ALPHA = 0.1;            // скорость адаптации BUST (EWMA factor)
+        var BUST = 0.8;                        // начальный BUST, адаптируется по chunkMed
+        var bustEwma = parseFloat(localStorage.getItem('vc_bustEwma')) || 0; // EWMA-сглаженное BUST (сохраняется)
+        if (bustEwma > 0) { BUST = bustEwma; } // восстановление из предыдущей сессии
+        var EMERGENCY_BEHIND = BUST * 2;       // порог emergency seek, пересчитывается с BUST
         var RATE_MAX = 1.25;                   // макс скорость на разгоне
         var RATE_MIN = 0.1;                    // мин скорость на торможении
-        var EMERGENCY_BEHIND = BUST * 2;       // порог emergency seek (сек)
-        var STALL_DEBOUNCE_MS = 3000;          // мин интервал между emergency seek (мс)
+        var BEHIND_MIN = 0.05;                 // минимальное расстояние от live edge (сек)
+        var SOFT_CATCHUP = 0.03;               // мягкий догон в stable zone: rate до 1.03 у границы BUST
         var BUF_START_THRESHOLD = CHUNK_INTERVAL_MS / 1000 * 2; // порог BUF-START seek (2 чанка)
-        var EWMA_ALPHA = 0.3;                  // сглаживание оценки джиттера
 
-        var liveJitter = 0.1;             // EWMA оценка джиттера сети (сек)
-        var liveLastChunkTime = 0;        // время прибытия предыдущего чанка (performance.now)
-        var lastEmergencySeekTime = 0;    // timestamp последнего emergency seek
         var stallStartWallTime = 0;       // Date.now() момента начала stall
         var stallStartCt = 0;             // currentTime в момент начала stall
         var lastStallLogTime = 0;         // троттлинг логов stall-seek
+        var recorderRestartTimer = null;  // debounce для restartMediaRecorder
+        var RECORDER_RESTART_DEBOUNCE_MS = 1000;
 
         var diagSentChunks = 0;
         var diagSentBytes = 0;
@@ -628,7 +620,6 @@
         var diagRecvBytes = 0;
         var diagMSEAppends = 0;
         var diagMSEErrors = 0;
-        var diagLastLogTime = 0;
         var MSE_CRITICAL_THRESHOLD = 33;
         var MSE_CRITICAL_WINDOW_MS = 1000;
         var mseErrorTimestamps = [];
@@ -640,10 +631,23 @@
         var peerRecorderCodec = ''; // mimeType рекордера пира из cmd:initCodec (для remoteResLabel)
         var peerRes = { width: 0, height: 0, frameRate: 0 }; // разрешение камеры пира из cmd:myRes
 
-        // Remote video fit modes: 0=fit, 1=1:1, 2=1:2, 3=2:1
-        var remoteFitMode = Math.max(0, Math.min(3, parseInt(localStorage.getItem('vc_fitMode')) || 0));
+        // ============= Статистика для анализа гистерезиса =============
+        var lastChunkSize = 0;                // размер последнего чанка (байт)
+        var recvChunkSizes = [];              // sliding window размеров чанков
+        var RECV_CHUNK_WINDOW = 50;           // размер окна
+        var chunkMed = 0; // статистика чанков в окне (chunkMin, chunkMax закомментированы — не участвуют в формулах)
+        // var chunkMin = 0, chunkMax = 0;
+        // var recvKbps = 0;                     // оценочный битрейт приёма (kbps)
+        // var recvKbpsLastBytes = 0;            // diagRecvBytes при последнем замере
+        // var recvKbpsLastTime = 0;             // Date.now при последнем замере
+        // var _lastHystLogTime = 0;             // троттлинг периодического лога
+        // var HYST_LOG_INTERVAL_MS = 2000;      // интервал логирования
+
+        // Remote video fit+mirror: 0=fit 1=1:1 2=/2 3=×2 4=fit+╤i╕ 5=1:1+╤i╕ 6=/2+╤i╕ 7=×2+╤i╕
+        var _savedFitMode = Math.max(0, Math.min(7, parseInt(localStorage.getItem('vc_fitMode')) || 0));
+        var remoteFitMode = _savedFitMode % 4;
+        var remoteMirrored = _savedFitMode >= 4;
         var remoteFitModes = ['', 'fit-1to1', 'fit-half', 'fit-2x'];
-        var remoteFitLabels = ['Fit', '1:1', '1:2', '2:1'];
         var remoteNativeW = 0;
         var remoteNativeH = 0;
 
@@ -652,6 +656,8 @@
             fit1to1Btn.classList.toggle('active', remoteFitMode === 1);
             fit2xBtn.classList.toggle('active', remoteFitMode === 3);
             fitContainBtn.classList.toggle('active', remoteFitMode === 0);
+            fitContainBtn.classList.toggle('mirrored', remoteMirrored);
+            fitContainBtn.title = remoteMirrored ? 'Mirror' : 'Fit';
         }
 
         function addFrameRateConstraint(constraints) {
@@ -708,7 +714,9 @@
             remoteVideo.classList.remove('fit-1to1', 'fit-half', 'fit-2x');
             remoteVideo.style.width = '';
             remoteVideo.style.height = '';
+            remoteVideo.style.transform = '';
             if (remoteFitMode === 0 || remoteNativeW === 0) {
+                if (remoteMirrored) remoteVideo.style.transform = 'scaleX(-1)';
                 updateFitBtnHighlight();
                 return;
             }
@@ -721,6 +729,10 @@
             } else if (remoteFitMode === 2) {
                 remoteVideo.style.width = Math.round(remoteNativeW / 2) + 'px';
                 remoteVideo.style.height = Math.round(remoteNativeH / 2) + 'px';
+            }
+            // Mirror: inline transform overrides CSS class transform
+            if (remoteMirrored) {
+                remoteVideo.style.transform = remoteFitMode === 3 ? 'scaleX(-1) scale(2)' : 'scaleX(-1)';
             }
             updateFitBtnHighlight();
         }
@@ -746,7 +758,19 @@
         fitHalfBtn.addEventListener('click', function(e) { e.stopPropagation(); setFitMode(2); });
         fit1to1Btn.addEventListener('click', function(e) { e.stopPropagation(); setFitMode(1); });
         fit2xBtn.addEventListener('click', function(e) { e.stopPropagation(); setFitMode(3); });
-        fitContainBtn.addEventListener('click', function(e) { e.stopPropagation(); setFitMode(0); });
+        fitContainBtn.addEventListener('click', function(e) { e.stopPropagation();
+            if (remoteFitMode === 0) {
+                // Кнопка зелёная — toggle mirror
+                remoteMirrored = !remoteMirrored;
+            } else {
+                // Кнопка серая — включить Fit, mirror не трогать
+                remoteFitMode = 0;
+            }
+            applyRemoteFitMode();
+            saveCallState();
+        });
+        // Установить начальное состояние кнопки ╒i╤/╤i╕
+        updateFitBtnHighlight();
 
         // PiP — только сверху
         var pipCorners = ['pip-tl', 'pip-tr'];
@@ -833,7 +857,14 @@
         });
         document.querySelector('.video-container.main-video').addEventListener('click', function(e) {
             if (e.target.closest('.controls-panel') || e.target.closest('.pip-container')) return;
-            showAllControls();
+            if (document.body.classList.contains('show-main-controls')) {
+                if (controlsTimer) clearTimeout(controlsTimer);
+                controlsTimer = null;
+                document.body.classList.remove('show-main-controls');
+                document.body.classList.remove('show-pip-controls');
+            } else {
+                showAllControls();
+            }
         });
         document.getElementById('controlsPanel').addEventListener('click', function() {
             showAllControls();
@@ -905,6 +936,7 @@
         micBtn.addEventListener('click', async function() {
             if (!localStream || micToggling) return;
             micToggling = true;
+            audioDisabledByPrivacy = false; // ручное управление — сбрасываем флаг приватности
             S.audio = !S.audio;
             if (S.audio) {
                 // Включаем: заново получаем аудио поток
@@ -933,7 +965,7 @@
                     mediaRecorder.stop(); recorderStarted = false;
                 }
             } else if (recorderStarted || S.audio) {
-                restartMediaRecorder();
+                restartMediaRecorder('settings');
             }
             micToggling = false;
         });
@@ -942,31 +974,20 @@
         camBtn.addEventListener('click', async function() {
             if (!localStream || camToggling) return;
             camToggling = true;
+            videoDisabledByPrivacy = false; // ручное управление — сбрасываем флаг приватности
             S.video = !S.video;
-            if (S.video) {
-                // Включаем: заново получаем видео поток с аспектом пира + mpx
+            if (isScreenSharing) {
+                // При шаринге экрана — не останавливаем display track (иначе сработает onended),
+                // используем enabled для приостановки/возобновления видео
+                var vt = localStream.getVideoTracks()[0];
+                if (vt) {
+                    vt.enabled = S.video;
+                    diagLog('CAM ' + (S.video ? 'enabled' : 'disabled') + ' (screen share active)');
+                }
+            } else if (S.video) {
+                // Включаем: двухфазное получение камеры
                 try {
-                    // Удаляем старые video tracks на всякий случай
-                    localStream.getVideoTracks().forEach(function(t) { t.stop(); localStream.removeTrack(t); });
-                    var camAspect = 4 / 3;
-                    // Используем реальные настройки трека, а не физические размеры сенсора
-                    // (сенсор всегда ландшафтный, даже если камера в портрете)
-                    var oldVt = localStream ? localStream.getVideoTracks()[0] : null;
-                    if (oldVt) {
-                        var oldVs = oldVt.getSettings();
-                        if (oldVs.width && oldVs.height) camAspect = oldVs.width / oldVs.height;
-                    }
-                    // НЕ используем peerDisplay для аспекта камеры — камера должна
-                    // захватывать в своей нативной ориентации, а пир отображает через CSS
-                    var camR = applyMpx(camAspect, 1, S.mpx);
-                    var newStream = await navigator.mediaDevices.getUserMedia({
-                        video: addFrameRateConstraint({ width: { ideal: camR.w }, height: { ideal: camR.h }, aspectRatio: { ideal: camAspect }, facingMode: S.facingMode }),
-                        audio: false
-                    });
-                    newStream.getVideoTracks().forEach(function(t) { localStream.addTrack(t); });
-                    localVideo.srcObject = localStream;
-                    updatePipSize();
-                    diagLog('CAM re-acquired with aspect ' + camAspect.toFixed(2) + ' res=' + camR.w + 'x' + camR.h);
+                    await acquireCamera('CAM');
                 } catch(e) {
                     diagLog('CAM re-acquire failed: ' + e.message);
                     S.video = false;
@@ -983,7 +1004,7 @@
                     mediaRecorder.stop(); recorderStarted = false;
                 }
             } else if (recorderStarted || S.video) {
-                restartMediaRecorder();
+                restartMediaRecorder('settings');
             }
             updateResLabels();
             camToggling = false;
@@ -998,34 +1019,25 @@
 
             if (S.video) {
                 try {
-                    // Сохраняем аспект и разрешение текущего трека до остановки
+                    // Сохраняем разрешение текущего трека до переключения
                     var oldVt = localStream.getVideoTracks()[0];
-                    var camAspect = 4 / 3;
                     var curW = 0, curH = 0;
+                    var curAspect = 4 / 3;
                     if (oldVt) {
                         var oldVs = oldVt.getSettings();
                         if (oldVs.width && oldVs.height) {
-                            camAspect = oldVs.width / oldVs.height;
+                            curAspect = oldVs.width / oldVs.height;
                             curW = oldVs.width;
                             curH = oldVs.height;
                         }
                     }
-                    localStream.getVideoTracks().forEach(function(t) { t.stop(); localStream.removeTrack(t); });
-                    // Запрашиваем с тем же аспектом и mpx
-                    var camR = applyMpx(camAspect, 1, S.mpx);
-                    var newStream = await navigator.mediaDevices.getUserMedia({
-                        video: addFrameRateConstraint({ width: { ideal: camR.w }, height: { ideal: camR.h }, aspectRatio: { ideal: camAspect }, facingMode: S.facingMode }),
-                        audio: false
-                    });
-                    newStream.getVideoTracks().forEach(function(t) { localStream.addTrack(t); });
-                    localVideo.srcObject = localStream;
-                    updatePipSize();
+                    await acquireCamera('FLIP');
                     // Если было точное разрешение — применяем его через applyConstraints
                     if (curW > 0 && curH > 0) {
                         var newVt = localStream.getVideoTracks()[0];
                         if (newVt) {
                             try {
-                                await newVt.applyConstraints(addFrameRateConstraint({ width: { ideal: curW }, height: { ideal: curH }, aspectRatio: { ideal: camAspect } }));
+                                await newVt.applyConstraints(addFrameRateConstraint({ width: { ideal: curW }, height: { ideal: curH }, aspectRatio: { ideal: curAspect } }));
                             } catch(acErr) {
                                 diagLog('FLIP applyConstraints failed: ' + acErr.message);
                             }
@@ -1040,7 +1052,7 @@
             }
 
             applySettings(); saveSettings(); sendSettings();
-            if (recorderStarted || S.video) restartMediaRecorder();
+            if (recorderStarted || S.video) restartMediaRecorder('settings');
             updateResLabels();
             flipToggling = false;
         });
@@ -1152,34 +1164,48 @@
                     updatePipSize();
                     isScreenSharing = true;
                     S.isScreenSharing = true;
-                    // Переводим видео собеседника в нативный PiP, чтобы видеть его при шаринге экрана
-                    try { await remoteVideo.requestPictureInPicture(); } catch(pipErr) { diagLog('PiP request failed: ' + pipErr.message); }
+                    // Запоминаем состояние камеры и микрофона до шаринга
+                    videoBeforeScreenShare = S.video;
+                    audioBeforeScreenShare = S.audio;
+                    // Display track активен — Cam кнопка зелёная (toggle enabled/disabled)
+                    S.video = true;
+                    if (S.audio) {
+                        S.audio = false;
+                        localStream.getAudioTracks().forEach(function(t) { t.stop(); localStream.removeTrack(t); });
+                        diagLog('MIC muted for screen share');
+                    }
                     // Когда пользователь остановит шаринг через браузерный UI
                     displayTrack.onended = function() {
                         isScreenSharing = false;
                         S.isScreenSharing = false;
-                        // Выходим из нативного PiP
-                        try { document.exitPictureInPicture(); } catch(pipErr) {}
-                        // Переключаемся обратно на камеру
-                        localStream.getVideoTracks().forEach(function(t) { t.stop(); localStream.removeTrack(t); });
-                        S.video = true;
+                        // Переключаемся обратно на камеру (если была включена)
+                        S.video = videoBeforeScreenShare;
                         (async function() {
-                            try {
-                                var camR = applyMpx(4 / 3, 1, S.mpx);
-                                var newStream = await navigator.mediaDevices.getUserMedia({
-                                    video: addFrameRateConstraint({ width: { ideal: camR.w }, height: { ideal: camR.h }, facingMode: S.facingMode }),
-                                    audio: false
-                                });
-                                newStream.getVideoTracks().forEach(function(t) { localStream.addTrack(t); });
-                                localVideo.srcObject = localStream;
-                                updatePipSize();
-                                diagLog('CAM re-acquired after screen share ended');
-                            } catch(e2) {
-                                diagLog('CAM re-acquire after screen share failed: ' + e2.message);
-                                S.video = false;
+                            if (videoBeforeScreenShare) {
+                                try {
+                                    await acquireCamera('CAM screen end');
+                                } catch(e2) {
+                                    diagLog('CAM re-acquire after screen share failed: ' + e2.message);
+                                    S.video = false;
+                                }
+                            }
+                            // Восстанавливаем микрофон после шаринга экрана
+                            if (audioBeforeScreenShare) {
+                                try {
+                                    var restoreStream = await navigator.mediaDevices.getUserMedia({
+                                        video: false,
+                                        audio: { echoCancellation: S.ec, noiseSuppression: S.ns, autoGainControl: S.agc }
+                                    });
+                                    restoreStream.getAudioTracks().forEach(function(t) { localStream.addTrack(t); });
+                                    S.audio = true;
+                                    diagLog('MIC restored after screen share end');
+                                } catch(ae) {
+                                    diagLog('MIC restore after screen share end failed: ' + ae.message);
+                                    S.audio = false;
+                                }
                             }
                             applySettings(); saveSettings(); sendSettings();
-                            if (recorderStarted || S.video) restartMediaRecorder();
+                            if (recorderStarted || S.video) restartMediaRecorder('settings');
                             updateResLabels();
                         })();
                     };
@@ -1188,43 +1214,45 @@
                     diagLog('SCREEN share failed: ' + e.message);
                     isScreenSharing = false;
                     S.isScreenSharing = false;
-                    // Восстанавливаем камеру
-                    S.video = true;
-                    try {
-                        var camR = applyMpx(4 / 3, 1, S.mpx);
-                        var camStream = await navigator.mediaDevices.getUserMedia({
-                            video: addFrameRateConstraint({ width: { ideal: camR.w }, height: { ideal: camR.h }, facingMode: S.facingMode }),
-                            audio: false
-                        });
-                        camStream.getVideoTracks().forEach(function(t) { localStream.addTrack(t); });
-                        localVideo.srcObject = localStream;
-                        updatePipSize();
-                    } catch(e2) {
-                        diagLog('CAM re-acquire after screen share cancel failed: ' + e2.message);
-                        S.video = false;
+                    // Восстанавливаем камеру (если была включена)
+                    S.video = videoBeforeScreenShare;
+                    if (videoBeforeScreenShare) {
+                        try {
+                            await acquireCamera('CAM screen fallback');
+                        } catch(e2) {
+                            diagLog('CAM re-acquire after screen share cancel failed: ' + e2.message);
+                            S.video = false;
+                        }
                     }
                 }
             } else {
                 // Выключаем шаринг экрана — переключаемся на камеру
-                localStream.getVideoTracks().forEach(function(t) { t.stop(); localStream.removeTrack(t); });
                 isScreenSharing = false;
                 S.isScreenSharing = false;
-                // Выходим из нативного PiP
-                try { document.exitPictureInPicture(); } catch(pipErr) {}
-                S.video = true;
-                try {
-                    var camR = applyMpx(4 / 3, 1, S.mpx);
-                    var newStream = await navigator.mediaDevices.getUserMedia({
-                        video: addFrameRateConstraint({ width: { ideal: camR.w }, height: { ideal: camR.h }, facingMode: S.facingMode }),
-                        audio: false
-                    });
-                    newStream.getVideoTracks().forEach(function(t) { localStream.addTrack(t); });
-                    localVideo.srcObject = localStream;
-                    updatePipSize();
-                    diagLog('CAM re-acquired after screen share toggle off');
-                } catch(e) {
-                    diagLog('CAM re-acquire after screen share toggle off failed: ' + e.message);
-                    S.video = false;
+                S.video = videoBeforeScreenShare;
+                if (videoBeforeScreenShare) {
+                    try {
+                        await acquireCamera('CAM screen off');
+                        diagLog('CAM re-acquired after screen share toggle off');
+                    } catch(e) {
+                        diagLog('CAM re-acquire after screen share toggle off failed: ' + e.message);
+                        S.video = false;
+                    }
+                }
+                // Восстанавливаем микрофон после шаринга экрана
+                if (audioBeforeScreenShare) {
+                    try {
+                        var restoreStream2 = await navigator.mediaDevices.getUserMedia({
+                            video: false,
+                            audio: { echoCancellation: S.ec, noiseSuppression: S.ns, autoGainControl: S.agc }
+                        });
+                        restoreStream2.getAudioTracks().forEach(function(t) { localStream.addTrack(t); });
+                        S.audio = true;
+                        diagLog('MIC restored after screen share toggle off');
+                    } catch(ae2) {
+                        diagLog('MIC restore after screen share toggle off failed: ' + ae2.message);
+                        S.audio = false;
+                    }
                 }
             }
             applySettings(); saveSettings(); sendSettings();
@@ -1233,7 +1261,7 @@
                     mediaRecorder.stop(); recorderStarted = false;
                 }
             } else if (recorderStarted || S.video || isScreenSharing) {
-                restartMediaRecorder();
+                restartMediaRecorder('settings');
             }
             updateResLabels();
             screenToggling = false;
@@ -1255,6 +1283,7 @@
         vp8Btn.addEventListener('click', function(e) {
             e.stopPropagation();
             S.vp8 = !S.vp8;
+            if (S.vp8 && S.aac) S.aac = false; // VP8 и AAC взаимоисключающие
             applySettings(); saveSettings(); sendSettings();
         });
         h264Btn.addEventListener('click', function(e) {
@@ -1270,6 +1299,7 @@
         aacBtn.addEventListener('click', function(e) {
             e.stopPropagation();
             S.aac = !S.aac;
+            if (S.aac && S.vp8) S.vp8 = false; // AAC и VP8 взаимоисключающие
             applySettings(); saveSettings(); sendSettings();
         });
         // Аудио фильтры
@@ -1338,23 +1368,59 @@
                     var bufEnd = remoteVideo.buffered.end(remoteVideo.buffered.length - 1);
                     var bufStart = remoteVideo.buffered.start(0);
                     var ct = remoteVideo.currentTime;
-                    var behind = bufEnd - ct;
+                    var behind = Math.max(BEHIND_MIN, bufEnd - ct);
                     currentBehind = behind;
                     var now = Date.now();
                     var isStalled = remoteVideo.readyState < 3;
+
+                    // Адаптивный BUST = SLOMO + K1×√(chunkMed) + K2×√(lastChunkSize), EWMA-сглаженный
+                    if (chunkMed > 100 && lastChunkSize > 0) {
+                        var bustTarget = SLOMO + K_BUST_MED * Math.sqrt(chunkMed) + K_BUST_CHUNK * Math.sqrt(lastChunkSize);
+                        if (bustEwma === 0) {
+                            bustEwma = bustTarget; // первый замер — без сглаживания
+                        } else {
+                            bustEwma = bustEwma + BUST_EWMA_ALPHA * (bustTarget - bustEwma);
+                        }
+                        BUST = bustEwma;
+                        EMERGENCY_BEHIND = BUST * 2;
+                        localStorage.setItem('vc_bustEwma', bustEwma.toFixed(4));
+                    }
+
+                    // Периодический лог статистики гистерезиса (закомментирован — переменные не участвуют в формулах)
+                    // if (now - _lastHystLogTime >= HYST_LOG_INTERVAL_MS) {
+                    //     diagLog('HYST chunk=' + lastChunkSize +
+                    //         ' behind=' + behind.toFixed(3) +
+                    //         ' rate=' + remoteVideo.playbackRate.toFixed(2) +
+                    //         ' SLOMO=' + SLOMO.toFixed(2) +
+                    //         ' BUST=' + BUST.toFixed(3) +
+                    //         ' EMER=' + EMERGENCY_BEHIND.toFixed(3) +
+                    //         ' bustEwma=' + bustEwma.toFixed(3) +
+                    //         ' buf=[' + bufStart.toFixed(1) + '-' + bufEnd.toFixed(1) + ']' +
+                    //         ' ct=' + ct.toFixed(1) +
+                    //         ' stall=' + (isStalled ? 1 : 0) +
+                    //         ' qLen=' + mseQueueLength() +
+                    //         ' chunkMin=' + chunkMin +
+                    //         ' chunkMed=' + chunkMed +
+                    //         ' chunkMax=' + chunkMax +
+                    //         ' recvKbps=' + recvKbps +
+                    //         ' appends=' + diagMSEAppends);
+                    //     _lastHystLogTime = now;
+                    // }
 
                     // 3. Трёхзонный playbackRate: торможение / 1.0 / разгон
                     if (firstAppendDone) {
                         var newRate;
                         if (behind <= SLOMO) {
-                            // Зона торможения: пропорциональный контроллер, буфер не кончается
-                            newRate = Math.max(RATE_MIN, behind / SLOMO);
+                            // Зона торможения: экспоненциальный контроллер (√), мягче при малом behind
+                            newRate = Math.max(RATE_MIN, Math.sqrt(behind / SLOMO));
                         } else if (behind <= BUST) {
-                            // Зона стабильная: ровно 1.0
-                            newRate = 1.0;
+                            // Зона стабильная: мягкий догон от 1.0 (у SLOMO) до 1.0+SOFT_CATCHUP (у BUST)
+                            newRate = 1.0 + SOFT_CATCHUP * (behind - SLOMO) / (BUST - SLOMO);
                         } else {
-                            // Зона разгона: пропорциональный контроллер, max RATE_MAX
-                            newRate = Math.min(RATE_MAX, 1.0 + (behind - BUST) / BUST * (RATE_MAX - 1.0));
+                            // Зона разгона: экспоненциальный контроллер, max RATE_MAX
+                            // √(excess/BUST) даёт 3× больше ускорения при малом превышении BUST
+                            var excess = (behind - BUST) / BUST;
+                            newRate = Math.min(RATE_MAX, 1.0 + Math.sqrt(excess) * (RATE_MAX - 1.0));
                         }
                         remoteVideo.playbackRate = newRate;
                     }
@@ -1366,11 +1432,11 @@
                         }
                         var elapsed = (now - stallStartWallTime) / 1000;
                         var expected = stallStartCt + elapsed;
-                        if (expected > ct && expected <= bufEnd) {
+                        if (expected > ct && expected <= bufEnd - SLOMO) { // BEHIND_MIN
                             remoteVideo.currentTime = expected;
                             remoteVideo.play().catch(function(){});
                             if (now - lastStallLogTime > 1000) {
-                                diagLog('ADAPTIVE STALL seek ct=' + ct.toFixed(1) + ' -> ' + expected.toFixed(1) + ' behind=' + behind.toFixed(1) + 's');
+                                diagLog('ADAPTIVE STALL seek ct=' + ct.toFixed(1) + ' -> ' + expected.toFixed(1) + ' behind=' + behind.toFixed(1) + 's chunk=' + lastChunkSize);
                                 lastStallLogTime = now;
                             }
                         }
@@ -1378,25 +1444,30 @@
                         stallStartWallTime = 0;
                         stallStartCt = 0;
                     }
-                    // 4. currentTime вышел за начало буфера — приоритет выше emergency seek
-                    if (ct < bufStart - BUF_START_THRESHOLD && (now - lastEmergencySeekTime) > STALL_DEBOUNCE_MS) {
-                        var target4 = Math.min(bufStart + 0.1, bufEnd - 0.05);
+                    // 4. currentTime вышел за начало буфера
+                    if (ct < bufStart - BUF_START_THRESHOLD ) {
+                        var target4 = Math.min(bufStart + 0.1, bufEnd - BEHIND_MIN);
                         if (target4 > bufStart) {
                             diagLog('ADAPTIVE BUF-START seek ct=' + ct.toFixed(1) + ' -> ' + target4.toFixed(1) +
-                                ' buf=[' + bufStart.toFixed(1) + '-' + bufEnd.toFixed(1) + ']');
+                                ' buf=[' + bufStart.toFixed(1) + '-' + bufEnd.toFixed(1) + '] chunk=' + lastChunkSize);
                             remoteVideo.currentTime = target4;
-                            lastEmergencySeekTime = now;
                             remoteVideo.playbackRate = 1.0;
                             if (remoteVideo.paused) remoteVideo.play().catch(function(){});
                         }
                     } else
                     // 2. Emergency seek при большом отставании (страховка от неконтролируемого роста лага)
-                    if (behind > EMERGENCY_BEHIND && !isStalled && (now - lastEmergencySeekTime) > STALL_DEBOUNCE_MS) {
-                        var target2 = bufEnd - BUST;
-                        diagLog('ADAPTIVE EMERGENCY seek ct=' + ct.toFixed(1) + ' -> ' + target2.toFixed(1) + ' behind=' + behind.toFixed(1) + 's');
+                    // Работает и при stall — иначе stall + behind > EMERGENCY = дедлок
+                    if (behind > EMERGENCY_BEHIND) {
+                        // При stall: seek ближе к bufEnd (bufEnd - SLOMO) чтобы не уйти в отрицательный behind
+                        // При норме: seek дальше (bufEnd - BUST) для плавного catch-up
+                        var target2 = isStalled ? bufEnd - SLOMO : bufEnd - BUST;
+                        diagLog('ADAPTIVE EMERGENCY seek ct=' + ct.toFixed(1) + ' -> ' + target2.toFixed(1) +
+                            ' behind=' + behind.toFixed(1) + 's' +
+                            ' stall=' + (isStalled ? 1 : 0) +
+                            ' chunk=' + lastChunkSize + ' chunkMed=' + chunkMed);
                         remoteVideo.currentTime = target2;
-                        lastEmergencySeekTime = now;
                         remoteVideo.playbackRate = 1.0;
+                        if (remoteVideo.paused) remoteVideo.play().catch(function(){});
                     }
                 }
             } catch (e) {}
@@ -1409,7 +1480,9 @@
         // ============= Обновление метки задержки (раз в секунду) =============
         setInterval(function() {
             if (currentBehind > 0) {
-                latencyLabel.textContent = currentBehind.toFixed(1) + 's';
+                var _lt = currentBehind >= 1 ? currentBehind.toFixed(2) : currentBehind.toFixed(1);
+                if (currentBehind < 1 && _lt.charAt(0) === '0') _lt = _lt.substring(1);
+                latencyLabel.textContent = _lt;
             } else {
                 latencyLabel.textContent = '';
             }
@@ -1477,14 +1550,10 @@
             var allCandidates = [
                 'video/webm;codecs="vp8,opus"',
                 'video/webm;codecs="vp8"',
-                // 'video/webm',
                 'video/mp4;codecs="avc1.42E01E,opus"',
                 'video/mp4;codecs="avc1.42E01E,mp4a.40.2"',
-                // 'video/mp4',
                 'audio/webm;codecs="opus"',
-                // 'audio/webm',
                 'audio/mp4;codecs="mp4a.40.2"',
-                // 'audio/mp4'
             ];
             var supported = [];
             var seen = {};
@@ -1530,61 +1599,102 @@
             try {
                 var W = 320, H = 240; // default для diagLog
 
-                // Фаза 1: getUserMedia с фолбэк-аспектом 4:3 и mpx
-                var initR = applyMpx(4, 3, S.mpx);
-                W = initR.w;
-                var H = initR.h;
+                // Создаём пустой стрим — tracks будут добавлены по мере успеха
+                localStream = new MediaStream();
+                var phase2Done = false; // Флаг: acquireCamera уже делает Фазу 2
 
-                localStream = await navigator.mediaDevices.getUserMedia({
-                    video: addFrameRateConstraint({ width: { ideal: W }, height: { ideal: H }, facingMode: S.facingMode }),
-                    audio: {
-                        echoCancellation: S.ec,
-                        noiseSuppression: S.ns,
-                        autoGainControl: S.agc
+                // --- Комбинированный запрос камеры + микрофона ---
+                if (S.video && S.audio) {
+                    var initR = applyMpx(4, 3, S.mpx);
+                    W = initR.w;
+                    H = initR.h;
+                    // Один вызов вместо двух — быстрее на Linux (один cold-start медиа-стека)
+                    try {
+                        var combinedStream = await navigator.mediaDevices.getUserMedia({
+                            video: addFrameRateConstraint({ width: { ideal: W }, height: { ideal: H }, facingMode: S.facingMode }),
+                            audio: {
+                                echoCancellation: S.ec,
+                                noiseSuppression: S.ns,
+                                autoGainControl: S.agc
+                            }
+                        });
+                        combinedStream.getVideoTracks().forEach(function(t) { localStream.addTrack(t); });
+                        combinedStream.getAudioTracks().forEach(function(t) { localStream.addTrack(t); });
+                        diagLog('CAM+MIC acquired (combined)');
+                    } catch(e) {
+                        diagLog('Combined acquire failed: ' + e.name + ' ' + e.message + ', trying separate');
+                        // Fallback: раздельные вызовы
+                        try {
+                            var videoStream = await navigator.mediaDevices.getUserMedia({
+                                video: addFrameRateConstraint({ width: { ideal: W }, height: { ideal: H }, facingMode: S.facingMode }),
+                                audio: false
+                            });
+                            videoStream.getVideoTracks().forEach(function(t) { localStream.addTrack(t); });
+                            diagLog('CAM acquired (fallback)');
+                        } catch(ve) {
+                            diagLog('CAM not available: ' + ve.name + ' ' + ve.message);
+                            S.video = false;
+                        }
+                        try {
+                            var audioStream = await navigator.mediaDevices.getUserMedia({
+                                video: false,
+                                audio: {
+                                    echoCancellation: S.ec,
+                                    noiseSuppression: S.ns,
+                                    autoGainControl: S.agc
+                                }
+                            });
+                            audioStream.getAudioTracks().forEach(function(t) { localStream.addTrack(t); });
+                            diagLog('MIC acquired (fallback)');
+                        } catch(ae) {
+                            diagLog('MIC not available: ' + ae.name + ' ' + ae.message);
+                            S.audio = false;
+                        }
                     }
-                });
+                } else if (S.video) {
+                    // Только камера — используем acquireCamera (включает Фазу 2)
+                    try {
+                        await acquireCamera('CAM');
+                        var vs = localStream.getVideoTracks()[0].getSettings();
+                        W = vs.width || W;
+                        H = vs.height || H;
+                        phase2Done = true;
+                    } catch(e) {
+                        diagLog('CAM not available: ' + e.name + ' ' + e.message);
+                        S.video = false;
+                    }
+                } else if (S.audio) {
+                    // Только микрофон
+                    try {
+                        var audioStream = await navigator.mediaDevices.getUserMedia({
+                            video: false,
+                            audio: {
+                                echoCancellation: S.ec,
+                                noiseSuppression: S.ns,
+                                autoGainControl: S.agc
+                            }
+                        });
+                        audioStream.getAudioTracks().forEach(function(t) { localStream.addTrack(t); });
+                        diagLog('MIC acquired');
+                    } catch(e) {
+                        diagLog('MIC not available: ' + e.name + ' ' + e.message);
+                        S.audio = false;
+                    }
+                }
+
                 localVideo.srcObject = localStream;
                 updatePipSize();
 
+                // Предупреждение если нет ни камеры ни микрофона — но звонок продолжается (можно шарить экран)
+                if (!S.video && !S.audio) {
+                    diagLog('INIT no camera and no microphone, continuing (screen share available)');
+                }
+
                 // Фаза 2: уточняем разрешение по нативному аспекту камеры + mpx
-                var camCaps = getCameraCapabilities();
-                var vtInit = localStream.getVideoTracks()[0];
-                if (vtInit) {
-                    var vsInit = vtInit.getSettings();
-                    diagLog('CAM init settings: ' + vsInit.width + 'x' + vsInit.height + ' fps=' + (vsInit.frameRate || 'n/a'));
-
-                    // Определяем нативный аспект камеры
-                    // Приоритет: реальные настройки трека (учитывают ориентацию устройства),
-                    // затем capabilities сенсора (всегда ландшафт!), затем fallback 4:3
-                    var initAspect = 4 / 3;
-                    if (vsInit.width && vsInit.height) {
-                        initAspect = vsInit.width / vsInit.height;
-                        diagLog('CAM init aspect from settings: ' + initAspect.toFixed(2) + ' (' + vsInit.width + 'x' + vsInit.height + ')');
-                    } else if (camCaps && camCaps.maxW > 0 && camCaps.maxH > 0) {
-                        initAspect = camCaps.maxW / camCaps.maxH;
-                        diagLog('CAM caps: ' + camCaps.minW + '-' + camCaps.maxW + 'x' + camCaps.minH + '-' + camCaps.maxH + ' step=' + camCaps.stepW + 'x' + camCaps.stepH + ' aspect=' + initAspect.toFixed(2));
-                    } else {
-                        diagLog('CAM caps: NOT AVAILABLE, using fallback aspect=' + initAspect.toFixed(2));
-                    }
-
-                    // Пересчитываем разрешение по нативному аспекту + mpx
-                    var initR2 = applyMpx(initAspect, 1, S.mpx);
-                    W = initR2.w;
-                    H = initR2.h;
-
-                    // Применяем уточнённое разрешение
-                    try {
-                        await vtInit.applyConstraints(addFrameRateConstraint({ width: { ideal: W }, height: { ideal: H }, aspectRatio: { ideal: initAspect } }));
-                        vsInit = vtInit.getSettings();
-                        diagLog('CAM init aspect=' + initAspect.toFixed(2) + ' res=' + vsInit.width + 'x' + vsInit.height);
-                    } catch(e) { diagLog('CAM aspect apply failed: ' + e.message); }
-
-                    if (typeof vtInit.getCapabilities === 'function') {
-                        try {
-                            var fullCaps = vtInit.getCapabilities();
-                            diagLog('CAM full capabilities: ' + JSON.stringify(fullCaps));
-                        } catch(e) { diagLog('CAM getCapabilities error: ' + e.message); }
-                    }
+                // Пропускаем если уже сделано через acquireCamera()
+                if (!phase2Done && localStream.getVideoTracks().length > 0) {
+                    var refined = await refineCameraResolution('CAM init');
+                    if (refined) { W = refined.w; H = refined.h; }
                 }
 
                 // Если камера/микрофон выключены — освободить соответствующие треки из localStream
@@ -1597,44 +1707,30 @@
                     diagLog('MIC released (init with audio off)');
                 }
 
+                applySettings(); saveSettings();
+
                 var myCodecs = detectSupportedCodecs();
                 diagLog('CODECS supported: ' + myCodecs.map(codecDisplayName).join(' | '));
 
                 var createResult = await tryCreateRoom();
                 isCreator = createResult.created;
-                diagLog('INIT peer=' + (isCreator ? 'host' : 'guest') + ' cam=' + W + 'x' + H);
 
                 isActive = true; // Разрешаем hangup во время ожидания пира
                 if (isCreator) {
                     myPeerID = 'host';
                     remotePeerID = 'guest';
-                    _chatUserId = myPeerID + '_' + getBrowserTag();
-                    localStorage.setItem('chatUserId', _chatUserId);
-                    waitingOverlay.classList.remove('hidden');
-                    waitingText.textContent = 'Waiting for peer to join...';
-                    var joined = null;
-                    while (!joined && isActive) {
-                        try {
-                            joined = await waitForPeer();
-                        } catch(e) {}
-                        if (!joined) await new Promise(function(r) { setTimeout(r, 2000); });
-                    }
-                    waitingOverlay.classList.add('hidden');
-                    if (!isActive) return; // Hangup нажат во время ожидания
                 } else {
                     myPeerID = 'guest';
                     remotePeerID = 'host';
-                    _chatUserId = myPeerID + '_' + getBrowserTag();
-                    localStorage.setItem('chatUserId', _chatUserId);
-                    await joinRoom();
                 }
+                diagLog('INIT peer=' + myPeerID + ' cam=' + W + 'x' + H + ' video=' + S.video + ' audio=' + S.audio);
+                _chatUserId = myPeerID + '_' + getBrowserTag();
+                localStorage.setItem('chatUserId', _chatUserId);
                 await startCall();
             } catch (err) {
                 isActive = false;
                 console.error('Init error:', err);
-                if (err.name === 'NotAllowedError') showError('Camera and microphone access denied.');
-                else if (err.name === 'NotFoundError') showError('No camera or microphone found.');
-                else showError('Error: ' + err.message);
+                showError('Error: ' + err.message);
             }
         }
 
@@ -1650,28 +1746,6 @@
                 var data = await resp.json();
                 return { created: data.status === 'created' };
             } catch (e) { return { created: false }; }
-        }
-
-        async function waitForPeer() {
-            try {
-                var resp = await fetch('/api/call/wait?room=' + encodeURIComponent(roomID));
-                if (!resp.ok) return false;
-                var data = await resp.json();
-                if (data.status === 'joined') return data;
-                return false;
-            } catch (e) { return false; }
-        }
-
-        async function joinRoom() {
-            try {
-                var resp = await fetch('/api/call/join', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ room: roomID })
-                });
-                if (!resp.ok) return null;
-                return await resp.json();
-            } catch (e) { return null; }
         }
 
         async function sendChunk(data) {
@@ -1724,23 +1798,6 @@
             }
         }
 
-        var RES_TOLERANCE = 32;
-        async function applyMinResolution(myW, myH, peerW, peerH) {
-            var newW = Math.min(myW, peerW);
-            var newH = Math.min(myH, peerH);
-            if (myW - newW <= RES_TOLERANCE && myH - newH <= RES_TOLERANCE) return;
-            if (newW < myW || newH < myH) {
-                var vt = localStream.getVideoTracks();
-                if (vt.length > 0) {
-                    try {
-                        await vt[0].applyConstraints(addFrameRateConstraint({ width: { ideal: newW }, height: { ideal: newH } }));
-                        var s = vt[0].getSettings();
-                        diagLog('RES applied ' + s.width + 'x' + s.height);
-                    } catch (e) { diagLog('RES apply failed: ' + e.message); }
-                }
-            }
-        }
-
         // ============= Camera capabilities + findBestResolution =============
         // Возвращает { minW, maxW, stepW, minH, maxH, stepH } или null
         function getCameraCapabilities() {
@@ -1761,6 +1818,66 @@
                 } catch(e) {}
             }
             return null;
+        }
+
+        // ============= Уточнение разрешения камеры (Фаза 2) =============
+        // Определяет нативный аспект камеры, пересчитывает разрешение по mpx,
+        // применяет applyConstraints. Возвращает { w, h } или null.
+        // Используется как из acquireCamera(), так и из init().
+        async function refineCameraResolution(logPrefix) {
+            logPrefix = logPrefix || 'CAM';
+            var vt = localStream ? localStream.getVideoTracks()[0] : null;
+            if (!vt) return null;
+            var camCaps = getCameraCapabilities();
+            var vs = vt.getSettings();
+            diagLog(logPrefix + ' phase1 settings: ' + vs.width + 'x' + vs.height + ' fps=' + (vs.frameRate || 'n/a'));
+            // Определяем нативный аспект камеры
+            var aspect = 4 / 3;
+            if (vs.width && vs.height) {
+                aspect = vs.width / vs.height;
+                diagLog(logPrefix + ' aspect from settings: ' + aspect.toFixed(2) + ' (' + vs.width + 'x' + vs.height + ')');
+            } else if (camCaps && camCaps.maxW > 0 && camCaps.maxH > 0) {
+                aspect = camCaps.maxW / camCaps.maxH;
+                diagLog(logPrefix + ' caps: ' + camCaps.minW + '-' + camCaps.maxW + 'x' + camCaps.minH + '-' + camCaps.maxH + ' step=' + camCaps.stepW + 'x' + camCaps.stepH + ' aspect=' + aspect.toFixed(2));
+            } else {
+                diagLog(logPrefix + ' caps: NOT AVAILABLE, using fallback aspect=' + aspect.toFixed(2));
+            }
+            // Пересчитываем разрешение по нативному аспекту + mpx
+            var refined = applyMpx(aspect, 1, S.mpx);
+            try {
+                await vt.applyConstraints(addFrameRateConstraint({ width: { ideal: refined.w }, height: { ideal: refined.h }, aspectRatio: { ideal: aspect } }));
+                vs = vt.getSettings();
+                diagLog(logPrefix + ' phase2 aspect=' + aspect.toFixed(2) + ' res=' + vs.width + 'x' + vs.height);
+            } catch(e) { diagLog(logPrefix + ' phase2 apply failed: ' + e.message); }
+            if (typeof vt.getCapabilities === 'function') {
+                try {
+                    var fullCaps = vt.getCapabilities();
+                    diagLog(logPrefix + ' full capabilities: ' + JSON.stringify(fullCaps));
+                } catch(e) { diagLog(logPrefix + ' getCapabilities error: ' + e.message); }
+            }
+            return { w: refined.w, h: refined.h };
+        }
+
+        // ============= Двухфазное получение камеры =============
+        // Фаза 1: getUserMedia с fallback-аспектом 4:3 + mpx
+        // Фаза 2: уточнение через refineCameraResolution()
+        // Останавливает старые video tracks, получает новые, добавляет в localStream
+        // Бросает исключение при ошибке (caller ловит и ставит S.video=false)
+        async function acquireCamera(logPrefix) {
+            logPrefix = logPrefix || 'CAM';
+            // Останавливаем старые video tracks
+            localStream.getVideoTracks().forEach(function(t) { t.stop(); localStream.removeTrack(t); });
+            // Фаза 1: getUserMedia с fallback-аспектом 4:3 и mpx
+            var camR = applyMpx(4, 3, S.mpx);
+            var newStream = await navigator.mediaDevices.getUserMedia({
+                video: addFrameRateConstraint({ width: { ideal: camR.w }, height: { ideal: camR.h }, facingMode: S.facingMode }),
+                audio: false
+            });
+            newStream.getVideoTracks().forEach(function(t) { localStream.addTrack(t); });
+            localVideo.srcObject = localStream;
+            updatePipSize();
+            // Фаза 2: уточняем разрешение
+            await refineCameraResolution(logPrefix);
         }
 
         // Находит максимальное нативное разрешение <= mpx мегапикселей
@@ -1852,10 +1969,86 @@
         }
 
         // ============= Обработка настроек пира =============
-        function handlePeerSettings(msg, initial) {
+        async function handlePeerSettings(msg, initial) {
             var prev = peerSettings;
             peerSettings = msg;
+            if (msg.role === remotePeerID) { try { localStorage.setItem('vc_peerSettings', JSON.stringify(msg)); } catch(e) {} }
             if (!isActive || !localStream) return;
+
+            // === PRIVACY: управление Mic/Cam на основе кодеков пира ===
+            var peerNoAudio = msg.opus === false && msg.aac === false;
+            var peerNoVideo = msg.vp8 === false && msg.h264 === false;
+
+            // Пир отключил все аудио кодеки → выключаем свой Mic (если ещё включён)
+            if (peerNoAudio && S.audio) {
+                diagLog('PRIVACY: peer disabled all audio codecs, turning off my Mic');
+                S.audio = false;
+                audioDisabledByPrivacy = true;
+                localStream.getAudioTracks().forEach(function(t) { t.stop(); localStream.removeTrack(t); });
+                applySettings(); saveSettings();
+                if (!S.audio && !S.video) {
+                    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                        mediaRecorder.stop(); recorderStarted = false;
+                    }
+                } else if (recorderStarted) {
+                    restartMediaRecorder('settings');
+                }
+            }
+            // Пир включил хотя бы один аудио кодек обратно → включаем Mic (если был выключен пиром, а не автором)
+            if (!peerNoAudio && audioDisabledByPrivacy && !S.audio) {
+                diagLog('PRIVACY: peer re-enabled audio codecs, turning my Mic back on');
+                audioDisabledByPrivacy = false;
+                S.audio = true;
+                try {
+                    var newAudioStream = await navigator.mediaDevices.getUserMedia({
+                        video: false,
+                        audio: { echoCancellation: S.ec, noiseSuppression: S.ns, autoGainControl: S.agc }
+                    });
+                    newAudioStream.getAudioTracks().forEach(function(t) { localStream.addTrack(t); });
+                    diagLog('MIC re-acquired (privacy restore)');
+                } catch(e) {
+                    diagLog('MIC re-acquire failed (privacy restore): ' + e.message);
+                    S.audio = false;
+                }
+                applySettings(); saveSettings(); sendSettings();
+                if (recorderStarted || S.audio) {
+                    restartMediaRecorder('settings');
+                }
+            }
+
+            // Пир отключил все видео кодеки → выключаем свою Cam (если ещё включена)
+            if (peerNoVideo && S.video) {
+                diagLog('PRIVACY: peer disabled all video codecs, turning off my Cam');
+                S.video = false;
+                videoDisabledByPrivacy = true;
+                localStream.getVideoTracks().forEach(function(t) { t.stop(); localStream.removeTrack(t); });
+                applySettings(); saveSettings();
+                if (!S.audio && !S.video) {
+                    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                        mediaRecorder.stop(); recorderStarted = false;
+                    }
+                } else if (recorderStarted) {
+                    restartMediaRecorder('settings');
+                }
+            }
+            // Пир включил хотя бы один видео кодек обратно → включаем Cam (если была выключена пиром, а не автором)
+            if (!peerNoVideo && videoDisabledByPrivacy && !S.video) {
+                diagLog('PRIVACY: peer re-enabled video codecs, turning my Cam back on');
+                videoDisabledByPrivacy = false;
+                S.video = true;
+                try {
+                    await acquireCamera('CAM privacy');
+                    diagLog('CAM re-acquired (privacy restore)');
+                } catch(e) {
+                    diagLog('CAM re-acquire failed (privacy restore): ' + e.message);
+                    S.video = false;
+                }
+                applySettings(); saveSettings(); sendSettings();
+                if (recorderStarted || S.video) {
+                    restartMediaRecorder('settings');
+                }
+                updateResLabels();
+            }
 
             // Извлекаем размеры MSE-окна пира для аспект-соотношения
             var newPeerDisplayW = 0, newPeerDisplayH = 0;
@@ -1950,8 +2143,6 @@
             var settingsChanged = false;
             if (prev) {
                 if (
-                    // prev.wantAudio !== msg.wantAudio ||
-                    // prev.wantVideo !== msg.wantVideo ||
                     prev.vp8 !== msg.vp8 ||
                     prev.h264 !== msg.h264 ||
                     prev.opus !== msg.opus ||
@@ -1972,22 +2163,32 @@
                 }
             } else if (settingsChanged || wasStopped) {
                 diagLog('REC restart: settings=' + settingsChanged + ' stopped=' + wasStopped);
-                restartMediaRecorder();
+                restartMediaRecorder(settingsChanged ? 'settings' : 'stopped');
             }
         }
 
-        function restartMediaRecorder() {
-            // onstop закроет файл после последнего ondataavailable
-            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-                mediaRecorder.stop();
-            } else {
-                if (isActive) setupMediaRecorder();
-            }
+        function restartMediaRecorder(reason) {
+            if (recorderRestartTimer) { clearTimeout(recorderRestartTimer); recorderRestartTimer = null; }
+            recorderRestartTimer = setTimeout(function() {
+                recorderRestartTimer = null;
+                if (!isActive) return;
+                // Если рекордер уже записывает и причина только wasStopped — пропускаем
+                // (рекордер уже перезапустился через onstop auto-restart)
+                if (reason !== 'settings' && mediaRecorder && mediaRecorder.state === 'recording') {
+                    diagLog('REC restart skipped: already recording, reason=' + reason);
+                    return;
+                }
+                // onstop закроет файл после последнего ondataavailable
+                if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                    mediaRecorder.stop();
+                } else {
+                    setupMediaRecorder();
+                }
+            }, RECORDER_RESTART_DEBOUNCE_MS);
         }
 
         // ============= WebSocket =============
         function connectWS() {
-            if (wsReconnectTimer) { clearTimeout(wsReconnectTimer); wsReconnectTimer = null; }
             if (!isActive) return;
             var proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
             var wsURL = proto + '//' + location.host + '/api/call/ws?room=' + encodeURIComponent(roomID) + '&peer=' + encodeURIComponent(myPeerID);
@@ -1996,9 +2197,31 @@
             catch (e) { diagLog('WS create error: ' + e.message); return; }
             ws.onopen = function() {
                 wsConnected = true;
-                diagLog('WS connected');
-                // Отправляем свои настройки пиру при подключении
-                sendSettings();
+                diagLog('WS connected role=' + (isCreator ? 'host' : 'guest'));
+                if (isCreator) {
+                    echo = true; // хост в эхо-режиме пока не придут settings от гостя
+                    // Host: загружаем сохранённые peer settings для немедленного старта рекордера
+                    var savedPeerSettings = null;
+                    try { savedPeerSettings = JSON.parse(localStorage.getItem('vc_peerSettings')); } catch(e) {}
+                    if (savedPeerSettings) {
+                        diagLog('PEER settings restored from localStorage');
+                        handlePeerSettings(savedPeerSettings, false);
+                    } else {
+                        // Fallback: используем свои настройки как peer settings (эхо-режим / первый запуск)
+                        var fallbackSettings = JSON.parse(JSON.stringify(S));
+                        fallbackSettings.cmd = 'settings';
+                        fallbackSettings.role = remotePeerID;
+                        fallbackSettings.recordCodecs = detectAllRecordCodecs();
+                        fallbackSettings.playCodecs = detectSupportedCodecs();
+                        try { localStorage.setItem('vc_peerSettings', JSON.stringify(fallbackSettings)); } catch(e) {}
+                        diagLog('PEER settings fallback from own S');
+                        handlePeerSettings(fallbackSettings, false);
+                    }
+                    // Запускаем рекордер без sendSettings — хост не инициирует обмен
+                } else {
+                    // Guest: отправляем свои настройки хосту, он ответит своими
+                    sendSettings();
+                }
             };
             ws.onmessage = function(event) {
                 if (event.data instanceof ArrayBuffer) {
@@ -2012,15 +2235,13 @@
                         try {
                             var msg = JSON.parse(event.data);
                             if (msg.cmd === 'settings') {
-                                diagLog('PEER settings: a=' + msg.audio + ' v=' + msg.video + ' wa=' + msg.wantAudio + ' wv=' + msg.wantVideo);
-                                var initial = !peerSettings && peerSettingsResolve;
-                                handlePeerSettings(msg, initial);
-                                // Резолвим ожидание первых настроек
-                                if (peerSettingsResolve) {
-                                    var resolve = peerSettingsResolve;
-                                    peerSettingsResolve = null;
-                                    resolve(peerSettings);
+                                diagLog('PEER settings: role=' + msg.role + ' a=' + msg.audio + ' v=' + msg.video + ' wa=' + msg.wantAudio + ' wv=' + msg.wantVideo);
+                                if (echo && msg.role === 'guest') {
+                                    echo = false;
+                                    sendSettings(); // отвечаем однократно
+                                    restartMediaRecorder('settings'); // рестарт → свежий initCodec гостю
                                 }
+                                handlePeerSettings(msg, false);
                             } else if (msg.cmd === 'initCodec') {
                                 // Единственная точка управления MSE: создание и пересоздание
                                 diagLog('RECV initCodec=' + (msg.codec || 'null') + ' mseRestarting=' + mseRestarting + ' mediaSource=' + !!mediaSource + ' readyState=' + (mediaSource ? mediaSource.readyState : 'none') + ' currentMseCodec=' + codecDisplayName(currentMseCodec));
@@ -2076,7 +2297,7 @@
                             } else if (msg.cmd === 'restartRecorder') {
                                 // Пир просит перезапустить наш рекордер
                                 diagLog('PEER requested recorder restart');
-                                restartMediaRecorder();
+                                restartMediaRecorder('settings');
                             } else if (msg.cmd === 'myRes') {
                                 // Пир сообщает своё текущее разрешение камеры (для remoteResLabel)
                                 if (msg.width > 0 && msg.height > 0) {
@@ -2091,7 +2312,7 @@
             ws.onclose = function(event) {
                 wsConnected = false;
                 diagLog('WS closed code=' + event.code);
-                if (isActive) { wsReconnectTimer = setTimeout(function() { connectWS(); }, WS_RECONNECT_MS); }
+                if (isActive) hangup();
             };
             ws.onerror = function() {};
         }
@@ -2109,16 +2330,33 @@
             diagRecvBytes += data.byteLength;
             if (mseCriticalTriggered) return;
 
-            // Адаптивный catch-up: измеряем джиттер прибытия чанков
-            var now = performance.now();
-            if (liveLastChunkTime > 0) {
-                var interval = (now - liveLastChunkTime) / 1000; // секунды
-                var expectedInterval = CHUNK_INTERVAL_MS / 1000;
-                var deviation = Math.abs(interval - expectedInterval);
-                // EWMA сглаживание
-                liveJitter = EWMA_ALPHA * deviation + (1 - EWMA_ALPHA) * liveJitter;
+            // Статистика чанков для анализа гистерезиса
+            lastChunkSize = data.byteLength;
+            recvChunkSizes.push(data.byteLength);
+            if (recvChunkSizes.length > RECV_CHUNK_WINDOW) recvChunkSizes.shift();
+
+            // Пересчитываем статистику окна
+            if (recvChunkSizes.length >= 5) {
+                var sorted = recvChunkSizes.slice().sort(function(a,b){return a-b;});
+                // chunkMin = sorted[0]; // закомментирован — не участвует в формулах
+                chunkMed = sorted[Math.floor(sorted.length / 2)];
+                // chunkMax = sorted[sorted.length - 1]; // закомментирован — не участвует в формулах
             }
-            liveLastChunkTime = now;
+
+            // Оценка битрейта приёма (каждые 2 сек) — закомментирована: recvKbps не участвует в формулах
+            // var nowBr = Date.now();
+            // if (recvKbpsLastTime === 0) {
+            //     recvKbpsLastTime = nowBr;
+            //     recvKbpsLastBytes = diagRecvBytes;
+            // } else {
+            //     var dtBr = (nowBr - recvKbpsLastTime) / 1000;
+            //     if (dtBr >= 2) {
+            //         var bytesBr = diagRecvBytes - recvKbpsLastBytes;
+            //         recvKbps = Math.round((bytesBr * 8) / dtBr / 1000);
+            //         recvKbpsLastTime = nowBr;
+            //         recvKbpsLastBytes = diagRecvBytes;
+            //     }
+            // }
 
             // Запись remote video: пишем чанк в файл
             if (peerRecActive && peerRecWritable) {
@@ -2141,7 +2379,6 @@
         }
 
         function disconnectWS() {
-            if (wsReconnectTimer) { clearTimeout(wsReconnectTimer); wsReconnectTimer = null; }
             if (ws) {
                 ws.onclose = null; ws.onerror = null; ws.onmessage = null;
                 if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) ws.close();
@@ -2153,49 +2390,15 @@
         // ============= Звонок =============
         async function startCall() {
             isActive = true;
-            // 1. Готовимся принять настройки пира ДО подключения WS (чтобы не пропустить)
-            if (!peerSettings) {
-                peerSettingsResolve = null;
-                var settingsPromise = new Promise(function(resolve) { peerSettingsResolve = resolve; });
-            }
-            // 2. Подключаем WS
             connectWS();
-            // 3. Ждём пока WS подключится (до 10 секунд)
-            var waitStart = Date.now();
-            while (!wsConnected && isActive && (Date.now() - waitStart < 10000)) {
-                await new Promise(function(r) { setTimeout(r, 100); });
-            }
-            if (!wsConnected) {
-                diagLog('WS connect timeout');
-                showError('WebSocket connection failed');
-                peerSettingsResolve = null;
-                return;
-            }
-            // 4. Ждём настройки пира (до 5 секунд) — чтобы знать кодек и разрешение до старта
-            if (!peerSettings) {
-                diagLog('Waiting for peer settings...');
-                var timeoutPromise = new Promise(function(resolve) { setTimeout(function() { resolve(null); }, 5000); });
-                var firstSettings = await Promise.race([settingsPromise, timeoutPromise]);
-                peerSettingsResolve = null;
-                if (firstSettings) {
-                    diagLog('Got peer settings, codec=' + codecDisplayName(recordCodec) + ' incoming=' + codecDisplayName(incomingCodec));
-                } else {
-                    diagLog('Peer settings timeout, using defaults');
-                }
-            } else {
-                diagLog('Peer settings already received, codec=' + codecDisplayName(recordCodec) + ' incoming=' + codecDisplayName(incomingCodec));
-            }
-            if (!isActive) return;
-            // 5. MSE создаётся из cmd:initCodec handler — не здесь
-            // 6. Запускаем запись с известным recordCodec и разрешением
-            recorderStarted = true;
-            setupMediaRecorder();
         }
 
         // ============= MSE =============
         function setupMSE() {
             var codec = incomingCodec || negotiatedCodec || detectCodec();
             diagLog('MSE setup codec=' + codecDisplayName(codec) + ' muted=' + remoteVideo.muted + ' wantAudio=' + S.wantAudio);
+            // Очищаем очередь — устаревшие чанки без init-сегмента вызовут MSE error
+            mseQueue = []; mseQueueReadIdx = 0;
             mseRestarting = true; // сбросится в sourceopen
             try { if (remoteVideo.src && remoteVideo.src.startsWith('blob:')) URL.revokeObjectURL(remoteVideo.src); } catch(e) {}
             mediaSource = new MediaSource();
@@ -2205,7 +2408,6 @@
                 try {
                     sourceBuffer = mediaSource.addSourceBuffer(codec);
                     sourceBuffer.mode = 'segments';
-                    // sourceBuffer.mode = 'sequence';
                     sourceBuffer.addEventListener('updateend', function() { onMSEUpdateEnd(); });
                     sourceBuffer.addEventListener('error', function() {
                         diagMSEErrors++;
@@ -2228,6 +2430,26 @@
 
 
         function onMSEUpdateEnd() {
+            // Обрезание старого буфера — после успешного appendBuffer
+            if (remoteVideo.buffered.length > 0 && sourceBuffer && !sourceBuffer.updating) {
+                var bufStart = remoteVideo.buffered.start(0);
+                var bufEnd = remoteVideo.buffered.end(remoteVideo.buffered.length - 1);
+
+                if (bufEnd - bufStart > MAX_BUFFER_SEC) {
+                    var removeEnd = bufEnd - MAX_BUFFER_SEC;
+                    // Не обрезаем ближе 2 секунд от currentTime — иначе playback уйдёт за начало буфера
+                    var ct = remoteVideo.currentTime;
+                    var safeEnd = ct - 2;
+                    if (safeEnd < bufStart) safeEnd = bufStart;
+                    if (removeEnd > safeEnd) removeEnd = safeEnd;
+                    if (removeEnd > bufStart) {
+                        try {
+                            // diagLog('BUF TRIM [' + bufStart.toFixed(1) + '-' + removeEnd.toFixed(1) + '] buf=[' + bufStart.toFixed(1) + '-' + bufEnd.toFixed(1) + '] ct=' + ct.toFixed(1));
+                            sourceBuffer.remove(bufStart, removeEnd);
+                        } catch(e) {}
+                    }
+                }
+            }
             processMSEQueue();
         }
 
@@ -2286,10 +2508,16 @@
             diagLog('MSE RESTART (teardown — codec change)');
 
             // Сброс адаптивных параметров
-            liveLastChunkTime = 0;
-            liveJitter = 0.1;
-            lastEmergencySeekTime = 0;
             try { remoteVideo.playbackRate = 1.0; } catch(e) {}
+            lastChunkSize = 0;
+            recvChunkSizes = [];
+            // chunkMin = 0; chunkMax = 0; // закомментированы — не участвуют в формулах
+            chunkMed = 0;
+            // recvKbps = 0;               // закомментирован — не участвует в формулах
+            // recvKbpsLastBytes = 0;
+            // recvKbpsLastTime = 0;
+            // _lastHystLogTime = 0;
+            // BUST/bustEwma НЕ сбрасываем — при MSE RESTART разрешение то же, опыт сохраняется
 
             // Очистка старого MSE
             mseReady = false;
@@ -2321,11 +2549,15 @@
             var w = settings.width || 320;
             var h = settings.height || 240;
 
-            // При выключенном видео — выбираем audio-only кодек
+            // При выключенном видео — выбираем audio-only кодек с учётом кнопок Opus/AAC
             var codec;
             if (!S.video && S.audio) {
-                var audioCodecs = ['audio/webm;codecs="opus"', 'audio/mp4;codecs="mp4a.40.2"', 'audio/webm'];
-                codec = 'audio/webm;codecs="opus"';
+                var audioCodecs = [];
+                if (peerSettings && peerSettings.opus) audioCodecs.push('audio/webm;codecs="opus"');
+                if (peerSettings && peerSettings.aac) audioCodecs.push('audio/mp4;codecs="mp4a.40.2"');
+                if (!audioCodecs.length) audioCodecs.push('audio/webm;codecs="opus"', 'audio/mp4;codecs="mp4a.40.2"');
+                audioCodecs.push('audio/webm'); // fallback
+                codec = audioCodecs[0];
                 for (var i = 0; i < audioCodecs.length; i++) {
                     if (typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(audioCodecs[i])) {
                         codec = audioCodecs[i];
@@ -2334,7 +2566,15 @@
                 }
                 diagLog('REC audio-only codec=' + codecDisplayName(codec));
             } else {
-                codec = recordCodec || negotiatedCodec || detectCodec();
+                // Если recordCodec/negotiatedCodec audio-only но есть видео-треки — используем detectCodec()
+                var hasVideoTrack = !!videoTrack;
+                var candidate = recordCodec || negotiatedCodec;
+                if (candidate && candidate.indexOf('audio/') === 0 && hasVideoTrack) {
+                    codec = detectCodec();
+                    diagLog('REC codec override: ' + codecDisplayName(candidate) + ' is audio-only but video track present, using ' + codecDisplayName(codec));
+                } else {
+                    codec = candidate || detectCodec();
+                }
                 diagLog('REC codec=' + codecDisplayName(codec) + ' res=' + w + 'x' + h);
             }
             updateResLabels();
@@ -2362,6 +2602,8 @@
                 if (recErrorCount >= 3 && S.video) camBtn.click();
             };
             mediaRecorder.onstart = function() {
+                // Отменяем отложенный рестарт — рекордер уже работает
+                if (recorderRestartTimer) { clearTimeout(recorderRestartTimer); recorderRestartTimer = null; }
                 var recMime = mediaRecorder.mimeType;
                 recMimeType = recMime;
                 recStartPending = false;  // рекордер перезапустился — следующие чанки пишем в файл
@@ -2421,7 +2663,7 @@
                     localStorage.setItem('vc_peerW', remoteNativeW);
                     localStorage.setItem('vc_peerH', remoteNativeH);
                 }
-                localStorage.setItem('vc_fitMode', remoteFitMode);
+                localStorage.setItem('vc_fitMode', remoteFitMode + (remoteMirrored ? 4 : 0));
                 saveSettings();
             } catch(e) {}
         }
