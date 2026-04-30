@@ -138,6 +138,8 @@
             width: fit-content;
             margin: 0 auto;
             z-index: 16;
+            pointer-events: auto;
+            cursor: pointer;
         }
         /* Показ кнопок через классы (десктоп + мобильные) */
         body.show-main-controls .controls-panel { opacity: 1; }
@@ -272,6 +274,13 @@
             display: none;
         }
         .error-banner.show { display: block; }
+        /* Отладочный ряд */
+        .debug-row { display: none; }
+        body.show-debug .debug-row { display: flex; }
+        .debug-row #bustDownBtn,
+        .debug-row #bustUpBtn,
+        .debug-row #slomoDownBtn,
+        .debug-row #slomoUpBtn { background: #555; }
     </style>
 </head>
 <body>
@@ -313,6 +322,16 @@
                     <button type="button" class="ctrl-btn codec" id="ecBtn" title="Echo Cancellation">EC</button>
                     <button type="button" class="ctrl-btn codec" id="nsBtn" title="Noise Suppression">NS</button>
                     <button type="button" class="ctrl-btn codec" id="agcBtn" title="Auto Gain Control">AGC</button>
+                </div>
+                <!-- Ряд 4: Отладка SS A[ BUST SLOMO -->
+                <div class="controls-row debug-row" id="debugRow">
+                    <button type="button" class="ctrl-btn codec emoji" id="ssBtn" title="Stall Seek">▶️</button>
+                    <button type="button" class="ctrl-btn codec" id="adaptiveBtn" title="Adaptive BUST">[A]</button>
+                    <button type="button" class="ctrl-btn codec emoji" id="bustDownBtn" title="BUST -0.1">🔽</button>
+                    <button type="button" class="ctrl-btn codec emoji" id="bustUpBtn" title="BUST +0.1">🔼</button>
+                    <span class="res-label" id="debugValLabel">[.0~.0]</span>
+                    <button type="button" class="ctrl-btn codec emoji" id="slomoDownBtn" title="SLOMO -0.1">🔽</button>
+                    <button type="button" class="ctrl-btn codec emoji" id="slomoUpBtn" title="SLOMO +0.1">🔼</button>
                 </div>
                 </div>
             </div>
@@ -593,8 +612,9 @@
         var firstAppendDone = false;
 
         // ============= Адаптивный catch-up =============
-        var SLOMO_MS = 400;                   // нижняя граница зоны 1.0 (мс)
-        var SLOMO = SLOMO_MS / 1000;          // в секундах (фиксирован)
+        var SLOMO_MS = 1000;                   // нижняя граница зоны 1.0 (мс)
+        var SLOMO_FIXED = SLOMO_MS / 1000;    // фиксированная база для EWMA
+        var SLOMO = SLOMO_FIXED;              // адаптируется: BUST/2 в adaptive, manualSLOMO в manual
         var K_BUST_MED = 0.005;               // BUST базовая линия: K × √(chunkMed)
         var K_BUST_CHUNK = 0.003;             // BUST реактивность: K × √(lastChunkSize)
         var BUST_EWMA_ALPHA = 0.1;            // скорость адаптации BUST (EWMA factor)
@@ -607,6 +627,59 @@
         var BEHIND_MIN = 0.5;                  // минимальное расстояние от live edge (сек)
         var SOFT_CATCHUP = 0.03;               // мягкий догон в stable zone: rate до 1.03 у границы BUST
         var BUF_START_THRESHOLD = CHUNK_INTERVAL_MS / 1000 * 2; // порог BUF-START seek (2 чанка)
+
+        // ============= Отладочные настройки адаптивного режима =============
+        var SS = true;           // Stall Seek включён
+        var adaptiveBust = true; // Адаптивный BUST через EWMA
+        var manualBUST = 0.8;    // Ручной BUST (когда adaptiveBust=false)
+        var manualSLOMO = 0.4;   // Ручной SLOMO (когда adaptiveBust=false)
+
+        function loadAdaptiveSettings() {
+            try {
+                var a = JSON.parse(localStorage.getItem('vc_adaptive') || '{}');
+                if (a.SS !== undefined) SS = a.SS;
+                if (a.adaptiveBust !== undefined) adaptiveBust = a.adaptiveBust;
+                if (a.manualBUST !== undefined) manualBUST = a.manualBUST;
+                if (a.manualSLOMO !== undefined) manualSLOMO = a.manualSLOMO;
+            } catch(e) {}
+            if (!adaptiveBust) {
+                BUST = manualBUST;
+                SLOMO = manualSLOMO;
+                EMERGENCY_BEHIND = BUST * 2;
+            }
+        }
+        function saveAdaptiveSettings() {
+            try { localStorage.setItem('vc_adaptive', JSON.stringify({
+                SS: SS, adaptiveBust: adaptiveBust, manualBUST: manualBUST, manualSLOMO: manualSLOMO
+            })); } catch(e) {}
+        }
+        function applyDebugSettings() {
+            var ssBtn = document.getElementById('ssBtn');
+            var adaptiveBtn = document.getElementById('adaptiveBtn');
+            var bustDownBtn = document.getElementById('bustDownBtn');
+            var bustUpBtn = document.getElementById('bustUpBtn');
+            var slomoDownBtn = document.getElementById('slomoDownBtn');
+            var slomoUpBtn = document.getElementById('slomoUpBtn');
+            var debugValLabel = document.getElementById('debugValLabel');
+            if (!ssBtn) return;
+            ssBtn.classList.toggle('off', !SS);
+            adaptiveBtn.classList.toggle('off', !adaptiveBust);
+            var manualDisabled = adaptiveBust;
+            bustDownBtn.classList.toggle('off', manualDisabled);
+            bustUpBtn.classList.toggle('off', manualDisabled);
+            slomoDownBtn.classList.toggle('off', manualDisabled);
+            slomoUpBtn.classList.toggle('off', manualDisabled);
+            bustDownBtn.textContent = manualDisabled ? '▼' : '🔽';
+            bustUpBtn.textContent = manualDisabled ? '▲' : '🔼';
+            slomoDownBtn.textContent = manualDisabled ? '▼' : '🔽';
+            slomoUpBtn.textContent = manualDisabled ? '▲' : '🔼';
+            var curBUST = adaptiveBust ? BUST : manualBUST;
+            var curSLOMO = adaptiveBust ? BUST / 2 : manualSLOMO;
+            var bStr = curBUST >= 1 ? curBUST.toFixed(1) : curBUST.toFixed(1).replace(/^0/, '');
+            var sStr = curSLOMO >= 1 ? curSLOMO.toFixed(1) : curSLOMO.toFixed(1).replace(/^0/, '');
+            debugValLabel.textContent = '[' + bStr + '~' + sStr + ']';
+        }
+        loadAdaptiveSettings();
 
         var stallStartWallTime = 0;       // Date.now() момента начала stall
         var stallStartCt = 0;             // currentTime в момент начала stall
@@ -1319,6 +1392,52 @@
             applySettings(); saveSettings(); sendSettings();
         });
 
+        // ============= Отладочные кнопки адаптивного режима =============
+        latencyLabel.addEventListener('click', function(e) {
+            e.stopPropagation();
+            document.body.classList.toggle('show-debug');
+            applyDebugSettings();
+        });
+        document.getElementById('ssBtn').addEventListener('click', function(e) {
+            e.stopPropagation();
+            SS = !SS;
+            saveAdaptiveSettings(); applyDebugSettings();
+        });
+        document.getElementById('adaptiveBtn').addEventListener('click', function(e) {
+            e.stopPropagation();
+            adaptiveBust = !adaptiveBust;
+            if (!adaptiveBust) {
+                manualBUST = BUST;
+                manualSLOMO = SLOMO;
+            }
+            saveAdaptiveSettings(); applyDebugSettings();
+        });
+        document.getElementById('bustDownBtn').addEventListener('click', function(e) {
+            e.stopPropagation();
+            if (adaptiveBust) return;
+            manualBUST = Math.max(0.1, +(manualBUST - 0.1).toFixed(1));
+            saveAdaptiveSettings(); applyDebugSettings();
+        });
+        document.getElementById('bustUpBtn').addEventListener('click', function(e) {
+            e.stopPropagation();
+            if (adaptiveBust) return;
+            manualBUST = Math.min(5.0, +(manualBUST + 0.1).toFixed(1));
+            saveAdaptiveSettings(); applyDebugSettings();
+        });
+        document.getElementById('slomoDownBtn').addEventListener('click', function(e) {
+            e.stopPropagation();
+            if (adaptiveBust) return;
+            manualSLOMO = Math.max(0.1, +(manualSLOMO - 0.1).toFixed(1));
+            saveAdaptiveSettings(); applyDebugSettings();
+        });
+        document.getElementById('slomoUpBtn').addEventListener('click', function(e) {
+            e.stopPropagation();
+            if (adaptiveBust) return;
+            manualSLOMO = Math.min(manualBUST, +(manualSLOMO + 0.1).toFixed(1));
+            saveAdaptiveSettings(); applyDebugSettings();
+        });
+        applyDebugSettings();
+
         hangupBtn.addEventListener('click', function() { hangup(); });
 
         if (!roomID) {
@@ -1356,9 +1475,11 @@
             diagLog('STAT sent:' + (diagSentBytes / 1024).toFixed(0) + 'KB' +
                 ' recv:' + (diagRecvBytes / 1024).toFixed(0) + 'KB' +
                 ' appends:' + diagMSEAppends + ' errs:' + diagMSEErrors +
-                ' buf:' + bufInfo + ' ct:' + ct + paused + waiting);
+                ' buf:' + bufInfo + ' ct:' + ct + paused + waiting +
+                ' BUST=' + BUST.toFixed(3) + ' SLOMO=' + SLOMO.toFixed(3) +
+                ' behind=' + currentBehind.toFixed(3));
         }
-        // setInterval(function() { diagStats(); }, 30000);
+        setInterval(function() { diagStats(); }, 30000);
 
         // ============= Экстренный seek + линейный rate контроль =============
         setInterval(function() {
@@ -1373,17 +1494,24 @@
                     var now = Date.now();
                     var isStalled = remoteVideo.readyState < 3;
 
-                    // Адаптивный BUST = SLOMO + K1×√(chunkMed) + K2×√(lastChunkSize), EWMA-сглаженный
-                    if (chunkMed > 100 && lastChunkSize > 0) {
-                        var bustTarget = SLOMO + K_BUST_MED * Math.sqrt(chunkMed) + K_BUST_CHUNK * Math.sqrt(lastChunkSize);
-                        if (bustEwma === 0) {
-                            bustEwma = bustTarget; // первый замер — без сглаживания
-                        } else {
-                            bustEwma = bustEwma + BUST_EWMA_ALPHA * (bustTarget - bustEwma);
+                    // Адаптивный BUST = SLOMO_FIXED + K1×√(chunkMed) + K2×√(lastChunkSize), EWMA-сглаженный
+                    if (adaptiveBust) {
+                        if (chunkMed > 100 && lastChunkSize > 0) {
+                            var bustTarget = SLOMO_FIXED + K_BUST_MED * Math.sqrt(chunkMed) + K_BUST_CHUNK * Math.sqrt(lastChunkSize);
+                            if (bustEwma === 0) {
+                                bustEwma = bustTarget; // первый замер — без сглаживания
+                            } else {
+                                bustEwma = bustEwma + BUST_EWMA_ALPHA * (bustTarget - bustEwma);
+                            }
+                            BUST = bustEwma;
+                            SLOMO = BUST / 2;
+                            EMERGENCY_BEHIND = BUST * 2;
+                            localStorage.setItem('vc_bustEwma', bustEwma.toFixed(4));
                         }
-                        BUST = bustEwma;
+                    } else {
+                        BUST = manualBUST;
+                        SLOMO = manualSLOMO;
                         EMERGENCY_BEHIND = BUST * 2;
-                        localStorage.setItem('vc_bustEwma', bustEwma.toFixed(4));
                     }
 
                     // Периодический лог статистики гистерезиса (закомментирован — переменные не участвуют в формулах)
@@ -1425,7 +1553,7 @@
                         remoteVideo.playbackRate = newRate;
                     }
                     // 1. Stall seek: каждый тик сикаем на предполагаемое время
-                    if (isStalled) {
+                    if (SS && isStalled) {
                         if (stallStartWallTime === 0) {
                             stallStartWallTime = now;
                             stallStartCt = ct;
@@ -1486,6 +1614,7 @@
             } else {
                 latencyLabel.textContent = '';
             }
+            if (document.body.classList.contains('show-debug')) applyDebugSettings();
         }, 1000);
 
         // ============= Кодеки — строим из зелёных кнопок =============
