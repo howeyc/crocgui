@@ -371,22 +371,64 @@
         }
         var recBtn = document.getElementById('recBtn');
         var isRecording = false;
-        var recordWritable = null;     // FileSystemWritableFileStream
+        var recordWritable = null;     // FileSystemWritableFileStream (OPFS)
         var recMimeType = '';          // MIME-тип текущего рекордера (для расширения файла)
         var recStartPending = false;   // флаг: рекордер перезапускается для начала записи (нужен init-сегмент)
-        // Скрываем кнопку записи если File System Access API недоступно
-        if (!('showSaveFilePicker' in window)) {
-            recBtn.style.display = 'none';
-        }
+        var recFileHandle = null;      // OPFS FileSystemFileHandle
+        var recFileName = '';          // имя файла для скачивания
         // Запись видео собеседника (remote)
         var peerRecBtn = document.getElementById('peerRecBtn');
         var isPeerRecording = false;
         var peerRecPending = false;    // ожидаем init-сегмент после restartRecorder
         var peerRecActive = false;     // активно пишем чанки в файл
-        var peerRecWritable = null;    // FileSystemWritableFileStream
-        if (!('showSaveFilePicker' in window)) {
+        var peerRecWritable = null;    // FileSystemWritableFileStream (OPFS)
+        var peerRecFileHandle = null;  // OPFS FileSystemFileHandle
+        var peerRecFileName = '';      // имя файла для скачивания
+        // Скрываем кнопки записи если OPFS недоступно
+        var opfsAvailable = !!navigator.storage && typeof navigator.storage.getDirectory === 'function';
+        if (!opfsAvailable) {
+            recBtn.style.display = 'none';
             peerRecBtn.style.display = 'none';
         }
+        // Создание файла в OPFS для записи
+        async function openOPFSRecFile(mimeType) {
+            var ext = mimeType && mimeType.indexOf('mp4') !== -1 ? '.mp4' : '.webm';
+            var fileName = new Date().toISOString().replace(/-/g, '').replace('T', '_').replace(/:/g, '').replace(/\..+$/, '') + ext;
+            var opfsRoot = await navigator.storage.getDirectory();
+            var fileHandle = await opfsRoot.getFileHandle(fileName, { create: true });
+            var writable = await fileHandle.createWritable();
+            return { fileHandle: fileHandle, writable: writable, fileName: fileName };
+        }
+        // Скачивание файла из OPFS (без удаления — cleanOPFS почистит при загрузке)
+        async function downloadOPFSFile(fileHandle, fileName) {
+            try {
+                var file = await fileHandle.getFile();
+                var a = document.createElement('a');
+                a.href = URL.createObjectURL(file);
+                a.download = fileName;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                diagLog('REC FILE downloaded: ' + fileName + ' (' + file.size + ' bytes)');
+            } catch(err) {
+                diagLog('REC FILE download error: ' + err.message);
+            }
+        }
+        // Очистка OPFS от stale файлов записи (маска: YYYYMMDD_HHMMSS.webm|.mp4)
+        async function cleanOPFS() {
+            if (!opfsAvailable) return;
+            try {
+                var root = await navigator.storage.getDirectory();
+                var recFileRe = /^\d{8}_\d{6}\.(webm|mp4)$/;
+                // @ts-ignore
+                for await (var entry of root.values()) {
+                    if (recFileRe.test(entry.name)) {
+                        try { await root.removeEntry(entry.name); } catch(e) {}
+                    }
+                }
+            } catch(e) {}
+        }
+        cleanOPFS();
         var hangupBtn = document.getElementById('hangupBtn');
         var remoteMuteBtn = document.getElementById('remoteMuteBtn');
         var remoteScreenBtn = document.getElementById('remoteScreenBtn');
@@ -1129,7 +1171,7 @@
             updateResLabels();
             flipToggling = false;
         });
-        // recBtn — запись в файл через File System Access API
+        // recBtn — запись в файл через OPFS
         recBtn.addEventListener('click', async function(e) {
             e.stopPropagation();
             if (isRecording) {
@@ -1143,17 +1185,12 @@
                     mediaRecorder.stop(); // ondataavailable запишет последний чанк, onstop закроет файл
                 }
             } else {
-                // Начало записи — открываем файл и перезапускаем рекордер для init-сегмента
+                // Начало записи — открываем OPFS файл и перезапускаем рекордер для init-сегмента
                 try {
-                    var recExt = recMimeType && recMimeType.indexOf('mp4') !== -1 ? '.mp4' : '.webm';
-                    var recMimeForPicker = recMimeType && recMimeType.indexOf('mp4') !== -1 ? 'video/mp4' : 'video/webm';
-                    var recAcceptObj = {};
-                    recAcceptObj[recMimeForPicker] = [recExt];
-                    var fileHandle = await window.showSaveFilePicker({
-                        suggestedName: new Date().toISOString().replace(/-/g, '').replace('T', '_').replace(/:/g, '').replace(/\..+$/, '') + recExt,
-                        types: [{ description: 'Video', accept: recAcceptObj }]
-                    });
-                    recordWritable = await fileHandle.createWritable();
+                    var recFile = await openOPFSRecFile(recMimeType);
+                    recFileHandle = recFile.fileHandle;
+                    recFileName = recFile.fileName;
+                    recordWritable = recFile.writable;
                     isRecording = true;
                     S.isRecording = true;
                     recStartPending = true;
@@ -1166,14 +1203,12 @@
                         setupMediaRecorder(); // рекордер неактивен — запустим напрямую
                     }
                 } catch (err) {
-                    if (err.name !== 'AbortError') {
-                        diagLog('REC FILE error: ' + err.message);
-                    }
+                    diagLog('REC FILE error: ' + err.message);
                 }
             }
             showAllControls();
         });
-        // peerRecBtn — запись видео собеседника (remote) через прямое сохранение чанков
+        // peerRecBtn — запись видео собеседника (remote) через OPFS
         peerRecBtn.addEventListener('click', async function(e) {
             e.stopPropagation();
             if (isPeerRecording) {
@@ -1189,17 +1224,12 @@
                     try { ws.send(JSON.stringify({ cmd: 'restartRecorder' })); } catch(e) {}
                 }
             } else {
-                // Старт — открыть файл, отправить restartRecorder пиру для получения init-сегмента
+                // Старт — открыть OPFS файл, отправить restartRecorder пиру для получения init-сегмента
                 try {
-                    var peerExt = incomingCodec && incomingCodec.indexOf('mp4') !== -1 ? '.mp4' : '.webm';
-                    var peerMime = peerExt === '.mp4' ? 'video/mp4' : 'video/webm';
-                    var peerAcceptObj = {};
-                    peerAcceptObj[peerMime] = [peerExt];
-                    var fileHandle = await window.showSaveFilePicker({
-                        suggestedName: new Date().toISOString().replace(/-/g, '').replace('T', '_').replace(/:/g, '').replace(/\..+$/, '') + peerExt,
-                        types: [{ description: 'Video', accept: peerAcceptObj }]
-                    });
-                    peerRecWritable = await fileHandle.createWritable();
+                    var peerFile = await openOPFSRecFile(incomingCodec);
+                    peerRecFileHandle = peerFile.fileHandle;
+                    peerRecFileName = peerFile.fileName;
+                    peerRecWritable = peerFile.writable;
                     isPeerRecording = true;
                     S.isPeerRecording = true;
                     peerRecPending = true;
@@ -1212,9 +1242,7 @@
                         try { ws.send(JSON.stringify({ cmd: 'restartRecorder' })); } catch(e) {}
                     }
                 } catch (err) {
-                    if (err.name !== 'AbortError') {
-                        diagLog('PEER REC FILE error: ' + err.message);
-                    }
+                    diagLog('PEER REC FILE error: ' + err.message);
                 }
             }
             showAllControls();
@@ -2407,7 +2435,7 @@
                                         peerRecBtn.textContent = '🔴';
                                         diagLog('PEER REC started — writing chunks');
                                     } else {
-                                        // Любой initCodec при активной записи или ожидании стопа — закрыть файл
+                                        // Любой initCodec при активной записи или ожидании стопа — закрыть файл и скачать
                                         diagLog('PEER REC stopped by initCodec');
                                         isPeerRecording = false;
                                         S.isPeerRecording = false;
@@ -2418,8 +2446,17 @@
                                         saveSettings(); sendSettings();
                                         if (peerRecWritable) {
                                             var pw = peerRecWritable;
+                                            var pfh = peerRecFileHandle;
+                                            var pfn = peerRecFileName;
                                             peerRecWritable = null;
-                                            pw.close().catch(function(){});
+                                            peerRecFileHandle = null;
+                                            peerRecFileName = '';
+                                            pw.close().then(function() {
+                                                diagLog('PEER REC FILE saved to OPFS');
+                                                if (pfh && pfn) downloadOPFSFile(pfh, pfn);
+                                            }).catch(function(err) {
+                                                diagLog('PEER REC FILE close error: ' + err.message);
+                                            });
                                         }
                                     }
                                 }
@@ -2790,15 +2827,20 @@
                 // Закрываем файл если он открыт и это не перезапуск для записи (recStartPending)
                 if (recordWritable && !recStartPending) {
                     var writer = recordWritable;
+                    var fh = recFileHandle;
+                    var fn = recFileName;
                     recordWritable = null;
+                    recFileHandle = null;
+                    recFileName = '';
                     isRecording = false;
                     S.isRecording = false;
-                recBtn.classList.remove('recording', 'pending');
-                recBtn.textContent = '⏺';
-                saveSettings(); sendSettings();
+                    recBtn.classList.remove('recording', 'pending');
+                    recBtn.textContent = '⏺';
+                    saveSettings(); sendSettings();
                     try {
                         await writer.close();
-                        diagLog('REC FILE saved successfully');
+                        diagLog('REC FILE saved to OPFS');
+                        if (fh && fn) await downloadOPFSFile(fh, fn);
                     } catch(err) {
                         diagLog('REC FILE close error: ' + err.message);
                     }
@@ -2847,6 +2889,8 @@
             if (recordWritable) {
                 var w = recordWritable;
                 recordWritable = null;
+                recFileHandle = null;
+                recFileName = '';
                 w.close().catch(function() {});
             }
             // Закрываем файл записи собеседника если открыт
@@ -2861,6 +2905,8 @@
             if (peerRecWritable) {
                 var pw = peerRecWritable;
                 peerRecWritable = null;
+                peerRecFileHandle = null;
+                peerRecFileName = '';
                 pw.close().catch(function() {});
             }
             if (isScreenSharing) {
