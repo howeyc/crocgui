@@ -487,6 +487,10 @@
         };
         var videoDevices = [];       // список videoinput устройств (для десктопа)
         var currentDeviceIndex = -1; // индекс текущей камеры в videoDevices
+        var cameraNativeMaxW = 0;    // нативный максимум ширины камеры (из getCameraCapabilities)
+        var cameraNativeMaxH = 0;    // нативный максимум высоты камеры (из getCameraCapabilities)
+        var FALLBACK_ASPECT_W = 16;  // fallback-аспект если неизвестен нативный
+        var FALLBACK_ASPECT_H = 9;
 
         function loadSettings() {
             try {
@@ -609,7 +613,16 @@
             saveSettings();
             sendSettings();
           }
-        mpx12Btn.addEventListener('click', function(e) { e.stopPropagation(); setMpx(0.5); });
+        mpx12Btn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            if (Math.abs(S.mpx - 0.5) < 0.01) {
+                // Уже активно — выставляем максимальное разрешение камеры (или 1920x1080)
+                var maxMpx = cameraNativeMaxW > 0 ? (cameraNativeMaxW * cameraNativeMaxH / 1000000) : 2.1;
+                setMpx(maxMpx);
+            } else {
+                setMpx(0.5);
+            }
+        });
         mpx15Btn.addEventListener('click', function(e) { e.stopPropagation(); setMpx(0.2); });
         mpx110Btn.addEventListener('click', function(e) { e.stopPropagation(); setMpx(0.1); });
         mpx120Btn.addEventListener('click', function(e) { e.stopPropagation(); setMpx(0.05); });
@@ -795,7 +808,9 @@
         // Единая точка формирования video constraints для getUserMedia
         // На десктопе с несколькими камерами — по deviceId, иначе — по facingMode
         function buildCameraConstraints() {
-            var camR = applyMpx(4, 3, S.mpx);
+            var aspectW = cameraNativeMaxW > 0 ? cameraNativeMaxW : FALLBACK_ASPECT_W;
+            var aspectH = cameraNativeMaxH > 0 ? cameraNativeMaxH : FALLBACK_ASPECT_H;
+            var camR = clampToCameraMax(applyMpx(aspectW, aspectH, S.mpx));
             var constraints = { width: { ideal: camR.w }, height: { ideal: camR.h } };
             if (isDesktop && videoDevices.length > 1 && currentDeviceIndex >= 0 && videoDevices[currentDeviceIndex]) {
                 constraints.deviceId = { exact: videoDevices[currentDeviceIndex].deviceId };
@@ -985,7 +1000,7 @@
             if (pipHeight < 40) pipHeight = 92; // fallback десктоп
             // Определяем аспект: сначала из track settings (учитывает портрет/ландшафт),
             // затем из videoWidth/Height (fallback если стрим ещё не готов)
-            var aspect = 4 / 3;
+            var aspect = FALLBACK_ASPECT_W / FALLBACK_ASPECT_H;
             if (localStream) {
                 var vt = localStream.getVideoTracks()[0];
                 if (vt) {
@@ -995,7 +1010,7 @@
                     }
                 }
             }
-            if (aspect === 4 / 3 && localVideo.videoWidth > 0 && localVideo.videoHeight > 0) {
+            if (aspect === FALLBACK_ASPECT_W / FALLBACK_ASPECT_H && localVideo.videoWidth > 0 && localVideo.videoHeight > 0) {
                 aspect = localVideo.videoWidth / localVideo.videoHeight;
             }
             var pipWidth = Math.round(pipHeight * aspect);
@@ -1205,7 +1220,7 @@
             // Сохраняем разрешение текущего трека до переключения
             var oldVt = localStream.getVideoTracks()[0];
             var curW = 0, curH = 0;
-            var curAspect = 4 / 3;
+            var curAspect = FALLBACK_ASPECT_W / FALLBACK_ASPECT_H;
             if (oldVt) {
                 var oldVs = oldVt.getSettings();
                 if (oldVs.width && oldVs.height) {
@@ -1252,17 +1267,8 @@
                 }
             }
 
-            // Если было точное разрешение — применяем его через applyConstraints
-            if (flipOk && curW > 0 && curH > 0) {
-                var newVt = localStream.getVideoTracks()[0];
-                if (newVt) {
-                    try {
-                        await newVt.applyConstraints(addFrameRateConstraint({ width: { ideal: curW }, height: { ideal: curH }, aspectRatio: { ideal: curAspect } }));
-                    } catch(acErr) {
-                        diagLog('FLIP applyConstraints failed: ' + acErr.message);
-                    }
-                }
-            }
+            // acquireCamera уже вызвал refineCameraResolution с правильным аспектом новой камеры,
+            // поэтому не перезаписываем разрешение старыми curW/curH от предыдущей камеры
 
             applySettings(); saveSettings(); sendSettings();
             if (recorderStarted || S.video) restartMediaRecorder('settings');
@@ -1866,7 +1872,7 @@
 
                 // --- Комбинированный запрос камеры + микрофона ---
                 if (S.video && S.audio) {
-                    var initR = applyMpx(4, 3, S.mpx);
+                    var initR = applyMpx(FALLBACK_ASPECT_W, FALLBACK_ASPECT_H, S.mpx);
                     W = initR.w;
                     H = initR.h;
                     // Один вызов вместо двух — быстрее на Linux (один cold-start медиа-стека)
@@ -2030,6 +2036,8 @@
         // ============= Разрешение =============
         async function applyDesiredResolution(dw, dh) {
             if (dw <= 0 || dh <= 0) return;
+            var clamped = clampToCameraMax({ w: dw, h: dh });
+            dw = clamped.w; dh = clamped.h;
             var videoTracks = localStream.getVideoTracks();
             if (videoTracks.length === 0) return;
             try {
@@ -2087,6 +2095,27 @@
             return null;
         }
 
+        // Обновляет cameraNativeMaxW/H из getCameraCapabilities()
+        function updateCameraNativeMax() {
+            var caps = getCameraCapabilities();
+            if (caps && caps.maxW > 0 && caps.maxH > 0) {
+                cameraNativeMaxW = caps.maxW;
+                cameraNativeMaxH = caps.maxH;
+                diagLog('CAM native max: ' + cameraNativeMaxW + 'x' + cameraNativeMaxH);
+            }
+        }
+
+        // Ограничивает разрешение {w, h} до нативного максимума камеры
+        // Если cameraNativeMaxW=0 (не зондировалось) — не ограничивает
+        // При превышении по любой оси — просто выставляет максимальные значения камеры
+        function clampToCameraMax(res) {
+            if (cameraNativeMaxW <= 0 || cameraNativeMaxH <= 0) return res;
+            if (res.w > cameraNativeMaxW || res.h > cameraNativeMaxH) {
+                return { w: cameraNativeMaxW, h: cameraNativeMaxH };
+            }
+            return res;
+        }
+
         // ============= Уточнение разрешения камеры (Фаза 2) =============
         // Определяет нативный аспект камеры, пересчитывает разрешение по mpx,
         // применяет applyConstraints. Возвращает { w, h } или null.
@@ -2096,21 +2125,26 @@
             var vt = localStream ? localStream.getVideoTracks()[0] : null;
             if (!vt) return null;
             var camCaps = getCameraCapabilities();
+            updateCameraNativeMax();
             var vs = vt.getSettings();
             diagLog(logPrefix + ' phase1 settings: ' + vs.width + 'x' + vs.height + ' fps=' + (vs.frameRate || 'n/a'));
-            // Определяем нативный аспект камеры
-            var aspect = 4 / 3;
-            if (vs.width && vs.height) {
-                aspect = vs.width / vs.height;
-                diagLog(logPrefix + ' aspect from settings: ' + aspect.toFixed(2) + ' (' + vs.width + 'x' + vs.height + ')');
+            // Определяем нативный аспект камеры: приоритет — cameraNativeMax (истинный максимум),
+            // затем camCaps, затем settings (могут быть занижены Phase 1), затем fallback 16:9
+            var aspect = FALLBACK_ASPECT_W / FALLBACK_ASPECT_H;
+            if (cameraNativeMaxW > 0 && cameraNativeMaxH > 0) {
+                aspect = cameraNativeMaxW / cameraNativeMaxH;
+                diagLog(logPrefix + ' aspect from nativeMax: ' + aspect.toFixed(2) + ' (' + cameraNativeMaxW + 'x' + cameraNativeMaxH + ')');
             } else if (camCaps && camCaps.maxW > 0 && camCaps.maxH > 0) {
                 aspect = camCaps.maxW / camCaps.maxH;
                 diagLog(logPrefix + ' caps: ' + camCaps.minW + '-' + camCaps.maxW + 'x' + camCaps.minH + '-' + camCaps.maxH + ' step=' + camCaps.stepW + 'x' + camCaps.stepH + ' aspect=' + aspect.toFixed(2));
+            } else if (vs.width && vs.height) {
+                aspect = vs.width / vs.height;
+                diagLog(logPrefix + ' aspect from settings: ' + aspect.toFixed(2) + ' (' + vs.width + 'x' + vs.height + ')');
             } else {
                 diagLog(logPrefix + ' caps: NOT AVAILABLE, using fallback aspect=' + aspect.toFixed(2));
             }
             // Пересчитываем разрешение по нативному аспекту + mpx
-            var refined = applyMpx(aspect, 1, S.mpx);
+            var refined = clampToCameraMax(applyMpx(aspect, 1, S.mpx));
             try {
                 await vt.applyConstraints(addFrameRateConstraint({ width: { ideal: refined.w }, height: { ideal: refined.h }, aspectRatio: { ideal: aspect } }));
                 vs = vt.getSettings();
@@ -2163,13 +2197,13 @@
             if (!vt) return null;
 
             if (caps) {
-                // Всегда используем нативный аспект камеры (из getSettings),
-                // а не аспект дисплея пира — камера должна захватывать в своей
-                // ориентации, отображение на пируе через CSS object-fit
+                // Аспект из cameraNativeMax (истинный максимум) или caps — стабильно,
+                // не зависит от текущего разрешения камеры (которое может быть ошибочным)
                 var aspect;
-                {
-                    var vs = vt.getSettings();
-                    aspect = (vs && vs.width && vs.height) ? vs.width / vs.height : caps.maxW / caps.maxH;
+                if (cameraNativeMaxW > 0 && cameraNativeMaxH > 0) {
+                    aspect = cameraNativeMaxW / cameraNativeMaxH;
+                } else {
+                    aspect = caps.maxW / caps.maxH;
                 }
                 var maxPixels = mpx * 1000000;
                 var lo = caps.minW, hi = caps.maxW;
@@ -2201,6 +2235,12 @@
                         hi = mid - caps.stepW;
                     }
                 }
+                // Если нативный максимум камеры укладывается в mpx — используем его
+                var maxRes = pixelsAt(caps.maxW);
+                if (maxRes.px <= maxPixels) {
+                    bestW = maxRes.w;
+                    bestH = maxRes.h;
+                }
                 // Чётность для кодирования
                 if (bestW % 2 !== 0) bestW = Math.max(caps.minW, bestW - caps.stepW);
                 if (bestH % 2 !== 0) bestH = Math.max(caps.minH, bestH - caps.stepH);
@@ -2218,17 +2258,22 @@
             }
 
             // Fallback: getSettings() → applyMpx
-            // Всегда используем нативный аспект камеры, не аспект дисплея пира
-            var s = vt.getSettings();
+            // Аспект из cameraNativeMax (стабильно), затем getSettings, затем 16:9
             var aspectW, aspectH;
-            if (s.width > 0 && s.height > 0) {
-                aspectW = s.width;
-                aspectH = s.height;
+            if (cameraNativeMaxW > 0 && cameraNativeMaxH > 0) {
+                aspectW = cameraNativeMaxW;
+                aspectH = cameraNativeMaxH;
             } else {
-                aspectW = 4;
-                aspectH = 3;
+                var s = vt.getSettings();
+                if (s.width > 0 && s.height > 0) {
+                    aspectW = s.width;
+                    aspectH = s.height;
+                } else {
+                    aspectW = FALLBACK_ASPECT_W;
+                    aspectH = FALLBACK_ASPECT_H;
+                }
             }
-            var r = applyMpx(aspectW, aspectH, mpx);
+            var r = clampToCameraMax(applyMpx(aspectW, aspectH, mpx));
             return r;
         }
 
