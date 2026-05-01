@@ -485,6 +485,8 @@
             pipCorner: 0,        // только локально, не отправляется пиру
             facingMode: 'user'   // 'user' = фронтальная, 'environment' = задняя
         };
+        var videoDevices = [];       // список videoinput устройств (для десктопа)
+        var currentDeviceIndex = -1; // индекс текущей камеры в videoDevices
 
         function loadSettings() {
             try {
@@ -518,7 +520,7 @@
             micBtn.classList.toggle('off', !S.audio);
             camBtn.classList.toggle('off', !S.video);
             screenBtn.classList.toggle('active', isScreenSharing);
-            flipBtn.classList.toggle('active', S.facingMode === 'environment');
+            flipBtn.classList.toggle('active', !isDesktop && S.facingMode === 'environment');
             // Receiver кнопки
             remoteScreenBtn.classList.toggle('off', !S.wantVideo);
             remoteVideo.style.visibility = S.wantVideo ? 'visible' : 'hidden';
@@ -778,6 +780,75 @@
         function addFrameRateConstraint(constraints) {
             constraints.frameRate = { ideal: TARGET_FPS };
             return constraints;
+        }
+
+        // ============= Перечисление видеоустройств (десктоп) =============
+        async function enumerateVideoDevices() {
+            try {
+                var devices = await navigator.mediaDevices.enumerateDevices();
+                videoDevices = devices.filter(function(d) { return d.kind === 'videoinput'; });
+            } catch(e) {
+                videoDevices = [];
+            }
+        }
+
+        // Единая точка формирования video constraints для getUserMedia
+        // На десктопе с несколькими камерами — по deviceId, иначе — по facingMode
+        function buildCameraConstraints() {
+            var camR = applyMpx(4, 3, S.mpx);
+            var constraints = { width: { ideal: camR.w }, height: { ideal: camR.h } };
+            if (isDesktop && videoDevices.length > 1 && currentDeviceIndex >= 0 && videoDevices[currentDeviceIndex]) {
+                constraints.deviceId = { exact: videoDevices[currentDeviceIndex].deviceId };
+            } else {
+                constraints.facingMode = S.facingMode;
+            }
+            return addFrameRateConstraint(constraints);
+        }
+
+        // Сохраняет текущий deviceId в localStorage (для десктопа)
+        function saveCurrentDeviceId() {
+            if (!isDesktop || currentDeviceIndex < 0 || !videoDevices[currentDeviceIndex]) return;
+            try { localStorage.setItem('vc_deviceId', videoDevices[currentDeviceIndex].deviceId); } catch(e) {}
+        }
+
+        // Восстанавливает currentDeviceIndex из сохранённого deviceId
+        async function restoreDeviceId() {
+            await enumerateVideoDevices();
+            var savedId = '';
+            try { savedId = localStorage.getItem('vc_deviceId') || ''; } catch(e) {}
+            if (savedId && videoDevices.length > 0) {
+                for (var i = 0; i < videoDevices.length; i++) {
+                    if (videoDevices[i].deviceId === savedId) {
+                        currentDeviceIndex = i;
+                        return;
+                    }
+                }
+            }
+            currentDeviceIndex = 0;
+        }
+
+        // Определяет текущее видеоустройство после получения камеры
+        async function detectCurrentDevice() {
+            await enumerateVideoDevices();
+            var vt = localStream ? localStream.getVideoTracks()[0] : null;
+            if (!vt) { currentDeviceIndex = 0; return; }
+            var curSettings = vt.getSettings();
+            if (curSettings && curSettings.deviceId) {
+                for (var i = 0; i < videoDevices.length; i++) {
+                    if (videoDevices[i].deviceId === curSettings.deviceId) {
+                        currentDeviceIndex = i;
+                        saveCurrentDeviceId();
+                        return;
+                    }
+                }
+            }
+            currentDeviceIndex = 0;
+        }
+
+        // Скрывает кнопку 🔄 на десктопе если камера всего одна
+        function updateFlipButtonVisibility() {
+            if (!isDesktop) return;
+            flipBtn.style.display = videoDevices.length <= 1 ? 'none' : '';
         }
 
         var _lastMyResText = '';
@@ -1124,45 +1195,72 @@
             updateResLabels();
             camToggling = false;
         });
-        // flipBtn — переключение фронтальная/задняя камера
+        // flipBtn — переключение камеры (десктоп: по deviceId, мобильные: по facingMode)
         var flipToggling = false;
         flipBtn.addEventListener('click', async function(e) {
             e.stopPropagation();
             if (!localStream || flipToggling || isScreenSharing) return;
             flipToggling = true;
-            S.facingMode = S.facingMode === 'user' ? 'environment' : 'user';
 
-            if (S.video) {
-                try {
-                    // Сохраняем разрешение текущего трека до переключения
-                    var oldVt = localStream.getVideoTracks()[0];
-                    var curW = 0, curH = 0;
-                    var curAspect = 4 / 3;
-                    if (oldVt) {
-                        var oldVs = oldVt.getSettings();
-                        if (oldVs.width && oldVs.height) {
-                            curAspect = oldVs.width / oldVs.height;
-                            curW = oldVs.width;
-                            curH = oldVs.height;
-                        }
+            // Сохраняем разрешение текущего трека до переключения
+            var oldVt = localStream.getVideoTracks()[0];
+            var curW = 0, curH = 0;
+            var curAspect = 4 / 3;
+            if (oldVt) {
+                var oldVs = oldVt.getSettings();
+                if (oldVs.width && oldVs.height) {
+                    curAspect = oldVs.width / oldVs.height;
+                    curW = oldVs.width;
+                    curH = oldVs.height;
+                }
+            }
+
+            var flipOk = false;
+            if (isDesktop) {
+                // Десктоп: переключение по deviceId
+                await enumerateVideoDevices();
+                if (videoDevices.length <= 1) {
+                    diagLog('FLIP: only one camera on desktop');
+                    flipToggling = false;
+                    return;
+                }
+                var prevIndex = currentDeviceIndex;
+                currentDeviceIndex = (currentDeviceIndex + 1) % videoDevices.length;
+                if (S.video) {
+                    try {
+                        await acquireCamera('FLIP');
+                        diagLog('FLIP to device: ' + (videoDevices[currentDeviceIndex] ? videoDevices[currentDeviceIndex].label : 'unknown'));
+                        saveCurrentDeviceId();
+                        flipOk = true;
+                    } catch(e) {
+                        diagLog('FLIP failed: ' + e.message);
+                        currentDeviceIndex = prevIndex;
                     }
-                    await acquireCamera('FLIP');
-                    // Если было точное разрешение — применяем его через applyConstraints
-                    if (curW > 0 && curH > 0) {
-                        var newVt = localStream.getVideoTracks()[0];
-                        if (newVt) {
-                            try {
-                                await newVt.applyConstraints(addFrameRateConstraint({ width: { ideal: curW }, height: { ideal: curH }, aspectRatio: { ideal: curAspect } }));
-                            } catch(acErr) {
-                                diagLog('FLIP applyConstraints failed: ' + acErr.message);
-                            }
-                        }
+                }
+            } else {
+                // Мобильные: переключение по facingMode
+                S.facingMode = S.facingMode === 'user' ? 'environment' : 'user';
+                if (S.video) {
+                    try {
+                        await acquireCamera('FLIP');
+                        diagLog('FLIP camera to ' + S.facingMode);
+                        flipOk = true;
+                    } catch(e) {
+                        diagLog('FLIP failed: ' + e.message);
+                        S.facingMode = S.facingMode === 'user' ? 'environment' : 'user';
                     }
-                    diagLog('FLIP camera to ' + S.facingMode);
-                } catch(e) {
-                    diagLog('FLIP failed: ' + e.message);
-                    // Откатываем
-                    S.facingMode = S.facingMode === 'user' ? 'environment' : 'user';
+                }
+            }
+
+            // Если было точное разрешение — применяем его через applyConstraints
+            if (flipOk && curW > 0 && curH > 0) {
+                var newVt = localStream.getVideoTracks()[0];
+                if (newVt) {
+                    try {
+                        await newVt.applyConstraints(addFrameRateConstraint({ width: { ideal: curW }, height: { ideal: curH }, aspectRatio: { ideal: curAspect } }));
+                    } catch(acErr) {
+                        diagLog('FLIP applyConstraints failed: ' + acErr.message);
+                    }
                 }
             }
 
@@ -1760,6 +1858,12 @@
                 localStream = new MediaStream();
                 var phase2Done = false; // Флаг: acquireCamera уже делает Фазу 2
 
+                // На десктопе: перечисляем устройства и восстанавливаем последний deviceId
+                // до первого getUserMedia, чтобы buildCameraConstraints() использовал его
+                if (isDesktop && S.video) {
+                    await restoreDeviceId();
+                }
+
                 // --- Комбинированный запрос камеры + микрофона ---
                 if (S.video && S.audio) {
                     var initR = applyMpx(4, 3, S.mpx);
@@ -1768,7 +1872,7 @@
                     // Один вызов вместо двух — быстрее на Linux (один cold-start медиа-стека)
                     try {
                         var combinedStream = await navigator.mediaDevices.getUserMedia({
-                            video: addFrameRateConstraint({ width: { ideal: W }, height: { ideal: H }, facingMode: S.facingMode }),
+                            video: buildCameraConstraints(),
                             audio: {
                                 echoCancellation: S.ec,
                                 noiseSuppression: S.ns,
@@ -1783,7 +1887,7 @@
                         // Fallback: раздельные вызовы
                         try {
                             var videoStream = await navigator.mediaDevices.getUserMedia({
-                                video: addFrameRateConstraint({ width: { ideal: W }, height: { ideal: H }, facingMode: S.facingMode }),
+                                video: buildCameraConstraints(),
                                 audio: false
                             });
                             videoStream.getVideoTracks().forEach(function(t) { localStream.addTrack(t); });
@@ -1862,6 +1966,12 @@
                 if (!S.audio) {
                     localStream.getAudioTracks().forEach(function(t) { t.stop(); localStream.removeTrack(t); });
                     diagLog('MIC released (init with audio off)');
+                }
+
+                // Определяем текущее видеоустройство (для переключения камер на десктопе)
+                if (S.video) {
+                    await detectCurrentDevice();
+                    updateFlipButtonVisibility();
                 }
 
                 applySettings(); saveSettings();
@@ -2022,14 +2132,21 @@
         // Бросает исключение при ошибке (caller ловит и ставит S.video=false)
         async function acquireCamera(logPrefix) {
             logPrefix = logPrefix || 'CAM';
-            // Останавливаем старые video tracks
-            localStream.getVideoTracks().forEach(function(t) { t.stop(); localStream.removeTrack(t); });
+            // Сохраняем старые video tracks (не останавливаем пока не получим новый стрим)
+            var oldTracks = localStream.getVideoTracks().slice();
             // Фаза 1: getUserMedia с fallback-аспектом 4:3 и mpx
-            var camR = applyMpx(4, 3, S.mpx);
-            var newStream = await navigator.mediaDevices.getUserMedia({
-                video: addFrameRateConstraint({ width: { ideal: camR.w }, height: { ideal: camR.h }, facingMode: S.facingMode }),
-                audio: false
-            });
+            var newStream;
+            try {
+                newStream = await navigator.mediaDevices.getUserMedia({
+                    video: buildCameraConstraints(),
+                    audio: false
+                });
+            } catch(e) {
+                // Не удалось получить новую камеру — старые треки живы, бросаем исключение
+                throw e;
+            }
+            // Успех — теперь безопасно заменяем старые треки
+            oldTracks.forEach(function(t) { t.stop(); localStream.removeTrack(t); });
             newStream.getVideoTracks().forEach(function(t) { localStream.addTrack(t); });
             localVideo.srcObject = localStream;
             updatePipSize();
