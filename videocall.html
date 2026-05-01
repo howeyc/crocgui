@@ -658,8 +658,8 @@
         var recorderStarted = false;
         var mediaSource = null;
         var sourceBuffer = null;
-        var MAX_MSE_QUEUE = 150;
-        var MAX_BUFFER_SEC = 30; // держим буфер в 30 секунд
+        var MAX_MSE_QUEUE = 100;
+        var MAX_BUFFER_SEC = 20; // держим буфер в 20 секунд
         var mseQueue = [];
         var mseQueueReadIdx = 0;
         var mseReady = false;
@@ -669,7 +669,7 @@
         var firstAppendDone = false;
 
         // ============= Адаптивный catch-up =============
-        var SLOMO_MS = 1000;                   // нижняя граница зоны 1.0 (мс)
+        var SLOMO_MS = 500;                   // нижняя граница зоны 1.0 (мс)
         var SLOMO_FIXED = SLOMO_MS / 1000;    // фиксированная база для EWMA
         var SLOMO = SLOMO_FIXED;              // адаптируется: BUST/2 в adaptive, manualSLOMO в manual
         var K_BUST_MED = 0.005;               // BUST базовая линия: K × √(chunkMed)
@@ -1365,6 +1365,9 @@
                     // Добавляем display track
                     var displayTrack = displayStream.getVideoTracks()[0];
                     localStream.addTrack(displayTrack);
+                    var dpr = window.devicePixelRatio || 1;
+                    cameraNativeMaxW = Math.round(screen.width * dpr);
+                    cameraNativeMaxH = Math.round(screen.height * dpr);
                     localVideo.srcObject = localStream;
                     updatePipSize();
                     isScreenSharing = true;
@@ -1605,11 +1608,11 @@
             var paused = remoteVideo.paused ? ' PAUSED' : '';
             var waiting = remoteVideo.readyState < 3 ? ' WAITING' : '';
             diagLog('STAT sent:' + (diagSentBytes / 1024).toFixed(0) + 'KB' +
-                ' recv:' + (diagRecvBytes / 1024).toFixed(0) + 'KB' +
-                ' appends:' + diagMSEAppends + ' errs:' + diagMSEErrors +
-                ' buf:' + bufInfo + ' ct:' + ct + paused + waiting +
-                ' BUST=' + BUST.toFixed(3) + ' SLOMO=' + SLOMO.toFixed(3) +
-                ' behind=' + currentBehind.toFixed(3));
+                ' recv:' + (diagRecvBytes / 1024).toFixed(0) + 'KB/' + diagMSEAppends +
+                ' errs:' + diagMSEErrors +
+                ' buf:' + bufInfo + ' ' + ct + paused + waiting +
+                ' [' + BUST.toFixed(3) + '~' + SLOMO.toFixed(3) + ']' +
+                ' ' + currentBehind.toFixed(3));
         }
         setInterval(function() { diagStats(); }, 30000);
 
@@ -2196,7 +2199,7 @@
             var vt = localStream ? localStream.getVideoTracks()[0] : null;
             if (!vt) return null;
 
-            if (caps) {
+            if (caps && !isScreenSharing) {
                 // Аспект из cameraNativeMax (истинный максимум) или caps — стабильно,
                 // не зависит от текущего разрешения камеры (которое может быть ошибочным)
                 var aspect;
@@ -2260,7 +2263,7 @@
             // Fallback: getSettings() → applyMpx
             // Аспект из cameraNativeMax (стабильно), затем getSettings, затем 16:9
             var aspectW, aspectH;
-            if (cameraNativeMaxW > 0 && cameraNativeMaxH > 0) {
+            if (cameraNativeMaxW > 0 && cameraNativeMaxH > 0 && !isScreenSharing) {
                 aspectW = cameraNativeMaxW;
                 aspectH = cameraNativeMaxH;
             } else {
