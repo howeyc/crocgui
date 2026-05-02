@@ -236,3 +236,39 @@ userr: crocgui.tar.xz
 	echo "Uninstalling from user directory..."; \
 	make user-uninstall; \
 	echo "User uninstallation completed! Removed from ~/.local/"
+
+ialt:
+	@echo "for Alt Linux..."
+	sudo apt-get update
+	sudo apt-get install -y \
+		pkg-config \
+		gcc \
+		gcc-c++ \
+		make \
+		libGL-devel \
+		libglfw-devel \
+		libX11-devel \
+		libXcursor-devel \
+		libXrandr-devel \
+		libXinerama-devel \
+		libXi-devel \
+		libXxf86vm-devel
+	@echo "Alt Linux done"
+
+ideb:
+	@echo "for Debian/Ubuntu..."
+	sudo apt-get update
+	sudo apt-get install -y \
+		pkg-config \
+		gcc \
+		g++ \
+		make \
+		libgl1-mesa-dev \
+		libglfw3-dev \
+		libgl-dev \
+		libx11-dev \
+		libxcursor-dev \
+		libxrandr-dev \
+		libxinerama-dev \
+		libxi-dev
+	@echo "Debian/Ubuntu done"

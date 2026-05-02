@@ -1,6 +1,6 @@
 module crocgui
 
-go 1.25.0
+go 1.24.13
 
 replace github.com/schollz/croc/v10 => ../croc
 
@@ -12,13 +12,13 @@ require (
 	github.com/adrg/xdg v0.5.3
 	github.com/cubewise-code/go-mime v0.0.0-20200519001935-8c5762b177d8
 	github.com/gorilla/websocket v1.5.3
-	github.com/schollz/croc/v10 v10.3.1-0.20251120031407-82cdeb19a87f
+	github.com/schollz/croc/v10 v10.0.0-00010101000000-000000000000
 	github.com/schollz/logger v1.2.0
 	github.com/schollz/pake/v3 v3.1.0
 	github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e
 	github.com/ulikunitz/xz v0.5.12
-	golang.org/x/net v0.51.0
-	golang.org/x/sync v0.20.0
+	golang.org/x/net v0.50.0
+	golang.org/x/sync v0.19.0
 	golang.org/x/sys v0.41.0
 	golang.org/x/text v0.34.0
 )
