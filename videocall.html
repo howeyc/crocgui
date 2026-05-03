@@ -348,14 +348,15 @@
 
     <script>
         // ============= Конфигурация =============
-        var CHUNK_INTERVAL_MS = 100;
-        var TARGET_FPS = 15;
+        var CHUNK_INTERVAL_MS = 50;
+        var TARGET_FPS = 10;
 
         // ============= Элементы UI =============
         var localVideo = document.getElementById('localVideo');
         var remoteVideo = document.getElementById('remoteVideo');
         var latencyLabel = document.getElementById('latencyLabel');
         var currentBehind = 0;
+        var currentRawBehind = 0;
         var errorBanner = document.getElementById('errorBanner');
         var micBtn = document.getElementById('micBtn');
         var camBtn = document.getElementById('camBtn');
@@ -599,16 +600,23 @@
         // ============= Мегапиксельный множитель для запроса пиру =============
         function setMpx(val) {
             diagLog('SETMPX ' + S.mpx + '→' + val + ' wantVideo=' + S.wantVideo);
+            // Сохранить текущий EWMA в кэш по старому mpx
+            if (behindEwma > 0) {
+                ewmaCache[S.mpx] = { b: behindEwma, d: deviationEwma };
+                diagLog('EWMA CACHE save mpx=' + S.mpx + ' b=' + behindEwma.toFixed(3) + ' d=' + deviationEwma.toFixed(3));
+            }
             S.mpx = val;
-            // Сброс опыта BUST при смене разрешения — новое разрешение = новые чанки
-            bustEwma = 0;
-            BUST = SLOMO * 2;
-            EMERGENCY_BEHIND = BUST * 2;
-            localStorage.removeItem('vc_bustEwma');
-            lastChunkSize = 0;
-            recvChunkSizes = [];
-            // chunkMin = 0; chunkMed = 0; chunkMax = 0;
-            chunkMed = 0; // chunkMin, chunkMax закомментированы — не участвуют в формулах
+            // Восстановить EWMA из кэша для нового mpx (если есть)
+            var cached = ewmaCache[S.mpx];
+            if (cached) {
+                behindEwma = cached.b;
+                deviationEwma = cached.d;
+                diagLog('EWMA CACHE restore mpx=' + S.mpx + ' b=' + behindEwma.toFixed(3) + ' d=' + deviationEwma.toFixed(3));
+            } else {
+                diagLog('EWMA CACHE miss mpx=' + S.mpx);
+            }
+            mpxSwitchPending = true;
+            saveAdaptiveSettings();  // сохранить ewmaCache в localStorage
             applySettings();
             saveSettings();
             sendSettings();
@@ -659,7 +667,7 @@
         var mediaSource = null;
         var sourceBuffer = null;
         var MAX_MSE_QUEUE = 100;
-        var MAX_BUFFER_SEC = 20; // держим буфер в 20 секунд
+        var MAX_BUFFER_SEC = 30; // держим буфер в 30 секунд
         var mseQueue = [];
         var mseQueueReadIdx = 0;
         var mseReady = false;
@@ -669,19 +677,14 @@
         var firstAppendDone = false;
 
         // ============= Адаптивный catch-up =============
-        var SLOMO_MS = 500;                   // нижняя граница зоны 1.0 (мс)
-        var SLOMO_FIXED = SLOMO_MS / 1000;    // фиксированная база для EWMA
-        var SLOMO = SLOMO_FIXED;              // адаптируется: BUST/2 в adaptive, manualSLOMO в manual
-        var K_BUST_MED = 0.005;               // BUST базовая линия: K × √(chunkMed)
-        var K_BUST_CHUNK = 0.003;             // BUST реактивность: K × √(lastChunkSize)
-        var BUST_EWMA_ALPHA = 0.1;            // скорость адаптации BUST (EWMA factor)
-        var BUST = SLOMO * 2;                 // начальный BUST, адаптируется по chunkMed
-        var bustEwma = parseFloat(localStorage.getItem('vc_bustEwma')) || 0; // EWMA-сглаженное BUST (сохраняется)
-        if (bustEwma > 0) { BUST = bustEwma; } // восстановление из предыдущей сессии
-        var EMERGENCY_BEHIND = BUST * 2;       // порог emergency seek, пересчитывается с BUST
+        var SLOMO = 0.4;                       // начальный SLOMO, адаптируется через EWMA behind
+        var K_EWMA_ZONES = 3;                  // множитель девиации: зона = ewmaB ± K*ewmaD
+        var MIN_ZONE_HALF = 0.1;              // минимальная полудлина зоны (сек)
+        var BUST = 0.8;                        // начальный BUST, адаптируется через EWMA behind
+        var EMERGENCY_BEHIND = 0.8 * 2;       // порог emergency seek, пересчитывается с BUST
         var RATE_MAX = 1.15;                   // макс скорость на разгоне
         var RATE_MIN = 0.85;                   // мин скорость на торможении
-        var BEHIND_MIN = 0.5;                  // минимальное расстояние от live edge (сек)
+        var BEHIND_MIN = 0.4;                  // минимальное расстояние от live edge (сек)
         var SOFT_CATCHUP = 0.03;               // мягкий догон в stable zone: rate до 1.03 у границы BUST
         var BUF_START_THRESHOLD = CHUNK_INTERVAL_MS / 1000 * 2; // порог BUF-START seek (2 чанка)
 
@@ -698,16 +701,18 @@
                 if (a.adaptiveBust !== undefined) adaptiveBust = a.adaptiveBust;
                 if (a.manualBUST !== undefined) manualBUST = a.manualBUST;
                 if (a.manualSLOMO !== undefined) manualSLOMO = a.manualSLOMO;
+                if (a.ewmaCache) ewmaCache = a.ewmaCache;
             } catch(e) {}
             if (!adaptiveBust) {
                 BUST = manualBUST;
                 SLOMO = manualSLOMO;
-                EMERGENCY_BEHIND = BUST * 2;
+                // EMERGENCY_BEHIND = BUST * 2;
             }
         }
         function saveAdaptiveSettings() {
             try { localStorage.setItem('vc_adaptive', JSON.stringify({
-                SS: SS, adaptiveBust: adaptiveBust, manualBUST: manualBUST, manualSLOMO: manualSLOMO
+                SS: SS, adaptiveBust: adaptiveBust, manualBUST: manualBUST, manualSLOMO: manualSLOMO,
+                ewmaCache: ewmaCache
             })); } catch(e) {}
         }
         function applyDebugSettings() {
@@ -731,9 +736,9 @@
             slomoDownBtn.textContent = manualDisabled ? '▼' : '🔽';
             slomoUpBtn.textContent = manualDisabled ? '▲' : '🔼';
             var curBUST = adaptiveBust ? BUST : manualBUST;
-            var curSLOMO = adaptiveBust ? BUST / 2 : manualSLOMO;
-            var bStr = curBUST >= 1 ? curBUST.toFixed(1) : curBUST.toFixed(1).replace(/^0/, '');
-            var sStr = curSLOMO >= 1 ? curSLOMO.toFixed(1) : curSLOMO.toFixed(1).replace(/^0/, '');
+            var curSLOMO = adaptiveBust ? SLOMO : manualSLOMO;
+            var bStr = curBUST.toFixed(2).replace(/^0/, '');
+            var sStr = curSLOMO.toFixed(2).replace(/^0/, '');
             debugValLabel.textContent = '[' + bStr + '~' + sStr + ']';
         }
         loadAdaptiveSettings();
@@ -761,17 +766,26 @@
         var peerRecorderCodec = ''; // mimeType рекордера пира из cmd:initCodec (для remoteResLabel)
         var peerRes = { width: 0, height: 0, frameRate: 0 }; // разрешение камеры пира из cmd:myRes
 
-        // ============= Статистика для анализа гистерезиса =============
-        var lastChunkSize = 0;                // размер последнего чанка (байт)
-        var recvChunkSizes = [];              // sliding window размеров чанков
-        var RECV_CHUNK_WINDOW = 50;           // размер окна
-        var chunkMed = 0; // статистика чанков в окне (chunkMin, chunkMax закомментированы — не участвуют в формулах)
-        // var chunkMin = 0, chunkMax = 0;
         // var recvKbps = 0;                     // оценочный битрейт приёма (kbps)
         // var recvKbpsLastBytes = 0;            // diagRecvBytes при последнем замере
         // var recvKbpsLastTime = 0;             // Date.now при последнем замере
-        // var _lastHystLogTime = 0;             // троттлинг периодического лога
-        // var HYST_LOG_INTERVAL_MS = 2000;      // интервал логирования
+        var _lastHystLogTime = 0;             // троттлинг периодического лога
+        var HYST_LOG_INTERVAL_MS = 2000;      // интервал логирования
+        var behindEwma = 0;                   // EWMA положения behind (кандидат на середину зоны)
+        var deviationEwma = 0;                // EWMA девиации |behind - behindEwma| (кандидат на полудлину зоны)
+        var BEHIND_EWMA_ALPHA = 0.02;         // коэффициент сглаживания EWMA behind
+        var DEVIATION_EWMA_ALPHA = 0.02;      // коэффициент сглаживания EWMA девиации
+        var ewmaCache = ewmaCache || {};      // кэш EWMA по mpx: { "0.1": {b, d}, ... } (из localStorage)
+        // Восстановить EWMA для стартового mpx из кэша и вычислить зоны
+        if (ewmaCache[S.mpx]) {
+            behindEwma = ewmaCache[S.mpx].b;
+            deviationEwma = ewmaCache[S.mpx].d;
+            var zoneHalf = Math.max(K_EWMA_ZONES * deviationEwma, MIN_ZONE_HALF);
+            SLOMO = Math.max(BEHIND_MIN / (RATE_MIN * RATE_MIN), behindEwma - zoneHalf);
+            BUST = behindEwma + zoneHalf;
+            // EMERGENCY_BEHIND = BUST * 2;
+        }
+        var mpxSwitchPending = false;         // флаг: при SETMPX+stall — seek в середину гистерезиса
 
         // Remote video fit+mirror: 0=fit 1=1:1 2=/2 3=×2 4=fit+╤i╕ 5=1:1+╤i╕ 6=/2+╤i╕ 7=×2+╤i╕
         var _savedFitMode = Math.max(0, Math.min(7, parseInt(localStorage.getItem('vc_fitMode')) || 0));
@@ -1624,51 +1638,53 @@
                     var bufEnd = remoteVideo.buffered.end(remoteVideo.buffered.length - 1);
                     var bufStart = remoteVideo.buffered.start(0);
                     var ct = remoteVideo.currentTime;
-                    var behind = Math.max(BEHIND_MIN, bufEnd - ct);
+                    var rawBehind = bufEnd - ct;
+                    var behind = Math.max(BEHIND_MIN, rawBehind);
                     currentBehind = behind;
+                    currentRawBehind = rawBehind;
                     var now = Date.now();
                     var isStalled = remoteVideo.readyState < 3;
 
-                    // Адаптивный BUST = SLOMO_FIXED + K1×√(chunkMed) + K2×√(lastChunkSize), EWMA-сглаженный
-                    if (adaptiveBust) {
-                        if (chunkMed > 100 && lastChunkSize > 0) {
-                            var bustTarget = SLOMO_FIXED + K_BUST_MED * Math.sqrt(chunkMed) + K_BUST_CHUNK * Math.sqrt(lastChunkSize);
-                            if (bustEwma === 0) {
-                                bustEwma = bustTarget; // первый замер — без сглаживания
-                            } else {
-                                bustEwma = bustEwma + BUST_EWMA_ALPHA * (bustTarget - bustEwma);
-                            }
-                            BUST = bustEwma;
-                            SLOMO = BUST / 2;
-                            EMERGENCY_BEHIND = BUST * 2;
-                            localStorage.setItem('vc_bustEwma', bustEwma.toFixed(4));
+                    // EWMA от rawBehind — пропускаем stall и отрицательные (нет данных)
+                    if (!isStalled && rawBehind > 0) {
+                        if (behindEwma === 0) {
+                            behindEwma = rawBehind;
+                            deviationEwma = 0;
+                        } else {
+                            behindEwma = behindEwma + BEHIND_EWMA_ALPHA * (rawBehind - behindEwma);
+                            var dev = Math.abs(rawBehind - behindEwma);
+                            deviationEwma = deviationEwma + DEVIATION_EWMA_ALPHA * (dev - deviationEwma);
                         }
+                    }
+
+                    // Адаптивный BUST/SLOMO через EWMA behind/deviation
+                    if (adaptiveBust) {
+                        if (behindEwma > 0 && !isStalled) {
+                            var zoneHalf = Math.max(K_EWMA_ZONES * deviationEwma, MIN_ZONE_HALF);
+                            SLOMO = Math.max(BEHIND_MIN / (RATE_MIN * RATE_MIN), behindEwma - zoneHalf);
+                            BUST = behindEwma + zoneHalf;
+                            // EMERGENCY_BEHIND = BUST * 2;
+                        }
+                        // else: используем предыдущие/начальные значения SLOMO/BUST
                     } else {
                         BUST = manualBUST;
                         SLOMO = manualSLOMO;
-                        EMERGENCY_BEHIND = BUST * 2;
+                        // EMERGENCY_BEHIND = BUST * 2;
                     }
 
-                    // Периодический лог статистики гистерезиса (закомментирован — переменные не участвуют в формулах)
-                    // if (now - _lastHystLogTime >= HYST_LOG_INTERVAL_MS) {
-                    //     diagLog('HYST chunk=' + lastChunkSize +
-                    //         ' behind=' + behind.toFixed(3) +
-                    //         ' rate=' + remoteVideo.playbackRate.toFixed(2) +
-                    //         ' SLOMO=' + SLOMO.toFixed(2) +
-                    //         ' BUST=' + BUST.toFixed(3) +
-                    //         ' EMER=' + EMERGENCY_BEHIND.toFixed(3) +
-                    //         ' bustEwma=' + bustEwma.toFixed(3) +
-                    //         ' buf=[' + bufStart.toFixed(1) + '-' + bufEnd.toFixed(1) + ']' +
-                    //         ' ct=' + ct.toFixed(1) +
-                    //         ' stall=' + (isStalled ? 1 : 0) +
-                    //         ' qLen=' + mseQueueLength() +
-                    //         ' chunkMin=' + chunkMin +
-                    //         ' chunkMed=' + chunkMed +
-                    //         ' chunkMax=' + chunkMax +
-                    //         ' recvKbps=' + recvKbps +
-                    //         ' appends=' + diagMSEAppends);
-                    //     _lastHystLogTime = now;
-                    // }
+                    // Периодический лог статистики гистерезиса (EWMA behind/deviation для оценки)
+                    if (now - _lastHystLogTime >= HYST_LOG_INTERVAL_MS) {
+                        diagLog('HYST raw=' + rawBehind.toFixed(3) +
+                            ' behind=' + behind.toFixed(3) +
+                            ' ewmaB=' + behindEwma.toFixed(3) +
+                            ' ewmaD=' + deviationEwma.toFixed(3) +
+                            ' rate=' + remoteVideo.playbackRate.toFixed(2) +
+                            ' SLOMO=' + SLOMO.toFixed(3) +
+                            ' BUST=' + BUST.toFixed(3) +
+                            ' stall=' + (isStalled ? 1 : 0) +
+                            ' qLen=' + mseQueueLength());
+                        _lastHystLogTime = now;
+                    }
 
                     // 3. Трёхзонный playbackRate: торможение / 1.0 / разгон
                     if (firstAppendDone) {
@@ -1687,6 +1703,25 @@
                         }
                         remoteVideo.playbackRate = newRate;
                     }
+                    // 0. MPX switch: seek в середину гистерезиса (ждём пока буфер дорастёт)
+                    // if (mpxSwitchPending && behindEwma > 0) {
+                    //     var targetMpx = bufEnd - behindEwma;
+                    //     if (targetMpx > ct && targetMpx < bufEnd) {
+                    //         remoteVideo.currentTime = targetMpx;
+                    //         if (remoteVideo.paused) remoteVideo.play().catch(function(){});
+                    //         diagLog('MPX SWITCH seek ct=' + ct.toFixed(1) + ' -> ' + targetMpx.toFixed(1) +
+                    //             ' ewmaB=' + behindEwma.toFixed(3) + ' bufEnd=' + bufEnd.toFixed(1));
+                    //         mpxSwitchPending = false;
+                    //     } else if (now - lastStallLogTime > 1000) {
+                    //         diagLog('MPX SWITCH waiting targetMpx=' + targetMpx.toFixed(1) +
+                    //             ' ct=' + ct.toFixed(1) + ' bufEnd=' + bufEnd.toFixed(1) +
+                    //             ' ewmaB=' + behindEwma.toFixed(3));
+                    //         lastStallLogTime = now;
+                    //     }
+                    // } else if (mpxSwitchPending) {
+                    //     diagLog('MPX SWITCH skip ewmaB=' + behindEwma.toFixed(3));
+                    //     mpxSwitchPending = false;
+                    // }
                     // 1. Stall seek: каждый тик сикаем на предполагаемое время
                     if (SS && isStalled) {
                         if (stallStartWallTime === 0) {
@@ -1712,7 +1747,7 @@
                         var target4 = Math.min(bufStart + BEHIND_MIN*2, bufEnd - BEHIND_MIN);
                         if (target4 > bufStart) {
                             diagLog('ADAPTIVE BUF-START seek ct=' + ct.toFixed(1) + ' -> ' + target4.toFixed(1) +
-                                ' buf=[' + bufStart.toFixed(1) + '-' + bufEnd.toFixed(1) + '] chunk=' + lastChunkSize);
+                                ' buf=[' + bufStart.toFixed(1) + '-' + bufEnd.toFixed(1) + ']');
                             remoteVideo.currentTime = target4;
                             remoteVideo.playbackRate = 1.0;
                             if (remoteVideo.paused) remoteVideo.play().catch(function(){});
@@ -1726,8 +1761,7 @@
                         var target2 = isStalled ? bufEnd - SLOMO : bufEnd - BUST;
                         diagLog('ADAPTIVE EMERGENCY seek ct=' + ct.toFixed(1) + ' -> ' + target2.toFixed(1) +
                             ' behind=' + behind.toFixed(1) + 's' +
-                            ' stall=' + (isStalled ? 1 : 0) +
-                            ' chunk=' + lastChunkSize + ' chunkMed=' + chunkMed);
+                            ' stall=' + (isStalled ? 1 : 0));
                         remoteVideo.currentTime = target2;
                         remoteVideo.playbackRate = 1.0;
                         if (remoteVideo.paused) remoteVideo.play().catch(function(){});
@@ -2661,19 +2695,6 @@
             diagRecvBytes += data.byteLength;
             if (mseCriticalTriggered) return;
 
-            // Статистика чанков для анализа гистерезиса
-            lastChunkSize = data.byteLength;
-            recvChunkSizes.push(data.byteLength);
-            if (recvChunkSizes.length > RECV_CHUNK_WINDOW) recvChunkSizes.shift();
-
-            // Пересчитываем статистику окна
-            if (recvChunkSizes.length >= 5) {
-                var sorted = recvChunkSizes.slice().sort(function(a,b){return a-b;});
-                // chunkMin = sorted[0]; // закомментирован — не участвует в формулах
-                chunkMed = sorted[Math.floor(sorted.length / 2)];
-                // chunkMax = sorted[sorted.length - 1]; // закомментирован — не участвует в формулах
-            }
-
             // Оценка битрейта приёма (каждые 2 сек) — закомментирована: recvKbps не участвует в формулах
             // var nowBr = Date.now();
             // if (recvKbpsLastTime === 0) {
@@ -2869,15 +2890,11 @@
 
             // Сброс адаптивных параметров
             try { remoteVideo.playbackRate = 1.0; } catch(e) {}
-            lastChunkSize = 0;
-            recvChunkSizes = [];
-            // chunkMin = 0; chunkMax = 0; // закомментированы — не участвуют в формулах
-            chunkMed = 0;
             // recvKbps = 0;               // закомментирован — не участвует в формулах
             // recvKbpsLastBytes = 0;
             // recvKbpsLastTime = 0;
-            // _lastHystLogTime = 0;
-            // BUST/bustEwma НЕ сбрасываем — при MSE RESTART разрешение то же, опыт сохраняется
+            // EWMA не сбрасываем — адаптируется естественно после MSE restart
+            _lastHystLogTime = 0;
 
             // Очистка старого MSE
             mseReady = false;
@@ -3088,6 +3105,10 @@
             if (!isActive) return;
             cleanupCall();
             saveCallState();
+            if (behindEwma > 0) {
+                ewmaCache[S.mpx] = { b: behindEwma, d: deviationEwma };
+            }
+            saveAdaptiveSettings();
             disconnectWS();
             endCall();
             setTimeout(function() { window.close(); }, 1500);
@@ -3101,6 +3122,10 @@
         window.addEventListener('beforeunload', function() {
             cleanupCall();
             saveCallState();
+            if (behindEwma > 0) {
+                ewmaCache[S.mpx] = { b: behindEwma, d: deviationEwma };
+            }
+            saveAdaptiveSettings();
             disconnectWS();
             endCall();
         });
