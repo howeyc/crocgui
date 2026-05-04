@@ -348,15 +348,15 @@
 
     <script>
         // ============= Конфигурация =============
-        var CHUNK_INTERVAL_MS = 50;
+        var CHUNK_INTERVAL_MS = 100;
         var TARGET_FPS = 10;
+        var KEY_FRAME_INTERVAL = 1;  // keyframe через кадр (для быстрого stall recovery)
 
         // ============= Элементы UI =============
         var localVideo = document.getElementById('localVideo');
         var remoteVideo = document.getElementById('remoteVideo');
         var latencyLabel = document.getElementById('latencyLabel');
         var currentBehind = 0;
-        var currentRawBehind = 0;
         var errorBanner = document.getElementById('errorBanner');
         var micBtn = document.getElementById('micBtn');
         var camBtn = document.getElementById('camBtn');
@@ -667,7 +667,7 @@
         var mediaSource = null;
         var sourceBuffer = null;
         var MAX_MSE_QUEUE = 100;
-        var MAX_BUFFER_SEC = 30; // держим буфер в 30 секунд
+        var MAX_BUFFER_SEC = 30;
         var mseQueue = [];
         var mseQueueReadIdx = 0;
         var mseReady = false;
@@ -676,23 +676,24 @@
         var incomingCodec = '';  // какой кодек будет у входящего потока (MSE)
         var firstAppendDone = false;
 
-        // ============= Адаптивный catch-up =============
-        var SLOMO = 0.4;                       // начальный SLOMO, адаптируется через EWMA behind
-        var K_EWMA_ZONES = 3;                  // множитель девиации: зона = ewmaB ± K*ewmaD
-        var MIN_ZONE_HALF = 0.1;              // минимальная полудлина зоны (сек)
-        var BUST = 0.8;                        // начальный BUST, адаптируется через EWMA behind
-        var EMERGENCY_BEHIND = 0.8 * 2;       // порог emergency seek, пересчитывается с BUST
-        var RATE_MAX = 1.15;                   // макс скорость на разгоне
-        var RATE_MIN = 0.85;                   // мин скорость на торможении
-        var BEHIND_MIN = 0.4;                  // минимальное расстояние от live edge (сек)
-        var SOFT_CATCHUP = 0.03;               // мягкий догон в stable zone: rate до 1.03 у границы BUST
-        var BUF_START_THRESHOLD = CHUNK_INTERVAL_MS / 1000 * 2; // порог BUF-START seek (2 чанка)
-
         // ============= Отладочные настройки адаптивного режима =============
         var SS = true;           // Stall Seek включён
         var adaptiveBust = true; // Адаптивный BUST через EWMA
         var manualBUST = 0.8;    // Ручной BUST (когда adaptiveBust=false)
         var manualSLOMO = 0.4;   // Ручной SLOMO (когда adaptiveBust=false)
+
+        // ============= Адаптивный catch-up =============
+        var BUST = manualBUST;                        // начальный BUST, адаптируется через EWMA behind
+        var SLOMO = manualSLOMO;                       // начальный SLOMO, адаптируется через EWMA behind
+        var K_EWMA_ZONES = 3;                  // множитель девиации: зона = ewmaB ± K*ewmaD
+        var MIN_ZONE_HALF = 0.1;              // минимальная полудлина зоны (сек)
+        var EMERGENCY_BEHIND = BUST * 2;       // порог emergency seek, пересчитывается с BUST
+        var RATE_MAX = 1.15;                   // макс скорость на разгоне
+        var RATE_MIN = 0.85;                   // мин скорость на торможении
+        var BEHIND_MIN = 0.3;                  // минимальное расстояние от live edge (сек)
+        var SOFT_CATCHUP = 0.03;               // мягкий догон в stable zone: rate до 1.03 у границы BUST
+        var BUF_START_THRESHOLD = CHUNK_INTERVAL_MS / 1000 * 2; // порог BUF-START seek (2 чанка)
+
 
         function loadAdaptiveSettings() {
             try {
@@ -706,7 +707,7 @@
             if (!adaptiveBust) {
                 BUST = manualBUST;
                 SLOMO = manualSLOMO;
-                // EMERGENCY_BEHIND = BUST * 2;
+                EMERGENCY_BEHIND = BUST * 2;
             }
         }
         function saveAdaptiveSettings() {
@@ -766,15 +767,13 @@
         var peerRecorderCodec = ''; // mimeType рекордера пира из cmd:initCodec (для remoteResLabel)
         var peerRes = { width: 0, height: 0, frameRate: 0 }; // разрешение камеры пира из cmd:myRes
 
-        // var recvKbps = 0;                     // оценочный битрейт приёма (kbps)
-        // var recvKbpsLastBytes = 0;            // diagRecvBytes при последнем замере
-        // var recvKbpsLastTime = 0;             // Date.now при последнем замере
         var _lastHystLogTime = 0;             // троттлинг периодического лога
         var HYST_LOG_INTERVAL_MS = 2000;      // интервал логирования
         var behindEwma = 0;                   // EWMA положения behind (кандидат на середину зоны)
         var deviationEwma = 0;                // EWMA девиации |behind - behindEwma| (кандидат на полудлину зоны)
         var BEHIND_EWMA_ALPHA = 0.02;         // коэффициент сглаживания EWMA behind
-        var DEVIATION_EWMA_ALPHA = 0.02;      // коэффициент сглаживания EWMA девиации
+        var DEVIATION_EWMA_ALPHA = 0.01;      // коэффициент сглаживания EWMA девиации
+        var EMERGENCY_ALPHA = 0.002;          // коэффициент сглаживания EMERGENCY_BEHIND (τ~50с, в 10 раз медленнее BUST)
         var ewmaCache = ewmaCache || {};      // кэш EWMA по mpx: { "0.1": {b, d}, ... } (из localStorage)
         // Восстановить EWMA для стартового mpx из кэша и вычислить зоны
         if (ewmaCache[S.mpx]) {
@@ -783,7 +782,7 @@
             var zoneHalf = Math.max(K_EWMA_ZONES * deviationEwma, MIN_ZONE_HALF);
             SLOMO = Math.max(BEHIND_MIN / (RATE_MIN * RATE_MIN), behindEwma - zoneHalf);
             BUST = behindEwma + zoneHalf;
-            // EMERGENCY_BEHIND = BUST * 2;
+            EMERGENCY_BEHIND = BUST * 2;
         }
         var mpxSwitchPending = false;         // флаг: при SETMPX+stall — seek в середину гистерезиса
 
@@ -1641,7 +1640,6 @@
                     var rawBehind = bufEnd - ct;
                     var behind = Math.max(BEHIND_MIN, rawBehind);
                     currentBehind = behind;
-                    currentRawBehind = rawBehind;
                     var now = Date.now();
                     var isStalled = remoteVideo.readyState < 3;
 
@@ -1663,13 +1661,13 @@
                             var zoneHalf = Math.max(K_EWMA_ZONES * deviationEwma, MIN_ZONE_HALF);
                             SLOMO = Math.max(BEHIND_MIN / (RATE_MIN * RATE_MIN), behindEwma - zoneHalf);
                             BUST = behindEwma + zoneHalf;
-                            // EMERGENCY_BEHIND = BUST * 2;
+                            EMERGENCY_BEHIND += EMERGENCY_ALPHA * (BUST * 2 - EMERGENCY_BEHIND);
                         }
                         // else: используем предыдущие/начальные значения SLOMO/BUST
                     } else {
                         BUST = manualBUST;
                         SLOMO = manualSLOMO;
-                        // EMERGENCY_BEHIND = BUST * 2;
+                        EMERGENCY_BEHIND += EMERGENCY_ALPHA * (BUST * 2 - EMERGENCY_BEHIND);
                     }
 
                     // Периодический лог статистики гистерезиса (EWMA behind/deviation для оценки)
@@ -1681,8 +1679,8 @@
                             ' rate=' + remoteVideo.playbackRate.toFixed(2) +
                             ' SLOMO=' + SLOMO.toFixed(3) +
                             ' BUST=' + BUST.toFixed(3) +
-                            ' stall=' + (isStalled ? 1 : 0) +
-                            ' qLen=' + mseQueueLength());
+                            ' EMER=' + EMERGENCY_BEHIND.toFixed(3) +
+                            ' stall=' + (isStalled ? 1 : 0));
                         _lastHystLogTime = now;
                     }
 
@@ -1703,25 +1701,11 @@
                         }
                         remoteVideo.playbackRate = newRate;
                     }
-                    // 0. MPX switch: seek в середину гистерезиса (ждём пока буфер дорастёт)
-                    // if (mpxSwitchPending && behindEwma > 0) {
-                    //     var targetMpx = bufEnd - behindEwma;
-                    //     if (targetMpx > ct && targetMpx < bufEnd) {
-                    //         remoteVideo.currentTime = targetMpx;
-                    //         if (remoteVideo.paused) remoteVideo.play().catch(function(){});
-                    //         diagLog('MPX SWITCH seek ct=' + ct.toFixed(1) + ' -> ' + targetMpx.toFixed(1) +
-                    //             ' ewmaB=' + behindEwma.toFixed(3) + ' bufEnd=' + bufEnd.toFixed(1));
-                    //         mpxSwitchPending = false;
-                    //     } else if (now - lastStallLogTime > 1000) {
-                    //         diagLog('MPX SWITCH waiting targetMpx=' + targetMpx.toFixed(1) +
-                    //             ' ct=' + ct.toFixed(1) + ' bufEnd=' + bufEnd.toFixed(1) +
-                    //             ' ewmaB=' + behindEwma.toFixed(3));
-                    //         lastStallLogTime = now;
-                    //     }
-                    // } else if (mpxSwitchPending) {
-                    //     diagLog('MPX SWITCH skip ewmaB=' + behindEwma.toFixed(3));
-                    //     mpxSwitchPending = false;
-                    // }
+                    // Общая точка seek: середина гистерезиса (SLOMO+BUST)/2
+                    var midHyst = (SLOMO + BUST) / 2;
+                    var safeTarget = bufEnd - midHyst;
+                    if (safeTarget <= bufStart) safeTarget = bufEnd - BEHIND_MIN;  // fallback при малом буфере
+
                     // 1. Stall seek: каждый тик сикаем на предполагаемое время
                     if (SS && isStalled) {
                         if (stallStartWallTime === 0) {
@@ -1730,7 +1714,7 @@
                         }
                         var elapsed = (now - stallStartWallTime) / 1000;
                         var expected = stallStartCt + elapsed;
-                        if (expected > ct && expected <= bufEnd - SLOMO) { // BEHIND_MIN
+                        if (expected > ct && expected <= safeTarget) {
                             remoteVideo.currentTime = expected;
                             remoteVideo.play().catch(function(){});
                             if (now - lastStallLogTime > 1000) {
@@ -1744,11 +1728,10 @@
                     }
                     // 4. currentTime вышел за начало буфера
                     if (ct < bufStart - BUF_START_THRESHOLD ) {
-                        var target4 = Math.min(bufStart + BEHIND_MIN*2, bufEnd - BEHIND_MIN);
-                        if (target4 > bufStart) {
-                            diagLog('ADAPTIVE BUF-START seek ct=' + ct.toFixed(1) + ' -> ' + target4.toFixed(1) +
+                        if (safeTarget > bufStart) {
+                            diagLog('ADAPTIVE BUF-START seek ct=' + ct.toFixed(1) + ' -> ' + safeTarget.toFixed(1) +
                                 ' buf=[' + bufStart.toFixed(1) + '-' + bufEnd.toFixed(1) + ']');
-                            remoteVideo.currentTime = target4;
+                            remoteVideo.currentTime = safeTarget;
                             remoteVideo.playbackRate = 1.0;
                             if (remoteVideo.paused) remoteVideo.play().catch(function(){});
                         }
@@ -1756,23 +1739,16 @@
                     // 2. Emergency seek при большом отставании (страховка от неконтролируемого роста лага)
                     // Работает и при stall — иначе stall + behind > EMERGENCY = дедлок
                     if (behind > EMERGENCY_BEHIND) {
-                        // При stall: seek ближе к bufEnd (bufEnd - SLOMO) чтобы не уйти в отрицательный behind
-                        // При норме: seek дальше (bufEnd - BUST) для плавного catch-up
-                        var target2 = isStalled ? bufEnd - SLOMO : bufEnd - BUST;
-                        diagLog('ADAPTIVE EMERGENCY seek ct=' + ct.toFixed(1) + ' -> ' + target2.toFixed(1) +
+                        diagLog('ADAPTIVE EMERGENCY seek ct=' + ct.toFixed(1) + ' -> ' + safeTarget.toFixed(1) +
                             ' behind=' + behind.toFixed(1) + 's' +
                             ' stall=' + (isStalled ? 1 : 0));
-                        remoteVideo.currentTime = target2;
+                        remoteVideo.currentTime = safeTarget;
                         remoteVideo.playbackRate = 1.0;
                         if (remoteVideo.paused) remoteVideo.play().catch(function(){});
                     }
                 }
             } catch (e) {}
-            // Безусловный play() — страховка после MSE restart на мобильных
-            if (remoteVideo.paused && firstAppendDone) {
-                remoteVideo.play().catch(function(){});
-            }
-        }, CHUNK_INTERVAL_MS);
+        }, CHUNK_INTERVAL_MS/2);
 
         // ============= Обновление метки задержки (раз в секунду) =============
         setInterval(function() {
@@ -2684,7 +2660,7 @@
 
         function mseQueueLength() { return mseQueue.length - mseQueueReadIdx; }
         function mseQueueCompact() {
-            if (mseQueueReadIdx > 100) {
+            if (mseQueueReadIdx > MAX_MSE_QUEUE) {
                 mseQueue = mseQueue.slice(mseQueueReadIdx);
                 mseQueueReadIdx = 0;
             }
@@ -2695,20 +2671,6 @@
             diagRecvBytes += data.byteLength;
             if (mseCriticalTriggered) return;
 
-            // Оценка битрейта приёма (каждые 2 сек) — закомментирована: recvKbps не участвует в формулах
-            // var nowBr = Date.now();
-            // if (recvKbpsLastTime === 0) {
-            //     recvKbpsLastTime = nowBr;
-            //     recvKbpsLastBytes = diagRecvBytes;
-            // } else {
-            //     var dtBr = (nowBr - recvKbpsLastTime) / 1000;
-            //     if (dtBr >= 2) {
-            //         var bytesBr = diagRecvBytes - recvKbpsLastBytes;
-            //         recvKbps = Math.round((bytesBr * 8) / dtBr / 1000);
-            //         recvKbpsLastTime = nowBr;
-            //         recvKbpsLastBytes = diagRecvBytes;
-            //     }
-            // }
 
             // Запись remote video: пишем чанк в файл
             if (peerRecActive && peerRecWritable) {
@@ -2782,12 +2744,6 @@
 
 
         function onMSEUpdateEnd() {
-            // Логируем завершение trim
-            // if (trimStartTime > 0) {
-            //     var trimDuration = Date.now() - trimStartTime;
-            //     diagLog('BUF TRIM done in ' + trimDuration + 'ms');
-            //     trimStartTime = 0;
-            // }
             processMSEQueue();
         }
 
@@ -2808,8 +2764,6 @@
 
             // Обрезаем только если буфер превышает MAX_BUFFER_SEC
             if (bufEnd - bufStart > MAX_BUFFER_SEC && removeEnd > bufStart) {
-                // trimStartTime = Date.now();
-                // diagLog('BUF TRIM start [' + bufStart.toFixed(1) + '-' + removeEnd.toFixed(1) + '] ct=' + ct.toFixed(1));
                 try {
                     sourceBuffer.remove(bufStart, removeEnd);
                 } catch(e) {
@@ -2890,10 +2844,6 @@
 
             // Сброс адаптивных параметров
             try { remoteVideo.playbackRate = 1.0; } catch(e) {}
-            // recvKbps = 0;               // закомментирован — не участвует в формулах
-            // recvKbpsLastBytes = 0;
-            // recvKbpsLastTime = 0;
-            // EWMA не сбрасываем — адаптируется естественно после MSE restart
             _lastHystLogTime = 0;
 
             // Очистка старого MSE
@@ -2903,6 +2853,14 @@
             mseErrorTimestamps = [];
             mseQueue = []; mseQueueReadIdx = 0; // очищаем — старые чанки от предыдущего кодека вызовут ошибку
             currentMseCodec = '';
+
+            // Полная очистка буфера перед пересозданием MSE
+            if (sourceBuffer && mediaSource && mediaSource.readyState === 'open') {
+                try { sourceBuffer.abort(); } catch(e) {}  // прервать текущий appendBuffer
+                try { sourceBuffer.remove(0, Infinity); } catch(e) {
+                    diagLog('MSE RESTART full clear error: ' + e.message);
+                }
+            }
 
             if (mediaSource && mediaSource.readyState === 'open') {
                 try {
@@ -2957,7 +2915,7 @@
             updateResLabels();
 
             try {
-                mediaRecorder = new MediaRecorder(localStream, { mimeType: codec });
+                mediaRecorder = new MediaRecorder(localStream, { mimeType: codec, videoKeyFrameIntervalCount: KEY_FRAME_INTERVAL });
             } catch (e) {
                 diagLog('REC with codec failed: ' + e.message + ', trying without');
                 try { mediaRecorder = new MediaRecorder(localStream, {}); }
