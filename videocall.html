@@ -1671,7 +1671,7 @@
                     }
 
                     // Периодический лог статистики гистерезиса (EWMA behind/deviation для оценки)
-                    if (now - _lastHystLogTime >= HYST_LOG_INTERVAL_MS) {
+                    if (now - _lastHystLogTime == HYST_LOG_INTERVAL_MS) {
                         diagLog('HYST raw=' + rawBehind.toFixed(3) +
                             ' behind=' + behind.toFixed(3) +
                             ' ewmaB=' + behindEwma.toFixed(3) +
