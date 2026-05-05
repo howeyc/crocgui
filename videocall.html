@@ -350,7 +350,15 @@
         // ============= Конфигурация =============
         var CHUNK_INTERVAL_MS = 100;
         var TARGET_FPS = 10;
-        var KEY_FRAME_INTERVAL = 1;  // keyframe через кадр (для быстрого stall recovery)
+        // Динамический keyframe interval: при mpx>=0.7 пропорционально cameraNativeMaxFPS
+        // Таблица/10: 5fps→1, 10fps→1, 15fps→2, 20fps→2, 24fps→2, 25fps→3, 30fps→3
+        // Таблица/12: 5fps→1, 10fps→1, 15fps→1, 20fps→2, 24fps→2, 25fps→2, 30fps→2
+        function getKeyFrameInterval() {
+            if (S.mpx >= 0.7 && cameraNativeMaxFPS > 0) {
+                return Math.max(1, Math.round(cameraNativeMaxFPS / 12));
+            }
+            return 1;
+        }
 
         // ============= Элементы UI =============
         var localVideo = document.getElementById('localVideo');
@@ -490,6 +498,7 @@
         var currentDeviceIndex = -1; // индекс текущей камеры в videoDevices
         var cameraNativeMaxW = 0;    // нативный максимум ширины камеры (из getCameraCapabilities)
         var cameraNativeMaxH = 0;    // нативный максимум высоты камеры (из getCameraCapabilities)
+        var cameraNativeMaxFPS = 0;  // нативный максимум FPS камеры (из getCameraCapabilities)
         var FALLBACK_ASPECT_W = 4;  // fallback-аспект если неизвестен нативный
         var FALLBACK_ASPECT_H = 3;
         // Предопределённые разрешения для MPX кнопок (приоритет 4:3, затем 16:9)
@@ -838,7 +847,11 @@
         }
 
         function addFrameRateConstraint(constraints) {
-            constraints.frameRate = { ideal: TARGET_FPS };
+            if (S.mpx >= 0.7 && cameraNativeMaxFPS > 0) {
+                constraints.frameRate = { ideal: cameraNativeMaxFPS };
+            } else {
+                constraints.frameRate = { ideal: TARGET_FPS };
+            }
             return constraints;
         }
 
@@ -1444,11 +1457,12 @@
                     audioBeforeScreenShare = S.audio;
                     // Display track активен — Cam кнопка зелёная (toggle enabled/disabled)
                     S.video = true;
-                    if (S.audio) {
-                        S.audio = false;
-                        localStream.getAudioTracks().forEach(function(t) { t.stop(); localStream.removeTrack(t); });
-                        diagLog('MIC muted for screen share');
-                    }
+                    // ОТКЛЮЧЕНО: микрофон не выключается при шаринге экрана
+                    // if (S.audio) {
+                    //     S.audio = false;
+                    //     localStream.getAudioTracks().forEach(function(t) { t.stop(); localStream.removeTrack(t); });
+                    //     diagLog('MIC muted for screen share');
+                    // }
                     // Когда пользователь остановит шаринг через браузерный UI
                     displayTrack.onended = function() {
                         isScreenSharing = false;
@@ -1464,21 +1478,21 @@
                                     S.video = false;
                                 }
                             }
-                            // Восстанавливаем микрофон после шаринга экрана
-                            if (audioBeforeScreenShare) {
-                                try {
-                                    var restoreStream = await navigator.mediaDevices.getUserMedia({
-                                        video: false,
-                                        audio: { echoCancellation: S.ec, noiseSuppression: S.ns, autoGainControl: S.agc }
-                                    });
-                                    restoreStream.getAudioTracks().forEach(function(t) { localStream.addTrack(t); });
-                                    S.audio = true;
-                                    diagLog('MIC restored after screen share end');
-                                } catch(ae) {
-                                    diagLog('MIC restore after screen share end failed: ' + ae.message);
-                                    S.audio = false;
-                                }
-                            }
+                            // ОТКЛЮЧЕНО: микрофон не восстанавливается после шаринга экрана (не выключался)
+                            // if (audioBeforeScreenShare) {
+                            //     try {
+                            //         var restoreStream = await navigator.mediaDevices.getUserMedia({
+                            //             video: false,
+                            //             audio: { echoCancellation: S.ec, noiseSuppression: S.ns, autoGainControl: S.agc }
+                            //         });
+                            //         restoreStream.getAudioTracks().forEach(function(t) { localStream.addTrack(t); });
+                            //         S.audio = true;
+                            //         diagLog('MIC restored after screen share end');
+                            //     } catch(ae) {
+                            //         diagLog('MIC restore after screen share end failed: ' + ae.message);
+                            //         S.audio = false;
+                            //     }
+                            // }
                             applySettings(); saveSettings(); sendSettings();
                             if (recorderStarted || S.video) restartMediaRecorder('settings');
                             updateResLabels();
@@ -1514,21 +1528,21 @@
                         S.video = false;
                     }
                 }
-                // Восстанавливаем микрофон после шаринга экрана
-                if (audioBeforeScreenShare) {
-                    try {
-                        var restoreStream2 = await navigator.mediaDevices.getUserMedia({
-                            video: false,
-                            audio: { echoCancellation: S.ec, noiseSuppression: S.ns, autoGainControl: S.agc }
-                        });
-                        restoreStream2.getAudioTracks().forEach(function(t) { localStream.addTrack(t); });
-                        S.audio = true;
-                        diagLog('MIC restored after screen share toggle off');
-                    } catch(ae2) {
-                        diagLog('MIC restore after screen share toggle off failed: ' + ae2.message);
-                        S.audio = false;
-                    }
-                }
+                // ОТКЛЮЧЕНО: микрофон не восстанавливается после шаринга экрана (не выключался)
+                // if (audioBeforeScreenShare) {
+                //     try {
+                //         var restoreStream2 = await navigator.mediaDevices.getUserMedia({
+                //             video: false,
+                //             audio: { echoCancellation: S.ec, noiseSuppression: S.ns, autoGainControl: S.agc }
+                //         });
+                //         restoreStream2.getAudioTracks().forEach(function(t) { localStream.addTrack(t); });
+                //         S.audio = true;
+                //         diagLog('MIC restored after screen share toggle off');
+                //     } catch(ae2) {
+                //         diagLog('MIC restore after screen share toggle off failed: ' + ae2.message);
+                //         S.audio = false;
+                //     }
+                // }
             }
             applySettings(); saveSettings(); sendSettings();
             if (!S.audio && !S.video && !isScreenSharing) {
@@ -2171,9 +2185,14 @@
                     if (caps && caps.width && caps.height &&
                         typeof caps.width.min === 'number' && typeof caps.width.max === 'number' &&
                         typeof caps.height.min === 'number' && typeof caps.height.max === 'number') {
+                        var maxFPS = 0;
+                        if (caps.frameRate && typeof caps.frameRate.max === 'number') {
+                            maxFPS = caps.frameRate.max;
+                        }
                         return {
                             minW: caps.width.min, maxW: caps.width.max, stepW: caps.width.step || 1,
-                            minH: caps.height.min, maxH: caps.height.max, stepH: caps.height.step || 1
+                            minH: caps.height.min, maxH: caps.height.max, stepH: caps.height.step || 1,
+                            maxFPS: maxFPS
                         };
                     }
                 } catch(e) {}
@@ -2188,7 +2207,8 @@
             if (caps && caps.maxW > 0 && caps.maxH > 0) {
                 cameraNativeMaxW = caps.maxW;
                 cameraNativeMaxH = caps.maxH;
-                diagLog('CAM native max: ' + cameraNativeMaxW + 'x' + cameraNativeMaxH);
+                if (caps.maxFPS > 0) cameraNativeMaxFPS = caps.maxFPS;
+                diagLog('CAM native max: ' + cameraNativeMaxW + 'x' + cameraNativeMaxH + '@' + cameraNativeMaxFPS + 'fps');
                 // Динамическая группа 0.7 — максимальное разрешение камеры (оба ключа для ideal fallback)
                 MPX_GROUPS[0.7] = { '4:3': [{ w: cameraNativeMaxW, h: cameraNativeMaxH }], '16:9': [{ w: cameraNativeMaxW, h: cameraNativeMaxH }] };
             }
@@ -2990,7 +3010,7 @@
             updateResLabels();
 
             try {
-                mediaRecorder = new MediaRecorder(localStream, { mimeType: codec, videoKeyFrameIntervalCount: KEY_FRAME_INTERVAL });
+                mediaRecorder = new MediaRecorder(localStream, { mimeType: codec, videoKeyFrameIntervalCount: getKeyFrameInterval() });
             } catch (e) {
                 diagLog('REC with codec failed: ' + e.message + ', trying without');
                 try { mediaRecorder = new MediaRecorder(localStream, {}); }
