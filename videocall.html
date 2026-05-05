@@ -309,10 +309,10 @@
                     <button type="button" class="ctrl-btn screen emoji" id="remoteScreenBtn" title="Remote Video">💻</button>
                     <button type="button" class="ctrl-btn codec" id="vp8Btn" title="VP8">VP8</button>
                     <button type="button" class="ctrl-btn codec" id="h264Btn" title="H.264">AVC</button>
-                    <button type="button" class="ctrl-btn codec mpx" id="mpx12Btn" title="0.5 megapixels">.5</button>
-                    <button type="button" class="ctrl-btn codec mpx" id="mpx15Btn" title="0.2 megapixels">.2</button>
-                    <button type="button" class="ctrl-btn codec mpx active" id="mpx110Btn" title="0.1 megapixels">.1</button>
-                    <button type="button" class="ctrl-btn codec mpx" id="mpx120Btn" title="0.05 megapixels">.05</button>
+                    <button type="button" class="ctrl-btn codec mpx" id="mpx06Btn" title="0.6 megapixels">.6</button>
+                    <button type="button" class="ctrl-btn codec mpx" id="mpx04Btn" title="0.4 megapixels">.4</button>
+                    <button type="button" class="ctrl-btn codec mpx active" id="mpx02Btn" title="0.2 megapixels">.2</button>
+                    <button type="button" class="ctrl-btn codec mpx" id="mpx006Btn" title="0.06 megapixels">.06</button>
                 </div>
                 <!-- Ряд 3: 🔈 Opus AAC EC NS AGC -->
                 <div class="controls-row">
@@ -442,10 +442,10 @@
         var h264Btn = document.getElementById('h264Btn');
         var opusBtn = document.getElementById('opusBtn');
         var aacBtn = document.getElementById('aacBtn');
-        var mpx12Btn = document.getElementById('mpx12Btn');
-        var mpx15Btn = document.getElementById('mpx15Btn');
-        var mpx110Btn = document.getElementById('mpx110Btn');
-        var mpx120Btn = document.getElementById('mpx120Btn');
+        var mpx06Btn = document.getElementById('mpx06Btn');
+        var mpx04Btn = document.getElementById('mpx04Btn');
+        var mpx02Btn = document.getElementById('mpx02Btn');
+        var mpx006Btn = document.getElementById('mpx006Btn');
         var ecBtn = document.getElementById('ecBtn');
         var nsBtn = document.getElementById('nsBtn');
         var agcBtn = document.getElementById('agcBtn');
@@ -479,7 +479,7 @@
             ec: true,
             ns: true,
             agc: true,
-            mpx: 0.1,
+            mpx: 0.2,
             isRecording: false,
             isPeerRecording: false,
             isScreenSharing: false,
@@ -490,8 +490,27 @@
         var currentDeviceIndex = -1; // индекс текущей камеры в videoDevices
         var cameraNativeMaxW = 0;    // нативный максимум ширины камеры (из getCameraCapabilities)
         var cameraNativeMaxH = 0;    // нативный максимум высоты камеры (из getCameraCapabilities)
-        var FALLBACK_ASPECT_W = 16;  // fallback-аспект если неизвестен нативный
-        var FALLBACK_ASPECT_H = 9;
+        var FALLBACK_ASPECT_W = 4;  // fallback-аспект если неизвестен нативный
+        var FALLBACK_ASPECT_H = 3;
+        // Предопределённые разрешения для MPX кнопок (приоритет 4:3, затем 16:9)
+        var MPX_GROUPS = {
+            0.06: {
+                '4:3':  [{w:160,h:120}, {w:176,h:144}],
+                '16:9': [{w:320,h:176}]
+            },
+            0.2: {
+                '4:3':  [{w:320,h:240}, {w:352,h:288}],
+                '16:9': [{w:432,h:240}, {w:544,h:288}]
+            },
+            0.4: {
+                '4:3':  [{w:640,h:480}, {w:720,h:480}],
+                '16:9': [{w:640,h:360}, {w:752,h:416}]
+            },
+            0.6: {
+                '4:3':  [{w:800,h:600}],
+                '16:9': [{w:800,h:448}, {w:864,h:480}, {w:960,h:544}]
+            }
+        };
 
         function loadSettings() {
             try {
@@ -507,7 +526,20 @@
                 if (s.ec !== undefined) S.ec = s.ec;
                 if (s.ns !== undefined) S.ns = s.ns;
                 if (s.agc !== undefined) S.agc = s.agc;
-                if (s.mpx !== undefined) S.mpx = s.mpx;
+                if (s.mpx !== undefined) {
+                    // Миграция старых значений mpx
+                    if (Math.abs(s.mpx - 0.05) < 0.01) s.mpx = 0.06;
+                    else if (Math.abs(s.mpx - 0.1) < 0.01) s.mpx = 0.2;
+                    else if (Math.abs(s.mpx - 0.5) < 0.01) s.mpx = 0.6;
+                    // Сброс нестандартных значений (напр. 0.3072 от старого toggle-to-max)
+                    var validMpx = [0.06, 0.2, 0.4, 0.6, 0.7];
+                    var found = false;
+                    for (var vi = 0; vi < validMpx.length; vi++) {
+                        if (Math.abs(s.mpx - validMpx[vi]) < 0.01) { found = true; break; }
+                    }
+                    if (!found) s.mpx = 0.2;
+                    S.mpx = s.mpx;
+                }
                 if (s.isRecording !== undefined) S.isRecording = s.isRecording;
                 if (s.isPeerRecording !== undefined) S.isPeerRecording = s.isPeerRecording;
                 if (s.isScreenSharing !== undefined) S.isScreenSharing = s.isScreenSharing;
@@ -540,9 +572,9 @@
             ecBtn.classList.toggle('off', !S.ec);
             nsBtn.classList.toggle('off', !S.ns);
             agcBtn.classList.toggle('off', !S.agc);
-            // Megapixel radio buttons
-            var mpxBtns = [mpx12Btn, mpx15Btn, mpx110Btn, mpx120Btn];
-            var mpxValues = [0.5, 0.2, 0.1, 0.05];
+            // Megapixel radio buttons (при 0.7 toggle-to-max ни одна не активна)
+            var mpxBtns = [mpx06Btn, mpx04Btn, mpx02Btn, mpx006Btn];
+            var mpxValues = [0.6, 0.4, 0.2, 0.06];
             for (var i = 0; i < mpxValues.length; i++) {
                 mpxBtns[i].classList.toggle('active', Math.abs(S.mpx - mpxValues[i]) < 0.01);
             }
@@ -621,19 +653,21 @@
             saveSettings();
             sendSettings();
           }
-        mpx12Btn.addEventListener('click', function(e) {
+        mpx06Btn.addEventListener('click', function(e) {
             e.stopPropagation();
-            if (Math.abs(S.mpx - 0.5) < 0.01) {
-                // Уже активно — выставляем максимальное разрешение камеры (или 1920x1080)
-                var maxMpx = cameraNativeMaxW > 0 ? (cameraNativeMaxW * cameraNativeMaxH / 1000000) : 2.1;
-                setMpx(maxMpx);
+            if (Math.abs(S.mpx - 0.6) < 0.01) {
+                // Уже активно — переключаем на максимум камеры (группа 0.7)
+                setMpx(0.7);
+            } else if (Math.abs(S.mpx - 0.7) < 0.01) {
+                // Было на максимуме — возвращаемся к 0.6
+                setMpx(0.6);
             } else {
-                setMpx(0.5);
+                setMpx(0.6);
             }
         });
-        mpx15Btn.addEventListener('click', function(e) { e.stopPropagation(); setMpx(0.2); });
-        mpx110Btn.addEventListener('click', function(e) { e.stopPropagation(); setMpx(0.1); });
-        mpx120Btn.addEventListener('click', function(e) { e.stopPropagation(); setMpx(0.05); });
+        mpx04Btn.addEventListener('click', function(e) { e.stopPropagation(); setMpx(0.4); });
+        mpx02Btn.addEventListener('click', function(e) { e.stopPropagation(); setMpx(0.2); });
+        mpx006Btn.addEventListener('click', function(e) { e.stopPropagation(); setMpx(0.06); });
 
         // Масштабирование разрешения по абсолютным мегапикселям
         function applyMpx(aspectW, aspectH, mpx) {
@@ -820,11 +854,28 @@
 
         // Единая точка формирования video constraints для getUserMedia
         // На десктопе с несколькими камерами — по deviceId, иначе — по facingMode
+        // Всегда ideal из MPX_GROUPS (exact делается через applyConstraints после открытия камеры)
         function buildCameraConstraints() {
-            var aspectW = cameraNativeMaxW > 0 ? cameraNativeMaxW : FALLBACK_ASPECT_W;
-            var aspectH = cameraNativeMaxH > 0 ? cameraNativeMaxH : FALLBACK_ASPECT_H;
-            var camR = clampToCameraMax(applyMpx(aspectW, aspectH, S.mpx));
-            var constraints = { width: { ideal: camR.w }, height: { ideal: camR.h } };
+            var constraints;
+            // Ideal из первого элемента MPX_GROUPS (4:3 → 16:9), fallback на applyMpx
+            var group = MPX_GROUPS[S.mpx];
+            if (group) {
+                var r43 = group['4:3'];
+                if (r43 && r43.length > 0) {
+                    constraints = { width: { ideal: r43[0].w }, height: { ideal: r43[0].h } };
+                } else {
+                    var r169 = group['16:9'];
+                    if (r169 && r169.length > 0) {
+                        constraints = { width: { ideal: r169[0].w }, height: { ideal: r169[0].h } };
+                    }
+                }
+            }
+            if (!constraints) {
+                var aspectW = cameraNativeMaxW > 0 ? cameraNativeMaxW : FALLBACK_ASPECT_W;
+                var aspectH = cameraNativeMaxH > 0 ? cameraNativeMaxH : FALLBACK_ASPECT_H;
+                var camR = clampToCameraMax(applyMpx(aspectW, aspectH, S.mpx));
+                constraints = { width: { ideal: camR.w }, height: { ideal: camR.h } };
+            }
             if (isDesktop && videoDevices.length > 1 && currentDeviceIndex >= 0 && videoDevices[currentDeviceIndex]) {
                 constraints.deviceId = { exact: videoDevices[currentDeviceIndex].deviceId };
             } else {
@@ -1381,6 +1432,9 @@
                     var dpr = window.devicePixelRatio || 1;
                     cameraNativeMaxW = Math.round(screen.width * dpr);
                     cameraNativeMaxH = Math.round(screen.height * dpr);
+                    // Обновляем MPX_GROUPS[0.7] разрешением экрана (оба ключа для ideal fallback)
+                    MPX_GROUPS[0.7] = { '4:3': [{ w: cameraNativeMaxW, h: cameraNativeMaxH }], '16:9': [{ w: cameraNativeMaxW, h: cameraNativeMaxH }] };
+                    diagLog('SCREEN MPX_GROUPS[0.7]=' + cameraNativeMaxW + 'x' + cameraNativeMaxH);
                     localVideo.srcObject = localStream;
                     updatePipSize();
                     isScreenSharing = true;
@@ -1903,16 +1957,16 @@
                         diagLog('CAM+MIC acquired (combined)');
                     } catch(e) {
                         diagLog('Combined acquire failed: ' + e.name + ' ' + e.message + ', trying separate');
-                        // Fallback: раздельные вызовы
+                        // Fallback: раздельные вызовы (ideal из MPX_GROUPS)
                         try {
                             var videoStream = await navigator.mediaDevices.getUserMedia({
                                 video: buildCameraConstraints(),
                                 audio: false
                             });
                             videoStream.getVideoTracks().forEach(function(t) { localStream.addTrack(t); });
-                            diagLog('CAM acquired (fallback)');
-                        } catch(ve) {
-                            diagLog('CAM not available: ' + ve.name + ' ' + ve.message);
+                            diagLog('CAM acquired (fallback ideal)');
+                        } catch(ve2) {
+                            diagLog('CAM not available: ' + ve2.name + ' ' + ve2.message);
                             S.video = false;
                         }
                         try {
@@ -2053,15 +2107,34 @@
             dw = clamped.w; dh = clamped.h;
             var videoTracks = localStream.getVideoTracks();
             if (videoTracks.length === 0) return;
+            // Камера: пробуем exact для точного разрешения
+            // Шаринг: exact искажает display track, пропускаем — сразу ideal
+            if (!isScreenSharing) {
+                try {
+                    await videoTracks[0].applyConstraints(addFrameRateConstraint({
+                        width: { exact: dw },
+                        height: { exact: dh }
+                    }));
+                    var s = videoTracks[0].getSettings();
+                    diagLog('RES applied peer desire exact ' + s.width + 'x' + s.height);
+                    updateResLabels();
+                    sendMyRes();
+                    return;
+                } catch(e) {
+                    diagLog('RES exact ' + dw + 'x' + dh + ' failed: ' + e.message + ', trying ideal');
+                }
+            }
+            // Fallback камеры или шаринг: ideal (aspectRatio только для камеры)
             try {
                 var constraints = addFrameRateConstraint({ width: { ideal: dw }, height: { ideal: dh } });
                 // aspectRatio помогает мобильным камерам понять нужную ориентацию
-                if (dw > 0 && dh > 0) {
+                // Для шаринга НЕ добавляем — display track сохраняет нативный аспект экрана
+                if (!isScreenSharing && dw > 0 && dh > 0) {
                     constraints.aspectRatio = { ideal: dw / dh };
                 }
                 await videoTracks[0].applyConstraints(constraints);
                 var s = videoTracks[0].getSettings();
-                diagLog('RES applied peer desire ' + s.width + 'x' + s.height);
+                diagLog('RES applied peer desire ideal ' + s.width + 'x' + s.height);
                 updateResLabels();
                 sendMyRes();
             } catch (e) { diagLog('RES desire failed: ' + e.message); }
@@ -2109,12 +2182,15 @@
         }
 
         // Обновляет cameraNativeMaxW/H из getCameraCapabilities()
+        // Также обновляет MPX_GROUPS[0.7] — максимальное разрешение камеры (для toggle-to-max)
         function updateCameraNativeMax() {
             var caps = getCameraCapabilities();
             if (caps && caps.maxW > 0 && caps.maxH > 0) {
                 cameraNativeMaxW = caps.maxW;
                 cameraNativeMaxH = caps.maxH;
                 diagLog('CAM native max: ' + cameraNativeMaxW + 'x' + cameraNativeMaxH);
+                // Динамическая группа 0.7 — максимальное разрешение камеры (оба ключа для ideal fallback)
+                MPX_GROUPS[0.7] = { '4:3': [{ w: cameraNativeMaxW, h: cameraNativeMaxH }], '16:9': [{ w: cameraNativeMaxW, h: cameraNativeMaxH }] };
             }
         }
 
@@ -2127,6 +2203,37 @@
                 return { w: cameraNativeMaxW, h: cameraNativeMaxH };
             }
             return res;
+        }
+
+        // ============= Поиск разрешения через exact из MPX_GROUPS =============
+        // Порядок: сначала 4:3 от меньшей площади, затем 16:9 от меньшей площади
+        // aspectRatio exact заставляет браузер отклонять неподходящий аспект
+        // Возвращает { w, h } первого успешного exact или null
+        async function tryExactResolutions(mpx) {
+            var group = MPX_GROUPS[mpx];
+            diagLog('EXACT trying mpx=' + mpx + ' group=' + !!group);
+            if (!group) return null;
+            var vt = localStream ? localStream.getVideoTracks()[0] : null;
+            if (!vt) return null;
+            var aspects = ['4:3', '16:9'];
+            for (var a = 0; a < aspects.length; a++) {
+                var resolutions = group[aspects[a]];
+                if (!resolutions) continue;
+                for (var i = 0; i < resolutions.length; i++) {
+                    var r = resolutions[i];
+                    try {
+                        await vt.applyConstraints(addFrameRateConstraint({
+                            width: { exact: r.w },
+                            height: { exact: r.h }
+                        }));
+                        diagLog('EXACT mpx=' + mpx + ' ' + aspects[a] + ' ' + r.w + 'x' + r.h + ' OK');
+                        return { w: r.w, h: r.h };
+                    } catch(e) {
+                        diagLog('EXACT mpx=' + mpx + ' ' + aspects[a] + ' ' + r.w + 'x' + r.h + ' fail: ' + e.message);
+                    }
+                }
+            }
+            return null;
         }
 
         // ============= Уточнение разрешения камеры (Фаза 2) =============
@@ -2156,12 +2263,42 @@
             } else {
                 diagLog(logPrefix + ' caps: NOT AVAILABLE, using fallback aspect=' + aspect.toFixed(2));
             }
-            // Пересчитываем разрешение по нативному аспекту + mpx
-            var refined = clampToCameraMax(applyMpx(aspect, 1, S.mpx));
-            try {
-                await vt.applyConstraints(addFrameRateConstraint({ width: { ideal: refined.w }, height: { ideal: refined.h }, aspectRatio: { ideal: aspect } }));
+            // Сначала пробуем exact из MPX_GROUPS (приоритет 4:3, затем 16:9)
+            var exactResult = await tryExactResolutions(S.mpx);
+            if (exactResult) {
                 vs = vt.getSettings();
-                diagLog(logPrefix + ' phase2 aspect=' + aspect.toFixed(2) + ' res=' + vs.width + 'x' + vs.height);
+                diagLog(logPrefix + ' phase2 exact=' + exactResult.w + 'x' + exactResult.h + ' actual=' + vs.width + 'x' + vs.height);
+                if (typeof vt.getCapabilities === 'function') {
+                    try {
+                        var fullCaps = vt.getCapabilities();
+                        diagLog(logPrefix + ' full capabilities: ' + JSON.stringify(fullCaps));
+                    } catch(e) { diagLog(logPrefix + ' getCapabilities error: ' + e.message); }
+                }
+                return { w: exactResult.w, h: exactResult.h };
+            }
+            // Fallback: ideal из первого элемента MPX_GROUPS, затем applyMpx
+            diagLog(logPrefix + ' phase2 exact failed, falling back to ideal');
+            var idealW, idealH;
+            var group = MPX_GROUPS[S.mpx];
+            if (group) {
+                var r43 = group['4:3'];
+                if (r43 && r43.length > 0) {
+                    idealW = r43[0].w; idealH = r43[0].h;
+                } else {
+                    var r169 = group['16:9'];
+                    if (r169 && r169.length > 0) {
+                        idealW = r169[0].w; idealH = r169[0].h;
+                    }
+                }
+            }
+            if (!idealW) {
+                var refined = clampToCameraMax(applyMpx(aspect, 1, S.mpx));
+                idealW = refined.w; idealH = refined.h;
+            }
+            try {
+                await vt.applyConstraints(addFrameRateConstraint({ width: { ideal: idealW }, height: { ideal: idealH } }));
+                vs = vt.getSettings();
+                diagLog(logPrefix + ' phase2 ideal=' + idealW + 'x' + idealH + ' actual=' + vs.width + 'x' + vs.height);
             } catch(e) { diagLog(logPrefix + ' phase2 apply failed: ' + e.message); }
             if (typeof vt.getCapabilities === 'function') {
                 try {
@@ -2169,7 +2306,7 @@
                     diagLog(logPrefix + ' full capabilities: ' + JSON.stringify(fullCaps));
                 } catch(e) { diagLog(logPrefix + ' getCapabilities error: ' + e.message); }
             }
-            return { w: refined.w, h: refined.h };
+            return { w: idealW, h: idealH };
         }
 
         // ============= Двухфазное получение камеры =============
@@ -2181,113 +2318,47 @@
             logPrefix = logPrefix || 'CAM';
             // Сохраняем старые video tracks (не останавливаем пока не получим новый стрим)
             var oldTracks = localStream.getVideoTracks().slice();
-            // Фаза 1: getUserMedia с fallback-аспектом 4:3 и mpx
-            var newStream;
-            try {
-                newStream = await navigator.mediaDevices.getUserMedia({
-                    video: buildCameraConstraints(),
-                    audio: false
-                });
-            } catch(e) {
-                // Не удалось получить новую камеру — старые треки живы, бросаем исключение
-                throw e;
-            }
+            // Фаза 1: getUserMedia с ideal из MPX_GROUPS
+            var newStream = await navigator.mediaDevices.getUserMedia({
+                video: buildCameraConstraints(),
+                audio: false
+            });
             // Успех — теперь безопасно заменяем старые треки
             oldTracks.forEach(function(t) { t.stop(); localStream.removeTrack(t); });
             newStream.getVideoTracks().forEach(function(t) { localStream.addTrack(t); });
             localVideo.srcObject = localStream;
             updatePipSize();
-            // Фаза 2: уточняем разрешение
+            // Фаза 2: уточняем разрешение (нужно только для ideal fallback)
             await refineCameraResolution(logPrefix);
         }
 
-        // Находит максимальное нативное разрешение <= mpx мегапикселей
-        // Бинарный поиск (дихотомия) по getCapabilities, fallback на applyMpx
-        // dispW, dispH — размеры окна пира (MSE-контейнера), используются для аспект-соотношения
+        // Камера: первое разрешение из MPX_GROUPS[mpx] (4:3 → 16:9)
+        // Шаринг: applyMpx с аспектом display track (пропорциональное масштабирование)
         function findBestResolution(mpx, dispW, dispH) {
-            var caps = getCameraCapabilities();
-            var vt = localStream ? localStream.getVideoTracks()[0] : null;
-            if (!vt) return null;
-
-            if (caps && !isScreenSharing) {
-                // Аспект из cameraNativeMax (истинный максимум) или caps — стабильно,
-                // не зависит от текущего разрешения камеры (которое может быть ошибочным)
-                var aspect;
-                if (cameraNativeMaxW > 0 && cameraNativeMaxH > 0) {
-                    aspect = cameraNativeMaxW / cameraNativeMaxH;
-                } else {
-                    aspect = caps.maxW / caps.maxH;
-                }
-                var maxPixels = mpx * 1000000;
-                var lo = caps.minW, hi = caps.maxW;
-                var bestW = caps.minW, bestH = caps.minH;
-
-                // Проверяем функцию: w*h при данном w (с учётом аспекта и step)
-                function pixelsAt(w) {
-                    var h = Math.round(w / aspect / caps.stepH) * caps.stepH;
-                    if (h < caps.minH) h = caps.minH;
-                    if (h > caps.maxH) h = caps.maxH;
-                    return { w: w, h: h, px: w * h };
-                }
-
-                // Если даже minW превышает лимит — возвращаем минимум
-                var minRes = pixelsAt(caps.minW);
-                if (minRes.px > maxPixels) return { w: minRes.w, h: minRes.h };
-
-                // Бинарный поиск: f(w) монотонно возрастает → ищем max w где w*h <= maxPixels
-                while (hi - lo >= caps.stepW) {
-                    var mid = Math.round((lo + hi) / 2 / caps.stepW) * caps.stepW;
-                    if (mid < lo) mid = lo;
-                    if (mid > hi) mid = hi;
-                    if (mid === lo && lo + caps.stepW <= hi) mid = lo + caps.stepW;
-                    var res = pixelsAt(mid);
-                    if (res.px <= maxPixels) {
-                        bestW = res.w; bestH = res.h;
-                        lo = mid + caps.stepW;
-                    } else {
-                        hi = mid - caps.stepW;
+            // Шаринг: пропорциональное масштабование через applyMpx
+            if (isScreenSharing) {
+                var vt = localStream ? localStream.getVideoTracks()[0] : null;
+                if (vt) {
+                    var s = vt.getSettings();
+                    if (s.width > 0 && s.height > 0) {
+                        var r = clampToCameraMax(applyMpx(s.width, s.height, mpx));
+                        diagLog('FIND_BEST mpx=' + mpx + ' screen applyMpx(' + s.width + 'x' + s.height + ')=' + r.w + 'x' + r.h);
+                        return r;
                     }
                 }
-                // Если нативный максимум камеры укладывается в mpx — используем его
-                var maxRes = pixelsAt(caps.maxW);
-                if (maxRes.px <= maxPixels) {
-                    bestW = maxRes.w;
-                    bestH = maxRes.h;
-                }
-                // Чётность для кодирования
-                if (bestW % 2 !== 0) bestW = Math.max(caps.minW, bestW - caps.stepW);
-                if (bestH % 2 !== 0) bestH = Math.max(caps.minH, bestH - caps.stepH);
-                // Защита от инверсии аспекта при clamp
-                if (aspect > 1 && bestW <= bestH) {
-                    var tmp = bestW; bestW = bestH; bestH = tmp;
-                    if (bestW % 2 !== 0) bestW = Math.max(caps.minW, bestW - caps.stepW);
-                    if (bestH % 2 !== 0) bestH = Math.max(caps.minH, bestH - caps.stepH);
-                } else if (aspect < 1 && bestH <= bestW) {
-                    var tmp = bestW; bestW = bestH; bestH = tmp;
-                    if (bestW % 2 !== 0) bestW = Math.max(caps.minW, bestW - caps.stepW);
-                    if (bestH % 2 !== 0) bestH = Math.max(caps.minH, bestH - caps.stepH);
-                }
-                return { w: bestW, h: bestH };
             }
-
-            // Fallback: getSettings() → applyMpx
-            // Аспект из cameraNativeMax (стабильно), затем getSettings, затем 16:9
-            var aspectW, aspectH;
-            if (cameraNativeMaxW > 0 && cameraNativeMaxH > 0 && !isScreenSharing) {
-                aspectW = cameraNativeMaxW;
-                aspectH = cameraNativeMaxH;
-            } else {
-                var s = vt.getSettings();
-                if (s.width > 0 && s.height > 0) {
-                    aspectW = s.width;
-                    aspectH = s.height;
-                } else {
-                    aspectW = FALLBACK_ASPECT_W;
-                    aspectH = FALLBACK_ASPECT_H;
+            // Камера: из MPX_GROUPS (4:3 → 16:9)
+            var group = MPX_GROUPS[mpx];
+            if (!group) return null;
+            var aspects = ['4:3', '16:9'];
+            for (var a = 0; a < aspects.length; a++) {
+                var res = group[aspects[a]];
+                if (res && res.length > 0) {
+                    diagLog('FIND_BEST mpx=' + mpx + ' ' + aspects[a] + ' ' + res[0].w + 'x' + res[0].h);
+                    return { w: res[0].w, h: res[0].h };
                 }
             }
-            var r = clampToCameraMax(applyMpx(aspectW, aspectH, mpx));
-            return r;
+            return null;
         }
 
         // ============= Negotiate codec на клиенте =============
@@ -2415,6 +2486,10 @@
             }
 
             // Пир хочет определённое разрешение от меня (через mpx)
+            // Миграция старых значений mpx от пира (или из vc_peerSettings)
+            if (Math.abs(msg.mpx - 0.05) < 0.01) msg.mpx = 0.06;
+            else if (Math.abs(msg.mpx - 0.1) < 0.01) msg.mpx = 0.2;
+            else if (Math.abs(msg.mpx - 0.5) < 0.01) msg.mpx = 0.6;
             if (msg.mpx > 0) {
                 var best = findBestResolution(msg.mpx, peerDisplayW, peerDisplayH);
                 if (best && best.w > 0 && best.h > 0) {
