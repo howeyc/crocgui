@@ -293,6 +293,20 @@
         /* Отладочный ряд */
         .debug-row { display: none; }
         body.show-debug .debug-row { display: flex; }
+        /* Вспышка при скриншоте */
+        .screenshot-flash {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: white;
+            opacity: 0;
+            pointer-events: none;
+            z-index: 30;
+            transition: opacity 0.15s ease-out;
+        }
+        .screenshot-flash.active {
+            opacity: 0.6;
+            transition: none;
+        }
         .debug-row #bustDownBtn,
         .debug-row #bustUpBtn,
         .debug-row #slomoDownBtn,
@@ -304,6 +318,7 @@
     <div class="videos">
         <div class="video-container main-video">
             <video id="remoteVideo" autoplay playsinline></video>
+            <div class="screenshot-flash" id="screenshotFlash"></div>
             <div class="res-label" id="latencyLabel"></div>
             <div class="res-label" id="remoteResLabel"></div>
             <div class="res-label" id="pipResLabel"></div>
@@ -1232,8 +1247,20 @@
             else enterFullscreen();
         });
         function syncFullscreenBtn() {
-            if (document.fullscreenElement || document.webkitFullscreenElement) fullscreenBtn.classList.remove('off');
-            else fullscreenBtn.classList.add('off');
+            var isFs = !!(document.fullscreenElement || document.webkitFullscreenElement);
+            if (isFs) {
+                fullscreenBtn.classList.remove('off');
+                if (!isPeerRecording) {
+                    peerRecBtn.textContent = '📸';
+                    peerRecBtn.title = 'Screenshot';
+                }
+            } else {
+                fullscreenBtn.classList.add('off');
+                if (!isPeerRecording) {
+                    peerRecBtn.textContent = '⏺';
+                    peerRecBtn.title = 'Record Peer';
+                }
+            }
         }
         document.addEventListener('fullscreenchange', syncFullscreenBtn);
         document.addEventListener('webkitfullscreenchange', syncFullscreenBtn);
@@ -1437,9 +1464,49 @@
             }
             showAllControls();
         });
-        // peerRecBtn — запись видео собеседника (remote) через OPFS
+        // Скриншот remoteVideo (используется в фулскрине)
+        function takeScreenshot() {
+            var w = remoteVideo.videoWidth || 0;
+            var h = remoteVideo.videoHeight || 0;
+            if (w === 0 || h === 0) {
+                diagLog('SCREENSHOT skipped — no video frame');
+                return;
+            }
+            var canvas = document.createElement('canvas');
+            canvas.width = w;
+            canvas.height = h;
+            var ctx = canvas.getContext('2d');
+            ctx.drawImage(remoteVideo, 0, 0, w, h);
+            canvas.toBlob(function(blob) {
+                if (!blob) { diagLog('SCREENSHOT toBlob failed'); return; }
+                var fileName = new Date().toISOString().replace(/-/g, '').replace('T', '_').replace(/:/g, '').replace(/\..+$/, '') + '.png';
+                var a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = fileName;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                setTimeout(function() { URL.revokeObjectURL(a.href); }, 1000);
+                diagLog('SCREENSHOT saved: ' + fileName + ' (' + w + 'x' + h + ')');
+            }, 'image/png');
+            // Вспышка
+            var flash = document.getElementById('screenshotFlash');
+            if (flash) {
+                flash.classList.add('active');
+                setTimeout(function() { flash.classList.remove('active'); }, 150);
+            }
+        }
+
+        // peerRecBtn — запись видео собеседника (remote) через OPFS, в фулскрине — скриншот
         peerRecBtn.addEventListener('click', async function(e) {
             e.stopPropagation();
+            // В режиме фулскрин — делаем скриншот вместо записи
+            var isFs = !!(document.fullscreenElement || document.webkitFullscreenElement);
+            if (isFs) {
+                takeScreenshot();
+                showAllControls();
+                return;
+            }
             if (isPeerRecording) {
                 // Стоп — отправить restartRecorder пиру, чанки продолжают писаться до initCodec
                 // Файл закроется когда придёт initCodec
