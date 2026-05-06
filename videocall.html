@@ -1078,6 +1078,9 @@
                 localStorage.setItem('vc_peerH', remoteNativeH);
                 applyRemoteFitMode();
                 updateResLabels();
+                if (document.fullscreenElement || document.webkitFullscreenElement) {
+                    syncFullscreenBtn();
+                }
             }
         }
         remoteVideo.addEventListener('loadedmetadata', onRemoteVideoResize);
@@ -1284,12 +1287,21 @@
                 }
                 // Начальный screenshotFrameMode от текущего remoteFitMode
                 screenshotFrameMode = (remoteFitMode === 0) ? 1 : 0;
-                // Текст кнопок с учётом аспекта видео
-                var va = remoteNativeW > 0 && remoteNativeH > 0 ? remoteNativeW / remoteNativeH : 0;
-                fitHalfBtn.textContent = (va > 0 && Math.abs(va - 16/9) < 0.05) ? '' : '16:9';
-                fitHalfBtn.title='16:9';
-                fit2xBtn.textContent = (va > 0 && Math.abs(va - 4/3) < 0.05) ? '' : '4:3';
-                fit2xBtn.title='4:3';
+                // Текст кнопок с учётом аспекта видео (портрет/ландшафт)
+                var isPortrait = remoteNativeW > 0 && remoteNativeH > 0 && remoteNativeW < remoteNativeH;
+                if (isPortrait) {
+                    var va = remoteNativeW / remoteNativeH;
+                    fitHalfBtn.textContent = (Math.abs(va - 9/16) < 0.05) ? '' : '9:16';
+                    fitHalfBtn.title = '9:16';
+                    fit2xBtn.textContent = (Math.abs(va - 3/4) < 0.05) ? '' : '3:4';
+                    fit2xBtn.title = '3:4';
+                } else {
+                    var va = remoteNativeW > 0 && remoteNativeH > 0 ? remoteNativeW / remoteNativeH : 0;
+                    fitHalfBtn.textContent = (va > 0 && Math.abs(va - 16/9) < 0.05) ? '' : '16:9';
+                    fitHalfBtn.title = '16:9';
+                    fit2xBtn.textContent = (va > 0 && Math.abs(va - 4/3) < 0.05) ? '' : '4:3';
+                    fit2xBtn.title = '4:3';
+                }
                 fitContainBtn.textContent = 'Full';
                 fitContainBtn.title = 'Fit Fullscreen';
                 updateScreenshotFrameBtnHighlight();
@@ -1538,9 +1550,19 @@
                 if (remoteMirrored) { ctx.translate(fw, 0); ctx.scale(-1, 1); }
                 ctx.drawImage(remoteVideo, dx, dy, dw, dh);
             } else if (isFs && screenshotFrameMode === 2) {
-                // 4:3 рамка от videoWidth: canvas = vw × round(vw * 3/4)
-                var fw = vw;
-                var fh = Math.round(vw * 3 / 4);
+                // 4:3 или 3:4 рамка
+                var isPortraitFrame = vw < vh;
+                var fw, fh;
+                if (isPortraitFrame) {
+                    // 3:4 портрет: canvas = round(vh * 3/4) × vh
+                    fh = vh;
+                    fw = Math.round(vh * 3 / 4);
+                } else {
+                    // 4:3 ландшафт: canvas = vw × round(vw * 3/4)
+                    fw = vw;
+                    fh = Math.round(vw * 3 / 4);
+                }
+                if (fw % 2 !== 0) fw++;
                 if (fh % 2 !== 0) fh++;
                 canvas.width = fw;
                 canvas.height = fh;
@@ -1553,10 +1575,20 @@
                 if (remoteMirrored) { ctx.translate(fw, 0); ctx.scale(-1, 1); }
                 ctx.drawImage(remoteVideo, dx, dy, dw, dh);
             } else if (isFs && screenshotFrameMode === 3) {
-                // 16:9 рамка от videoHeight: canvas = round(vh * 16/9) × vh
-                var fh = vh;
-                var fw = Math.round(vh * 16 / 9);
+                // 16:9 или 9:16 рамка
+                var isPortraitFrame = vw < vh;
+                var fw, fh;
+                if (isPortraitFrame) {
+                    // 9:16 портрет: canvas = round(vh * 9/16) × vh
+                    fh = vh;
+                    fw = Math.round(vh * 9 / 16);
+                } else {
+                    // 16:9 ландшафт: canvas = round(vh * 16/9) × vh
+                    fh = vh;
+                    fw = Math.round(vh * 16 / 9);
+                }
                 if (fw % 2 !== 0) fw++;
+                if (fh % 2 !== 0) fh++;
                 canvas.width = fw;
                 canvas.height = fh;
                 ctx.fillStyle = '#000';
