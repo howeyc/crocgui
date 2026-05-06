@@ -234,6 +234,22 @@
         }
         .ctrl-btn.mic.off { background: #555; }
         body.show-pip-controls .ctrl-btn.mic { opacity: 1; }
+        .ctrl-btn.aspect169 {
+            position: absolute;
+            top: 50%;
+            left: 2px;
+            transform: translateY(-50%);
+            z-index: 25;
+            background: #555;
+            opacity: 0;
+            transition: opacity 0.3s;
+            width: auto;
+            padding: 0 4px;
+            white-space: nowrap;
+            font-size: 0.75em;
+        }
+        .ctrl-btn.aspect169.active { background: #4ecca3; }
+        body.show-pip-controls .ctrl-btn.aspect169 { opacity: 1; }
         .ctrl-btn.cam {
             position: absolute;
             bottom: 2px;
@@ -339,6 +355,7 @@
                 <button type="button" class="ctrl-btn rec emoji" id="recBtn" title="Record">⏺</button>
                 <button type="button" class="ctrl-btn screen-share emoji" id="screenBtn" title="Screen Share">🖼️</button>
                 <button type="button" class="ctrl-btn flip emoji" id="flipBtn" title="Flip Camera">🔄</button>
+                <button type="button" class="ctrl-btn aspect169 emoji" id="aspect169Btn" title="16:9">16⁄9</button>
                 <video id="localVideo" autoplay muted playsinline></video>
                 <button type="button" class="ctrl-btn mic emoji" id="micBtn" title="Mic">🎤</button>
                 <button type="button" class="ctrl-btn cam emoji" id="camBtn" title="Cam">📷</button>
@@ -350,12 +367,9 @@
         // ============= Конфигурация =============
         var CHUNK_INTERVAL_MS = 100;
         var TARGET_FPS = 10;
-        // Динамический keyframe interval: при mpx>=0.7 пропорционально cameraNativeMaxFPS
-        // Таблица/10: 5fps→1, 10fps→1, 15fps→2, 20fps→2, 24fps→2, 25fps→3, 30fps→3
-        // Таблица/12: 5fps→1, 10fps→1, 15fps→1, 20fps→2, 24fps→2, 25fps→2, 30fps→2
         function getKeyFrameInterval() {
-            if (S.mpx >= 0.7 && cameraNativeMaxFPS > 0) {
-                return Math.max(1, Math.round(cameraNativeMaxFPS / 12));
+            if (S.mpx >= 0.7 && cameraNativeMaxFPS > 19) {
+                return 2;
             }
             return 1;
         }
@@ -370,6 +384,7 @@
         var camBtn = document.getElementById('camBtn');
         var screenBtn = document.getElementById('screenBtn');
         var flipBtn = document.getElementById('flipBtn');
+        var aspect169Btn = document.getElementById('aspect169Btn');
         var isScreenSharing = false;
         var screenToggling = false;
         var audioBeforeScreenShare = false;
@@ -492,7 +507,8 @@
             isPeerRecording: false,
             isScreenSharing: false,
             pipCorner: 0,        // только локально, не отправляется пиру
-            facingMode: 'user'   // 'user' = фронтальная, 'environment' = задняя
+            facingMode: 'user',  // 'user' = фронтальная, 'environment' = задняя
+            aspect169: false     // true = приоритет 16:9, false = приоритет 4:3
         };
         var videoDevices = [];       // список videoinput устройств (для десктопа)
         var currentDeviceIndex = -1; // индекс текущей камеры в videoDevices
@@ -520,6 +536,25 @@
                 '16:9': [{w:800,h:448}, {w:864,h:480}, {w:960,h:544}]
             }
         };
+
+        // Вспомогательная функция: порядок аспектов в зависимости от S.aspect169
+        function getAspectPriority() {
+            return S.aspect169 ? ['16:9', '4:3'] : ['4:3', '16:9'];
+        }
+
+        // Первое разрешение из MPX_GROUPS[mpx] по приоритету аспекта, или null
+        function getFirstResolution(mpx) {
+            var group = MPX_GROUPS[mpx];
+            if (!group) return null;
+            var aspects = getAspectPriority();
+            for (var ai = 0; ai < aspects.length; ai++) {
+                var rList = group[aspects[ai]];
+                if (rList && rList.length > 0) {
+                    return { w: rList[0].w, h: rList[0].h };
+                }
+            }
+            return null;
+        }
 
         function loadSettings() {
             try {
@@ -554,6 +589,7 @@
                 if (s.isScreenSharing !== undefined) S.isScreenSharing = s.isScreenSharing;
                 if (s.pipCorner !== undefined) S.pipCorner = s.pipCorner;
                 if (s.facingMode !== undefined) S.facingMode = s.facingMode;
+                if (s.aspect169 !== undefined) S.aspect169 = s.aspect169;
             } catch(e) {}
         }
 
@@ -567,6 +603,7 @@
             camBtn.classList.toggle('off', !S.video);
             screenBtn.classList.toggle('active', isScreenSharing);
             flipBtn.classList.toggle('active', !isDesktop && S.facingMode === 'environment');
+            aspect169Btn.classList.toggle('active', S.aspect169);
             // Receiver кнопки
             remoteScreenBtn.classList.toggle('off', !S.wantVideo);
             remoteVideo.style.visibility = S.wantVideo ? 'visible' : 'hidden';
@@ -870,18 +907,10 @@
         // Всегда ideal из MPX_GROUPS (exact делается через applyConstraints после открытия камеры)
         function buildCameraConstraints() {
             var constraints;
-            // Ideal из первого элемента MPX_GROUPS (4:3 → 16:9), fallback на applyMpx
-            var group = MPX_GROUPS[S.mpx];
-            if (group) {
-                var r43 = group['4:3'];
-                if (r43 && r43.length > 0) {
-                    constraints = { width: { ideal: r43[0].w }, height: { ideal: r43[0].h } };
-                } else {
-                    var r169 = group['16:9'];
-                    if (r169 && r169.length > 0) {
-                        constraints = { width: { ideal: r169[0].w }, height: { ideal: r169[0].h } };
-                    }
-                }
+            // Ideal из первого элемента MPX_GROUPS (по приоритету аспекта), fallback на applyMpx
+            var first = getFirstResolution(S.mpx);
+            if (first) {
+                constraints = { width: { ideal: first.w }, height: { ideal: first.h } };
             }
             if (!constraints) {
                 var aspectW = cameraNativeMaxW > 0 ? cameraNativeMaxW : FALLBACK_ASPECT_W;
@@ -1128,6 +1157,7 @@
             if (e.target.closest('.ctrl-btn.rec')) return;
             if (e.target.closest('.ctrl-btn.screen-share')) return;
             if (e.target.closest('.ctrl-btn.flip')) return;
+            if (e.target.closest('.ctrl-btn.aspect169')) return;
             if (e.target.closest('.ctrl-btn.mic')) return;
             if (e.target.closest('.ctrl-btn.cam')) return;
             movePip();
@@ -1286,6 +1316,24 @@
             }
             updateResLabels();
             camToggling = false;
+        });
+        // aspect169Btn — переключение приоритета аспекта 16:9 / 4:3
+        aspect169Btn.addEventListener('click', async function(e) {
+            e.stopPropagation();
+            S.aspect169 = !S.aspect169;
+            applySettings(); saveSettings(); sendSettings();
+            diagLog('ASPECT169 toggle=' + S.aspect169);
+            // Пересоздаём камеру с новым аспектом если звонок активен
+            if (isActive && S.video && !isScreenSharing && S.mpx < 0.7 && localStream && localStream.getVideoTracks().length > 0) {
+                try {
+                    await acquireCamera('ASPECT169');
+                    if (recorderStarted || S.video) restartMediaRecorder('settings');
+                    updateResLabels();
+                } catch(e) {
+                    diagLog('ASPECT169 acquireCamera failed: ' + e.message);
+                }
+            }
+            showAllControls();
         });
         // flipBtn — переключение камеры (десктоп: по deviceId, мобильные: по facingMode)
         var flipToggling = false;
@@ -2235,7 +2283,7 @@
             if (!group) return null;
             var vt = localStream ? localStream.getVideoTracks()[0] : null;
             if (!vt) return null;
-            var aspects = ['4:3', '16:9'];
+            var aspects = getAspectPriority();
             for (var a = 0; a < aspects.length; a++) {
                 var resolutions = group[aspects[a]];
                 if (!resolutions) continue;
@@ -2299,17 +2347,9 @@
             // Fallback: ideal из первого элемента MPX_GROUPS, затем applyMpx
             diagLog(logPrefix + ' phase2 exact failed, falling back to ideal');
             var idealW, idealH;
-            var group = MPX_GROUPS[S.mpx];
-            if (group) {
-                var r43 = group['4:3'];
-                if (r43 && r43.length > 0) {
-                    idealW = r43[0].w; idealH = r43[0].h;
-                } else {
-                    var r169 = group['16:9'];
-                    if (r169 && r169.length > 0) {
-                        idealW = r169[0].w; idealH = r169[0].h;
-                    }
-                }
+            var first = getFirstResolution(S.mpx);
+            if (first) {
+                idealW = first.w; idealH = first.h;
             }
             if (!idealW) {
                 var refined = clampToCameraMax(applyMpx(aspect, 1, S.mpx));
@@ -2367,16 +2407,11 @@
                     }
                 }
             }
-            // Камера: из MPX_GROUPS (4:3 → 16:9)
-            var group = MPX_GROUPS[mpx];
-            if (!group) return null;
-            var aspects = ['4:3', '16:9'];
-            for (var a = 0; a < aspects.length; a++) {
-                var res = group[aspects[a]];
-                if (res && res.length > 0) {
-                    diagLog('FIND_BEST mpx=' + mpx + ' ' + aspects[a] + ' ' + res[0].w + 'x' + res[0].h);
-                    return { w: res[0].w, h: res[0].h };
-                }
+            // Камера: из MPX_GROUPS по приоритету аспекта
+            var first = getFirstResolution(mpx);
+            if (first) {
+                diagLog('FIND_BEST mpx=' + mpx + ' ' + first.w + 'x' + first.h);
+                return first;
             }
             return null;
         }
