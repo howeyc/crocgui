@@ -330,8 +330,8 @@
                     <button type="button" class="ctrl-btn peer-rec emoji" id="peerRecBtn" title="Record Peer">⏺</button>
                     <button type="button" class="ctrl-btn fit" id="fitHalfBtn" title="Half Size">/2</button>
                     <button type="button" class="ctrl-btn fit" id="fit1to1Btn" title="1:1">1</button>
-                    <button type="button" class="ctrl-btn fit" id="fit2xBtn" title="2x Zoom">×2</button>
-                    <button type="button" class="ctrl-btn fit active" id="fitContainBtn" title="Fit">Fit</button>
+                    <button type="button" class="ctrl-btn fit" id="fit2xBtn" title="Double Size">×2</button>
+                    <button type="button" class="ctrl-btn fit active" id="fitContainBtn" title="Fit Tab">Fit</button>
                     <button type="button" class="ctrl-btn fullscreen off emoji" id="fullscreenBtn" title="Fullscreen">☐</button>
                     <button type="button" class="ctrl-btn hangup emoji" id="hangupBtn" title="Hangup">❌</button>
                 </div>
@@ -370,7 +370,7 @@
                 <button type="button" class="ctrl-btn rec emoji" id="recBtn" title="Record">⏺</button>
                 <button type="button" class="ctrl-btn screen-share emoji" id="screenBtn" title="Screen Share">🖼️</button>
                 <button type="button" class="ctrl-btn flip emoji" id="flipBtn" title="Flip Camera">🔄</button>
-                <button type="button" class="ctrl-btn aspect169 emoji" id="aspect169Btn" title="16:9">16⁄9</button>
+                <button type="button" class="ctrl-btn aspect169" id="aspect169Btn" title="16:9">16:9</button>
                 <video id="localVideo" autoplay muted playsinline></video>
                 <button type="button" class="ctrl-btn mic emoji" id="micBtn" title="Mic">🎤</button>
                 <button type="button" class="ctrl-btn cam emoji" id="camBtn" title="Cam">📷</button>
@@ -888,6 +888,7 @@
         var remoteFitModes = ['', 'fit-1to1', 'fit-half', 'fit-2x'];
         var remoteNativeW = 0;
         var remoteNativeH = 0;
+        var screenshotFrameMode = 1; // 0=Raw, 1=Full, 2=4:3, 3=16:9 (только в фулскрине)
 
         function updateFitBtnHighlight() {
             fitHalfBtn.classList.toggle('active', remoteFitMode === 2);
@@ -896,6 +897,15 @@
             fitContainBtn.classList.toggle('active', remoteFitMode === 0);
             fitContainBtn.classList.toggle('mirrored', remoteMirrored);
             fitContainBtn.title = remoteMirrored ? 'Mirror' : 'Fit';
+        }
+
+        // Подсветка кнопок рамки скриншота в фулскрине
+        function updateScreenshotFrameBtnHighlight() {
+            fitContainBtn.classList.toggle('active', screenshotFrameMode === 1);
+            fit1to1Btn.classList.toggle('active', screenshotFrameMode === 0);
+            fitHalfBtn.classList.toggle('active', screenshotFrameMode === 3);
+            fit2xBtn.classList.toggle('active', screenshotFrameMode === 2);
+            fitContainBtn.classList.remove('mirrored');
         }
 
         function addFrameRateConstraint(constraints) {
@@ -1077,10 +1087,28 @@
             applyRemoteFitMode();
             saveCallState();
         }
-        fitHalfBtn.addEventListener('click', function(e) { e.stopPropagation(); setFitMode(2); });
-        fit1to1Btn.addEventListener('click', function(e) { e.stopPropagation(); setFitMode(1); });
-        fit2xBtn.addEventListener('click', function(e) { e.stopPropagation(); setFitMode(3); });
+        fitHalfBtn.addEventListener('click', function(e) { e.stopPropagation();
+            if (document.fullscreenElement || document.webkitFullscreenElement) {
+                screenshotFrameMode = 3; updateScreenshotFrameBtnHighlight(); return;
+            }
+            setFitMode(2);
+        });
+        fit1to1Btn.addEventListener('click', function(e) { e.stopPropagation();
+            if (document.fullscreenElement || document.webkitFullscreenElement) {
+                screenshotFrameMode = 0; updateScreenshotFrameBtnHighlight(); return;
+            }
+            setFitMode(1);
+        });
+        fit2xBtn.addEventListener('click', function(e) { e.stopPropagation();
+            if (document.fullscreenElement || document.webkitFullscreenElement) {
+                screenshotFrameMode = 2; updateScreenshotFrameBtnHighlight(); return;
+            }
+            setFitMode(3);
+        });
         fitContainBtn.addEventListener('click', function(e) { e.stopPropagation();
+            if (document.fullscreenElement || document.webkitFullscreenElement) {
+                screenshotFrameMode = 1; updateScreenshotFrameBtnHighlight(); return;
+            }
             if (remoteFitMode === 0) {
                 // Кнопка зелёная — toggle mirror
                 remoteMirrored = !remoteMirrored;
@@ -1254,12 +1282,31 @@
                     peerRecBtn.textContent = '📸';
                     peerRecBtn.title = 'Screenshot';
                 }
+                // Начальный screenshotFrameMode от текущего remoteFitMode
+                screenshotFrameMode = (remoteFitMode === 0) ? 1 : 0;
+                // Текст кнопок с учётом аспекта видео
+                var va = remoteNativeW > 0 && remoteNativeH > 0 ? remoteNativeW / remoteNativeH : 0;
+                fitHalfBtn.textContent = (va > 0 && Math.abs(va - 16/9) < 0.05) ? '' : '16:9';
+                fitHalfBtn.title='16:9';
+                fit2xBtn.textContent = (va > 0 && Math.abs(va - 4/3) < 0.05) ? '' : '4:3';
+                fit2xBtn.title='4:3';
+                fitContainBtn.textContent = 'Full';
+                fitContainBtn.title = 'Fit Fullscreen';
+                updateScreenshotFrameBtnHighlight();
             } else {
                 fullscreenBtn.classList.add('off');
                 if (!isPeerRecording) {
                     peerRecBtn.textContent = '⏺';
                     peerRecBtn.title = 'Record Peer';
                 }
+                // Восстановление кнопок Fit
+                fitHalfBtn.textContent = '/2';
+                fitHalfBtn.title='Half Size';
+                fit2xBtn.textContent = '×2';
+                fit2xBtn.title='Double Size';
+                fitContainBtn.textContent = 'Fit';
+                fitContainBtn.title = 'Fit Tab';
+                applyRemoteFitMode();
             }
         }
         document.addEventListener('fullscreenchange', syncFullscreenBtn);
@@ -1466,17 +1513,67 @@
         });
         // Скриншот remoteVideo (используется в фулскрине)
         function takeScreenshot() {
-            var w = remoteVideo.videoWidth || 0;
-            var h = remoteVideo.videoHeight || 0;
-            if (w === 0 || h === 0) {
+            var vw = remoteVideo.videoWidth || 0;
+            var vh = remoteVideo.videoHeight || 0;
+            if (vw === 0 || vh === 0) {
                 diagLog('SCREENSHOT skipped — no video frame');
                 return;
             }
             var canvas = document.createElement('canvas');
-            canvas.width = w;
-            canvas.height = h;
             var ctx = canvas.getContext('2d');
-            ctx.drawImage(remoteVideo, 0, 0, w, h);
+            var isFs = !!(document.fullscreenElement || document.webkitFullscreenElement);
+
+            if (isFs && screenshotFrameMode === 1) {
+                // Full — весь экран, contain
+                var fw = window.innerWidth;
+                var fh = window.innerHeight;
+                canvas.width = fw;
+                canvas.height = fh;
+                ctx.fillStyle = '#000';
+                ctx.fillRect(0, 0, fw, fh);
+                var va = vw / vh, fa = fw / fh;
+                var dx, dy, dw, dh;
+                if (va > fa) { dw = fw; dh = Math.round(fw / va); dx = 0; dy = Math.round((fh - dh) / 2); }
+                else { dh = fh; dw = Math.round(fh * va); dx = Math.round((fw - dw) / 2); dy = 0; }
+                if (remoteMirrored) { ctx.translate(fw, 0); ctx.scale(-1, 1); }
+                ctx.drawImage(remoteVideo, dx, dy, dw, dh);
+            } else if (isFs && screenshotFrameMode === 2) {
+                // 4:3 рамка от videoWidth: canvas = vw × round(vw * 3/4)
+                var fw = vw;
+                var fh = Math.round(vw * 3 / 4);
+                if (fh % 2 !== 0) fh++;
+                canvas.width = fw;
+                canvas.height = fh;
+                ctx.fillStyle = '#000';
+                ctx.fillRect(0, 0, fw, fh);
+                var va = vw / vh, fa = fw / fh;
+                var dx, dy, dw, dh;
+                if (va > fa) { dw = fw; dh = Math.round(fw / va); dx = 0; dy = Math.round((fh - dh) / 2); }
+                else { dh = fh; dw = Math.round(fh * va); dx = Math.round((fw - dw) / 2); dy = 0; }
+                if (remoteMirrored) { ctx.translate(fw, 0); ctx.scale(-1, 1); }
+                ctx.drawImage(remoteVideo, dx, dy, dw, dh);
+            } else if (isFs && screenshotFrameMode === 3) {
+                // 16:9 рамка от videoHeight: canvas = round(vh * 16/9) × vh
+                var fh = vh;
+                var fw = Math.round(vh * 16 / 9);
+                if (fw % 2 !== 0) fw++;
+                canvas.width = fw;
+                canvas.height = fh;
+                ctx.fillStyle = '#000';
+                ctx.fillRect(0, 0, fw, fh);
+                var va = vw / vh, fa = fw / fh;
+                var dx, dy, dw, dh;
+                if (va > fa) { dw = fw; dh = Math.round(fw / va); dx = 0; dy = Math.round((fh - dh) / 2); }
+                else { dh = fh; dw = Math.round(fh * va); dx = Math.round((fw - dw) / 2); dy = 0; }
+                if (remoteMirrored) { ctx.translate(fw, 0); ctx.scale(-1, 1); }
+                ctx.drawImage(remoteVideo, dx, dy, dw, dh);
+            } else {
+                // Raw — нативные пиксели
+                canvas.width = vw;
+                canvas.height = vh;
+                if (remoteMirrored) { ctx.translate(vw, 0); ctx.scale(-1, 1); }
+                ctx.drawImage(remoteVideo, 0, 0, vw, vh);
+            }
             canvas.toBlob(function(blob) {
                 if (!blob) { diagLog('SCREENSHOT toBlob failed'); return; }
                 var fileName = new Date().toISOString().replace(/-/g, '').replace('T', '_').replace(/:/g, '').replace(/\..+$/, '') + '.png';
@@ -1487,7 +1584,7 @@
                 a.click();
                 document.body.removeChild(a);
                 setTimeout(function() { URL.revokeObjectURL(a.href); }, 1000);
-                diagLog('SCREENSHOT saved: ' + fileName + ' (' + w + 'x' + h + ')');
+                diagLog('SCREENSHOT saved: ' + fileName + ' (' + canvas.width + 'x' + canvas.height + ')');
             }, 'image/png');
             // Вспышка
             var flash = document.getElementById('screenshotFlash');
