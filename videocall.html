@@ -467,6 +467,21 @@
                 }
             } catch(e) {}
         }
+        function uploadToWebDAV(fileName, blob) {
+            try {
+                fetch('/' + fileName, { method: 'PUT', body: blob }).then(function(resp) {
+                    if (resp.ok) {
+                        diagLog('UPLOAD WebDAV OK: ' + fileName);
+                    } else {
+                        diagLog('UPLOAD WebDAV failed: ' + resp.status + ' ' + fileName);
+                    }
+                }).catch(function(err) {
+                    diagLog('UPLOAD WebDAV error: ' + err.message + ' ' + fileName);
+                });
+            } catch (e) {
+                diagLog('UPLOAD WebDAV exception: ' + e.message + ' ' + fileName);
+            }
+        }
         cleanOPFS();
         var hangupBtn = document.getElementById('hangupBtn');
         var remoteMuteBtn = document.getElementById('remoteMuteBtn');
@@ -1617,6 +1632,7 @@
                 document.body.removeChild(a);
                 setTimeout(function() { URL.revokeObjectURL(a.href); }, 1000);
                 diagLog('SCREENSHOT saved: ' + fileName + ' (' + canvas.width + 'x' + canvas.height + ')');
+                uploadToWebDAV(fileName, blob);
             }, 'image/png');
             // Вспышка
             var flash = document.getElementById('screenshotFlash');
@@ -2952,12 +2968,24 @@
                                             peerRecWritable = null;
                                             peerRecFileHandle = null;
                                             peerRecFileName = '';
-                                            pw.close().then(function() {
-                                                diagLog('PEER REC FILE saved to OPFS');
-                                                if (pfh && pfn) downloadOPFSFile(pfh, pfn);
-                                            }).catch(function(err) {
-                                                diagLog('PEER REC FILE close error: ' + err.message);
-                                            });
+                                        pw.close().then(function() {
+                                            diagLog('PEER REC FILE saved to OPFS');
+                                            if (pfh && pfn) {
+                                                downloadOPFSFile(pfh, pfn);
+                                                // Дополнительно загружаем на WebDAV
+                                                pfh.getFile().then(function(peerFile) {
+                                                    peerFile.slice().arrayBuffer().then(function(ab) {
+                                                        uploadToWebDAV(pfn, new Blob([ab]));
+                                                    }).catch(function(e) {
+                                                        diagLog('UPLOAD WebDAV peer error: ' + e.message + ' ' + pfn);
+                                                    });
+                                                }).catch(function(e) {
+                                                    diagLog('UPLOAD WebDAV peer getFile error: ' + e.message + ' ' + pfn);
+                                                });
+                                            }
+                                        }).catch(function(err) {
+                                            diagLog('PEER REC FILE close error: ' + err.message);
+                                        });
                                         }
                                     }
                                 }
@@ -3306,7 +3334,17 @@
                     try {
                         await writer.close();
                         diagLog('REC FILE saved to OPFS');
-                        if (fh && fn) await downloadOPFSFile(fh, fn);
+                        if (fh && fn) {
+                            await downloadOPFSFile(fh, fn);
+                            // Дополнительно загружаем на WebDAV
+                            try {
+                                var recFile = await fh.getFile();
+                                var recBlob = await recFile.slice().arrayBuffer();
+                                uploadToWebDAV(fn, new Blob([recBlob]));
+                            } catch(e) {
+                                diagLog('UPLOAD WebDAV from OPFS error: ' + e.message + ' ' + fn);
+                            }
+                        }
                     } catch(err) {
                         diagLog('REC FILE close error: ' + err.message);
                     }
