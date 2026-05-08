@@ -1958,7 +1958,7 @@
         setInterval(function() { diagStats(); }, 30000);
 
         // ============= Экстренный seek + линейный rate контроль =============
-        setInterval(function() {
+        function doRateControl() {
             if (!isActive || !mseReady) return;
             try {
                 if (remoteVideo.buffered && remoteVideo.buffered.length > 0) {
@@ -2076,7 +2076,7 @@
                     }
                 }
             } catch (e) {}
-        }, CHUNK_INTERVAL_MS/2);
+        }
 
         // ============= Обновление метки задержки (раз в секунду) =============
         setInterval(function() {
@@ -3044,6 +3044,7 @@
             } else if (diagRecvChunks <= 3) {
                 diagLog('MSE NOT READY: chunk queued but mseReady=false mseRestarting=' + mseRestarting + ' mediaSource=' + !!mediaSource + ' sourceBuffer=' + !!sourceBuffer + ' queue=' + mseQueueLength());
             }
+            doRateControl();
         }
 
         function disconnectWS() {
