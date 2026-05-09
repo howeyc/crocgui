@@ -1012,6 +1012,9 @@
                 remoteNativeH = h;
                 localStorage.setItem('vc_peerW', remoteNativeW);
                 localStorage.setItem('vc_peerH', remoteNativeH);
+                diagLog('RESIZE remote video=' + w + '×' + h +
+                    ' settings=' + peerRes.width + '×' + peerRes.height +
+                    (w !== peerRes.width || h !== peerRes.height ? ' DIFF' : ''));
                 applyRemoteFitMode();
                 updateResLabels();
                 if (document.fullscreenElement || document.webkitFullscreenElement) {
@@ -1027,6 +1030,14 @@
             if (w > 0 && h > 0 && (w !== localNativeW || h !== localNativeH)) {
                 localNativeW = w;
                 localNativeH = h;
+                var sw = 0, sh = 0;
+                if (localStream) {
+                    var vt = localStream.getVideoTracks()[0];
+                    if (vt) { var s = vt.getSettings(); sw = s.width || 0; sh = s.height || 0; }
+                }
+                diagLog('RESIZE local video=' + w + '×' + h +
+                    ' settings=' + sw + '×' + sh +
+                    (w !== sw || h !== sh ? ' DIFF' : ''));
                 updateResLabels();
             }
         }
