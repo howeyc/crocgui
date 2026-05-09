@@ -321,6 +321,9 @@ func (s *WebDAVServer) Start(addr, root string, useTLS bool, addrs ...string) er
 		log.Warnf("WebDAV: failed to create root directory %s: %v", root, err)
 	}
 
+	// Устанавливаем корневой каталог для серверной записи видео
+	callStore.SetWebDAVRoot(root)
+
 	caffeinate(1)
 	s.useTLS = useTLS
 

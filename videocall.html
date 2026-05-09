@@ -410,79 +410,11 @@
         }
         var recBtn = document.getElementById('recBtn');
         var isRecording = false;
-        var recordWritable = null;     // FileSystemWritableFileStream (OPFS)
         var recMimeType = '';          // MIME-тип текущего рекордера (для расширения файла)
         var recStartPending = false;   // флаг: рекордер перезапускается для начала записи (нужен init-сегмент)
-        var recFileHandle = null;      // OPFS FileSystemFileHandle
-        var recFileName = '';          // имя файла для скачивания
         // Запись видео собеседника (remote)
         var peerRecBtn = document.getElementById('peerRecBtn');
         var isPeerRecording = false;
-        var peerRecPending = false;    // ожидаем init-сегмент после restartRecorder
-        var peerRecActive = false;     // активно пишем чанки в файл
-        var peerRecWritable = null;    // FileSystemWritableFileStream (OPFS)
-        var peerRecFileHandle = null;  // OPFS FileSystemFileHandle
-        var peerRecFileName = '';      // имя файла для скачивания
-        // Скрываем кнопки записи если OPFS недоступно
-        var opfsAvailable = !!navigator.storage && typeof navigator.storage.getDirectory === 'function';
-        if (!opfsAvailable) {
-            recBtn.style.display = 'none';
-            peerRecBtn.style.display = 'none';
-        }
-        // Создание файла в OPFS для записи
-        async function openOPFSRecFile(mimeType) {
-            var ext = mimeType && mimeType.indexOf('mp4') !== -1 ? '.mp4' : '.webm';
-            var fileName = new Date().toISOString().replace(/-/g, '').replace('T', '_').replace(/:/g, '').replace(/\..+$/, '') + ext;
-            var opfsRoot = await navigator.storage.getDirectory();
-            var fileHandle = await opfsRoot.getFileHandle(fileName, { create: true });
-            var writable = await fileHandle.createWritable();
-            return { fileHandle: fileHandle, writable: writable, fileName: fileName };
-        }
-        // Скачивание файла из OPFS (без удаления — cleanOPFS почистит при загрузке)
-        async function downloadOPFSFile(fileHandle, fileName) {
-            try {
-                var file = await fileHandle.getFile();
-                var a = document.createElement('a');
-                a.href = URL.createObjectURL(file);
-                a.download = fileName;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                diagLog('REC FILE downloaded: ' + fileName + ' (' + file.size + ' bytes)');
-            } catch(err) {
-                diagLog('REC FILE download error: ' + err.message);
-            }
-        }
-        // Очистка OPFS от stale файлов записи (маска: YYYYMMDD_HHMMSS.webm|.mp4)
-        async function cleanOPFS() {
-            if (!opfsAvailable) return;
-            try {
-                var root = await navigator.storage.getDirectory();
-                var recFileRe = /^\d{8}_\d{6}\.(webm|mp4)$/;
-                // @ts-ignore
-                for await (var entry of root.values()) {
-                    if (recFileRe.test(entry.name)) {
-                        try { await root.removeEntry(entry.name); } catch(e) {}
-                    }
-                }
-            } catch(e) {}
-        }
-        function uploadToWebDAV(fileName, blob) {
-            try {
-                fetch('/' + fileName, { method: 'PUT', body: blob }).then(function(resp) {
-                    if (resp.ok) {
-                        diagLog('UPLOAD WebDAV OK: ' + fileName);
-                    } else {
-                        diagLog('UPLOAD WebDAV failed: ' + resp.status + ' ' + fileName);
-                    }
-                }).catch(function(err) {
-                    diagLog('UPLOAD WebDAV error: ' + err.message + ' ' + fileName);
-                });
-            } catch (e) {
-                diagLog('UPLOAD WebDAV exception: ' + e.message + ' ' + fileName);
-            }
-        }
-        cleanOPFS();
         var hangupBtn = document.getElementById('hangupBtn');
         var remoteMuteBtn = document.getElementById('remoteMuteBtn');
         var remoteScreenBtn = document.getElementById('remoteScreenBtn');
@@ -513,8 +445,9 @@
             if (m) return 'Safari_' + m[1];
             return 'Unknown';
         }
-        var _chatUserId = localStorage.getItem('chatUserId') || 'user_' + Math.random().toString(36).substr(2, 9);
+        var _chatUserId = new URLSearchParams(window.location.search).get('chatUserId') || localStorage.getItem('chatUserId') || 'user_' + Math.random().toString(36).substr(2, 9);
         localStorage.setItem('chatUserId', _chatUserId);
+        var _diagUserId = _chatUserId; // перезаписывается в init() на peer-based ID
 
         // ============= Определяем десктоп =============
         var isDesktop = window.matchMedia('(hover: hover)').matches;
@@ -1296,10 +1229,8 @@
             var isFs = !!(document.fullscreenElement || document.webkitFullscreenElement);
             if (isFs) {
                 fullscreenBtn.classList.remove('off');
-                if (!isPeerRecording) {
-                    peerRecBtn.textContent = '📸';
-                    peerRecBtn.title = 'Screenshot';
-                }
+                peerRecBtn.textContent = '📸';
+                peerRecBtn.title = 'Screenshot';
                 // Начальный screenshotFrameMode от текущего remoteFitMode
                 screenshotFrameMode = (remoteFitMode === 0) ? 1 : 0;
                 // Текст кнопок с учётом аспекта видео (портрет/ландшафт)
@@ -1322,7 +1253,10 @@
                 updateScreenshotFrameBtnHighlight();
             } else {
                 fullscreenBtn.classList.add('off');
-                if (!isPeerRecording) {
+                if (isPeerRecording) {
+                    peerRecBtn.textContent = '🔴';
+                    peerRecBtn.title = 'Stop Recording';
+                } else {
                     peerRecBtn.textContent = '⏺';
                     peerRecBtn.title = 'Record Peer';
                 }
@@ -1501,39 +1435,33 @@
             updateResLabels();
             flipToggling = false;
         });
-        // recBtn — запись в файл через OPFS
+        // recBtn — запись своего видео на сервер
         recBtn.addEventListener('click', async function(e) {
             e.stopPropagation();
             if (isRecording) {
-                // Остановка записи — onstop закроет файл после последнего ondataavailable
+                // Остановка записи — отправляем команду серверу
                 isRecording = false;
                 S.isRecording = false;
                 recBtn.classList.remove('recording', 'pending');
                 recBtn.textContent = '⏺';
                 saveSettings(); sendSettings();
-                if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-                    mediaRecorder.stop(); // ondataavailable запишет последний чанк, onstop закроет файл
+                if (wsConnected && ws && ws.readyState === WebSocket.OPEN) {
+                    try { ws.send(JSON.stringify({ cmd: 'stopRecording', recordPeerID: myPeerID, chatUserId: _chatUserId })); } catch(e) {}
                 }
+                diagLog('REC stopped — server closes file');
             } else {
-                // Начало записи — открываем OPFS файл и перезапускаем рекордер для init-сегмента
-                try {
-                    var recFile = await openOPFSRecFile(recMimeType);
-                    recFileHandle = recFile.fileHandle;
-                    recFileName = recFile.fileName;
-                    recordWritable = recFile.writable;
-                    isRecording = true;
-                    S.isRecording = true;
-                    recStartPending = true;
-                    recBtn.classList.add('pending');
-                    saveSettings(); sendSettings();
-                    diagLog('REC FILE starting (restart for init segment)');
-                    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-                        mediaRecorder.stop(); // onstop перезапустит рекордер
-                    } else {
-                        setupMediaRecorder(); // рекордер неактивен — запустим напрямую
-                    }
-                } catch (err) {
-                    diagLog('REC FILE error: ' + err.message);
+                // Начало записи — перезапускаем рекордер для init-сегмента
+                // startRecording отправим в onstart когда будет известен mime type
+                isRecording = true;
+                S.isRecording = true;
+                recStartPending = true;
+                recBtn.classList.add('pending');
+                saveSettings(); sendSettings();
+                diagLog('REC starting (server-side recording)');
+                if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                    mediaRecorder.stop(); // onstop перезапустит рекордер
+                } else {
+                    setupMediaRecorder(); // рекордер неактивен — запустим напрямую
                 }
             }
             showAllControls();
@@ -1623,16 +1551,26 @@
             }
             canvas.toBlob(function(blob) {
                 if (!blob) { diagLog('SCREENSHOT toBlob failed'); return; }
-                var fileName = new Date().toISOString().replace(/-/g, '').replace('T', '_').replace(/:/g, '').replace(/\..+$/, '') + '.png';
-                var a = document.createElement('a');
-                a.href = URL.createObjectURL(blob);
-                a.download = fileName;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                setTimeout(function() { URL.revokeObjectURL(a.href); }, 1000);
-                diagLog('SCREENSHOT saved: ' + fileName + ' (' + canvas.width + 'x' + canvas.height + ')');
-                uploadToWebDAV(fileName, blob);
+                var d = new Date();
+                var ms = String(d.getMilliseconds()).padStart(3, '0');
+                var fileName = d.getFullYear().toString() +
+                    String(d.getMonth()+1).padStart(2,'0') +
+                    String(d.getDate()).padStart(2,'0') + '_' +
+                    String(d.getHours()).padStart(2,'0') +
+                    String(d.getMinutes()).padStart(2,'0') +
+                    String(d.getSeconds()).padStart(2,'0') + '_' + ms + '.png';
+                fetch(location.origin + '/' + fileName, { method: 'PUT', body: blob })
+                    .then(function(resp) {
+                        if (resp.ok) {
+                            diagLog('SCREENSHOT saved to WebDAV: ' + fileName + ' (' + canvas.width + 'x' + canvas.height + ')');
+                            try { ws.send(JSON.stringify({ cmd: 'chatMessage', text: '📸 /' + fileName, sender: _chatUserId })); } catch(e) {}
+                        } else {
+                            diagLog('SCREENSHOT PUT failed: ' + resp.status + ' ' + resp.statusText);
+                        }
+                    })
+                    .catch(function(err) {
+                        diagLog('SCREENSHOT PUT error: ' + err.message);
+                    });
             }, 'image/png');
             // Вспышка
             var flash = document.getElementById('screenshotFlash');
@@ -1642,7 +1580,7 @@
             }
         }
 
-        // peerRecBtn — запись видео собеседника (remote) через OPFS, в фулскрине — скриншот
+        // peerRecBtn — запись видео собеседника (remote) на сервер, в фулскрине — скриншот
         peerRecBtn.addEventListener('click', async function(e) {
             e.stopPropagation();
             // В режиме фулскрин — делаем скриншот вместо записи
@@ -1653,37 +1591,28 @@
                 return;
             }
             if (isPeerRecording) {
-                // Стоп — отправить restartRecorder пиру, чанки продолжают писаться до initCodec
-                // Файл закроется когда придёт initCodec
-                if (!peerRecBtn.classList.contains('recording') && !peerRecBtn.classList.contains('pending')) return; // уже в процессе стопа
-                peerRecPending = false;
+                // Стоп — отправляем команду серверу
+                isPeerRecording = false;
+                S.isPeerRecording = false;
                 peerRecBtn.classList.remove('recording', 'pending');
                 peerRecBtn.textContent = '⏺';
-                diagLog('PEER REC stopping — waiting for initCodec to close file');
-                // Попросить пир перезапустить рекордер — когда придёт initCodec, закроем файл
+                saveSettings(); sendSettings();
                 if (wsConnected && ws && ws.readyState === WebSocket.OPEN) {
-                    try { ws.send(JSON.stringify({ cmd: 'restartRecorder' })); } catch(e) {}
+                    try { ws.send(JSON.stringify({ cmd: 'stopRecording', recordPeerID: remotePeerID, chatUserId: _chatUserId })); } catch(e) {}
                 }
+                diagLog('PEER REC stopped — server closes file');
             } else {
-                // Старт — открыть OPFS файл, отправить restartRecorder пиру для получения init-сегмента
-                try {
-                    var peerFile = await openOPFSRecFile(incomingCodec);
-                    peerRecFileHandle = peerFile.fileHandle;
-                    peerRecFileName = peerFile.fileName;
-                    peerRecWritable = peerFile.writable;
-                    isPeerRecording = true;
-                    S.isPeerRecording = true;
-                    peerRecPending = true;
-                    peerRecActive = false;
-                    peerRecBtn.classList.add('pending');
-                    saveSettings(); sendSettings();
-                    diagLog('PEER REC FILE starting (waiting for init segment)');
-                    // Попросить пир перезапустить рекордер — мы получим init-сегмент в cmd:initCodec
-                    if (wsConnected && ws && ws.readyState === WebSocket.OPEN) {
-                        try { ws.send(JSON.stringify({ cmd: 'restartRecorder' })); } catch(e) {}
-                    }
-                } catch (err) {
-                    diagLog('PEER REC FILE error: ' + err.message);
+                // Старт — отправляем команду серверу и просим пир перезапустить рекордер для init-сегмента
+                isPeerRecording = true;
+                S.isPeerRecording = true;
+                peerRecBtn.classList.add('pending');
+                saveSettings(); sendSettings();
+                diagLog('PEER REC starting (server-side recording)');
+                if (wsConnected && ws && ws.readyState === WebSocket.OPEN) {
+                    try {
+                        ws.send(JSON.stringify({ cmd: 'startRecording', recordPeerID: remotePeerID, codec: incomingCodec }));
+                        ws.send(JSON.stringify({ cmd: 'restartRecorder' }));
+                    } catch(e) {}
                 }
             }
             showAllControls();
@@ -1930,7 +1859,7 @@
                 fetch('/api/messages', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ text: msg, sender: _chatUserId })
+                    body: JSON.stringify({ text: msg, sender: _diagUserId })
                 });
             } catch (e) {}
         }
@@ -2338,8 +2267,7 @@
                     remotePeerID = 'host';
                 }
                 diagLog('INIT peer=' + myPeerID + ' cam=' + W + 'x' + H + ' video=' + S.video + ' audio=' + S.audio);
-                _chatUserId = myPeerID + '_' + getBrowserTag();
-                localStorage.setItem('chatUserId', _chatUserId);
+                _diagUserId = myPeerID + '_' + getBrowserTag();
                 await startCall();
             } catch (err) {
                 isActive = false;
@@ -2941,53 +2869,12 @@
                                 } else {
                                     diagLog('RECV initCodec: codec is empty — no action');
                                 }
-                                // Запись remote video: обработка initCodec
-                                if (isPeerRecording) {
-                                    if (peerRecPending) {
-                                        // Первый init-сегмент после запроса — начинаем запись
-                                        peerRecPending = false;
-                                        peerRecActive = true;
-                                        peerRecBtn.classList.remove('pending');
-                                        peerRecBtn.classList.add('recording');
-                                        peerRecBtn.textContent = '🔴';
-                                        diagLog('PEER REC started — writing chunks');
-                                    } else {
-                                        // Любой initCodec при активной записи или ожидании стопа — закрыть файл и скачать
-                                        diagLog('PEER REC stopped by initCodec');
-                                        isPeerRecording = false;
-                                        S.isPeerRecording = false;
-                                        peerRecActive = false;
-                                        peerRecPending = false;
-                                        peerRecBtn.classList.remove('recording', 'pending');
-                                        peerRecBtn.textContent = '⏺';
-                                        saveSettings(); sendSettings();
-                                        if (peerRecWritable) {
-                                            var pw = peerRecWritable;
-                                            var pfh = peerRecFileHandle;
-                                            var pfn = peerRecFileName;
-                                            peerRecWritable = null;
-                                            peerRecFileHandle = null;
-                                            peerRecFileName = '';
-                                        pw.close().then(function() {
-                                            diagLog('PEER REC FILE saved to OPFS');
-                                            if (pfh && pfn) {
-                                                downloadOPFSFile(pfh, pfn);
-                                                // Дополнительно загружаем на WebDAV
-                                                pfh.getFile().then(function(peerFile) {
-                                                    peerFile.slice().arrayBuffer().then(function(ab) {
-                                                        uploadToWebDAV(pfn, new Blob([ab]));
-                                                    }).catch(function(e) {
-                                                        diagLog('UPLOAD WebDAV peer error: ' + e.message + ' ' + pfn);
-                                                    });
-                                                }).catch(function(e) {
-                                                    diagLog('UPLOAD WebDAV peer getFile error: ' + e.message + ' ' + pfn);
-                                                });
-                                            }
-                                        }).catch(function(err) {
-                                            diagLog('PEER REC FILE close error: ' + err.message);
-                                        });
-                                        }
-                                    }
+                                // Запись remote video: initCodec подтверждает что сервер начал запись
+                                if (isPeerRecording && peerRecBtn.classList.contains('pending')) {
+                                    peerRecBtn.classList.remove('pending');
+                                    peerRecBtn.classList.add('recording');
+                                    peerRecBtn.textContent = '🔴';
+                                    diagLog('PEER REC started — server writing chunks');
                                 }
                             } else if (msg.cmd === 'restartRecorder') {
                                 // Пир просит перезапустить наш рекордер
@@ -3026,12 +2913,6 @@
             if (mseCriticalTriggered) return;
 
 
-            // Запись remote video: пишем чанк в файл
-            if (peerRecActive && peerRecWritable) {
-                peerRecWritable.write(new Uint8Array(data)).catch(function(err) {
-                    diagLog('PEER REC write error: ' + err.message);
-                });
-            }
             // Просто помещаем в очередь — MSE управляется только через cmd:initCodec
             mseQueue.push(data);
             if (mseQueueLength() > MAX_MSE_QUEUE) {
@@ -3279,11 +3160,7 @@
             mediaRecorder.ondataavailable = function(e) {
                 if (!e.data || e.data.size === 0 || !isActive) return;
                 sendChunk(e.data);
-                if (recordWritable && !recStartPending) {
-                    recordWritable.write(e.data).catch(function(err) {
-                        diagLog('REC FILE write error: ' + err.message);
-                    });
-                }
+                // Чанки записываются на сервер через WS — не нужно писать локально
             };
             var recErrorCount = 0;
             mediaRecorder.onerror = function(e) {
@@ -3305,6 +3182,16 @@
                 }
                 diagLog('REC started mime=' + recMime);
                 if (recMime && wsConnected && ws && ws.readyState === WebSocket.OPEN) {
+                    // Если активна запись — сначала startRecording (создаст файл на сервере),
+                    // потом initCodec (снимет pending — сервер начнёт писать чанки)
+                    if (isRecording) {
+                        try {
+                            ws.send(JSON.stringify({ cmd: 'startRecording', recordPeerID: myPeerID, codec: recMime }));
+                            diagLog('SEND startRecording peerID=' + myPeerID + ' codec=' + recMime);
+                        } catch(e) {
+                            diagLog('SEND startRecording FAILED: ' + e.message);
+                        }
+                    }
                     try {
                         ws.send(JSON.stringify({ cmd: 'initCodec', codec: recMime }));
                         diagLog('SEND initCodec=' + recMime);
@@ -3318,38 +3205,7 @@
                 sendMyRes();
             };
             mediaRecorder.onstop = async function() {
-                diagLog('REC onstop called, isRecording=' + isRecording + ' recStartPending=' + recStartPending + ' hasWritable=' + !!recordWritable);
-                // Закрываем файл если он открыт и это не перезапуск для записи (recStartPending)
-                if (recordWritable && !recStartPending) {
-                    var writer = recordWritable;
-                    var fh = recFileHandle;
-                    var fn = recFileName;
-                    recordWritable = null;
-                    recFileHandle = null;
-                    recFileName = '';
-                    isRecording = false;
-                    S.isRecording = false;
-                    recBtn.classList.remove('recording', 'pending');
-                    recBtn.textContent = '⏺';
-                    saveSettings(); sendSettings();
-                    try {
-                        await writer.close();
-                        diagLog('REC FILE saved to OPFS');
-                        if (fh && fn) {
-                            await downloadOPFSFile(fh, fn);
-                            // Дополнительно загружаем на WebDAV
-                            try {
-                                var recFile = await fh.getFile();
-                                var recBlob = await recFile.slice().arrayBuffer();
-                                uploadToWebDAV(fn, new Blob([recBlob]));
-                            } catch(e) {
-                                diagLog('UPLOAD WebDAV from OPFS error: ' + e.message + ' ' + fn);
-                            }
-                        }
-                    } catch(err) {
-                        diagLog('REC FILE close error: ' + err.message);
-                    }
-                }
+                diagLog('REC onstop called, isRecording=' + isRecording + ' recStartPending=' + recStartPending);
                 // Перезапуск рекордера если звонок активен
                 if (isActive && (recorderStarted || recStartPending)) {
                     setTimeout(function() {
@@ -3384,35 +3240,18 @@
             if (controlsTimer) { clearTimeout(controlsTimer); controlsTimer = null; }
             if (resizeDebounceTimer) { clearTimeout(resizeDebounceTimer); resizeDebounceTimer = null; }
             if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
-            // Закрываем файл записи если идёт запись
+            // Сброс состояния записи — сервер закроет файлы при disconnect
             recStartPending = false;
             if (isRecording) {
                 isRecording = false;
                 S.isRecording = false;
                 recBtn.classList.remove('recording');
             }
-            if (recordWritable) {
-                var w = recordWritable;
-                recordWritable = null;
-                recFileHandle = null;
-                recFileName = '';
-                w.close().catch(function() {});
-            }
-            // Закрываем файл записи собеседника если открыт
             if (isPeerRecording) {
                 isPeerRecording = false;
                 S.isPeerRecording = false;
-                peerRecActive = false;
-                peerRecPending = false;
                 peerRecBtn.classList.remove('recording', 'pending');
                 peerRecBtn.textContent = '⏺';
-            }
-            if (peerRecWritable) {
-                var pw = peerRecWritable;
-                peerRecWritable = null;
-                peerRecFileHandle = null;
-                peerRecFileName = '';
-                pw.close().catch(function() {});
             }
             if (isScreenSharing) {
                 isScreenSharing = false;

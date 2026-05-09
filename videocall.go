@@ -26,6 +26,14 @@ type VideoChunk struct {
 	Data  []byte `json:"data"`
 }
 
+// recEntry — одна активная серверная запись
+type recEntry struct {
+	file       *os.File
+	recordPeer string // кого записываем (recordPeerID от клиента)
+	sourcePeer string // кто реально шлёт чанки (для writeChunk/clearRecPending)
+	pending    bool   // ожидаем initCodec от sourcePeer
+}
+
 // VideoCallRoom представляет комнату видеозвонка между двумя участниками
 type VideoCallRoom struct {
 	ID        string
@@ -48,13 +56,18 @@ type VideoCallRoom struct {
 	peerSettingsCh map[string]chan struct{} // peerID → сигнал "settings получены"
 	peerSettingsMu sync.Mutex
 
+	// Серверная запись: fileName → запись
+	recEntries map[string]*recEntry // fileName → активная запись
+	recMu      sync.Mutex           // защита состояния записи
+
 	mu sync.Mutex
 }
 
 // VideoCallStorage хранит активные комнаты видеозвонков
 type VideoCallStorage struct {
-	rooms map[string]*VideoCallRoom
-	mu    sync.RWMutex
+	rooms      map[string]*VideoCallRoom
+	mu         sync.RWMutex
+	webdavRoot string // Корневой каталог WebDAV для записи файлов
 }
 
 var callStore = &VideoCallStorage{
@@ -101,9 +114,17 @@ func (vs *VideoCallStorage) createRoom(roomID string) (*VideoCallRoom, error) {
 		wsConns:        make(map[string]*wsConn),
 		peerSettings:   make(map[string]map[string]interface{}),
 		peerSettingsCh: make(map[string]chan struct{}),
+		recEntries:     make(map[string]*recEntry),
 	}
 	vs.rooms[roomID] = room
 	return room, nil
+}
+
+// SetWebDAVRoot устанавливает корневой каталог WebDAV для записи файлов
+func (vs *VideoCallStorage) SetWebDAVRoot(root string) {
+	vs.mu.Lock()
+	defer vs.mu.Unlock()
+	vs.webdavRoot = root
 }
 
 // getRoom возвращает комнату по ID
@@ -196,6 +217,135 @@ func (r *VideoCallRoom) clearAllChunks() {
 	for peerID := range r.Chunks {
 		r.Chunks[peerID] = nil
 		delete(r.ChunkIdx, peerID)
+	}
+}
+
+// startRecording создаёт файл для записи чанков указанного пира
+func (r *VideoCallRoom) startRecording(recordPeerID, sourcePeerID, codec string) error {
+	r.recMu.Lock()
+	defer r.recMu.Unlock()
+
+	// Если уже есть запись этого пира — закрываем предыдущую
+	for fn, e := range r.recEntries {
+		if e.recordPeer == recordPeerID {
+			e.file.Close()
+			delete(r.recEntries, fn)
+		}
+	}
+
+	// Определяем расширение файла по кодеку
+	ext := ".webm"
+	if codec != "" && strings.Contains(strings.ToLower(codec), "mp4") {
+		ext = ".mp4"
+	}
+
+	// Генерируем уникальное имя файла: YYYYMMDD_HHMMSS_mmm.<ext>
+	now := time.Now()
+	fileName := now.Format("20060102_150405") + fmt.Sprintf("_%03d", now.Nanosecond()/1e6) + ext
+
+	// Получаем корневой каталог WebDAV
+	callStore.mu.RLock()
+	root := callStore.webdavRoot
+	callStore.mu.RUnlock()
+
+	if root == "" {
+		return fmt.Errorf("webdav root not set")
+	}
+
+	// Создаём файл
+	filePath := filepath.Join(root, fileName)
+	f, err := os.Create(filePath)
+	if err != nil {
+		return fmt.Errorf("failed to create recording file %s: %w", filePath, err)
+	}
+
+	r.recEntries[fileName] = &recEntry{
+		file:       f,
+		recordPeer: recordPeerID,
+		sourcePeer: sourcePeerID,
+		pending:    true, // ожидаем initCodec от sourcePeer перед записью чанков
+	}
+
+	log.Debugf("Recording started: room=%s recordPeer=%s sourcePeer=%s file=%s", r.ID, recordPeerID, sourcePeerID, fileName)
+	return nil
+}
+
+// stopRecording закрывает файл записи для указанного пира, возвращает имя файла
+func (r *VideoCallRoom) stopRecording(recordPeerID string) (string, error) {
+	r.recMu.Lock()
+	defer r.recMu.Unlock()
+
+	for fn, e := range r.recEntries {
+		if e.recordPeer == recordPeerID {
+			err := e.file.Close()
+			delete(r.recEntries, fn)
+			if err != nil {
+				log.Debugf("Recording close error: room=%s peer=%s file=%s err=%v", r.ID, recordPeerID, fn, err)
+				return "", err
+			}
+			log.Debugf("Recording stopped: room=%s peer=%s file=%s", r.ID, recordPeerID, fn)
+			return fn, nil
+		}
+	}
+	return "", fmt.Errorf("no recording for peer %s", recordPeerID)
+}
+
+// writeChunk записывает чанк в файлы где sourcePeer совпадает с отправителем
+func (r *VideoCallRoom) writeChunk(sourcePeerID string, data []byte) {
+	r.recMu.Lock()
+	defer r.recMu.Unlock()
+
+	for _, e := range r.recEntries {
+		if e.sourcePeer == sourcePeerID && !e.pending && e.file != nil {
+			if _, err := e.file.Write(data); err != nil {
+				log.Debugf("Recording write error: room=%s file err=%v", r.ID, err)
+			}
+		}
+	}
+}
+
+// clearRecPending снимает флаг ожидания initCodec — сервер начнёт писать чанки
+func (r *VideoCallRoom) clearRecPending(sourcePeerID string) {
+	r.recMu.Lock()
+	defer r.recMu.Unlock()
+
+	for fn, e := range r.recEntries {
+		if e.sourcePeer == sourcePeerID && e.pending {
+			e.pending = false
+			log.Debugf("Recording pending cleared: room=%s sourcePeer=%s file=%s", r.ID, sourcePeerID, fn)
+		}
+	}
+}
+
+// closeAllRecordings закрывает все открытые файлы записи в комнате
+func (r *VideoCallRoom) closeAllRecordings() {
+	r.recMu.Lock()
+	defer r.recMu.Unlock()
+
+	for fn, e := range r.recEntries {
+		if err := e.file.Close(); err != nil {
+			log.Debugf("Recording close error on cleanup: room=%s file=%s err=%v", r.ID, fn, err)
+		} else {
+			log.Debugf("Recording closed on cleanup: room=%s file=%s", r.ID, fn)
+		}
+	}
+	r.recEntries = make(map[string]*recEntry)
+}
+
+// closePeerRecordings закрывает файлы записи связанные с указанным пиром
+func (r *VideoCallRoom) closePeerRecordings(peerID string) {
+	r.recMu.Lock()
+	defer r.recMu.Unlock()
+
+	for fn, e := range r.recEntries {
+		if e.sourcePeer == peerID || e.recordPeer == peerID {
+			if err := e.file.Close(); err != nil {
+				log.Debugf("Recording close error on peer disconnect: room=%s peer=%s file=%s err=%v", r.ID, peerID, fn, err)
+			} else {
+				log.Debugf("Recording closed on peer disconnect: room=%s peer=%s file=%s", r.ID, peerID, fn)
+			}
+			delete(r.recEntries, fn)
+		}
 	}
 }
 
@@ -549,6 +699,9 @@ func handleCallWS(w http.ResponseWriter, r *http.Request) {
 			// Сохраняем чанк в памяти (для reconnect/history)
 			room.addChunk(peerID, data)
 
+			// Записываем чанк в файл если активна серверная запись
+			room.writeChunk(peerID, data)
+
 			// Перенаправляем remote peer через WS, или echo обратно (loopback preview)
 			if remotePeer != "" {
 				if room.getWS(remotePeer) != nil {
@@ -559,13 +712,67 @@ func handleCallWS(w http.ResponseWriter, r *http.Request) {
 			}
 		} else if msgType == websocket.TextMessage && len(data) > 0 {
 			dataStr := string(data)
-			// Перехватываем settings JSON для Go sender
+			// Перехватываем JSON команды
 			var msg map[string]interface{}
 			json.Unmarshal(data, &msg)
-			if msg != nil && msg["cmd"] == "settings" {
-				room.storePeerSettings(peerID, msg)
+			if msg != nil {
+				cmd, _ := msg["cmd"].(string)
+				switch cmd {
+				case "settings":
+					room.storePeerSettings(peerID, msg)
+				case "initCodec":
+					// Снимаем pending — сервер начнёт писать чанки от этого пира
+					room.clearRecPending(peerID)
+				case "startRecording":
+					// Серверная команда: начать запись чанков указанного пира в файл
+					recordPeerID, _ := msg["recordPeerID"].(string)
+					codec, _ := msg["codec"].(string)
+					if recordPeerID != "" {
+						// Определяем sourcePeerID: кто реально будет слать чанки
+						// Если у recordPeerID есть активный WS — это реальный пир
+						// Если нет (loopback) — чанки придут от запрашивающего пира
+						sourcePeerID := recordPeerID
+						if room.getWS(recordPeerID) == nil {
+							sourcePeerID = peerID
+						}
+						if err := room.startRecording(recordPeerID, sourcePeerID, codec); err != nil {
+							log.Debugf("startRecording error: %v", err)
+						}
+					}
+					// НЕ пересылаем remote peer — это серверная команда
+					continue
+				case "stopRecording":
+					// Серверная команда: остановить запись и закрыть файл
+					recordPeerID, _ := msg["recordPeerID"].(string)
+					if recordPeerID != "" {
+						if fileName, err := room.stopRecording(recordPeerID); err != nil {
+							log.Debugf("stopRecording error: %v", err)
+						} else if fileName != "" {
+							chatUserId, _ := msg["chatUserId"].(string)
+							if chatUserId == "" {
+								chatUserId = peerID
+							}
+							chatMsg := chatStore.addMessage("📹 /"+fileName, chatUserId)
+							broadcastChatMessage(chatMsg)
+						}
+					}
+					// НЕ пересылаем remote peer — это серверная команда
+					continue
+				case "chatMessage":
+					// Клиент просит отправить сообщение в чат (скриншот и т.д.)
+					chatText, _ := msg["text"].(string)
+					if chatText != "" {
+						sender, _ := msg["sender"].(string)
+						if sender == "" {
+							sender = peerID
+						}
+						chatMsg := chatStore.addMessage(chatText, sender)
+						broadcastChatMessage(chatMsg)
+					}
+					continue
+				}
 			}
-			// Текстовые сообщения (settings, restart_recorder) — перенаправляем remote peer или echo
+			// Текстовые сообщения (settings, restart_recorder, initCodec) — перенаправляем remote peer или echo
 			if remotePeer != "" {
 				if room.getWS(remotePeer) != nil {
 					room.forwardTextToWS(remotePeer, dataStr)
@@ -575,6 +782,9 @@ func handleCallWS(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+
+	// Закрываем файлы записи для этого пира при отключении
+	room.closePeerRecordings(peerID)
 
 	// Отправляем remote peer уведомление об отключении
 	if remotePeer != "" {
@@ -621,6 +831,9 @@ func handleCallEnd(w http.ResponseWriter, r *http.Request) {
 		}
 		room.wsConns = make(map[string]*wsConn)
 		room.wsMu.Unlock()
+
+		// Закрываем все файлы записи в комнате
+		room.closeAllRecordings()
 	}
 
 	callStore.deleteRoom(roomID)

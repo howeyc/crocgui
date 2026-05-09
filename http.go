@@ -499,8 +499,8 @@ func (h *WebDAVWithDirectoryListing) serveDirectoryListing(w http.ResponseWriter
 			font-size: 0.85em;
 		}
 		.chat-message.own .chat-message-content {
-			background-color: #007bff;
-			color: white;
+			background-color: #e9ecef;
+			color: #333;
 			border-bottom-right-radius: 2px;
 		}
 		.chat-message.other .chat-message-content {
@@ -556,27 +556,29 @@ func (h *WebDAVWithDirectoryListing) serveDirectoryListing(w http.ResponseWriter
 			background-color: #004494;
 		}
 		.chat-message-content a.call-link {
-			display: inline-block;
-			padding: 4px 12px;
-			border-radius: 16px;
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			width: 36px;
+			height: 36px;
+			border-radius: 50%;
 			text-decoration: none;
-			font-weight: 600;
-			font-size: 0.95em;
+			font-size: 1.2em;
 			transition: all 0.2s;
 		}
 		.chat-message.own .chat-message-content a.call-link {
-			background: rgba(255,255,255,0.25);
+			background: #007bff;
 			color: #fff;
 		}
 		.chat-message.own .chat-message-content a.call-link:hover {
-			background: rgba(255,255,255,0.4);
+			background: #0056b3;
 		}
 		.chat-message.other .chat-message-content a.call-link {
-			background: #28a745;
+			background: #007bff;
 			color: #fff;
 		}
 		.chat-message.other .chat-message-content a.call-link:hover {
-			background: #218838;
+			background: #0056b3;
 		}
 
 		/* Медиа-запрос для мобильных устройств */
@@ -743,6 +745,8 @@ func (h *WebDAVWithDirectoryListing) serveDirectoryListing(w http.ResponseWriter
 			var callMatch = msg.text.match(/^📞\s*(\/videocall\S+)/);
 			if (callMatch) {
 				var rawUrl = callMatch[1];
+				// Подменяем chatUserId на свой — чтобы guest не использовал host's ID
+				rawUrl = rawUrl.replace(/([?&])chatUserId=[^&]*/, '$1chatUserId=' + encodeURIComponent(currentUserId));
 				var a = document.createElement('a');
 				a.href = rawUrl;
 				a.target = '_blank';
@@ -750,7 +754,17 @@ func (h *WebDAVWithDirectoryListing) serveDirectoryListing(w http.ResponseWriter
 				a.textContent = '📞';
 				contentDiv.appendChild(a);
 			} else {
-				contentDiv.textContent = msg.text;
+				// Проверяем, является ли сообщение ссылкой на файл (запись/скриншот)
+				var fileMatch = msg.text.match(/^[📹📸]\s*(\/\S+\.(mp4|webm|png))/u);
+				if (fileMatch) {
+					var a = document.createElement('a');
+					a.href = fileMatch[1];
+					a.target = '_blank';
+					a.textContent = msg.text.replace(/^([📹📸]\s*)\//u, '$1');
+					contentDiv.appendChild(a);
+				} else {
+					contentDiv.textContent = msg.text;
+				}
 			}
 
 			const timeDiv = document.createElement('div');
@@ -846,7 +860,7 @@ func (h *WebDAVWithDirectoryListing) serveDirectoryListing(w http.ResponseWriter
 		const chatCallBtn = document.getElementById('chatCallBtn');
 		chatCallBtn.addEventListener('click', function() {
 			const roomId = 'call_' + Math.random().toString(36).substr(2, 8);
-			const callUrl = '/videocall.html?room=' + roomId;
+			const callUrl = '/videocall.html?room=' + roomId + '&chatUserId=' + encodeURIComponent(currentUserId);
 			if (chatWS && chatWS.readyState === WebSocket.OPEN) {
 				chatWS.send(JSON.stringify({ text: '📞 ' + callUrl, sender: currentUserId }));
 				window.open(callUrl, '_blank');
@@ -856,7 +870,13 @@ func (h *WebDAVWithDirectoryListing) serveDirectoryListing(w http.ResponseWriter
 `)
 		}
 
-		html.WriteString(`</body>
+		html.WriteString(`<script>
+document.addEventListener('visibilitychange', function() {
+		  if (document.visibilityState === 'visible') { location.reload(); }
+});
+window.addEventListener('focus', function() { location.reload(); });
+</script>
+</body>
 </html>`)
 
 		// Отправляем HTML клиенту
