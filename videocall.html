@@ -641,23 +641,12 @@
         // ============= Мегапиксельный множитель для запроса пиру =============
         function setMpx(val) {
             diagLog('SETMPX ' + S.mpx + '→' + val + ' wantVideo=' + S.wantVideo);
-            // Сохранить текущий EWMA в кэш по старому mpx
-            if (behindEwma > 0) {
-                ewmaCache[S.mpx] = { b: behindEwma, d: deviationEwma };
-                diagLog('EWMA CACHE save mpx=' + S.mpx + ' b=' + behindEwma.toFixed(3) + ' d=' + deviationEwma.toFixed(3));
-            }
             S.mpx = val;
-            // Восстановить EWMA из кэша для нового mpx (если есть)
-            var cached = ewmaCache[S.mpx];
-            if (cached) {
-                behindEwma = cached.b;
-                deviationEwma = cached.d;
-                diagLog('EWMA CACHE restore mpx=' + S.mpx + ' b=' + behindEwma.toFixed(3) + ' d=' + deviationEwma.toFixed(3));
-            } else {
-                diagLog('EWMA CACHE miss mpx=' + S.mpx);
-            }
+            // Сброс EWMA — дообучится за несколько секунд
+            behindEwma = 0;
+            deviationEwma = 0;
             mpxSwitchPending = true;
-            saveAdaptiveSettings();  // сохранить ewmaCache в localStorage
+            saveAdaptiveSettings();
             applySettings();
             saveSettings();
             sendSettings();
@@ -745,7 +734,6 @@
                 if (a.adaptiveBust !== undefined) adaptiveBust = a.adaptiveBust;
                 if (a.manualBUST !== undefined) manualBUST = a.manualBUST;
                 if (a.manualSLOMO !== undefined) manualSLOMO = a.manualSLOMO;
-                if (a.ewmaCache) ewmaCache = a.ewmaCache;
             } catch(e) {}
             if (!adaptiveBust) {
                 BUST = manualBUST;
@@ -755,8 +743,7 @@
         }
         function saveAdaptiveSettings() {
             try { localStorage.setItem('vc_adaptive', JSON.stringify({
-                SS: SS, adaptiveBust: adaptiveBust, manualBUST: manualBUST, manualSLOMO: manualSLOMO,
-                ewmaCache: ewmaCache
+                SS: SS, adaptiveBust: adaptiveBust, manualBUST: manualBUST, manualSLOMO: manualSLOMO
             })); } catch(e) {}
         }
         function applyDebugSettings() {
@@ -817,17 +804,8 @@
         var BEHIND_EWMA_ALPHA = 0.02;         // коэффициент сглаживания EWMA behind
         var DEVIATION_EWMA_ALPHA = 0.01;      // коэффициент сглаживания EWMA девиации
         var EMERGENCY_ALPHA = 0.002;          // коэффициент сглаживания EMERGENCY_BEHIND (τ~50с, в 10 раз медленнее BUST)
-        var ewmaCache = ewmaCache || {};      // кэш EWMA по mpx: { "0.1": {b, d}, ... } (из localStorage)
-        // Восстановить EWMA для стартового mpx из кэша и вычислить зоны
-        if (ewmaCache[S.mpx]) {
-            behindEwma = ewmaCache[S.mpx].b;
-            deviationEwma = ewmaCache[S.mpx].d;
-            var zoneHalf = Math.max(K_EWMA_ZONES * deviationEwma, MIN_ZONE_HALF);
-            SLOMO = Math.max(BEHIND_MIN / (RATE_MIN * RATE_MIN), behindEwma - zoneHalf);
-            BUST = behindEwma + zoneHalf;
-            EMERGENCY_BEHIND = BUST * 2;
-        }
         var mpxSwitchPending = false;         // флаг: при SETMPX+stall — seek в середину гистерезиса
+        var _tabWasHidden = false;            // вкладка была в фоне — при восстановлении сбросить EWMA + doRateControl
 
         // Remote video fit+mirror: 0=fit 1=1:1 2=/2 3=×2 4=fit+╤i╕ 5=1:1+╤i╕ 6=/2+╤i╕ 7=×2+╤i╕
         var _savedFitMode = Math.max(0, Math.min(7, parseInt(localStorage.getItem('vc_fitMode')) || 0));
@@ -1843,6 +1821,39 @@
         });
         applyDebugSettings();
 
+        // ============= Восстановление после потери фокуса вкладкой =============
+        document.addEventListener('visibilitychange', function() {
+            if (document.hidden) {
+                _tabWasHidden = true;
+            } else if (_tabWasHidden && isActive && mseReady) {
+                _tabWasHidden = false;
+                // Сброс EWMA — в фоне behindEwma отравлена огромными значениями
+                behindEwma = 0;
+                deviationEwma = 0;
+                // Начальные BUST/SLOMO — EWMA переобучится с правильной позиции
+                BUST = manualBUST;
+                SLOMO = manualSLOMO;
+                EMERGENCY_BEHIND = BUST * 2;
+                // Явный seek в середину гистерезиса
+                if (remoteVideo.buffered && remoteVideo.buffered.length > 0) {
+                    var bufEnd = remoteVideo.buffered.end(remoteVideo.buffered.length - 1);
+                    var bufStart = remoteVideo.buffered.start(0);
+                    var midHyst = (BUST + SLOMO) / 2;
+                    var target = bufEnd - midHyst;
+                    if (target <= bufStart) target = bufEnd - BEHIND_MIN;
+                    remoteVideo.currentTime = target;
+                    remoteVideo.playbackRate = 1.0;
+                    remoteVideo.play().catch(function(){});
+                    diagLog('VISIBILITY seek ct -> ' + target.toFixed(1) +
+                        ' bufEnd=' + bufEnd.toFixed(1) +
+                        ' midHyst=' + midHyst.toFixed(3) +
+                        ' BUST=' + BUST.toFixed(3) + ' SLOMO=' + SLOMO.toFixed(3));
+                } else {
+                    diagLog('VISIBILITY no buffer');
+                }
+            }
+        });
+
         hangupBtn.addEventListener('click', function() { hangup(); });
 
         if (!roomID) {
@@ -1888,7 +1899,7 @@
 
         // ============= Экстренный seek + линейный rate контроль =============
         function doRateControl() {
-            if (!isActive || !mseReady) return;
+            if (!isActive || !mseReady || _tabWasHidden) return;
             try {
                 if (remoteVideo.buffered && remoteVideo.buffered.length > 0) {
                     var bufEnd = remoteVideo.buffered.end(remoteVideo.buffered.length - 1);
@@ -1900,8 +1911,8 @@
                     var now = Date.now();
                     var isStalled = remoteVideo.readyState < 3;
 
-                    // EWMA от rawBehind — пропускаем stall и отрицательные (нет данных)
-                    if (!isStalled && rawBehind > 0) {
+                    // EWMA от rawBehind — пропускаем stall, отрицательные (нет данных) и скрытую вкладку
+                    if (!isStalled && rawBehind > 0 && !_tabWasHidden) {
                         if (behindEwma === 0) {
                             behindEwma = rawBehind;
                             deviationEwma = 0;
@@ -3267,9 +3278,6 @@
             if (!isActive) return;
             cleanupCall();
             saveCallState();
-            if (behindEwma > 0) {
-                ewmaCache[S.mpx] = { b: behindEwma, d: deviationEwma };
-            }
             saveAdaptiveSettings();
             disconnectWS();
             endCall();
@@ -3284,9 +3292,6 @@
         window.addEventListener('beforeunload', function() {
             cleanupCall();
             saveCallState();
-            if (behindEwma > 0) {
-                ewmaCache[S.mpx] = { b: behindEwma, d: deviationEwma };
-            }
             saveAdaptiveSettings();
             disconnectWS();
             endCall();
