@@ -460,6 +460,8 @@
             wantVideo: true,      // хочу видео от пира
             vp8: true,
             h264: false,
+            vpxProfile: 'vp8',    // 'vp8' | 'vp9' — профиль VPx
+            avcProfile: 'avc',    // 'avc' | 'avc-main' | 'avc-high' | 'hevc' — профиль AVC/HEVC
             opus: true,
             aac: false,
             ec: true,
@@ -528,6 +530,8 @@
                 if (s.wantVideo !== undefined) S.wantVideo = s.wantVideo;
                 if (s.vp8 !== undefined) S.vp8 = s.vp8;
                 if (s.h264 !== undefined) S.h264 = s.h264;
+                if (s.vpxProfile !== undefined) S.vpxProfile = s.vpxProfile;
+                if (s.avcProfile !== undefined) S.avcProfile = s.avcProfile;
                 if (s.opus !== undefined) S.opus = s.opus;
                 if (s.aac !== undefined) S.aac = s.aac;
                 if (s.ec !== undefined) S.ec = s.ec;
@@ -572,8 +576,11 @@
             remoteVideo.style.visibility = S.wantVideo ? 'visible' : 'hidden';
             remoteMuteBtn.classList.toggle('off', !S.wantAudio);
             remoteVideo.muted = !S.wantAudio;
-            // Кодеки
+            // Кодеки — текст кнопок зависит от профиля
+            vp8Btn.textContent = S.vpxProfile === 'vp9' ? 'VP9' : 'VP8';
             vp8Btn.classList.toggle('off', !S.vp8);
+            var avcTexts = { 'avc': 'Avc', 'avc-main': 'AVc', 'avc-high': 'AVC', 'hevc': 'HEVC' };
+            h264Btn.textContent = avcTexts[S.avcProfile] || 'Avc';
             h264Btn.classList.toggle('off', !S.h264);
             opusBtn.classList.toggle('off', !S.opus);
             aacBtn.classList.toggle('off', !S.aac);
@@ -613,6 +620,8 @@
                 wantVideo: S.wantVideo,
                 vp8: S.vp8,
                 h264: S.h264,
+                vpxProfile: S.vpxProfile,
+                avcProfile: S.avcProfile,
                 opus: S.opus,
                 aac: S.aac,
                 ec: S.ec,
@@ -1735,16 +1744,60 @@
             diagLog('SCREEN toggle wantVideo=' + S.wantVideo);
             applySettings(); saveSettings(); sendSettings();
         });
-        // Кодеки
+        // Кодеки — маппинг avcProfile → video codec string
+        var AVC_CODEC_MAP = {
+            'avc': 'avc1.42E01E',         // Baseline
+            'avc-main': 'avc1.4D401E',     // Main
+            'avc-high': 'avc1.64001F',     // High
+            'hevc': 'hev1.1.6.L93.B0'      // HEVC
+        };
+        // Все возможные профили
+        var ALL_VPX_PROFILES = ['vp8', 'vp9'];
+        var ALL_AVC_PROFILES = ['avc', 'avc-main', 'avc-high', 'hevc'];
+        // Session-level blacklist — профили, упавшие при MSE addSourceBuffer
+        var failedProfiles = new Set();
+        function getAvailableVpxProfiles() {
+            return ALL_VPX_PROFILES.filter(function(p) { return !failedProfiles.has(p); });
+        }
+        function getAvailableAvcProfiles() {
+            return ALL_AVC_PROFILES.filter(function(p) { return !failedProfiles.has(p); });
+        }
+
         vp8Btn.addEventListener('click', function(e) {
             e.stopPropagation();
-            S.vp8 = !S.vp8;
-            if (S.vp8 && S.aac) S.aac = false; // VP8 и AAC взаимоисключающие
+            var avail = getAvailableVpxProfiles();
+            if (avail.length === 0) return;
+            if (!S.vp8) {
+                // Серая → включить с текущим профилем (выключить AVC)
+                S.vp8 = true; S.h264 = false;
+                if (S.aac) S.aac = false; // VPx(WebM) и AAC несовместимы
+                if (avail.indexOf(S.vpxProfile) === -1) S.vpxProfile = avail[0];
+                diagLog('VPX on: profile=' + S.vpxProfile);
+            } else {
+                // Зелёная → следующий профиль (wrap-around)
+                var curIdx = avail.indexOf(S.vpxProfile);
+                var nextIdx = (curIdx + 1) % avail.length;
+                S.vpxProfile = avail[nextIdx];
+                diagLog('VPX cycle: ' + S.vpxProfile);
+            }
             applySettings(); saveSettings(); sendSettings();
         });
         h264Btn.addEventListener('click', function(e) {
             e.stopPropagation();
-            S.h264 = !S.h264;
+            var avail = getAvailableAvcProfiles();
+            if (avail.length === 0) return;
+            if (!S.h264) {
+                // Серая → включить с текущим профилем (выключить VPx)
+                S.h264 = true; S.vp8 = false;
+                if (avail.indexOf(S.avcProfile) === -1) S.avcProfile = avail[0];
+                diagLog('AVC on: profile=' + S.avcProfile);
+            } else {
+                // Зелёная → следующий профиль (wrap-around)
+                var curIdx = avail.indexOf(S.avcProfile);
+                var nextIdx = (curIdx + 1) % avail.length;
+                S.avcProfile = avail[nextIdx];
+                diagLog('AVC cycle: ' + S.avcProfile);
+            }
             applySettings(); saveSettings(); sendSettings();
         });
         opusBtn.addEventListener('click', function(e) {
@@ -1755,7 +1808,7 @@
         aacBtn.addEventListener('click', function(e) {
             e.stopPropagation();
             S.aac = !S.aac;
-            if (S.aac && S.vp8) S.vp8 = false; // AAC и VP8 взаимоисключающие
+            if (S.aac && S.vp8) S.vp8 = false; // AAC и VPx(WebM) взаимоисключающие
             applySettings(); saveSettings(); sendSettings();
         });
         // Аудио фильтры
@@ -2031,24 +2084,27 @@
         }, 1000);
 
         // ============= Кодеки — строим из зелёных кнопок =============
+
         function buildCodecListFromButtons() {
             var list = [];
             if (S.h264) {
+                var vc = AVC_CODEC_MAP[S.avcProfile] || AVC_CODEC_MAP['avc'];
                 if (S.aac) {
-                    list.push('video/mp4;codecs="avc1.42E01E,mp4a.40.2"');
+                    list.push('video/mp4;codecs="' + vc + ',mp4a.40.2"');
                 }
                 if (S.opus) {
-                    list.push('video/mp4;codecs="avc1.42E01E,opus"');
+                    list.push('video/mp4;codecs="' + vc + ',opus"');
                 }
                 if (!S.aac && !S.opus) {
                     list.push('video/mp4');
                 }
             }
             if (S.vp8) {
+                var vpCodec = S.vpxProfile === 'vp9' ? 'vp9' : 'vp8';
                 if (S.opus) {
-                    list.push('video/webm;codecs="vp8,opus"');
+                    list.push('video/webm;codecs="' + vpCodec + ',opus"');
                 } else {
-                    list.push('video/webm');
+                    list.push('video/webm;codecs="' + vpCodec + '"');
                 }
             }
             // Audio-only codecs
@@ -2092,8 +2148,16 @@
             var allCandidates = [
                 'video/webm;codecs="vp8,opus"',
                 'video/webm;codecs="vp8"',
+                'video/webm;codecs="vp9,opus"',
+                'video/webm;codecs="vp9"',
                 'video/mp4;codecs="avc1.42E01E,opus"',
                 'video/mp4;codecs="avc1.42E01E,mp4a.40.2"',
+                'video/mp4;codecs="avc1.4D401E,opus"',
+                'video/mp4;codecs="avc1.4D401E,mp4a.40.2"',
+                'video/mp4;codecs="avc1.64001F,opus"',
+                'video/mp4;codecs="avc1.64001F,mp4a.40.2"',
+                'video/mp4;codecs="hev1.1.6.L93.B0,opus"',
+                'video/mp4;codecs="hev1.1.6.L93.B0,mp4a.40.2"',
                 'audio/webm;codecs="opus"',
                 'audio/mp4;codecs="mp4a.40.2"',
             ];
@@ -2120,16 +2184,20 @@
 
         function codecDisplayName(codec) {
             if (!codec) return 'Unknown';
+            var cl = codec.toLowerCase();
             var video = '', audio = '';
-            if (codec.indexOf('avc1.42E01E') !== -1) video = 'H.264 Baseline';
-            else if (codec.indexOf('avc1.4D401E') !== -1) video = 'H.264 Main';
-            else if (codec.indexOf('avc1.64001F') !== -1) video = 'H.264 High';
-            else if (codec.indexOf('vp8') !== -1) video = 'VP8';
-            if (codec.indexOf('opus') !== -1) audio = 'Opus';
-            else if (codec.indexOf('mp4a.40.2') !== -1) audio = 'AAC';
-            if (!video && codec.indexOf('audio/') === 0) return audio || codec;
-            if (!video && codec.indexOf('mp4') !== -1) video = 'MP4';
-            if (!video && codec.indexOf('webm') !== -1) video = 'WebM';
+            // AVC профили — matching по префиксу (MediaRecorder нормализует avc1.42E01E → avc1.42001e)
+            if (cl.indexOf('avc1.42') !== -1) video = 'Avc';
+            else if (cl.indexOf('avc1.4d') !== -1) video = 'AVc';
+            else if (cl.indexOf('avc1.64') !== -1) video = 'AVC';
+            else if (cl.indexOf('hev1') !== -1 || cl.indexOf('hvc1') !== -1) video = 'HEVC';
+            else if (cl.indexOf('vp9') !== -1) video = 'VP9';
+            else if (cl.indexOf('vp8') !== -1) video = 'VP8';
+            if (cl.indexOf('opus') !== -1) audio = 'Opus';
+            else if (cl.indexOf('mp4a.40.2') !== -1) audio = 'AAC';
+            if (!video && cl.indexOf('audio/') === 0) return audio || codec;
+            if (!video && cl.indexOf('mp4') !== -1) video = 'MP4';
+            if (!video && cl.indexOf('webm') !== -1) video = 'WebM';
             var name = video || codec;
             if (audio) name += ' + ' + audio;
             return name;
@@ -2758,6 +2826,8 @@
                 if (
                     prev.vp8 !== msg.vp8 ||
                     prev.h264 !== msg.h264 ||
+                    prev.vpxProfile !== msg.vpxProfile ||
+                    prev.avcProfile !== msg.avcProfile ||
                     prev.opus !== msg.opus ||
                     prev.aac !== msg.aac ||
                     Math.abs((prev.mpx || 0) - (msg.mpx || 0)) > 0.001) {
@@ -2984,7 +3054,32 @@
                     if (mseQueueLength() > 0) processMSEQueue();
                 } catch (e) {
                     diagLog('MSE sourceopen FAILED: ' + e.message);
-                    showError('MSE codec not supported: ' + codec);
+                    // Runtime fallback — занести профиль в blacklist, переключить на следующий
+                    var _cl = (codec || '').toLowerCase();
+                    if (_cl.indexOf('vp8') !== -1 || _cl.indexOf('vp9') !== -1) {
+                        failedProfiles.add(S.vpxProfile);
+                        diagLog('MSE blacklist: ' + S.vpxProfile + ' (total=' + failedProfiles.size + ')');
+                        var _avail = getAvailableVpxProfiles();
+                        if (_avail.length > 0) {
+                            S.vpxProfile = _avail[0];
+                        }
+                        diagLog('MSE fallback: VPX → ' + S.vpxProfile);
+                    } else {
+                        failedProfiles.add(S.avcProfile);
+                        diagLog('MSE blacklist: ' + S.avcProfile + ' (total=' + failedProfiles.size + ')');
+                        var _avail = getAvailableAvcProfiles();
+                        if (_avail.length > 0) {
+                            S.avcProfile = _avail[0];
+                        }
+                        diagLog('MSE fallback: AVC → ' + S.avcProfile);
+                    }
+                    S.vp8 = false; S.h264 = false;
+                    // Закрыть сломанный MediaSource — чтобы следующий initCodec создал свежий
+                    mseRestarting = false;
+                    try { if (mediaSource && mediaSource.readyState === 'open') mediaSource.endOfStream(); } catch(_e) {}
+                    try { if (remoteVideo.src) { URL.revokeObjectURL(remoteVideo.src); remoteVideo.removeAttribute('src'); } } catch(_e) {}
+                    mediaSource = null; sourceBuffer = null;
+                    applySettings(); saveSettings(); sendSettings();
                 }
             });
         }
