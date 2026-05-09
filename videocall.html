@@ -823,6 +823,8 @@
         var remoteFitModes = ['', 'fit-1to1', 'fit-half', 'fit-2x'];
         var remoteNativeW = 0;
         var remoteNativeH = 0;
+        var localNativeW = 0;
+        var localNativeH = 0;
         var screenshotFrameMode = 1; // 0=Raw, 1=Full, 2=4:3, 3=16:9 (только в фулскрине)
 
         function updateFitBtnHighlight() {
@@ -935,16 +937,15 @@
         var _lastMyResText = '';
         var _lastPeerResText = '';
         function updateResLabels() {
-            // pipResLabel — разрешение МОЕЙ камеры (PiP окно) + MIME рекордера
+            // pipResLabel — реальное разрешение МОЕЙ камеры из видеодорожки + MIME рекордера
             var myText = '';
-            if (localStream) {
-                var vt = localStream.getVideoTracks()[0];
-                if (vt && vt.enabled) {
-                    var s = vt.getSettings();
-                    var w = s.width || 0;
-                    var h = s.height || 0;
-                    if (w > 0 && h > 0) {
-                        myText = w + '×' + h;
+            if (localNativeW > 0 && localNativeH > 0) {
+                myText = localNativeW + '×' + localNativeH;
+                // FPS берём из getSettings() — videoWidth его не даёт
+                if (localStream) {
+                    var vt = localStream.getVideoTracks()[0];
+                    if (vt) {
+                        var s = vt.getSettings();
                         if (s.frameRate > 0) {
                             myText += '×' + Math.round(s.frameRate);
                         }
@@ -960,10 +961,10 @@
                 _lastMyResText = myText;
             }
 
-            // remoteResLabel — разрешение камеры пира из cmd:myRes + кодек рекордера из cmd:initCodec
+            // remoteResLabel — реальное разрешение камеры пира из видеодорожки + кодек рекордера
             var peerText = '';
-            if (peerRes.width > 0 && peerRes.height > 0) {
-                peerText = peerRes.width + '×' + peerRes.height;
+            if (remoteNativeW > 0 && remoteNativeH > 0) {
+                peerText = remoteNativeW + '×' + remoteNativeH;
                 if (peerRes.frameRate > 0) {
                     peerText += '×' + Math.round(peerRes.frameRate);
                 }
@@ -1020,6 +1021,15 @@
         }
         remoteVideo.addEventListener('loadedmetadata', onRemoteVideoResize);
         remoteVideo.addEventListener('resize', onRemoteVideoResize);
+        function onLocalVideoResize() {
+            var w = localVideo.videoWidth || 0;
+            var h = localVideo.videoHeight || 0;
+            if (w > 0 && h > 0 && (w !== localNativeW || h !== localNativeH)) {
+                localNativeW = w;
+                localNativeH = h;
+                updateResLabels();
+            }
+        }
         function setFitMode(mode) {
             remoteFitMode = mode;
             applyRemoteFitMode();
@@ -1173,8 +1183,8 @@
         updatePipSize();
 
         // Размер PiP обновляется при загрузке видео и при ресайзе
-        localVideo.addEventListener('loadedmetadata', updatePipSize);
-        localVideo.addEventListener('resize', updatePipSize);
+        localVideo.addEventListener('loadedmetadata', function() { updatePipSize(); onLocalVideoResize(); });
+        localVideo.addEventListener('resize', function() { updatePipSize(); onLocalVideoResize(); });
         window.addEventListener('resize', updatePipSize);
 
         // ResizeObserver на MSE-контейнере: при ресайзе переотправляем settings пиру
