@@ -404,6 +404,9 @@
         var isScreenSharing = false;
         var screenToggling = false;
         var displayAudioTrack = null;
+        var audioCtx = null;           // AudioContext для стерео-микширования Mic+Screen
+        var mergedAudioTrack = null;   // результирующий стерео-трек (Mic→L, Display→R)
+        var savedMicTrack = null;      // сохранённый mic track для восстановления
         var audioBeforeScreenShare = false;
         var videoBeforeScreenShare = false;
         // Скрываем кнопки шаринга экрана если API недоступно
@@ -1376,6 +1379,12 @@
             if (!localStream || micToggling) return;
             micToggling = true;
             audioDisabledByPrivacy = false; // ручное управление — сбрасываем флаг приватности
+            // Если активен merger экранного аудио — сначала мягко разбираем
+            var reinitScreenAudio = false;
+            if (isScreenSharing && S.screenAudio && (audioCtx || mergedAudioTrack || displayAudioTrack)) {
+                reinitScreenAudio = true;
+                teardownScreenAudio(true);
+            }
 
             if (!S.audio) {
                 // Микрофон выключен (серая) — включаем первый
@@ -1431,6 +1440,10 @@
                 }
             }
 
+            // Пересоздаём merger экранного аудио если нужно
+            if (reinitScreenAudio && isScreenSharing && S.screenAudio && displayAudioTrack) {
+                setupScreenAudioFromTracks();
+            }
             applySettings(); saveSettings(); sendSettings();
             if (!S.audio && !S.video) {
                 // Всё выключено — стоп рекордер
@@ -1736,6 +1749,83 @@
             }
             showAllControls();
         });
+        // ============= Стерео-микширование Mic + Screen Audio =============
+        // setupScreenAudio(displayStream) — начальная настройка при старте шаринга
+        function setupScreenAudio(displayStream) {
+            var displayAudioTracks = displayStream.getAudioTracks();
+            if (displayAudioTracks.length === 0) {
+                diagLog('SCREEN AUDIO: no display audio tracks available');
+                return;
+            }
+            displayAudioTrack = displayAudioTracks[0];
+            setupScreenAudioFromTracks();
+        }
+        // setupScreenAudioFromTracks() — пересоздание merger из существующего displayAudioTrack
+        function setupScreenAudioFromTracks() {
+            if (!displayAudioTrack || displayAudioTrack.readyState !== 'live') {
+                diagLog('SCREEN AUDIO: no live display audio track');
+                return;
+            }
+            var micTracks = localStream.getAudioTracks();
+            if (micTracks.length > 0 && S.audio) {
+                // Оба источника — стерео-микширование через Web Audio API
+                try {
+                    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                    var micSource = audioCtx.createMediaStreamSource(new MediaStream([micTracks[0]]));
+                    var displaySource = audioCtx.createMediaStreamSource(new MediaStream([displayAudioTrack]));
+                    var merger = audioCtx.createChannelMerger(2);
+                    var dest = audioCtx.createMediaStreamDestination();
+                    micSource.connect(merger, 0, 0);    // Mic → channel 0 (left)
+                    displaySource.connect(merger, 0, 1); // Display → channel 1 (right)
+                    merger.connect(dest);
+                    savedMicTrack = micTracks[0];
+                    localStream.removeTrack(savedMicTrack);
+                    mergedAudioTrack = dest.stream.getAudioTracks()[0];
+                    localStream.addTrack(mergedAudioTrack);
+                    diagLog('SCREEN AUDIO: stereo merge created (Mic→L, Display→R)');
+                } catch(e) {
+                    diagLog('SCREEN AUDIO: stereo merge failed: ' + e.message);
+                    localStream.addTrack(displayAudioTrack);
+                    audioCtx = null;
+                    mergedAudioTrack = null;
+                    savedMicTrack = null;
+                }
+            } else {
+                // Только display audio — без микширования
+                localStream.addTrack(displayAudioTrack);
+                diagLog('SCREEN AUDIO: display audio only (no mic)');
+            }
+        }
+        // teardownScreenAudio(soft) — разбор аудио
+        // soft=true: keep displayAudioTrack alive для пересоздания (при toggle Mic)
+        // soft=false: full teardown (screen share ending)
+        function teardownScreenAudio(soft) {
+            if (audioCtx) {
+                try { audioCtx.close(); } catch(e) {}
+                audioCtx = null;
+            }
+            if (mergedAudioTrack) {
+                try { localStream.removeTrack(mergedAudioTrack); } catch(e) {}
+                mergedAudioTrack = null;
+            }
+            if (displayAudioTrack) {
+                try { localStream.removeTrack(displayAudioTrack); } catch(e) {}
+                if (!soft) {
+                    try { displayAudioTrack.stop(); } catch(e) {}
+                    displayAudioTrack = null;
+                }
+            }
+            if (savedMicTrack) {
+                if (savedMicTrack.readyState === 'live') {
+                    localStream.addTrack(savedMicTrack);
+                    diagLog('SCREEN AUDIO: mic track restored');
+                }
+                savedMicTrack = null;
+            }
+            if (!soft) diagLog('SCREEN AUDIO: teardown complete');
+            else diagLog('SCREEN AUDIO: soft teardown (display audio kept)');
+        }
+
         // screenBtn — переключение камера/шаринг экрана
         screenBtn.addEventListener('click', async function(e) {
             e.stopPropagation();
@@ -1757,13 +1847,10 @@
                     // Добавляем display track
                     var displayTrack = displayStream.getVideoTracks()[0];
                     localStream.addTrack(displayTrack);
-                    // Добавляем аудио-трек экрана если есть
+                    // Настраиваем аудио: стерео-микширование или просто display audio
                     displayAudioTrack = null;
-                    var displayAudioTracks = displayStream.getAudioTracks();
-                    if (displayAudioTracks.length > 0) {
-                        displayAudioTrack = displayAudioTracks[0];
-                        localStream.addTrack(displayAudioTrack);
-                        diagLog('SCREEN audio track added');
+                    if (S.screenAudio) {
+                        setupScreenAudio(displayStream);
                     }
                     cameraNativeMaxW = screenW;
                     cameraNativeMaxH = screenH;
@@ -1789,12 +1876,8 @@
                     displayTrack.onended = function() {
                         isScreenSharing = false;
                         S.isScreenSharing = false;
-                        // Удаляем аудио-трек экрана
-                        if (displayAudioTrack) {
-                            try { localStream.removeTrack(displayAudioTrack); displayAudioTrack.stop(); } catch(e) {}
-                            displayAudioTrack = null;
-                            diagLog('SCREEN audio track removed');
-                        }
+                        // Удаляем аудио-треки экрана и восстанавливаем Mic
+                        teardownScreenAudio();
                         // Переключаемся обратно на камеру (если была включена)
                         S.video = videoBeforeScreenShare;
                         (async function() {
@@ -1831,6 +1914,7 @@
                     diagLog('SCREEN share failed: ' + e.message);
                     isScreenSharing = false;
                     S.isScreenSharing = false;
+                    teardownScreenAudio();
                     // Восстанавливаем камеру (если была включена)
                     S.video = videoBeforeScreenShare;
                     if (videoBeforeScreenShare) {
@@ -1846,6 +1930,7 @@
                 // Выключаем шаринг экрана — переключаемся на камеру
                 isScreenSharing = false;
                 S.isScreenSharing = false;
+                teardownScreenAudio();
                 S.video = videoBeforeScreenShare;
                 if (videoBeforeScreenShare) {
                     try {
