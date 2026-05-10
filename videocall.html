@@ -185,8 +185,9 @@
         .ctrl-btn.off { background: #555; }
         .ctrl-btn.screen-share {
             position: absolute;
-            top: 2px;
+            top: 50%;
             right: 2px;
+            transform: translateY(-50%);
             z-index: 25;
             background: #555;
             opacity: 0;
@@ -223,9 +224,10 @@
         body.show-pip-controls .ctrl-btn.mic { opacity: 1; }
         .ctrl-btn.aspect169 {
             position: absolute;
-            top: 50%;
-            left: 2px;
-            transform: translateY(-50%);
+            top: 2px;
+            right: 2px;
+            left: auto;
+            transform: none;
             z-index: 25;
             background: #555;
             opacity: 0;
@@ -237,6 +239,18 @@
         }
         .ctrl-btn.aspect169.active { background: #4ecca3; }
         body.show-pip-controls .ctrl-btn.aspect169 { opacity: 1; }
+        .ctrl-btn.screen-audio {
+            position: absolute;
+            top: 50%;
+            left: 2px;
+            transform: translateY(-50%);
+            z-index: 25;
+            background: #4ecca3;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .ctrl-btn.screen-audio.off { background: #555; }
+        body.show-pip-controls .ctrl-btn.screen-audio { opacity: 1; }
         .ctrl-btn.cam {
             position: absolute;
             bottom: 2px;
@@ -355,8 +369,9 @@
             </div>
             <div class="pip-container pip-tl" id="pipContainer">
                 <button type="button" class="ctrl-btn rec emoji" id="recBtn" title="Record">⏺</button>
-                <button type="button" class="ctrl-btn screen-share emoji" id="screenBtn" title="Screen Share">🖼️</button>
                 <button type="button" class="ctrl-btn aspect169" id="aspect169Btn" title="16:9">16:9</button>
+                <button type="button" class="ctrl-btn screen-share emoji" id="screenBtn" title="Screen Share">📤</button>
+                <button type="button" class="ctrl-btn screen-audio emoji" id="screenAudioBtn" title="Screen Audio">🎙️</button>
                 <video id="localVideo" autoplay muted playsinline></video>
                 <button type="button" class="ctrl-btn mic emoji" id="micBtn" title="Mic">🎤</button>
                 <button type="button" class="ctrl-btn cam emoji" id="camBtn" title="Cam">📷</button>
@@ -385,13 +400,16 @@
         var camBtn = document.getElementById('camBtn');
         var screenBtn = document.getElementById('screenBtn');
         var aspect169Btn = document.getElementById('aspect169Btn');
+        var screenAudioBtn = document.getElementById('screenAudioBtn');
         var isScreenSharing = false;
         var screenToggling = false;
+        var displayAudioTrack = null;
         var audioBeforeScreenShare = false;
         var videoBeforeScreenShare = false;
-        // Скрываем кнопку шаринга экрана если API недоступно
+        // Скрываем кнопки шаринга экрана если API недоступно
         if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
             screenBtn.style.display = 'none';
+            screenAudioBtn.style.display = 'none';
         }
         var recBtn = document.getElementById('recBtn');
         var isRecording = false;
@@ -458,7 +476,8 @@
             isScreenSharing: false,
             pipCorner: 0,        // только локально, не отправляется пиру
             facingMode: 'user',  // 'user' = фронтальная, 'environment' = задняя
-            aspect169: false     // true = приоритет 16:9, false = приоритет 4:3
+            aspect169: false,    // true = приоритет 16:9, false = приоритет 4:3
+            screenAudio: false   // true = захватывать аудио при шаринге экрана
         };
         var videoDevices = [];       // список videoinput устройств (для десктопа)
         var currentDeviceIndex = -1; // индекс текущей камеры в videoDevices
@@ -544,6 +563,7 @@
                 if (s.pipCorner !== undefined) S.pipCorner = s.pipCorner;
                 if (s.facingMode !== undefined) S.facingMode = s.facingMode;
                 if (s.aspect169 !== undefined) S.aspect169 = s.aspect169;
+                if (s.screenAudio !== undefined) S.screenAudio = s.screenAudio;
             } catch(e) {}
         }
 
@@ -569,6 +589,7 @@
             }
             screenBtn.classList.toggle('active', isScreenSharing);
             aspect169Btn.classList.toggle('active', S.aspect169);
+            screenAudioBtn.classList.toggle('off', !S.screenAudio);
             // Receiver кнопки
             remoteScreenBtn.classList.toggle('off', !S.wantVideo);
             remoteVideo.style.visibility = S.wantVideo ? 'visible' : 'hidden';
@@ -705,6 +726,7 @@
         var echo = false; // эхо-режим (хост видит своё видео пока гость не подключился)
         var audioDisabledByPrivacy = false; // Mic выключен пиром через кодеки (не автором вручную)
         var videoDisabledByPrivacy = false; // Cam выключена пиром через кодеки (не автором вручную)
+        var screenAudioDisabledByPrivacy = false; // Screen Audio выключен пиром через кодеки (не автором вручную)
         var recorderStarted = false;
         var mediaSource = null;
         var sourceBuffer = null;
@@ -1225,6 +1247,7 @@
             if (e.target.closest('.ctrl-btn.rec')) return;
             if (e.target.closest('.ctrl-btn.screen-share')) return;
             if (e.target.closest('.ctrl-btn.aspect169')) return;
+            if (e.target.closest('.ctrl-btn.screen-audio')) return;
             if (e.target.closest('.ctrl-btn.mic')) return;
             if (e.target.closest('.ctrl-btn.cam')) return;
             movePip();
@@ -1727,13 +1750,21 @@
                     var screenH = Math.round(screen.height * dpr);
                     var displayStream = await navigator.mediaDevices.getDisplayMedia({
                         video: { width: { ideal: screenW }, height: { ideal: screenH } },
-                        audio: false
+                        audio: S.screenAudio
                     });
                     // Останавливаем текущие video tracks (камеру)
                     localStream.getVideoTracks().forEach(function(t) { t.stop(); localStream.removeTrack(t); });
                     // Добавляем display track
                     var displayTrack = displayStream.getVideoTracks()[0];
                     localStream.addTrack(displayTrack);
+                    // Добавляем аудио-трек экрана если есть
+                    displayAudioTrack = null;
+                    var displayAudioTracks = displayStream.getAudioTracks();
+                    if (displayAudioTracks.length > 0) {
+                        displayAudioTrack = displayAudioTracks[0];
+                        localStream.addTrack(displayAudioTrack);
+                        diagLog('SCREEN audio track added');
+                    }
                     cameraNativeMaxW = screenW;
                     cameraNativeMaxH = screenH;
                     // Обновляем MPX_GROUPS[0.7] разрешением экрана (оба ключа для ideal fallback)
@@ -1758,6 +1789,12 @@
                     displayTrack.onended = function() {
                         isScreenSharing = false;
                         S.isScreenSharing = false;
+                        // Удаляем аудио-трек экрана
+                        if (displayAudioTrack) {
+                            try { localStream.removeTrack(displayAudioTrack); displayAudioTrack.stop(); } catch(e) {}
+                            displayAudioTrack = null;
+                            diagLog('SCREEN audio track removed');
+                        }
                         // Переключаемся обратно на камеру (если была включена)
                         S.video = videoBeforeScreenShare;
                         (async function() {
@@ -1845,6 +1882,15 @@
             }
             updateResLabels();
             screenToggling = false;
+        });
+        // screenAudioBtn — переключение захвата аудио при шаринге экрана
+        screenAudioBtn.addEventListener('click', async function(e) {
+            e.stopPropagation();
+            screenAudioDisabledByPrivacy = false; // ручное управление — сбрасываем флаг приватности
+            S.screenAudio = !S.screenAudio;
+            applySettings(); saveSettings();
+            diagLog('SCREEN AUDIO toggle=' + S.screenAudio);
+            showAllControls();
         });
         // remoteMuteBtn — toggle хочу ли я аудио от пира
         remoteMuteBtn.addEventListener('click', function(e) {
@@ -2793,6 +2839,13 @@
                     restartMediaRecorder('settings');
                 }
             }
+            // Пир отключил все аудио кодеки → выключаем Screen Audio (если ещё включён)
+            if (peerNoAudio && S.screenAudio) {
+                diagLog('PRIVACY: peer disabled all audio codecs, turning off Screen Audio');
+                S.screenAudio = false;
+                screenAudioDisabledByPrivacy = true;
+                applySettings(); saveSettings();
+            }
             // Пир включил хотя бы один аудио кодек обратно → включаем Mic (если был выключен пиром, а не автором)
             if (!peerNoAudio && audioDisabledByPrivacy && !S.audio) {
                 diagLog('PRIVACY: peer re-enabled audio codecs, turning my Mic back on');
@@ -2813,6 +2866,13 @@
                 if (recorderStarted || S.audio) {
                     restartMediaRecorder('settings');
                 }
+            }
+            // Пир включил аудио кодеки обратно → включаем Screen Audio (если был выключен пиром, а не автором)
+            if (!peerNoAudio && screenAudioDisabledByPrivacy && !S.screenAudio) {
+                diagLog('PRIVACY: peer re-enabled audio codecs, turning Screen Audio back on');
+                screenAudioDisabledByPrivacy = false;
+                S.screenAudio = true;
+                applySettings(); saveSettings();
             }
 
             // Пир отключил все видео кодеки → выключаем свою Cam (если ещё включена)
