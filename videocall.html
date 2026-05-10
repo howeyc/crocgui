@@ -195,19 +195,6 @@
         .ctrl-btn.screen-share:hover { background: #666; }
         .ctrl-btn.screen-share.active { background: #4ecca3; }
         body.show-pip-controls .ctrl-btn.screen-share { opacity: 1; }
-        .ctrl-btn.flip {
-            position: absolute;
-            top: 50%;
-            right: 2px;
-            transform: translateY(-50%);
-            z-index: 25;
-            background: #555;
-            opacity: 0;
-            transition: opacity 0.3s;
-        }
-        .ctrl-btn.flip:hover { background: #666; }
-        .ctrl-btn.flip.active { background: #4ecca3; }
-        body.show-pip-controls .ctrl-btn.flip { opacity: 1; }
         .ctrl-btn.rec {
             position: absolute;
             top: 2px;
@@ -369,7 +356,6 @@
             <div class="pip-container pip-tl" id="pipContainer">
                 <button type="button" class="ctrl-btn rec emoji" id="recBtn" title="Record">⏺</button>
                 <button type="button" class="ctrl-btn screen-share emoji" id="screenBtn" title="Screen Share">🖼️</button>
-                <button type="button" class="ctrl-btn flip emoji" id="flipBtn" title="Flip Camera">🔄</button>
                 <button type="button" class="ctrl-btn aspect169" id="aspect169Btn" title="16:9">16:9</button>
                 <video id="localVideo" autoplay muted playsinline></video>
                 <button type="button" class="ctrl-btn mic emoji" id="micBtn" title="Mic">🎤</button>
@@ -398,7 +384,6 @@
         var micBtn = document.getElementById('micBtn');
         var camBtn = document.getElementById('camBtn');
         var screenBtn = document.getElementById('screenBtn');
-        var flipBtn = document.getElementById('flipBtn');
         var aspect169Btn = document.getElementById('aspect169Btn');
         var isScreenSharing = false;
         var screenToggling = false;
@@ -477,6 +462,8 @@
         };
         var videoDevices = [];       // список videoinput устройств (для десктопа)
         var currentDeviceIndex = -1; // индекс текущей камеры в videoDevices
+        var audioDevices = [];       // список audioinput устройств
+        var currentAudioDeviceIndex = -1; // индекс текущего микрофона в audioDevices
         var cameraNativeMaxW = 0;    // нативный максимум ширины камеры (из getCameraCapabilities)
         var cameraNativeMaxH = 0;    // нативный максимум высоты камеры (из getCameraCapabilities)
         var cameraNativeMaxFPS = 0;  // нативный максимум FPS камеры (из getCameraCapabilities)
@@ -567,9 +554,20 @@
         function applySettings() {
             // Sender кнопки
             micBtn.classList.toggle('off', !S.audio);
+            // Индекс микрофона в тексте кнопки: несколько устройств → 🎤2, иначе → 🎤
+            if (audioDevices.length > 1 && S.audio && currentAudioDeviceIndex >= 0) {
+                micBtn.textContent = '🎤' + (currentAudioDeviceIndex + 1);
+            } else {
+                micBtn.textContent = '🎤';
+            }
             camBtn.classList.toggle('off', !S.video);
+            // Индекс камеры в тексте кнопки: десктоп с несколькими камерами → 📷2, иначе → 📷
+            if (isDesktop && videoDevices.length > 1 && S.video && currentDeviceIndex >= 0) {
+                camBtn.textContent = '📷' + (currentDeviceIndex + 1);
+            } else {
+                camBtn.textContent = '📷';
+            }
             screenBtn.classList.toggle('active', isScreenSharing);
-            flipBtn.classList.toggle('active', !isDesktop && S.facingMode === 'environment');
             aspect169Btn.classList.toggle('active', S.aspect169);
             // Receiver кнопки
             remoteScreenBtn.classList.toggle('off', !S.wantVideo);
@@ -861,9 +859,14 @@
         async function enumerateVideoDevices() {
             try {
                 var devices = await navigator.mediaDevices.enumerateDevices();
-                videoDevices = devices.filter(function(d) { return d.kind === 'videoinput'; });
+                videoDevices = devices.filter(function(d) { return d.kind === 'videoinput' && /^[0-9a-f]{8,}$/.test(d.deviceId); });
+                var vlist = videoDevices.map(function(d, i) {
+                    return '#' + i + ' label=' + (d.label || '(no label)') + ' id=' + d.deviceId.slice(0, 8) + '…';
+                }).join(', ');
+                diagLog('[Devices] Video inputs (' + videoDevices.length + '): ' + vlist);
             } catch(e) {
                 videoDevices = [];
+                diagLog('[Devices] enumerateVideoDevices error: ' + e);
             }
         }
 
@@ -931,10 +934,68 @@
             currentDeviceIndex = 0;
         }
 
-        // Скрывает кнопку 🔄 на десктопе если камера всего одна
-        function updateFlipButtonVisibility() {
-            if (!isDesktop) return;
-            flipBtn.style.display = videoDevices.length <= 1 ? 'none' : '';
+        // ============= Перечисление аудиоустройств =============
+        async function enumerateAudioDevices() {
+            try {
+                var devices = await navigator.mediaDevices.enumerateDevices();
+                audioDevices = devices.filter(function(d) { return d.kind === 'audioinput' && /^[0-9a-f]{8,}$/.test(d.deviceId); });
+                var alist = audioDevices.map(function(d, i) {
+                    return '#' + i + ' label=' + (d.label || '(no label)') + ' id=' + d.deviceId.slice(0, 8) + '…';
+                }).join(', ');
+                diagLog('[Devices] Audio inputs (' + audioDevices.length + '): ' + alist);
+            } catch(e) {
+                audioDevices = [];
+                diagLog('[Devices] enumerateAudioDevices error: ' + e);
+            }
+        }
+
+        // Формирование audio constraints для getUserMedia
+        function buildAudioConstraints() {
+            var constraints = { echoCancellation: S.ec, noiseSuppression: S.ns, autoGainControl: S.agc };
+            if (audioDevices.length > 1 && currentAudioDeviceIndex >= 0 && audioDevices[currentAudioDeviceIndex]) {
+                constraints.deviceId = { exact: audioDevices[currentAudioDeviceIndex].deviceId };
+            }
+            return constraints;
+        }
+
+        // Сохраняет текущий audio deviceId в localStorage
+        function saveCurrentAudioDeviceId() {
+            if (currentAudioDeviceIndex < 0 || !audioDevices[currentAudioDeviceIndex]) return;
+            try { localStorage.setItem('vc_audioDeviceId', audioDevices[currentAudioDeviceIndex].deviceId); } catch(e) {}
+        }
+
+        // Восстанавливает currentAudioDeviceIndex из сохранённого deviceId
+        async function restoreAudioDeviceId() {
+            await enumerateAudioDevices();
+            var savedId = '';
+            try { savedId = localStorage.getItem('vc_audioDeviceId') || ''; } catch(e) {}
+            if (savedId && audioDevices.length > 0) {
+                for (var i = 0; i < audioDevices.length; i++) {
+                    if (audioDevices[i].deviceId === savedId) {
+                        currentAudioDeviceIndex = i;
+                        return;
+                    }
+                }
+            }
+            currentAudioDeviceIndex = 0;
+        }
+
+        // Определяет текущее аудиоустройство после получения микрофона
+        async function detectCurrentAudioDevice() {
+            await enumerateAudioDevices();
+            var at = localStream ? localStream.getAudioTracks()[0] : null;
+            if (!at) { currentAudioDeviceIndex = 0; return; }
+            var curSettings = at.getSettings();
+            if (curSettings && curSettings.deviceId) {
+                for (var i = 0; i < audioDevices.length; i++) {
+                    if (audioDevices[i].deviceId === curSettings.deviceId) {
+                        currentAudioDeviceIndex = i;
+                        saveCurrentAudioDeviceId();
+                        return;
+                    }
+                }
+            }
+            currentAudioDeviceIndex = 0;
         }
 
         var _lastMyResText = '';
@@ -1163,7 +1224,6 @@
         pipContainer.addEventListener('click', function(e) {
             if (e.target.closest('.ctrl-btn.rec')) return;
             if (e.target.closest('.ctrl-btn.screen-share')) return;
-            if (e.target.closest('.ctrl-btn.flip')) return;
             if (e.target.closest('.ctrl-btn.aspect169')) return;
             if (e.target.closest('.ctrl-btn.mic')) return;
             if (e.target.closest('.ctrl-btn.cam')) return;
@@ -1287,33 +1347,67 @@
         document.addEventListener('webkitfullscreenchange', syncFullscreenBtn);
 
         // ============= Кнопки управления =============
-        // micBtn — toggle мой микрофон (реальный release/acquire)
+        // micBtn — переключение микрофона: серая→включить первый, зелёная→следующий, последний→выключить
         var micToggling = false;
         micBtn.addEventListener('click', async function() {
             if (!localStream || micToggling) return;
             micToggling = true;
             audioDisabledByPrivacy = false; // ручное управление — сбрасываем флаг приватности
-            S.audio = !S.audio;
-            if (S.audio) {
-                // Включаем: заново получаем аудио поток
+
+            if (!S.audio) {
+                // Микрофон выключен (серая) — включаем первый
+                S.audio = true;
+                currentAudioDeviceIndex = 0;
                 try {
-                    // Удаляем старые audio tracks на всякий случай
                     localStream.getAudioTracks().forEach(function(t) { t.stop(); localStream.removeTrack(t); });
                     var newStream = await navigator.mediaDevices.getUserMedia({
                         video: false,
-                        audio: { echoCancellation: S.ec, noiseSuppression: S.ns, autoGainControl: S.agc }
+                        audio: buildAudioConstraints()
                     });
                     newStream.getAudioTracks().forEach(function(t) { localStream.addTrack(t); });
-                    diagLog('MIC re-acquired');
+                    await detectCurrentAudioDevice();
+                    saveCurrentAudioDeviceId();
+                    diagLog('MIC acquired');
                 } catch(e) {
-                    diagLog('MIC re-acquire failed: ' + e.message);
+                    diagLog('MIC acquire failed: ' + e.message);
                     S.audio = false;
                 }
             } else {
-                // Выключаем: освобождаем микрофон
-                localStream.getAudioTracks().forEach(function(t) { t.stop(); localStream.removeTrack(t); });
-                diagLog('MIC released');
+                // Микрофон включён (зелёная) — переключаем или выключаем
+                // await enumerateAudioDevices(); // перенесено в devicechange
+                var shouldTurnOff = false;
+                if (audioDevices.length <= 1) {
+                    shouldTurnOff = true;
+                } else {
+                    var nextIndex = currentAudioDeviceIndex + 1;
+                    if (nextIndex >= audioDevices.length) {
+                        shouldTurnOff = true;
+                    } else {
+                        var prevIndex = currentAudioDeviceIndex;
+                        currentAudioDeviceIndex = nextIndex;
+                        try {
+                            localStream.getAudioTracks().forEach(function(t) { t.stop(); localStream.removeTrack(t); });
+                            var newStream = await navigator.mediaDevices.getUserMedia({
+                                video: false,
+                                audio: buildAudioConstraints()
+                            });
+                            newStream.getAudioTracks().forEach(function(t) { localStream.addTrack(t); });
+                            saveCurrentAudioDeviceId();
+                            diagLog('MIC switch to device ' + (currentAudioDeviceIndex + 1) + ': ' + (audioDevices[currentAudioDeviceIndex] ? audioDevices[currentAudioDeviceIndex].label : 'unknown'));
+                        } catch(e) {
+                            diagLog('MIC switch failed: ' + e.message);
+                            currentAudioDeviceIndex = prevIndex;
+                        }
+                    }
+                }
+
+                if (shouldTurnOff) {
+                    S.audio = false;
+                    localStream.getAudioTracks().forEach(function(t) { t.stop(); localStream.removeTrack(t); });
+                    diagLog('MIC released (end of cycle)');
+                }
             }
+
             applySettings(); saveSettings(); sendSettings();
             if (!S.audio && !S.video) {
                 // Всё выключено — стоп рекордер
@@ -1325,34 +1419,88 @@
             }
             micToggling = false;
         });
-        // camBtn — toggle моя камера
+        // camBtn — переключение камеры: серая→включить первую, зелёная→следующая, последняя→выключить
         var camToggling = false;
         camBtn.addEventListener('click', async function() {
             if (!localStream || camToggling) return;
             camToggling = true;
             videoDisabledByPrivacy = false; // ручное управление — сбрасываем флаг приватности
-            S.video = !S.video;
+
             if (isScreenSharing) {
-                // При шаринге экрана — не останавливаем display track (иначе сработает onended),
-                // используем enabled для приостановки/возобновления видео
+                // При шаринге экрана — toggle enabled на display track
+                S.video = !S.video;
                 var vt = localStream.getVideoTracks()[0];
                 if (vt) {
                     vt.enabled = S.video;
                     diagLog('CAM ' + (S.video ? 'enabled' : 'disabled') + ' (screen share active)');
                 }
-            } else if (S.video) {
-                // Включаем: двухфазное получение камеры
+            } else if (!S.video) {
+                // Камера выключена (серая) — включаем первую камеру
+                S.video = true;
+                if (isDesktop) {
+                    currentDeviceIndex = 0;
+                } else {
+                    S.facingMode = 'user';
+                }
                 try {
                     await acquireCamera('CAM');
+                    if (isDesktop) {
+                        await detectCurrentDevice();
+                        saveCurrentDeviceId();
+                    }
                 } catch(e) {
-                    diagLog('CAM re-acquire failed: ' + e.message);
+                    diagLog('CAM acquire failed: ' + e.message);
                     S.video = false;
                 }
             } else {
-                // Выключаем: освобождаем камеру
-                localStream.getVideoTracks().forEach(function(t) { t.stop(); localStream.removeTrack(t); });
-                diagLog('CAM released');
+                // Камера включена (зелёная) — переключаем или выключаем
+                var shouldTurnOff = false;
+                if (isDesktop) {
+                    // await enumerateVideoDevices(); // перенесено в devicechange
+                    if (videoDevices.length <= 1) {
+                        // Одна камера — выключаем
+                        shouldTurnOff = true;
+                    } else {
+                        var nextIndex = currentDeviceIndex + 1;
+                        if (nextIndex >= videoDevices.length) {
+                            // Последняя камера в цикле — выключаем
+                            shouldTurnOff = true;
+                        } else {
+                            var prevIndex = currentDeviceIndex;
+                            currentDeviceIndex = nextIndex;
+                            try {
+                                await acquireCamera('CAM');
+                                saveCurrentDeviceId();
+                                diagLog('CAM switch to device ' + (currentDeviceIndex + 1) + ': ' + (videoDevices[currentDeviceIndex] ? videoDevices[currentDeviceIndex].label : 'unknown'));
+                            } catch(e) {
+                                diagLog('CAM switch failed: ' + e.message);
+                                currentDeviceIndex = prevIndex;
+                            }
+                        }
+                    }
+                } else {
+                    // Мобильные: user → environment → off
+                    if (S.facingMode === 'environment') {
+                        shouldTurnOff = true;
+                    } else {
+                        S.facingMode = 'environment';
+                        try {
+                            await acquireCamera('CAM');
+                            diagLog('CAM switch to ' + S.facingMode);
+                        } catch(e) {
+                            diagLog('CAM switch failed: ' + e.message);
+                            S.facingMode = 'user';
+                        }
+                    }
+                }
+
+                if (shouldTurnOff) {
+                    S.video = false;
+                    localStream.getVideoTracks().forEach(function(t) { t.stop(); localStream.removeTrack(t); });
+                    diagLog('CAM released (end of cycle)');
+                }
             }
+
             applySettings(); saveSettings(); sendSettings();
             if (!S.audio && !S.video) {
                 // Всё выключено — стоп рекордер
@@ -1382,71 +1530,6 @@
                 }
             }
             showAllControls();
-        });
-        // flipBtn — переключение камеры (десктоп: по deviceId, мобильные: по facingMode)
-        var flipToggling = false;
-        flipBtn.addEventListener('click', async function(e) {
-            e.stopPropagation();
-            if (!localStream || flipToggling || isScreenSharing) return;
-            flipToggling = true;
-
-            // Сохраняем разрешение текущего трека до переключения
-            var oldVt = localStream.getVideoTracks()[0];
-            var curW = 0, curH = 0;
-            var curAspect = FALLBACK_ASPECT_W / FALLBACK_ASPECT_H;
-            if (oldVt) {
-                var oldVs = oldVt.getSettings();
-                if (oldVs.width && oldVs.height) {
-                    curAspect = oldVs.width / oldVs.height;
-                    curW = oldVs.width;
-                    curH = oldVs.height;
-                }
-            }
-
-            var flipOk = false;
-            if (isDesktop) {
-                // Десктоп: переключение по deviceId
-                await enumerateVideoDevices();
-                if (videoDevices.length <= 1) {
-                    diagLog('FLIP: only one camera on desktop');
-                    flipToggling = false;
-                    return;
-                }
-                var prevIndex = currentDeviceIndex;
-                currentDeviceIndex = (currentDeviceIndex + 1) % videoDevices.length;
-                if (S.video) {
-                    try {
-                        await acquireCamera('FLIP');
-                        diagLog('FLIP to device: ' + (videoDevices[currentDeviceIndex] ? videoDevices[currentDeviceIndex].label : 'unknown'));
-                        saveCurrentDeviceId();
-                        flipOk = true;
-                    } catch(e) {
-                        diagLog('FLIP failed: ' + e.message);
-                        currentDeviceIndex = prevIndex;
-                    }
-                }
-            } else {
-                // Мобильные: переключение по facingMode
-                S.facingMode = S.facingMode === 'user' ? 'environment' : 'user';
-                if (S.video) {
-                    try {
-                        await acquireCamera('FLIP');
-                        diagLog('FLIP camera to ' + S.facingMode);
-                        flipOk = true;
-                    } catch(e) {
-                        diagLog('FLIP failed: ' + e.message);
-                        S.facingMode = S.facingMode === 'user' ? 'environment' : 'user';
-                    }
-                }
-            }
-
-            // acquireCamera уже вызвал refineCameraResolution с правильным аспектом новой камеры,
-            // поэтому не перезаписываем разрешение старыми curW/curH от предыдущей камеры
-
-            applySettings(); saveSettings(); sendSettings();
-            if (recorderStarted || S.video) restartMediaRecorder('settings');
-            updateResLabels();
-            flipToggling = false;
         });
         // recBtn — запись своего видео на сервер
         recBtn.addEventListener('click', async function(e) {
@@ -1638,15 +1721,21 @@
             if (!isScreenSharing) {
                 // Включаем шаринг экрана
                 try {
-                    var displayStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+                    // Вычисляем разрешение экрана ДО getDisplayMedia для передачи как ideal
+                    var dpr = window.devicePixelRatio || 1;
+                    var screenW = Math.round(screen.width * dpr);
+                    var screenH = Math.round(screen.height * dpr);
+                    var displayStream = await navigator.mediaDevices.getDisplayMedia({
+                        video: { width: { ideal: screenW }, height: { ideal: screenH } },
+                        audio: false
+                    });
                     // Останавливаем текущие video tracks (камеру)
                     localStream.getVideoTracks().forEach(function(t) { t.stop(); localStream.removeTrack(t); });
                     // Добавляем display track
                     var displayTrack = displayStream.getVideoTracks()[0];
                     localStream.addTrack(displayTrack);
-                    var dpr = window.devicePixelRatio || 1;
-                    cameraNativeMaxW = Math.round(screen.width * dpr);
-                    cameraNativeMaxH = Math.round(screen.height * dpr);
+                    cameraNativeMaxW = screenW;
+                    cameraNativeMaxH = screenH;
                     // Обновляем MPX_GROUPS[0.7] разрешением экрана (оба ключа для ideal fallback)
                     MPX_GROUPS[0.7] = { '4:3': [{ w: cameraNativeMaxW, h: cameraNativeMaxH }], '16:9': [{ w: cameraNativeMaxW, h: cameraNativeMaxH }] };
                     diagLog('SCREEN MPX_GROUPS[0.7]=' + cameraNativeMaxW + 'x' + cameraNativeMaxH);
@@ -2240,9 +2329,12 @@
                 var phase2Done = false; // Флаг: acquireCamera уже делает Фазу 2
 
                 // На десктопе: перечисляем устройства и восстанавливаем последний deviceId
-                // до первого getUserMedia, чтобы buildCameraConstraints() использовал его
+                // до первого getUserMedia, чтобы buildCameraConstraints() / buildAudioConstraints() использовали его
                 if (isDesktop && S.video) {
                     await restoreDeviceId();
+                }
+                if (S.audio) {
+                    await restoreAudioDeviceId();
                 }
 
                 // --- Комбинированный запрос камеры + микрофона ---
@@ -2254,11 +2346,7 @@
                     try {
                         var combinedStream = await navigator.mediaDevices.getUserMedia({
                             video: buildCameraConstraints(),
-                            audio: {
-                                echoCancellation: S.ec,
-                                noiseSuppression: S.ns,
-                                autoGainControl: S.agc
-                            }
+                            audio: buildAudioConstraints()
                         });
                         combinedStream.getVideoTracks().forEach(function(t) { localStream.addTrack(t); });
                         combinedStream.getAudioTracks().forEach(function(t) { localStream.addTrack(t); });
@@ -2280,11 +2368,7 @@
                         try {
                             var audioStream = await navigator.mediaDevices.getUserMedia({
                                 video: false,
-                                audio: {
-                                    echoCancellation: S.ec,
-                                    noiseSuppression: S.ns,
-                                    autoGainControl: S.agc
-                                }
+                                audio: buildAudioConstraints()
                             });
                             audioStream.getAudioTracks().forEach(function(t) { localStream.addTrack(t); });
                             diagLog('MIC acquired (fallback)');
@@ -2310,11 +2394,7 @@
                     try {
                         var audioStream = await navigator.mediaDevices.getUserMedia({
                             video: false,
-                            audio: {
-                                echoCancellation: S.ec,
-                                noiseSuppression: S.ns,
-                                autoGainControl: S.agc
-                            }
+                            audio: buildAudioConstraints()
                         });
                         audioStream.getAudioTracks().forEach(function(t) { localStream.addTrack(t); });
                         diagLog('MIC acquired');
@@ -2352,10 +2432,27 @@
                 // Определяем текущее видеоустройство (для переключения камер на десктопе)
                 if (S.video) {
                     await detectCurrentDevice();
-                    updateFlipButtonVisibility();
+                }
+                // Определяем текущее аудиоустройство (для переключения микрофонов)
+                if (S.audio) {
+                    await detectCurrentAudioDevice();
                 }
 
                 applySettings(); saveSettings();
+
+                // Слушаем подключение/отключение устройств для обновления индексов на кнопках
+                navigator.mediaDevices.addEventListener('devicechange', async function() {
+                    diagLog('[Devices] devicechange event');
+                    await enumerateVideoDevices();
+                    await enumerateAudioDevices();
+                    if (S.video && localStream && localStream.getVideoTracks().length > 0) {
+                        await detectCurrentDevice();
+                    }
+                    if (S.audio && localStream && localStream.getAudioTracks().length > 0) {
+                        await detectCurrentAudioDevice();
+                    }
+                    applySettings();
+                });
 
                 var myCodecs = detectSupportedCodecs();
                 diagLog('CODECS supported: ' + myCodecs.map(codecDisplayName).join(' | '));
@@ -2704,7 +2801,7 @@
                 try {
                     var newAudioStream = await navigator.mediaDevices.getUserMedia({
                         video: false,
-                        audio: { echoCancellation: S.ec, noiseSuppression: S.ns, autoGainControl: S.agc }
+                        audio: buildAudioConstraints()
                     });
                     newAudioStream.getAudioTracks().forEach(function(t) { localStream.addTrack(t); });
                     diagLog('MIC re-acquired (privacy restore)');
