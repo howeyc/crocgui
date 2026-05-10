@@ -607,6 +607,9 @@
             if (!wsConnected || !ws || ws.readyState !== WebSocket.OPEN) return;
             var vt = localStream ? localStream.getVideoTracks()[0] : null;
             var vs = vt ? vt.getSettings() : {};
+            // Реальное разрешение из videoWidth/videoHeight, fallback на getSettings()
+            var sw = localNativeW || vs.width || 0;
+            var sh = localNativeH || vs.height || 0;
             // Измеряем MSE-контейнер — окно, в котором пир будет показывать наше видео
             var mainContainer = document.querySelector('.video-container.main-video');
             var dw = mainContainer ? mainContainer.clientWidth : 0;
@@ -633,8 +636,8 @@
                 isScreenSharing: S.isScreenSharing,
                 recordCodecs: detectAllRecordCodecs(),
                 playCodecs: detectSupportedCodecs(),
-                width: vs.width || 0,
-                height: vs.height || 0,
+                width: sw,
+                height: sh,
                 frameRate: vs.frameRate || 0,
                 displayW: dw,
                 displayH: dh
@@ -804,7 +807,7 @@
         var peerDisplayW = 0; // ширина MSE-окна пира (для аспект-соотношения)
         var peerDisplayH = 0; // высота MSE-окна пира (для аспект-соотношения)
         var peerRecorderCodec = ''; // mimeType рекордера пира из cmd:initCodec (для remoteResLabel)
-        var peerRes = { width: 0, height: 0, frameRate: 0 }; // разрешение камеры пира из cmd:myRes
+        var peerRes = { frameRate: 0 }; // FPS камеры пира из cmd:myRes (width/height берём из remoteVideo и peerSettings)
 
         var _lastHystLogTime = 0;             // троттлинг периодического лога
         var HYST_LOG_INTERVAL_MS = 2000;      // интервал логирования
@@ -1012,9 +1015,11 @@
                 remoteNativeH = h;
                 localStorage.setItem('vc_peerW', remoteNativeW);
                 localStorage.setItem('vc_peerH', remoteNativeH);
+                var psw = peerSettings ? (peerSettings.width || 0) : 0;
+                var psh = peerSettings ? (peerSettings.height || 0) : 0;
                 diagLog('RESIZE remote video=' + w + '×' + h +
-                    ' settings=' + peerRes.width + '×' + peerRes.height +
-                    (w !== peerRes.width || h !== peerRes.height ? ' DIFF' : ''));
+                    ' settings=' + psw + '×' + psh +
+                    (w !== psw || h !== psh ? ' DIFF' : ''));
                 applyRemoteFitMode();
                 updateResLabels();
                 if (document.fullscreenElement || document.webkitFullscreenElement) {
@@ -2442,22 +2447,16 @@
             } catch (e) { diagLog('RES desire failed: ' + e.message); }
         }
 
-        // Отправляет пире текущее разрешение своей камеры (cmd:myRes)
+        // Отправляет пиру реальный FPS своей камеры (cmd:myRes)
+        // width/height пиру уже известны из cmd:settings и remoteVideo
         function sendMyRes() {
             if (!wsConnected || !ws || ws.readyState !== WebSocket.OPEN) return;
             if (!localStream) return;
             var vt = localStream.getVideoTracks()[0];
             if (!vt) return;
             var s = vt.getSettings();
-            if (s.width > 0 && s.height > 0) {
-                try {
-                    ws.send(JSON.stringify({
-                        cmd: 'myRes',
-                        width: s.width,
-                        height: s.height,
-                        frameRate: s.frameRate || 0
-                    }));
-                } catch(e) {}
+            if (s.frameRate > 0) {
+                try { ws.send(JSON.stringify({ cmd: 'myRes', frameRate: s.frameRate })); } catch(e) {}
             }
         }
 
@@ -2635,12 +2634,17 @@
         // Камера: первое разрешение из MPX_GROUPS[mpx] (4:3 → 16:9)
         // Шаринг: applyMpx с аспектом display track (пропорциональное масштабирование)
         function findBestResolution(mpx, dispW, dispH) {
-            // Шаринг: пропорциональное масштабование через applyMpx
+            // Шаринг: mpx>=0.7 → полное разрешение (как камера), иначе — пропорциональное масштабование через applyMpx
             if (isScreenSharing) {
                 var vt = localStream ? localStream.getVideoTracks()[0] : null;
                 if (vt) {
                     var s = vt.getSettings();
                     if (s.width > 0 && s.height > 0) {
+                        if (mpx >= 0.7) {
+                            // mpx=0.7 = максимум — полное разрешение без масштабирования
+                            diagLog('FIND_BEST mpx=' + mpx + ' screen full=' + s.width + 'x' + s.height);
+                            return { w: s.width, h: s.height };
+                        }
                         var r = clampToCameraMax(applyMpx(s.width, s.height, mpx));
                         diagLog('FIND_BEST mpx=' + mpx + ' screen applyMpx(' + s.width + 'x' + s.height + ')=' + r.w + 'x' + r.h);
                         return r;
@@ -2983,9 +2987,9 @@
                                 diagLog('PEER requested recorder restart');
                                 restartMediaRecorder('settings');
                             } else if (msg.cmd === 'myRes') {
-                                // Пир сообщает своё текущее разрешение камеры (для remoteResLabel)
-                                if (msg.width > 0 && msg.height > 0) {
-                                    peerRes = { width: msg.width, height: msg.height, frameRate: msg.frameRate || 0 };
+                                // Пир сообщает реальный FPS своей камеры (для remoteResLabel)
+                                if (msg.frameRate > 0) {
+                                    peerRes.frameRate = msg.frameRate;
                                     updateResLabels();
                                 }
                             }
