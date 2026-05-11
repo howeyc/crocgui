@@ -402,7 +402,9 @@
         var aspect169Btn = document.getElementById('aspect169Btn');
         var screenAudioBtn = document.getElementById('screenAudioBtn');
         var isScreenSharing = false;
+        var screenAudioOnly = false;  // true = шарим только аудио экрана (Cam OFF)
         var screenToggling = false;
+        var displayVideoTrackRef = null; // ссылка на видео-трек дисплея (для stop при audio-only)
         var displayAudioTrack = null;
         var audioCtx = null;           // AudioContext для стерео-микширования Mic+Screen
         var mergedAudioTrack = null;   // результирующий стерео-трек (Mic→L, Display→R)
@@ -577,7 +579,7 @@
         function applySettings() {
             // Sender кнопки
             micBtn.classList.toggle('off', !S.audio);
-            // Индекс микрофона в тексте кнопки: несколько устройств → 🎤2, иначе → 🎤
+            // Индекс микрофона в тексте кнопки: 🎙️=стерео, 🎤=моно (по умолчанию, обновится в onstart)
             if (audioDevices.length > 1 && S.audio && currentAudioDeviceIndex >= 0) {
                 micBtn.textContent = '🎤' + (currentAudioDeviceIndex + 1);
             } else {
@@ -592,6 +594,9 @@
             }
             screenBtn.classList.toggle('active', isScreenSharing);
             aspect169Btn.classList.toggle('active', S.aspect169);
+            // Иконка screenAudioBtn: 🎙️=соло стерео (без мика), 🎤=merge (с миком)
+            var screenAudioEmoji = (S.screenAudio && !S.audio) ? '🎙️' : '🎤';
+            screenAudioBtn.textContent = screenAudioEmoji;
             screenAudioBtn.classList.toggle('off', !S.screenAudio);
             // Receiver кнопки
             remoteScreenBtn.classList.toggle('off', !S.wantVideo);
@@ -1445,12 +1450,12 @@
                 setupScreenAudioFromTracks();
             }
             applySettings(); saveSettings(); sendSettings();
-            if (!S.audio && !S.video) {
+            if (!S.audio && !S.video && !screenAudioOnly) {
                 // Всё выключено — стоп рекордер
                 if (mediaRecorder && mediaRecorder.state !== 'inactive') {
                     mediaRecorder.stop(); recorderStarted = false;
                 }
-            } else if (recorderStarted || S.audio) {
+            } else if (recorderStarted || S.audio || screenAudioOnly) {
                 restartMediaRecorder('settings');
             }
             micToggling = false;
@@ -1462,8 +1467,8 @@
             camToggling = true;
             videoDisabledByPrivacy = false; // ручное управление — сбрасываем флаг приватности
 
-            if (isScreenSharing) {
-                // При шаринге экрана — toggle enabled на display track
+            if (isScreenSharing && !screenAudioOnly) {
+                // При шаринге экрана (видео) — toggle enabled на display track
                 S.video = !S.video;
                 var vt = localStream.getVideoTracks()[0];
                 if (vt) {
@@ -1538,12 +1543,12 @@
             }
 
             applySettings(); saveSettings(); sendSettings();
-            if (!S.audio && !S.video) {
+            if (!S.audio && !S.video && !screenAudioOnly) {
                 // Всё выключено — стоп рекордер
                 if (mediaRecorder && mediaRecorder.state !== 'inactive') {
                     mediaRecorder.stop(); recorderStarted = false;
                 }
-            } else if (recorderStarted || S.video) {
+            } else if (recorderStarted || S.video || screenAudioOnly) {
                 restartMediaRecorder('settings');
             }
             updateResLabels();
@@ -1791,9 +1796,21 @@
                     savedMicTrack = null;
                 }
             } else {
-                // Только display audio — без микширования
-                localStream.addTrack(displayAudioTrack);
-                diagLog('SCREEN AUDIO: display audio only (no mic)');
+                // Только display audio — через AudioContext для гарантии стерео
+                try {
+                    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                    var displaySource = audioCtx.createMediaStreamSource(new MediaStream([displayAudioTrack]));
+                    var dest = audioCtx.createMediaStreamDestination();
+                    displaySource.connect(dest);
+                    mergedAudioTrack = dest.stream.getAudioTracks()[0];
+                    localStream.addTrack(mergedAudioTrack);
+                    diagLog('SCREEN AUDIO: display audio stereo (no mic)');
+                } catch(e) {
+                    diagLog('SCREEN AUDIO: stereo fallback failed: ' + e.message);
+                    localStream.addTrack(displayAudioTrack);
+                    audioCtx = null;
+                    mergedAudioTrack = null;
+                }
             }
         }
         // teardownScreenAudio(soft) — разбор аудио
@@ -1832,7 +1849,58 @@
             if (screenToggling) return;
             screenToggling = true;
             if (!isScreenSharing) {
-                // Включаем шаринг экрана
+                // Cam OFF + ScreenAudio OFF → нечего шарить
+                if (!S.video && !S.screenAudio) {
+                    diagLog('SCREEN: skipped — Cam OFF and Screen Audio OFF');
+                    screenToggling = false;
+                    return;
+                }
+                // Cam OFF + ScreenAudio ON → только аудио экрана
+                if (!S.video) {
+                    screenAudioOnly = true;
+                    try {
+                        var displayStream = await navigator.mediaDevices.getDisplayMedia({
+                            video: true,   // требуется API, но не используем
+                            audio: true
+                        });
+                        // Видео-трек: не добавляем в localStream, отключаем
+                        var displayVideoTrack = displayStream.getVideoTracks()[0];
+                        displayVideoTrackRef = displayVideoTrack;
+                        if (displayVideoTrack) displayVideoTrack.enabled = false;
+                        // Настраиваем аудио: стерео-микширование или просто display audio
+                        displayAudioTrack = null;
+                        setupScreenAudio(displayStream);
+                        if (!displayAudioTrack) {
+                            diagLog('SCREEN audio-only: no audio tracks, aborting');
+                            displayStream.getTracks().forEach(function(t) { t.stop(); });
+                            screenAudioOnly = false;
+                            screenToggling = false;
+                            return;
+                        }
+                        isScreenSharing = true;
+                        S.isScreenSharing = true;
+                        // onended через видео-трек — он живой хотя и disabled
+                        if (displayVideoTrack) {
+                            displayVideoTrack.onended = function() {
+                                isScreenSharing = false;
+                                S.isScreenSharing = false;
+                                screenAudioOnly = false;
+                                displayVideoTrackRef = null;
+                                teardownScreenAudio();
+                                applySettings(); saveSettings(); sendSettings();
+                                if (recorderStarted || S.audio) restartMediaRecorder('settings');
+                            };
+                        }
+                        diagLog('SCREEN audio-only share started');
+                    } catch(e) {
+                        diagLog('SCREEN audio-only share failed: ' + e.message);
+                        isScreenSharing = false;
+                        S.isScreenSharing = false;
+                        screenAudioOnly = false;
+                        teardownScreenAudio();
+                    }
+                } else {
+                // Cam ON → видео+аудио шаринг (существующая логика)
                 try {
                     // Вычисляем разрешение экрана ДО getDisplayMedia для передачи как ideal
                     var dpr = window.devicePixelRatio || 1;
@@ -1866,12 +1934,6 @@
                     audioBeforeScreenShare = S.audio;
                     // Display track активен — Cam кнопка зелёная (toggle enabled/disabled)
                     S.video = true;
-                    // ОТКЛЮЧЕНО: микрофон не выключается при шаринге экрана
-                    // if (S.audio) {
-                    //     S.audio = false;
-                    //     localStream.getAudioTracks().forEach(function(t) { t.stop(); localStream.removeTrack(t); });
-                    //     diagLog('MIC muted for screen share');
-                    // }
                     // Когда пользователь остановит шаринг через браузерный UI
                     displayTrack.onended = function() {
                         isScreenSharing = false;
@@ -1889,21 +1951,6 @@
                                     S.video = false;
                                 }
                             }
-                            // ОТКЛЮЧЕНО: микрофон не восстанавливается после шаринга экрана (не выключался)
-                            // if (audioBeforeScreenShare) {
-                            //     try {
-                            //         var restoreStream = await navigator.mediaDevices.getUserMedia({
-                            //             video: false,
-                            //             audio: { echoCancellation: S.ec, noiseSuppression: S.ns, autoGainControl: S.agc }
-                            //         });
-                            //         restoreStream.getAudioTracks().forEach(function(t) { localStream.addTrack(t); });
-                            //         S.audio = true;
-                            //         diagLog('MIC restored after screen share end');
-                            //     } catch(ae) {
-                            //         diagLog('MIC restore after screen share end failed: ' + ae.message);
-                            //         S.audio = false;
-                            //     }
-                            // }
                             applySettings(); saveSettings(); sendSettings();
                             if (recorderStarted || S.video) restartMediaRecorder('settings');
                             updateResLabels();
@@ -1926,36 +1973,32 @@
                         }
                     }
                 }
+                } // end Cam ON branch
             } else {
-                // Выключаем шаринг экрана — переключаемся на камеру
+                // Выключаем шаринг экрана
                 isScreenSharing = false;
                 S.isScreenSharing = false;
                 teardownScreenAudio();
-                S.video = videoBeforeScreenShare;
-                if (videoBeforeScreenShare) {
-                    try {
-                        await acquireCamera('CAM screen off');
-                        diagLog('CAM re-acquired after screen share toggle off');
-                    } catch(e) {
-                        diagLog('CAM re-acquire after screen share toggle off failed: ' + e.message);
-                        S.video = false;
+                if (screenAudioOnly) {
+                    // Audio-only: останавливаем видео-трек дисплея и камеру не трогаем
+                    if (displayVideoTrackRef) {
+                        try { displayVideoTrackRef.stop(); } catch(e) {}
+                        displayVideoTrackRef = null;
+                    }
+                    screenAudioOnly = false;
+                } else {
+                    // Видео-шаринг: переключаемся на камеру
+                    S.video = videoBeforeScreenShare;
+                    if (videoBeforeScreenShare) {
+                        try {
+                            await acquireCamera('CAM screen off');
+                            diagLog('CAM re-acquired after screen share toggle off');
+                        } catch(e) {
+                            diagLog('CAM re-acquire after screen share toggle off failed: ' + e.message);
+                            S.video = false;
+                        }
                     }
                 }
-                // ОТКЛЮЧЕНО: микрофон не восстанавливается после шаринга экрана (не выключался)
-                // if (audioBeforeScreenShare) {
-                //     try {
-                //         var restoreStream2 = await navigator.mediaDevices.getUserMedia({
-                //             video: false,
-                //             audio: { echoCancellation: S.ec, noiseSuppression: S.ns, autoGainControl: S.agc }
-                //         });
-                //         restoreStream2.getAudioTracks().forEach(function(t) { localStream.addTrack(t); });
-                //         S.audio = true;
-                //         diagLog('MIC restored after screen share toggle off');
-                //     } catch(ae2) {
-                //         diagLog('MIC restore after screen share toggle off failed: ' + ae2.message);
-                //         S.audio = false;
-                //     }
-                // }
             }
             applySettings(); saveSettings(); sendSettings();
             if (!S.audio && !S.video && !isScreenSharing) {
@@ -2644,7 +2687,7 @@
             if (videoTracks.length === 0) return;
             // Камера: пробуем exact для точного разрешения
             // Шаринг: exact искажает display track, пропускаем — сразу ideal
-            if (!isScreenSharing) {
+            if (!isScreenSharing || screenAudioOnly) {
                 try {
                     await videoTracks[0].applyConstraints(addFrameRateConstraint({
                         width: { exact: dw },
@@ -2664,7 +2707,7 @@
                 var constraints = addFrameRateConstraint({ width: { ideal: dw }, height: { ideal: dh } });
                 // aspectRatio помогает мобильным камерам понять нужную ориентацию
                 // Для шаринга НЕ добавляем — display track сохраняет нативный аспект экрана
-                if (!isScreenSharing && dw > 0 && dh > 0) {
+                if ((!isScreenSharing || screenAudioOnly) && dw > 0 && dh > 0) {
                     constraints.aspectRatio = { ideal: dw / dh };
                 }
                 await videoTracks[0].applyConstraints(constraints);
@@ -2863,7 +2906,7 @@
         // Шаринг: applyMpx с аспектом display track (пропорциональное масштабирование)
         function findBestResolution(mpx, dispW, dispH) {
             // Шаринг: mpx>=0.7 → полное разрешение (как камера), иначе — пропорциональное масштабование через applyMpx
-            if (isScreenSharing) {
+            if (isScreenSharing && !screenAudioOnly) {
                 var vt = localStream ? localStream.getVideoTracks()[0] : null;
                 if (vt) {
                     var s = vt.getSettings();
@@ -2916,7 +2959,7 @@
                 audioDisabledByPrivacy = true;
                 localStream.getAudioTracks().forEach(function(t) { t.stop(); localStream.removeTrack(t); });
                 applySettings(); saveSettings();
-                if (!S.audio && !S.video) {
+                if (!S.audio && !S.video && !screenAudioOnly) {
                     if (mediaRecorder && mediaRecorder.state !== 'inactive') {
                         mediaRecorder.stop(); recorderStarted = false;
                     }
@@ -2967,7 +3010,7 @@
                 videoDisabledByPrivacy = true;
                 localStream.getVideoTracks().forEach(function(t) { t.stop(); localStream.removeTrack(t); });
                 applySettings(); saveSettings();
-                if (!S.audio && !S.video) {
+                if (!S.audio && !S.video && !screenAudioOnly) {
                     if (mediaRecorder && mediaRecorder.state !== 'inactive') {
                         mediaRecorder.stop(); recorderStarted = false;
                     }
@@ -3045,7 +3088,7 @@
             // Дальнейшие изменения — рестарт рекордера при необходимости
             var peerWantsMyAudio = msg.wantAudio !== false;
             var peerWantsMyVideo = msg.wantVideo !== false;
-            var canSend = (S.audio && peerWantsMyAudio) || (S.video && peerWantsMyVideo);
+            var canSend = (S.audio && peerWantsMyAudio) || (S.video && peerWantsMyVideo) || (screenAudioOnly && peerWantsMyAudio);
             // Обновляем метку разрешения пира
             updateResLabels();
 
@@ -3105,9 +3148,9 @@
             // Проверяем был ли рекордер остановлен
             var wasStopped = !recorderStarted || !mediaRecorder || mediaRecorder.state === 'inactive';
 
-            if (!canSend) {
+            if (!canSend && !isRecording) {
                 if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-                    diagLog('REC stop: peer doesnt need my streams');
+                    diagLog('REC stop: peer doesnt need my streams and not recording');
                     mediaRecorder.stop();
                     recorderStarted = false;
                 }
@@ -3495,7 +3538,7 @@
 
             // При выключенном видео — выбираем audio-only кодек с учётом кнопок Opus/AAC
             var codec;
-            if (!S.video && S.audio) {
+            if (!S.video && (S.audio || screenAudioOnly)) {
                 var audioCodecs = [];
                 if (peerSettings && peerSettings.opus) audioCodecs.push('audio/webm;codecs="opus"');
                 if (peerSettings && peerSettings.aac) audioCodecs.push('audio/mp4;codecs="mp4a.40.2"');
@@ -3548,6 +3591,21 @@
                 recMimeType = recMime;
                 recStartPending = false;  // рекордер перезапустился — следующие чанки пишем в файл
                 recorderStarted = true;   // отмечаем что рекордер работает
+                // Определяем реальное количество каналов микрофона и обновляем иконку
+                if (S.audio && localStream) {
+                    var at = localStream.getAudioTracks()[0];
+                    if (at) {
+                        var as = at.getSettings();
+                        var ch = as.channelCount || 1;
+                        var micEmoji = ch >= 2 ? '🎙️' : '🎤';
+                        if (audioDevices.length > 1 && currentAudioDeviceIndex >= 0) {
+                            micBtn.textContent = micEmoji + (currentAudioDeviceIndex + 1);
+                        } else {
+                            micBtn.textContent = micEmoji;
+                        }
+                        diagLog('MIC channels=' + ch + ' emoji=' + micEmoji);
+                    }
+                }
                 if (isRecording) {
                     recBtn.classList.remove('pending');
                     recBtn.classList.add('recording');
@@ -3629,6 +3687,8 @@
             if (isScreenSharing) {
                 isScreenSharing = false;
                 S.isScreenSharing = false;
+                screenAudioOnly = false;
+                displayVideoTrackRef = null;
             }
             if (localStream) localStream.getTracks().forEach(function(t) { t.stop(); });
             if (mediaSource && mediaSource.readyState === 'open') {
