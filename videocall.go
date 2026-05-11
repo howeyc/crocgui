@@ -754,6 +754,11 @@ func handleCallWS(w http.ResponseWriter, r *http.Request) {
 							}
 							chatMsg := chatStore.addMessage("📹 /"+fileName, chatUserId)
 							broadcastChatMessage(chatMsg)
+							// Ремукс файла в фоне: дописать индекс (WebM) или moov в начало (MP4)
+							callStore.mu.RLock()
+							fixRoot := callStore.webdavRoot
+							callStore.mu.RUnlock()
+							go fixRecordingFile(fixRoot, fileName)
 						}
 					}
 					// НЕ пересылаем remote peer — это серверная команда
