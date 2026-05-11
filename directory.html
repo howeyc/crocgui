@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title><!--PH-->TITLE<!--PH--></title>
+	<link rel="icon" type="image/png" href="/favicon.ico">
+    <link rel="shortcut icon" href="/favicon.ico" type="image/x-icon">
+    <link rel="apple-touch-icon" href="/favicon.ico">
+	<style>
+		body { 
+			font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+			margin: 20px;
+			background-color: #f5f5f5;
+			-webkit-tap-highlight-color: transparent;
+		}
+		.container {
+			max-width: 1200px;
+			margin: 0 auto;
+			background-color: white;
+			border-radius: 8px;
+			box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+			padding: 20px;
+		}
+		.breadcrumbs {
+			margin: 0 0 20px 0;
+			padding: 10px;
+			background-color: #f8f9fa;
+			border-radius: 4px;
+			font-size: 1.1em;
+		}
+		.breadcrumbs a {
+			color: #0066cc;
+			text-decoration: none;
+		}
+		.breadcrumbs a:hover {
+			text-decoration: underline;
+		}
+		.breadcrumbs .separator {
+			color: #666;
+			margin: 0 5px;
+		}
+		.breadcrumbs .current {
+			color: #333;
+			font-weight: 500;
+		}
+		.directory-listing {
+			width: 100%;
+			border-collapse: collapse;
+			box-sizing: border-box;
+		}
+
+		.directory-listing tr {
+			transition: background-color 0.15s ease;
+		}
+
+		.directory-listing tr:hover {
+			background-color: #f5f5f5;
+		}
+
+		.directory-listing td {
+			padding: 8px 12px;
+			border-bottom: 1px solid #eee;
+		}
+
+		.directory-listing .name {
+			width: auto;
+			white-space: nowrap;
+		}
+
+		.directory-listing .size {
+			width: 1%;
+			white-space: nowrap;
+			text-align: right;
+			color: #666;
+			font-family: monospace;
+		}
+
+		.directory-listing .date {
+			width: 1%;
+			white-space: nowrap;
+			color: #666;
+			font-family: monospace;
+		}
+
+		.directory-listing a {
+			color: #0066cc;
+			text-decoration: none;
+		}
+
+		.directory-listing a:hover {
+			text-decoration: underline;
+		}
+
+		/* Стили чата */
+		.chat-container {
+			margin-top: 15px;
+			padding-top: 15px;
+		}
+		.chat-messages {
+			max-height: 200px;
+			overflow-y: auto;
+			background-color: #f8f9fa;
+			border: 1px solid #ddd;
+			border-radius: 4px;
+			padding: 10px;
+			margin-bottom: 10px;
+		}
+		.chat-message {
+			margin-bottom: 8px;
+			display: flex;
+			flex-direction: column;
+		}
+		.chat-message.own {
+			align-items: flex-end;
+		}
+		.chat-message-content {
+			max-width: 80%;
+			padding: 6px 10px;
+			border-radius: 12px;
+			word-wrap: break-word;
+			word-break: break-word;
+			overflow-wrap: break-word;
+			white-space: pre-wrap;
+			font-size: 0.85em;
+		}
+		.chat-message.own .chat-message-content {
+			background-color: #e9ecef;
+			color: #333;
+			border-bottom-right-radius: 2px;
+		}
+		.chat-message.other .chat-message-content {
+			background-color: #e9ecef;
+			color: #333;
+			border-bottom-left-radius: 2px;
+		}
+		.chat-message-sender {
+			font-size: 0.75em;
+			color: #999;
+			margin-bottom: 2px;
+			margin-left: 3px;
+		}
+		.chat-message-time {
+			font-size: 0.7em;
+			color: #999;
+			margin-top: 2px;
+			text-align: right;
+		}
+		.chat-input-container {
+			display: flex;
+			gap: 8px;
+		}
+		.chat-input {
+			flex: 1;
+			padding: 6px 10px;
+			border: 1px solid #ccc;
+			border-radius: 4px;
+			font-family: inherit;
+			font-size: 0.85em;
+			height: 30px;
+		}
+		.chat-input:focus {
+			outline: none;
+			border-color: #007bff;
+		}
+		.chat-send-btn {
+			padding: 6px 15px;
+			background-color: #007bff;
+			color: white;
+			border: none;
+			border-radius: 4px;
+			cursor: pointer;
+			font-size: 1.2em;
+			min-width: 36px;
+			min-height: 36px;
+			transition: background-color 0.2s;
+		}
+		.chat-send-btn:hover {
+			background-color: #0056b3;
+		}
+		.chat-send-btn:active {
+			background-color: #004494;
+		}
+		.chat-message-content a.call-link {
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			width: 36px;
+			height: 36px;
+			border-radius: 50%;
+			text-decoration: none;
+			font-size: 1.2em;
+			transition: all 0.2s;
+		}
+		.chat-message.own .chat-message-content a.call-link {
+			background: #007bff;
+			color: #fff;
+		}
+		.chat-message.own .chat-message-content a.call-link:hover {
+			background: #0056b3;
+		}
+		.chat-message.other .chat-message-content a.call-link {
+			background: #007bff;
+			color: #fff;
+		}
+		.chat-message.other .chat-message-content a.call-link:hover {
+			background: #0056b3;
+		}
+
+		/* Медиа-запрос для мобильных устройств */
+		@media (max-width: 768px) {
+			body {
+				margin: 8px;
+				font-size: 16px;
+			}
+			.container {
+				border-radius: 6px;
+			}
+			.breadcrumbs {
+				border-radius: 8px;
+				margin-bottom: 16px;
+			}
+			.directory-listing .name {
+				white-space: normal;
+				width: auto;
+			}
+			.directory-listing .name a {
+				display: inline-block;
+				word-wrap: break-word;
+				word-break: break-word;
+				overflow-wrap: break-word;
+			}
+			.directory-listing .size {
+				width: 25%;
+				font-size: 0.5em;
+				white-space: normal;
+			}
+			.directory-listing .date {
+				display: none;
+			}
+		}
+		
+		/* Для очень маленьких экранов */
+		@media (max-width: 480px) {
+			body {
+				margin: 4px;
+			}
+			.container {
+				padding: 10px;
+			}
+			.breadcrumbs {
+				font-size: 1em;
+			}
+			.breadcrumbs .separator {
+				margin: 0 8px;
+			}
+			.directory-listing td {
+				padding: 10px 5px;
+			}
+			.directory-listing .name a {
+				font-size: 1em;
+			}
+			.directory-listing .size {
+				width: 25%;
+				font-size: 0.5em;
+			}
+			.directory-listing .date {
+				display: none;
+			}
+		}
+	</style>
+</head>
+<body>
+	<div class="container">
+	<!--PH-->BREADCRUMBS<!--PH-->
+	<table class="directory-listing">
+			<tbody>
+<!--PH-->FILES<!--PH-->
+			</tbody>
+		</table>
+	</div>
+<!--PH:CHAT_START-->
+	<!-- Панель чата -->
+	<div class="chat-container">
+		<div class="chat-messages" id="chatMessages"></div>
+		<div class="chat-input-container">
+			<input type="text" class="chat-input" id="chatInput" placeholder="Type a message...">
+			<button class="chat-send-btn" id="chatSendBtn">💬</button>
+			<button class="chat-call-btn chat-send-btn" id="chatCallBtn" title="Video Call">📞</button>
+		</div>
+	</div>
+
+	<script>
+		// Получаем уникальный идентификатор для текущего пользователя
+		let currentUserId = sessionStorage.getItem('chatSessionId');
+		if (!currentUserId) {
+			currentUserId = 'user_' + Math.random().toString(36).substr(2, 9);
+			sessionStorage.setItem('chatSessionId', currentUserId);
+		}
+
+		const chatMessages = document.getElementById('chatMessages');
+		const chatInput = document.getElementById('chatInput');
+		const chatSendBtn = document.getElementById('chatSendBtn');
+
+		// Форматирование времени
+		function formatTime(timestamp) {
+			const date = new Date(timestamp);
+			return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+		}
+
+		// Определение является ли сообщение своим
+		function isOwnMessage(sender) {
+			return sender === currentUserId;
+		}
+
+		// Отображение сообщения
+		function displayMessage(msg) {
+			const msgDiv = document.createElement('div');
+			msgDiv.className = 'chat-message ' + (isOwnMessage(msg.sender) ? 'own' : 'other');
+
+			const senderDiv = document.createElement('div');
+			senderDiv.className = 'chat-message-sender';
+
+			const contentDiv = document.createElement('div');
+			contentDiv.className = 'chat-message-content';
+
+			// Проверяем, является ли сообщение приглашением на звонок
+			var callMatch = msg.text.match(/^📞\s*(\/videocall\S+)/);
+			if (callMatch) {
+				var rawUrl = callMatch[1];
+				// Подменяем chatUserId на свой — чтобы guest не использовал host's ID
+				rawUrl = rawUrl.replace(/([?&])chatUserId=[^&]*/, '$1chatUserId=' + encodeURIComponent(currentUserId));
+				var a = document.createElement('a');
+				a.href = rawUrl;
+				a.target = '_blank';
+				a.className = 'call-link';
+				a.textContent = '📞';
+				contentDiv.appendChild(a);
+			} else {
+				// Проверяем, является ли сообщение ссылкой на файл (запись/скриншот)
+				var fileMatch = msg.text.match(/^[📹📸]\s*(\/\S+\.(mp4|webm|png))/u);
+				if (fileMatch) {
+					var a = document.createElement('a');
+					a.href = fileMatch[1];
+					a.target = '_blank';
+					a.textContent = msg.text.replace(/^([📹📸]\s*)\//u, '$1');
+					contentDiv.appendChild(a);
+				} else {
+					contentDiv.textContent = msg.text;
+				}
+			}
+
+			const timeDiv = document.createElement('div');
+			timeDiv.className = 'chat-message-time';
+			timeDiv.textContent = formatTime(msg.timestamp);
+
+			if (!isOwnMessage(msg.sender)) {
+				msgDiv.appendChild(senderDiv);
+			}
+			msgDiv.appendChild(contentDiv);
+			msgDiv.appendChild(timeDiv);
+
+			chatMessages.appendChild(msgDiv);
+			chatMessages.scrollTop = chatMessages.scrollHeight;
+		}
+
+		// --- WebSocket ---
+		let chatWS = null;
+		let chatWSReconnectTimer = null;
+		const chatWSReconnectDelay = 2000;
+
+		function chatWSUrl() {
+			var proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+			return proto + '//' + location.host + '/api/chat/ws';
+		}
+
+		function connectChatWS() {
+			if (chatWS && chatWS.readyState <= 1) return; // уже подключён
+
+			chatWS = new WebSocket(chatWSUrl());
+
+			chatWS.onopen = function() {
+				console.log('Chat WS connected');
+			};
+
+			chatWS.onmessage = function(event) {
+				try {
+					var data = JSON.parse(event.data);
+					if (Array.isArray(data)) {
+						// История сообщений при подключении
+						chatMessages.innerHTML = '';
+						data.forEach(displayMessage);
+					} else {
+						// Одно новое сообщение (broadcast)
+						displayMessage(data);
+					}
+				} catch(e) {
+					console.error('Chat WS parse error:', e);
+				}
+			};
+
+			chatWS.onclose = function() {
+				console.log('Chat WS closed, reconnecting...');
+				scheduleChatWSReconnect();
+			};
+
+			chatWS.onerror = function(err) {
+				console.error('Chat WS error:', err);
+				chatWS.close();
+			};
+		}
+
+		function scheduleChatWSReconnect() {
+			if (chatWSReconnectTimer) clearTimeout(chatWSReconnectTimer);
+			chatWSReconnectTimer = setTimeout(connectChatWS, chatWSReconnectDelay);
+		}
+
+		// Отправка сообщения через WebSocket
+		function sendMessage() {
+			const text = chatInput.value.trim();
+			if (!text) return;
+
+			if (chatWS && chatWS.readyState === WebSocket.OPEN) {
+				chatWS.send(JSON.stringify({ text: text, sender: currentUserId }));
+				chatInput.value = '';
+			}
+		}
+
+		// Обработчики событий
+		chatSendBtn.addEventListener('click', sendMessage);
+
+		chatInput.addEventListener('keydown', (e) => {
+			if (e.key === 'Enter') {
+				e.preventDefault();
+				sendMessage();
+			}
+		});
+
+		// Подключаем WebSocket
+		connectChatWS();
+
+		// Видеозвонок — через WebSocket
+		const chatCallBtn = document.getElementById('chatCallBtn');
+		chatCallBtn.addEventListener('click', function() {
+			const roomId = 'call_' + Math.random().toString(36).substr(2, 8);
+			const callUrl = '/videocall.html?room=' + roomId + '&chatUserId=' + encodeURIComponent(currentUserId);
+			if (chatWS && chatWS.readyState === WebSocket.OPEN) {
+				chatWS.send(JSON.stringify({ text: '📞 ' + callUrl, sender: currentUserId }));
+				window.open(callUrl, '_blank');
+			}
+		});
+	</script>
+<!--PH:CHAT_END-->
+<script>
+(function() {
+		  var _hiddenAt = 0;
+		  var _blurredAt = 0;
+		  var RELOAD_DELAY = 500;
+		  document.addEventListener('visibilitychange', function() {
+		      if (document.visibilityState === 'hidden') {
+		          _hiddenAt = Date.now();
+		      } else if (_hiddenAt > 0 && (Date.now() - _hiddenAt) > RELOAD_DELAY) {
+		          location.reload();
+		      }
+		  });
+		  window.addEventListener('blur', function() {
+		      _blurredAt = Date.now();
+		  });
+		  window.addEventListener('focus', function() {
+		      if (_blurredAt > 0 && (Date.now() - _blurredAt) > RELOAD_DELAY) {
+		          location.reload();
+		      }
+		  });
+})();
+</script>
+</body>
+</html>
