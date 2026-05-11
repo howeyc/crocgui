@@ -871,10 +871,26 @@ func (h *WebDAVWithDirectoryListing) serveDirectoryListing(w http.ResponseWriter
 		}
 
 		html.WriteString(`<script>
-document.addEventListener('visibilitychange', function() {
-		  if (document.visibilityState === 'visible') { location.reload(); }
-});
-window.addEventListener('focus', function() { location.reload(); });
+(function() {
+		  var _hiddenAt = 0;
+		  var _blurredAt = 0;
+		  var RELOAD_DELAY = 500;
+		  document.addEventListener('visibilitychange', function() {
+		      if (document.visibilityState === 'hidden') {
+		          _hiddenAt = Date.now();
+		      } else if (_hiddenAt > 0 && (Date.now() - _hiddenAt) > RELOAD_DELAY) {
+		          location.reload();
+		      }
+		  });
+		  window.addEventListener('blur', function() {
+		      _blurredAt = Date.now();
+		  });
+		  window.addEventListener('focus', function() {
+		      if (_blurredAt > 0 && (Date.now() - _blurredAt) > RELOAD_DELAY) {
+		          location.reload();
+		      }
+		  });
+})();
 </script>
 </body>
 </html>`)
