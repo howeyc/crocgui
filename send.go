@@ -621,7 +621,7 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 			// Polling goroutine: опрашивает /api/messages для auto-open
 			go func() {
 				// Начальный fetch — устанавливаем baseline (все текущие сообщения)
-					resp, err := insecureHTTPClient.Get(proxyURL.String() + "/api/messages")
+				resp, err := insecureHTTPClient.Get(proxyURL.String() + "/api/messages")
 				if err != nil {
 					log.Debugf("[polling] initial fetch error: %v", err)
 					return
@@ -1300,6 +1300,7 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 
 						// deepLink https://abakum.github.io/croc#
 						if st, ne, as, a6, ps, pd, s5, ct, err := fromURI(uriString); err == nil {
+							var _, _, _ = pd, s5, ct
 							switch st {
 							case "App info":
 								idActions(ID, APP_OPEN_BY_DEFAULT_SETTINGS, APPLICATION_DETAILS_SETTINGS)
@@ -1310,9 +1311,10 @@ func sendTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 							a.Preferences().SetString("relay-address", as)
 							a.Preferences().SetString("relay6", a6)
 							a.Preferences().SetString("relay-ports", ps)
-							a.Preferences().SetString("relay-password", pd)
-							a.Preferences().SetString("socks5", s5)
-							a.Preferences().SetString("connect", ct)
+							// a.Preferences().SetString("relay-password", pd)
+							// a.Preferences().SetString("socks5", s5)
+							// a.Preferences().SetString("connect", ct)
+							addCurrentRelay(a)
 							return
 						}
 						// deepLink davX: webdavX:

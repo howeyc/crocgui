@@ -540,9 +540,9 @@ func setClipboard(a fyne.App) (text string) {
 		relayAddress,
 		a.Preferences().String("relay6"),
 		a.Preferences().String("relay-ports"),
-		a.Preferences().String("relay-password"),
-		a.Preferences().String("socks5"),
-		a.Preferences().String("connect"),
+		// a.Preferences().String("relay-password"),
+		// a.Preferences().String("socks5"),
+		// a.Preferences().String("connect"),
 	)
 	a.Clipboard().SetContent(text)
 	return

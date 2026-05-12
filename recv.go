@@ -108,14 +108,16 @@ func recvTabItem(a fyne.App, w fyne.Window) (ti *container.TabItem) {
 	cbButton := widget.NewButtonWithIcon("", theme.ContentPasteIcon(), func() {
 		cc := a.Clipboard().Content()
 		if st, ne, as, a6, ps, pd, s5, ct, err := fromURI(cc); err == nil {
+			var _, _, _ = pd, s5, ct
 			entry.SetText(st)
 			a.Preferences().SetString("new-relay", ne)
 			a.Preferences().SetString("relay-address", as)
 			a.Preferences().SetString("relay6", a6)
 			a.Preferences().SetString("relay-ports", ps)
-			a.Preferences().SetString("relay-password", pd)
-			a.Preferences().SetString("socks5", s5)
-			a.Preferences().SetString("connect", ct)
+			// a.Preferences().SetString("relay-password", pd)
+			// a.Preferences().SetString("socks5", s5)
+			// a.Preferences().SetString("connect", ct)
+			addCurrentRelay(a)
 			cc = fmt.Sprintf("%s: %s", lp("Relay"), ne)
 		} else {
 			if _, ccn, _, ok := isDAV(cc); ok {

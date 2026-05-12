@@ -14,6 +14,35 @@ import (
 	"fyne.io/fyne/v2/widget"
 )
 
+var relayUpdateUI func()
+
+// addCurrentRelay сохраняет текущие настройки посредника из preferences в список профилей
+func addCurrentRelay(a fyne.App) {
+	name := strings.TrimSpace(a.Preferences().String("new-relay"))
+	if name == "" {
+		return
+	}
+	relays := getRelays(a)
+	relay, index := relayByName(relays, name)
+	relay.Name = name
+	relay.Address = a.Preferences().String("relay-address")
+	relay.Address6 = a.Preferences().String("relay6")
+	relay.Ports = a.Preferences().String("relay-ports")
+	// relay.Password = a.Preferences().String("relay-password")
+	// relay.Socks5 = a.Preferences().String("socks5")
+	// relay.Connect = a.Preferences().String("connect")
+	if index < 0 {
+		relays = append(relays, relay)
+	} else {
+		relays[index] = relay
+	}
+	saveRelays(a, relays)
+	setRelayName(a, name)
+	if relayUpdateUI != nil {
+		relayUpdateUI()
+	}
+}
+
 // Relay представляет посредника
 type Relay struct {
 	Name     string `json:"name"`
@@ -257,6 +286,7 @@ func createRelaySelector(a fyne.App, w fyne.Window,
 	deleteRelayBtn := widget.NewButtonWithIcon("", theme.DeleteIcon(), deleteRelay)
 
 	// Первоначальная загрузка
+	relayUpdateUI = updateRelaySelector
 	updateRelaySelector()
 	relayControls = container.NewBorder(
 		nil, nil,
