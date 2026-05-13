@@ -135,8 +135,11 @@ func (h *WebDAVWithDirectoryListing) ServeHTTP(w http.ResponseWriter, r *http.Re
 
 			if mimeType != "" {
 				// Для FLAC используем правильный тип
-				if strings.ToLower(ext) == ".flac" {
+				switch strings.ToLower(ext) {
+				case ".flac":
 					mimeType = "audio/flac"
+				case ".mov":
+					mimeType = "video/mp4"
 				}
 				w.Header().Set("Content-Type", mimeType)
 
