@@ -49,7 +49,7 @@ jobs:
       - name: Checkout croc dependency
         uses: actions/checkout@v4
         with:
-          repository: abakum/croc
+          repository: abakCroc/croc
           ref: main
           path: workspace/croc
 
@@ -177,7 +177,7 @@ jobs:
       - name: Checkout croc dependency
         uses: actions/checkout@v4
         with:
-          repository: abakum/croc
+          repository: abakCroc/croc
           ref: main
           path: workspace/croc
 
@@ -280,7 +280,7 @@ jobs:
       - name: Checkout croc dependency
         uses: actions/checkout@v4
         with:
-          repository: abakum/croc
+          repository: abakCroc/croc
           ref: main
           path: workspace/croc
 
@@ -368,7 +368,7 @@ jobs:
       - name: Checkout croc dependency
         uses: actions/checkout@v4
         with:
-          repository: abakum/croc
+          repository: abakCroc/croc
           ref: main
           path: workspace/croc
 
@@ -465,7 +465,7 @@ jobs:
       - name: Checkout croc dependency
         uses: actions/checkout@v4
         with:
-          repository: abakum/croc
+          repository: abakCroc/croc
           ref: main
           path: workspace/croc
 
