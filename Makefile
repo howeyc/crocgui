@@ -5,7 +5,7 @@ VERSION_NAME := $(shell grep -E '^\s*Version\s*=' FyneApp.toml | sed -E 's/^\s*V
 BUILD_NUMBER := $(shell grep -E '^\s*Build\s*=' FyneApp.toml | sed -E 's/^\s*Build\s*=\s*([0-9]+).*/\1/')
 DEB_FILE := crocgui_$(VERSION_NAME)_amd64.deb
 
-.PHONY: all clean arm arm64 386 amd64 linux windows wsl darwin ios install darm emulator adb wsladb logcat atags tags wtags t windowsgui ver deb debi debr useri userr repo local
+.PHONY: all clean arm arm64 386 amd64 linux windows wsl darwin ios install darm emulator adb wsladb logcat atags tags wtags t windowsgui ver deb debi debr useri userr repo local relay
 
 ver: AndroidManifest.xml
 	@echo "Reading version and build number from FyneApp.toml..."
@@ -201,6 +201,18 @@ ios:
 
 install:
 	GOFLAGS=-ldflags=-s go install
+
+relay:
+	@CROC_SERVICE_BIN=$$(systemctl cat croc.service 2>/dev/null | grep -E '^ExecStart=' | head -1 | sed 's/ExecStart=//' | awk '{print $$1}'); \
+	if [ -z "$$CROC_SERVICE_BIN" ]; then echo "ERROR: Cannot find ExecStart in croc.service"; exit 1; fi; \
+	CROC_NEW=$$(which croc); \
+	if [ -z "$$CROC_NEW" ]; then echo "ERROR: croc binary not found in PATH"; exit 1; fi; \
+	echo "Service binary: $$CROC_SERVICE_BIN"; \
+	echo "New binary:     $$CROC_NEW"; \
+	sudo systemctl stop croc.service; \
+	sudo cp "$$CROC_NEW" "$$CROC_SERVICE_BIN"; \
+	sudo systemctl start croc.service; \
+	echo "Done. croc.service updated and restarted."
 
 darm: 
 	#brew install glfw
