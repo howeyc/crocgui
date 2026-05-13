@@ -5,7 +5,7 @@ VERSION_NAME := $(shell grep -E '^\s*Version\s*=' FyneApp.toml | sed -E 's/^\s*V
 BUILD_NUMBER := $(shell grep -E '^\s*Build\s*=' FyneApp.toml | sed -E 's/^\s*Build\s*=\s*([0-9]+).*/\1/')
 DEB_FILE := crocgui_$(VERSION_NAME)_amd64.deb
 
-.PHONY: all clean arm arm64 386 amd64 linux windows wsl darwin ios install darm emulator adb wsladb logcat atags tags wtags t windowsgui ver deb debi debr useri userr
+.PHONY: all clean arm arm64 386 amd64 linux windows wsl darwin ios install darm emulator adb wsladb logcat atags tags wtags t windowsgui ver deb debi debr useri userr repo local
 
 ver: AndroidManifest.xml
 	@echo "Reading version and build number from FyneApp.toml..."
@@ -22,7 +22,30 @@ ver: AndroidManifest.xml
 	@echo "Updated AndroidManifest.xml:"
 	@grep -E 'android:versionName|android:versionCode' AndroidManifest.xml
 
-atags:	
+CROC_FORK := github.com/abakCroc/croc/v10
+PEER_FORK := github.com/abakum/peerdiscovery
+CROC_VERSION := $(shell go list -m -f '{{.Version}}' $(CROC_FORK)@latest 2>/dev/null)
+PEER_VERSION := $(shell go list -m -f '{{.Version}}' $(PEER_FORK)@latest 2>/dev/null)
+
+repo:
+	@if [ -z "$(CROC_VERSION)" ]; then echo "ERROR: Cannot resolve $(CROC_FORK)@latest"; exit 1; fi
+	@if [ -z "$(PEER_VERSION)" ]; then echo "ERROR: Cannot resolve $(PEER_FORK)@latest"; exit 1; fi
+	@echo "Updating replace directives in go.mod:"
+	@echo "  $(CROC_FORK) $(CROC_VERSION)"
+	@echo "  $(PEER_FORK) $(PEER_VERSION)"
+	@go mod edit -replace=github.com/schollz/croc/v10=$(CROC_FORK)@$(CROC_VERSION)
+	@go mod edit -replace=github.com/schollz/peerdiscovery=$(PEER_FORK)@$(PEER_VERSION)
+	@go mod tidy
+	@echo "Done."
+
+local:
+	@echo "Switching replace directives to local paths in go.mod:"
+	@go mod edit -replace=github.com/schollz/croc/v10=../croc
+	@go mod edit -replace=github.com/schollz/peerdiscovery=../peerdiscovery
+	@go mod tidy
+	@echo "Done."
+
+atags:
 	@mkdir -p $(VSCODE_DIR)
 	@if [ -f $(SETTINGS_FILE) ]; then \
 		jq '.gopls["build.buildFlags"] = ["-tags=android"]' $(SETTINGS_FILE) > $(SETTINGS_FILE).tmp && \
