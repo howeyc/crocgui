@@ -212,7 +212,7 @@ relay:
 	sudo systemctl stop croc.service; \
 	sudo cp "$$CROC_NEW" "$$CROC_SERVICE_BIN"; \
 	sudo systemctl start croc.service; \
-	echo "Done. croc.service updated and restarted."
+	sudo systemctl status croc.service
 
 darm: 
 	#brew install glfw
