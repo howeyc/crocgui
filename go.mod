@@ -7,7 +7,7 @@ replace github.com/schollz/croc/v10 => github.com/abakCroc/croc/v10 v10.0.0-2026
 replace github.com/schollz/peerdiscovery => github.com/abakum/peerdiscovery v0.0.0-20251222054903-bda39395085f
 
 require (
-	fyne.io/fyne/v2 v2.7.3
+	fyne.io/fyne/v2 v2.7.4
 	github.com/BurntSushi/toml v1.5.0
 	github.com/adrg/xdg v0.5.3
 	github.com/cubewise-code/go-mime v0.0.0-20200519001935-8c5762b177d8
@@ -25,7 +25,7 @@ require (
 
 require (
 	filippo.io/edwards25519 v1.2.0 // indirect
-	fyne.io/systray v1.12.0 // indirect
+	fyne.io/systray v1.12.1 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/denisbrodbeck/machineid v1.0.1 // indirect
@@ -37,8 +37,8 @@ require (
 	github.com/fyne-io/oksvg v0.2.0 // indirect
 	github.com/go-gl/gl v0.0.0-20231021071112-07e5d0ea2e71 // indirect
 	github.com/go-gl/glfw/v3.3/glfw v0.0.0-20240506104042-037f3cc74f2a // indirect
-	github.com/go-text/render v0.2.0 // indirect
-	github.com/go-text/typesetting v0.3.3 // indirect
+	github.com/go-text/render v0.2.1 // indirect
+	github.com/go-text/typesetting v0.3.4 // indirect
 	github.com/godbus/dbus/v5 v5.1.0 // indirect
 	github.com/hack-pad/go-indexeddb v0.3.2 // indirect
 	github.com/hack-pad/safejs v0.1.0 // indirect
@@ -47,6 +47,7 @@ require (
 	github.com/kalafut/imohash v1.1.1 // indirect
 	github.com/kr/text v0.2.0 // indirect
 	github.com/magisterquis/connectproxy v0.0.0-20200725203833-3582e84f0c9b // indirect
+	github.com/mattn/go-runewidth v0.0.17 // indirect
 	github.com/minio/highwayhash v1.0.4 // indirect
 	github.com/mitchellh/colorstring v0.0.0-20190213212951-d06e56a500db // indirect
 	github.com/nfnt/resize v0.0.0-20180221191011-83c6a9932646 // indirect
