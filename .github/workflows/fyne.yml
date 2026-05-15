@@ -47,6 +47,7 @@ jobs:
           path: workspace/crocgui
 
       - name: Checkout croc dependency
+        if: false # temporarily disabled: using make repo instead
         uses: actions/checkout@v4
         with:
           repository: abakCroc/croc
@@ -54,6 +55,7 @@ jobs:
           path: workspace/croc
 
       - name: Checkout peerdiscovery dependency
+        if: false # temporarily disabled: using make repo instead
         uses: actions/checkout@v4
         with:
           repository: abakum/peerdiscovery
@@ -175,6 +177,7 @@ jobs:
 
       # Step 2: Checkout the croc dependency repository directly into workspace/croc
       - name: Checkout croc dependency
+        if: false # temporarily disabled: using make repo instead
         uses: actions/checkout@v4
         with:
           repository: abakCroc/croc
@@ -183,6 +186,7 @@ jobs:
 
       # Step 3: Checkout the peerdiscovery dependency repository directly into workspace/peerdiscovery
       - name: Checkout peerdiscovery dependency
+        if: false # temporarily disabled: using make repo instead
         uses: actions/checkout@v4
         with:
           repository: abakum/peerdiscovery
@@ -278,6 +282,7 @@ jobs:
 
       # Step 2: Checkout the croc dependency repository directly into workspace/croc
       - name: Checkout croc dependency
+        if: false # temporarily disabled: using make repo instead
         uses: actions/checkout@v4
         with:
           repository: abakCroc/croc
@@ -286,6 +291,7 @@ jobs:
 
       # Step 3: Checkout the peerdiscovery dependency repository directly into workspace/peerdiscovery
       - name: Checkout peerdiscovery dependency
+        if: false # temporarily disabled: using make repo instead
         uses: actions/checkout@v4
         with:
           repository: abakum/peerdiscovery
@@ -366,6 +372,7 @@ jobs:
 
       # Step 2: Checkout the croc dependency repository directly into workspace/croc
       - name: Checkout croc dependency
+        if: false # temporarily disabled: using make repo instead
         uses: actions/checkout@v4
         with:
           repository: abakCroc/croc
@@ -374,6 +381,7 @@ jobs:
 
       # Step 3: Checkout the peerdiscovery dependency repository directly into workspace/peerdiscovery
       - name: Checkout peerdiscovery dependency
+        if: false # temporarily disabled: using make repo instead
         uses: actions/checkout@v4
         with:
           repository: abakum/peerdiscovery
@@ -463,6 +471,7 @@ jobs:
 
       # Step 2: Checkout the croc dependency repository directly into workspace/croc
       - name: Checkout croc dependency
+        if: false # temporarily disabled: using make repo instead
         uses: actions/checkout@v4
         with:
           repository: abakCroc/croc
@@ -471,6 +480,7 @@ jobs:
 
       # Step 3: Checkout the peerdiscovery dependency repository directly into workspace/peerdiscovery
       - name: Checkout peerdiscovery dependency
+        if: false # temporarily disabled: using make repo instead
         uses: actions/checkout@v4
         with:
           repository: abakum/peerdiscovery

@@ -2,7 +2,7 @@ module crocgui
 
 go 1.25.0
 
-replace github.com/schollz/croc/v10 => github.com/abakCroc/croc/v10 v10.0.0-20260513143123-d0e3f5fd5a2e
+replace github.com/schollz/croc/v10 => github.com/abakCroc/croc/v10 v10.0.0-20260515112602-8c176350fd85
 
 replace github.com/schollz/peerdiscovery => github.com/abakum/peerdiscovery v0.0.0-20251222054903-bda39395085f
 
