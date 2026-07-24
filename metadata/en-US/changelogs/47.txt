@@ -1,0 +1,2 @@
+update to croc v10.6.0
+update to fyne 2.8.0
