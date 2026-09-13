@@ -14,7 +14,7 @@ import (
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
-	"github.com/schollz/croc/v10/src/croc"
+	"github.com/schollz/croc/v11/src/croc"
 	log "github.com/schollz/logger"
 )
 
