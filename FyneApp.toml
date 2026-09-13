@@ -2,8 +2,8 @@
   Icon = "metadata/en-US/images/icon.png"
   Name = "crocgui"
   ID = "com.github.howeyc.crocgui"
-  Version = "10.6.0"
-  Build = 47
+  Version = "11.5.2"
+  Build = 48
 
 [Migrations]
   fyneDo = false
