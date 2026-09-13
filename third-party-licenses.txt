@@ -1941,7 +1941,7 @@ SOFTWARE.
 
 --------------------------------------------------------------------------------
 
-github.com/schollz/croc/v10
+github.com/schollz/croc/v11
 
 MIT License
 
